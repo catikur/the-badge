@@ -1,0 +1,16 @@
+name: sim-ci
+on: [push, pull_request]
+jobs:
+  determinism-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build worker (paylasilan cekirdek derleniyor mu)
+        run: dotnet build server/TheBadge.SimWorker -c Release
+      - name: Determinizm kapisi
+        run: dotnet run --project shared/TheBadge.Sim.Checks -c Release
+# FAZ 01'de eklenecek: injection test seti (CB Spec 10)
+# FAZ 03'te eklenecek: 100-mac determinizm seti + kalibrasyon bantlari (ME Spec 17)

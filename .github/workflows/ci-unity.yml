@@ -1,0 +1,16 @@
+name: unity-ci
+on:
+  workflow_dispatch: {}   # UNITY_LICENSE secret eklenince push tetigine cevrilir
+jobs:
+  unity-tests:
+    if: ${{ vars.UNITY_CI_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        with:
+          projectPath: unity/TheBadge
+          testMode: EditMode
+# Kurulum: https://game.ci/docs/github/activation (kisisel lisans aktivasyonu)

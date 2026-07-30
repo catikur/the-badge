@@ -1,0 +1,5 @@
+{"id":"g001","input":{"skor":"3-0 G","one_cikan":"hat-trick: F. Aksoy","momentum":"tek tarafli"},"expect":{"must_include":["Aksoy"],"yasak":["uydurma istatistik","yanlis skor"],"ton":"tebrik+manset","max_cumle":2}}
+{"id":"g002","input":{"skor":"0-2 M","one_cikan":"kirmizi kart dk34: kaptan","momentum":"kart sonrasi cokus"},"expect":{"must_include":["kirmizi","kaptan"],"yasak":["alay"],"ton":"sorgulayici","max_cumle":2}}
+{"id":"g003","input":{"skor":"1-1 B","one_cikan":"90+3 esitlik golu","momentum":"geri donus","ark":"rakip menajerle polemik"},"expect":{"must_include":["son dakika"],"yasak":["ark disi polemik"],"ton":"kiskirtici","max_cumle":2}}
+{"id":"g004","input":{"skor":"2-1 G","one_cikan":"2 sakatlik","momentum":"gergin"},"expect":{"must_include":["sakat"],"yasak":["tibbi teshis"],"ton":"endise+soru","max_cumle":2}}
+{"id":"g005","input":{"skor":"1-0 G","one_cikan":"FTUE ilk maci","momentum":"yeni baslangic"},"expect":{"must_include":[],"yasak":["jargon agirligi"],"ton":"tanisma+umut","max_cumle":2}}

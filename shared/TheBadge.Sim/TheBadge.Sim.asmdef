@@ -1,0 +1,7 @@
+{
+  "name": "TheBadge.Sim",
+  "rootNamespace": "TheBadge.Sim",
+  "references": [],
+  "noEngineReferences": true,
+  "autoReferenced": true
+}

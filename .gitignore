@@ -1,0 +1,16 @@
+# .NET
+**/bin/
+**/obj/
+*.user
+.vs/
+# Unity (unity/<Proje>/ altinda)
+unity/**/Library/
+unity/**/Temp/
+unity/**/Logs/
+unity/**/UserSettings/
+unity/**/Build/
+unity/**/Builds/
+unity/**/*.csproj
+unity/**/*.sln
+# OS
+.DS_Store

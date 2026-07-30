@@ -1,0 +1,171 @@
+{
+  "_meta": {
+    "schema": "usm.sim.balance/1",
+    "comment": "Tum [KALIBRE] katsayilar burada — koda sabit yazilmaz (GDD 16.2, ME Spec 18.1). Bu dosya config_hash kapsamindadir; SEZON ICINDE degistirilemez (ME Spec 3.3, 8.2)."
+  },
+  "duel": {
+    "pTabanDefault": 0.48,
+    "kDuel": 0.9,
+    "clampMin": 0.08,
+    "clampMax": 0.92
+  },
+  "pass": {
+    "sigma0Deg": 6.5,
+    "distFactorPerM": 0.02857,
+    "presFactorPerRakip": 0.15,
+    "groundSpeedMin": 12.0,
+    "groundSpeedMax": 19.0
+  },
+  "shot": {
+    "xg": {
+      "b0": -0.9,
+      "bLnDist": -1.05,
+      "bAngle": 1.35,
+      "bPres": -0.45,
+      "bHeader": -0.35,
+      "bBigChance": 0.25,
+      "bOneOnOne": 0.2
+    }
+  },
+  "gk": {
+    "tReactBase": 0.16,
+    "tReactPerReflexEksik": 0.0016,
+    "reachBase": 0.9,
+    "reachAgilityFactor": 1.9,
+    "logisticSlope": 6.5,
+    "saveClampMin": 0.04,
+    "saveClampMax": 0.96
+  },
+  "setpiece": {
+    "penalty": {
+      "dogruTahmin": 0.55,
+      "yanlisTahmin": 0.93,
+      "ortaOrta": 0.25,
+      "direk": 0.04,
+      "hedefOrtalama": 0.76
+    },
+    "cornerGolBandi": [
+      0.1,
+      0.16
+    ],
+    "frikikDirektEsikM": 28
+  },
+  "referee": {
+    "foulEsikTaban": 0.3,
+    "strictnessCarpan": 0.002,
+    "griBantOrta": 0.06,
+    "sariEsik": 0.55,
+    "kirmiziEsik": 0.8
+  },
+  "var": {
+    "sahaKarariKalirOran": {
+      "dusuk": 0.0,
+      "orta": 0.04,
+      "yuksek": 0.08
+    },
+    "beklemeSnMin": 20,
+    "beklemeSnMax": 90
+  },
+  "stamina": {
+    "kE": 0.85,
+    "deadBallRecoveryPerSn": 2.0,
+    "devreArasi": 150,
+    "yorgunlukEsik": 250
+  },
+  "injury": {
+    "siddetDagilimi": [
+      0.55,
+      0.28,
+      0.12,
+      0.05
+    ],
+    "macBasiBandi": [
+      0.35,
+      0.6
+    ]
+  },
+  "momentum": {
+    "golDelta": 4,
+    "sonumPerDk": 0.3,
+    "decisionSigmaEtkiYuzde": 15,
+    "moralPuanTavan": 5
+  },
+  "chaos": {
+    "duelSigma": {
+      "dusuk": 4,
+      "orta": 9,
+      "yuksek": 16
+    },
+    "decisionSigma": {
+      "dusuk": 0.03,
+      "orta": 0.07,
+      "yuksek": 0.12
+    },
+    "aimCarpan": {
+      "dusuk": 1.0,
+      "orta": 1.15,
+      "yuksek": 1.35
+    },
+    "griBantEk": {
+      "dusuk": 0.03,
+      "orta": 0.06,
+      "yuksek": 0.1
+    },
+    "sekmePertDerece": {
+      "dusuk": 0,
+      "orta": 0,
+      "yuksek": 3
+    }
+  },
+  "move": {
+    "vMaxBase": 4.2,
+    "vMaxPaceSpan": 4.6,
+    "aMaxBase": 3.0,
+    "aMaxAccelSpan": 4.0,
+    "dribbleCarpanBase": 0.72,
+    "dribbleCarpanPerPuan": 0.0022
+  },
+  "physics": {
+    "aRollKuru": 3.3,
+    "sekmeEKuru": 0.62,
+    "dragK": 0.0045,
+    "magnusK": 0.0032
+  },
+  "anchor": {
+    "wAnchorMin": 0.45,
+    "wAnchorMax": 0.6
+  },
+  "lod": {
+    "cpuBudgetSn": {
+      "lod0": 2.5,
+      "lod1": 0.8,
+      "lod2": 0.01
+    }
+  },
+  "highlight": {
+    "w": {
+      "xgSalinim": 0.35,
+      "gecDakika": 0.2,
+      "skorEtkisi": 0.2,
+      "nadirlik": 0.15,
+      "hikayeIlgisi": 0.1
+    },
+    "esik": 0.5
+  },
+  "extraTime": {
+    "durakCarpan": 0.55,
+    "kartCarpan": 0.3,
+    "golCarpan": 0.35,
+    "minDk": 1,
+    "maxDk": 9
+  },
+  "ai": {
+    "gunlukTokenTavaniKullanici": 15000,
+    "degradeZinciri": [
+      "cache",
+      "haiku",
+      "limitEkrani"
+    ],
+    "_comment": "Anayasa 8.2 maliyet tavani [KALIBRE]"
+  }
+}

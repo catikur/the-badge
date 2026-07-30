@@ -1,0 +1,9 @@
+{
+  "_meta": { "schema": "usm.ai.balance/1", "comment": "Kullanici basina LLM butceleri ve degrade zinciri [KALIBRE]. Apple Anayasasi 8.2 ithali — 2026-07-30. Telemetri eventleri ANALYTICS sozlugune eklenir." },
+  "budget": { "dailyTokens": 25000, "monthlyTokens": 500000, "modBCallsPerMin": 10 },
+  "degrade": {
+    "t80":  { "model": "haiku", "memoryFacts": 6, "maxOutputTokens": 300 },
+    "t100": { "mode": "cacheOnly", "modAAlwaysOpen": true, "uiMessage": "nazik sinir ekrani + sifirlanma zamani" }
+  },
+  "telemetry": { "events": ["ai_tokens_used", "ai_budget_t80", "ai_budget_t100"] }
+}
