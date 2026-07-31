@@ -66,7 +66,8 @@ namespace TheBadge.Greybox.Sim
         ShotWide,
         Corner,
         CornerHeader,   // korner sonrası kafa vuruşu (şut sayılır)
-        FullTime
+        FullTime,
+        ChanceStart     // ceza sahasına giriş — spiker/gerilim satırı için (İterasyon 1)
     }
 
     /// <summary>Sıralı olay kaydı; View kuyruktan çeker, Telemetry loglar.</summary>

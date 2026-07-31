@@ -34,6 +34,7 @@ namespace TheBadge.Greybox.Sim
             public float aksiyonAralikMaxSn;
             public float santraBeklemeSn;
             public float kutlamaSuresiSn;
+            public float spikerAralikSn;      // boşta akan spiker satırı sıklığı (sunum)
         }
 
         [Serializable]
@@ -74,6 +75,7 @@ namespace TheBadge.Greybox.Sim
             public float ilerlemeMinM;        // ileri pas başına ilerleme bandı (metre)
             public float ilerlemeMaxM;
             public float genislikMaxM;        // yan pas / sürüklenme genişliği
+            public float gucTutmaCarpan;      // kadro gücü farkının top tutmaya etkisi (puan başına)
         }
 
         [Serializable]
@@ -113,6 +115,7 @@ namespace TheBadge.Greybox.Sim
             public float shakeGenlikM;
             public float shakeSureSn;
             public float golFlasSureSn;
+            public bool titresimAktif;        // gol anında cihaz titreşimi (yalnız mobil)
         }
 
         [Serializable]

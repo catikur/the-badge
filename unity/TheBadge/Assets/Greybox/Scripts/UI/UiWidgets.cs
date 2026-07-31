@@ -24,7 +24,9 @@ namespace TheBadge.Greybox.UI
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1080f, 1920f);
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 0.5f;
+            // Portre kilidi olan UI'da GENİŞLİK eşlenir (0): 19.5:9 gibi uzun ekranlarda
+            // 0.5 karışımı genişlikten taşırıyordu (İterasyon 1 — "yazılar sığmıyor").
+            scaler.matchWidthOrHeight = 0f;
             go.AddComponent<GraphicRaycaster>();
 
             if (UnityEngine.Object.FindFirstObjectByType<EventSystem>() == null)

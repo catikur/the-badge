@@ -12,7 +12,8 @@
     "aksiyonAralikMinSn": 0.15,
     "aksiyonAralikMaxSn": 0.5,
     "santraBeklemeSn": 1.4,
-    "kutlamaSuresiSn": 2.8
+    "kutlamaSuresiSn": 2.8,
+    "spikerAralikSn": 8.0
   },
   "ball": {
     "pasHiziMinMS": 13.0,
@@ -43,7 +44,8 @@
     "pCezaSahasinaGiris": 0.42,
     "ilerlemeMinM": 8.0,
     "ilerlemeMaxM": 17.0,
-    "genislikMaxM": 14.0
+    "genislikMaxM": 14.0,
+    "gucTutmaCarpan": 0.008
   },
   "shot": {
     "pSutChanceBuild": 0.5,
@@ -52,7 +54,7 @@
     "pDisari": 0.27,
     "pKornerSekmesi": 0.28,
     "pKornerKurtarisSonrasi": 0.22,
-    "gucEtkiCarpan": 0.0025,
+    "gucEtkiCarpan": 0.004,
     "momentumEtki": 0.03
   },
   "corner": {
@@ -63,14 +65,15 @@
     "sigma": 0.4,
     "sonum": 0.3,
     "golBoost": 0.45,
-    "gucFarkiCarpan": 0.006
+    "gucFarkiCarpan": 0.01
   },
   "vurgu": {
     "slowmoCarpan": 0.3,
     "slowmoSureSn": 1.1,
     "shakeGenlikM": 1.0,
     "shakeSureSn": 1.5,
-    "golFlasSureSn": 0.45
+    "golFlasSureSn": 0.45,
+    "titresimAktif": true
   },
   "ekonomi": {
     "kapasite": 5000,

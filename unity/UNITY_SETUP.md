@@ -10,7 +10,8 @@
    - Pinli sürüm `6000.3.21f1`; sendeki 6000.3.x patch'i farklıysa Unity sürüm onay diyaloğu gösterir → **onayla**. İlk açılış paket çözümleme + ProjectSettings migrasyonu nedeniyle birkaç dakika sürebilir.
    - İlk açılışta oluşan `Packages/packages-lock.json` ve ProjectSettings'te Unity'nin tamamladığı alanları **commit et** (tek seferlik).
 3. **Doğrulama:** Project panelinde `Packages → The Badge Sim Core` görünmeli (`com.thebadge.sim` local package). Console'da 0 error / 0 warning hedef.
-4. **Oyna:** `Assets/Greybox/Scenes/Greybox.unity` sahnesini aç → Play. Game görünümünü **9:16 Portrait** yap (Game penceresi üstündeki aspect menüsü).
+4. **Oyna:** `Assets/Greybox/Scenes/Greybox.unity` sahnesini aç → Play. Game görünümü PORTRE olmalı:
+   Game penceresi üst barındaki çözünürlük menüsü → **+** → Type: *Fixed Resolution*, W:1080 H:1920, ad "Portre 1080x1920" → onu seç. (16:9 yatayda UI bilerek taşar — oyun portre kilitli.)
 5. **EditMode testleri:** Window → General → Test Runner → EditMode → Run All. Hepsi yeşil olmalı (FlowSim pacing + ekonomi + command bus).
 6. **Cihaz build'i (iPhone):** File → Build Settings → iOS → Build; Xcode projesini imzala, cihaza yükle. Orientation Portrait olarak ayarlı.
 7. **Ekran kaydı (DoD-G):** 30-60 sn — bir maçın başı, bir gol vurgusu, skip kullanımı, maç sonu + bilet slider'ı + "Sonraki Maç" turu.

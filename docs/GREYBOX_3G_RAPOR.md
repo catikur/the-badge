@@ -59,6 +59,19 @@ Tüm his/ekonomi sayıları **[KALİBRE-G]** olarak `Assets/Greybox/Resources/gr
 - ~~`activeInputHandler=0` (eski Input Manager): FAZ 02'de Input System'e geçiş bilinçli borç.~~ **Kapatıldı (2026-07-31):** 6000.3 LTS eski Input Manager'ı deprecation uyarısıyla işaretlediği için Input System'e geçildi (`com.unity.inputsystem` + `InputSystemUIInputModule`; paket yoksa `#if ENABLE_INPUT_SYSTEM` koruması eski yola düşer).
 - Skip sırasında gelen goller vurgusuz geçer (ticker'a düşer) — tasarım gereği, playtest'te gözle.
 
+## İterasyon 1 — Atilla'nın ilk oynayış geri bildirimi (2026-07-31)
+
+| Geri bildirim | Yapılan |
+|---|---|
+| "Yazılar ekrana sığmıyor" | İki ayaklı: (1) CanvasScaler genişlik-eşleme (0) yapıldı — 19.5:9 uzun ekranlarda %2 taşma vardı; (2) runbook'a Game penceresi 1080×1920 portre preset adımı eklendi (16:9 yatay görünümde taşma normaldir, oyun portre kilitli). |
+| "Top oyunculardan çok uzakta" | Paslar artık gerçek takım arkadaşına gidiyor (`PickReceiver`/`PickReceiverNearGoal`); topu alan oyuncu **taşıyıcı** oluyor ve topla oynuyor; korner kullanıcısı köşeye gidiyor, ortayı bir hücumcu karşılıyor; kurtarışta top kalecide. |
+| "Sonuç güçten bağımsız" | Güç farkı artık üç kanala işliyor: top tutma (`flow.gucTutmaCarpan` 0.008), şut kalitesi (`gucEtkiCarpan` 0.004), momentum eğimi (0.010). Harness: zayıf rakibe (48) galibiyet 36/60, güçlüye (72) 6/60 — önceki 30/60–15/60'tan belirgin ayrışma. |
+| "Akan metin olsa" | Spiker satırları eklendi: olay yorumları (şut/kurtarış/korner/gol/atak başlangıcı `ChanceStart` olayı) + boşta akış cümleleri (`pace.spikerAralikSn` 8 sn) — dakika damgalı ticker. |
+| "Gol anında telefon titresin" | `Handheld.Vibrate()` cihazda gol vurgusuna bağlandı (`vurgu.titresimAktif` [KALİBRE-G], yalnız iOS/Android derlemesi). |
+| "Maç süresi ideal, belki tık uzun" | 150 sn korundu; müdahale mekanikleri gelince `clock.macSuresiSaniye` tek satırla uzatılır. |
+
+İterasyon sonrası kanıt: 300 maç harness yeşil (2.21 gol / 10.2 şut / 3.0 korner / 166 sn); determinizm-lite geçer; tüm derleme yolları 0 hata / 0 uyarı; Sim.Checks yeşil.
+
 ## Atilla'nın sıradaki adımları
 
 `unity/UNITY_SETUP.md` runbook'u: projeyi aç → konsol/testler → Editor'de oyna → iPhone build → 3-5 oyuncu playtest → `docs/PLAYTEST_3G.md` doldur → kapı kararı (GO/NO-GO) → DECISIONS.md.

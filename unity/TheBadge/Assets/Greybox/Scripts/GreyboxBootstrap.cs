@@ -33,6 +33,7 @@ namespace TheBadge.Greybox
         float postShownAt;
         bool priceDirty;
         int matchesEndedThisSession;
+        float spikerTimer;
 
         static string HomeShort => "ROZET";
 
@@ -126,6 +127,17 @@ namespace TheBadge.Greybox
             pitch.Render(director.Sim);
             ui.SetScoreLine(HomeShort, awayShort,
                 director.Sim.HomeScore, director.Sim.AwayScore, director.Sim.MatchMinute);
+
+            // Boşta akan spiker satırı — olay yoğunluğu düşükken maçı anlatır (İterasyon 1)
+            if (director.Sim.Phase == FlowPhase.OpenPlay)
+            {
+                spikerTimer += Time.deltaTime;
+                if (spikerTimer >= bal.pace.spikerAralikSn)
+                {
+                    spikerTimer = 0f;
+                    ui.Ticker($"{Mathf.FloorToInt(director.Sim.MatchMinute)}' {Commentary.IdleLine(HomeShort, awayShort)}");
+                }
+            }
         }
 
         // ---------------------------------------------------------------- core loop adımları
@@ -166,10 +178,12 @@ namespace TheBadge.Greybox
 
         void OnFlowEvent(FlowEvent e, bool duringSkip)
         {
+            string club = e.Team == 0 ? HomeShort : awayShort;
+            string rival = e.Team == 0 ? awayShort : HomeShort;
+
             switch (e.Type)
             {
                 case FlowEventType.Goal:
-                    string club = e.Team == 0 ? HomeShort : awayShort;
                     telemetry.Event("goal").Num("match", state.matchIndex)
                              .Num("minute", e.Minute).Str("team", e.Team == 0 ? "home" : "away")
                              .Str("score", $"{e.HomeScore}-{e.AwayScore}").Send();
@@ -181,29 +195,30 @@ namespace TheBadge.Greybox
                     {
                         camRig.Shake();                       // vurgu: titreme (Brif K2)
                         ui.GoalFlash($"{club}  ·  {e.HomeScore} - {e.AwayScore}");
+                        ui.Ticker($"{Mathf.FloorToInt(e.Minute)}' {Commentary.For(e.Type, club, rival)}");
+#if UNITY_IOS || UNITY_ANDROID
+                        if (bal.vurgu.titresimAktif)
+                            Handheld.Vibrate();               // İterasyon 1: gol anında cihaz titreşimi
+#endif
                     }
                     break;
 
                 case FlowEventType.Shot:
-                    if (!duringSkip) ui.Ticker("Şut!");
-                    break;
                 case FlowEventType.CornerHeader:
-                    if (!duringSkip) ui.Ticker("Kafa vuruşu!");
-                    break;
                 case FlowEventType.Save:
-                    if (!duringSkip) ui.Ticker("Kurtarış!");
-                    break;
                 case FlowEventType.ShotWide:
-                    if (!duringSkip) ui.Ticker("Auta!");
-                    break;
                 case FlowEventType.Corner:
-                    if (!duringSkip) ui.Ticker("Korner " + (e.Team == 0 ? HomeShort : awayShort));
+                case FlowEventType.ChanceStart:
+                case FlowEventType.SecondHalfKickOff:
+                    if (!duringSkip)
+                    {
+                        spikerTimer = 0f; // olay satırı geldi; boşta spikeri ertele
+                        ui.Ticker($"{Mathf.FloorToInt(e.Minute)}' {Commentary.For(e.Type, club, rival)}");
+                    }
                     break;
+
                 case FlowEventType.HalfTime:
                     if (!duringSkip) ui.Banner("DEVRE ARASI", Mathf.Max(0.8f, bal.clock.devreArasiSaniye - 0.4f));
-                    break;
-                case FlowEventType.SecondHalfKickOff:
-                    if (!duringSkip) ui.Ticker("İkinci yarı başladı");
                     break;
             }
         }
