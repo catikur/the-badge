@@ -5,9 +5,9 @@
 
 ## Greybox Çalıştırma (Atilla runbook'u — FAZ 00.5)
 
-1. **Unity sürümü:** Unity Hub → Installs → **Unity 6 LTS (6000.0.x)** kurulu olsun (iOS Build Support modülüyle).
+1. **Unity sürümü:** Unity Hub → Installs → **Unity 6 LTS (6000.3.x, Apple Silicon)** kurulu olsun (iOS Build Support modülüyle). 6000.5 gibi LTS-dışı akımlarla AÇMA — proje tek yönlü yükselir, LTS'e dönüş desteklenmez.
 2. **Projeyi aç:** Hub → Add → `unity/TheBadge` klasörünü seç → aç.
-   - Pinli sürüm `6000.0.58f1`; sendeki 6000.0.x farklıysa Unity sürüm yükseltme/onay diyaloğu gösterir → **onayla**. İlk açılış paket çözümleme + ProjectSettings migrasyonu nedeniyle birkaç dakika sürebilir.
+   - Pinli sürüm `6000.3.21f1`; sendeki 6000.3.x patch'i farklıysa Unity sürüm onay diyaloğu gösterir → **onayla**. İlk açılış paket çözümleme + ProjectSettings migrasyonu nedeniyle birkaç dakika sürebilir.
    - İlk açılışta oluşan `Packages/packages-lock.json` ve ProjectSettings'te Unity'nin tamamladığı alanları **commit et** (tek seferlik).
 3. **Doğrulama:** Project panelinde `Packages → The Badge Sim Core` görünmeli (`com.thebadge.sim` local package). Console'da 0 error / 0 warning hedef.
 4. **Oyna:** `Assets/Greybox/Scenes/Greybox.unity` sahnesini aç → Play. Game görünümünü **9:16 Portrait** yap (Game penceresi üstündeki aspect menüsü).

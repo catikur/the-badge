@@ -7,7 +7,7 @@ Plan onayı: Atilla (aynı gün) — portre/dikey saha; greybox ayarları ayrı 
 
 | Katman | İçerik | Konum |
 |---|---|---|
-| Unity iskeleti | 6000.0 LTS proje: manifest (`com.thebadge.sim` local package), ProjectSettings (portre, legacy input), tek sahneli Bootstrap deseni, tüm .meta'lar sabit GUID'li | `unity/TheBadge/` |
+| Unity iskeleti | Unity 6 LTS (pin: 6000.3.21f1) proje: manifest (`com.thebadge.sim` local package), ProjectSettings (portre, legacy input), tek sahneli Bootstrap deseni, tüm .meta'lar sabit GUID'li | `unity/TheBadge/` |
 | FlowSim | Motor bağımsız akış simülasyonu: bölge/pas dalgalanması, momentum (OU), şut/gol/korner/kurtarış, 22 nokta formasyon hareketi, devre yapısı. **ME Spec motoru DEĞİL** (Brif K2) | `Assets/Greybox/Scripts/Sim/` |
 | Sunum | Daire/dikdörtgen saha, 1x/2x/önemli-ana-atla, gol vurgusu (slow-mo + kamera titremesi + flaş), banner/ticker | `Scripts/View/`, `Scripts/Loop/MatchDirector.cs` |
 | Core loop | Maç öncesi (3 taktik + kadro) → Maç → Maç sonu (skor + bilet geliri + prim) → bilet slider'ı (canlı doluluk/gelir önizleme, GDD 4.2) → Sonraki Maç; mini-save | `Scripts/UI/`, `Scripts/GreyboxBootstrap.cs` |
