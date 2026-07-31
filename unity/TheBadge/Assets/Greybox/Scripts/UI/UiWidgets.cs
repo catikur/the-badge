@@ -31,7 +31,12 @@ namespace TheBadge.Greybox.UI
             {
                 var es = new GameObject("EventSystem");
                 es.AddComponent<EventSystem>();
-                es.AddComponent<StandaloneInputModule>(); // eski Input Manager (ProjectSettings activeInputHandler=0)
+#if ENABLE_INPUT_SYSTEM
+                // Input System paketi aktif (activeInputHandler=1); varsayılan aksiyonlarla dokunma/fare çalışır
+                es.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
+#else
+                es.AddComponent<StandaloneInputModule>(); // paket yoksa eski Input Manager geri dönüş yolu
+#endif
             }
             return canvas;
         }

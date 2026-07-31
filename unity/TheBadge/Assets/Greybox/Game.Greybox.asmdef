@@ -3,7 +3,8 @@
     "rootNamespace": "TheBadge.Greybox",
     "references": [
         "TheBadge.Sim",
-        "UnityEngine.UI"
+        "UnityEngine.UI",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

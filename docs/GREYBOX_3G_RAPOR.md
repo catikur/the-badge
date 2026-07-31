@@ -56,7 +56,7 @@ Tüm his/ekonomi sayıları **[KALİBRE-G]** olarak `Assets/Greybox/Resources/gr
 - Takımlar devre arasında saha DEĞİŞTİRMEZ (okunabilirlik tercihi); playtester yadırgarsa nota geçir.
 - Uzatma dakikaları yok (90'da biter); korner ortalaması (3.3) gerçek futboldan düşük — his için yeterli varsayıldı.
 - Ekonomide doluluk tabanı (%5) yüzünden çok yüksek fiyatta gelir eğrisi düzleşip hafif yükselir; optimal bölge ~ref fiyat civarı olduğundan sömürülemez ama slider ucunda görünür.
-- `activeInputHandler=0` (eski Input Manager): FAZ 02'de Input System'e geçiş bilinçli borç.
+- ~~`activeInputHandler=0` (eski Input Manager): FAZ 02'de Input System'e geçiş bilinçli borç.~~ **Kapatıldı (2026-07-31):** 6000.3 LTS eski Input Manager'ı deprecation uyarısıyla işaretlediği için Input System'e geçildi (`com.unity.inputsystem` + `InputSystemUIInputModule`; paket yoksa `#if ENABLE_INPUT_SYSTEM` koruması eski yola düşer).
 - Skip sırasında gelen goller vurgusuz geçer (ticker'a düşer) — tasarım gereği, playtest'te gözle.
 
 ## Atilla'nın sıradaki adımları

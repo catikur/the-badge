@@ -36,4 +36,4 @@ PlayerSettings:
   useOSAutorotation: 1
   use32BitDisplayBuffer: 1
   accessibilityFeatures: 0
-  activeInputHandler: 0
+  activeInputHandler: 1
