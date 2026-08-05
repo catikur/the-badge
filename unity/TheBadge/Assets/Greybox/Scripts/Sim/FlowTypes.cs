@@ -43,13 +43,14 @@ namespace TheBadge.Greybox.Sim
     /// <summary>Maç akış fazları — basitleştirilmiş akış modeli, ME Spec'in FSM'i DEĞİL (Brif K2).</summary>
     public enum FlowPhase
     {
-        KickOff,          // santra dizilişi + kısa bekleme
+        KickOff,          // santra: diziliş koşulu sağlanmadan düdük yok (Sahneleme 1)
         OpenPlay,         // top pas/taşıma dalgalanması
         ChanceBuild,      // ceza sahası çevresi tehlike anı ("önemli an" penceresi başlangıcı)
         ShotTravel,       // top kaleye gidiyor
-        CornerSetup,      // top korner noktasına taşınıyor
+        CornerSetup,      // korner dizilişi: kutu dolmadan orta yok (Sahneleme 5)
         CornerCross,      // orta havada
-        GoalCelebration,  // gol sonrası kutlama duraklaması
+        GoalKick,         // kale vuruşu: kaleci topun başına, savunma açılır (Sahneleme 4)
+        GoalCelebration,  // gol sonrası kutlama kümelenmesi
         HalfTimeBreak,    // devre arası bandosu
         FullTime          // maç bitti
     }

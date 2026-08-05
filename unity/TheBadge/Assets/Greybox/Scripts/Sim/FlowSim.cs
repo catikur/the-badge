@@ -56,6 +56,11 @@ namespace TheBadge.Greybox.Sim
         int carrierIdx = -1;          // topun sahibi oyuncu (görsel inandırıcılık — İterasyon 1)
         int pendingReceiverIdx = -1;  // havadaki pasın hedef oyuncusu
         Vec2 celebPos;                // gol sevinci kümelenme noktası (İterasyon 2)
+        float stageHold;              // diziliş sağlandıktan sonra düdük/orta öncesi nefes sayacı
+        bool kickoffPassPending;      // santra pası: ilk karar geriye/yana kısa pas (Sahneleme 1)
+
+        /// <summary>Diziliş emniyeti kaç kez devreye girdi (sahne sözleşmesi telemetrisi).</summary>
+        public int StagingTimeouts { get; private set; }
         int lastScorerTeam = -1;
         float momentum;               // + ev sahibi lehine, [-1, 1]
 
@@ -129,12 +134,19 @@ namespace TheBadge.Greybox.Sim
             switch (Phase)
             {
                 case FlowPhase.KickOff:
+                    // Sahneleme 1: düdük, diziliş koşulu sağlanmadan ÇALMAZ (süre değil yerleşim)
                     MovePlayers(h);
                     phaseTimer -= h;
-                    if (phaseTimer <= 0f)
+                    if (KickoffReady())
                     {
-                        Phase = FlowPhase.OpenPlay;
-                        dwellTimer = 0.2f;
+                        stageHold += h;
+                        if (stageHold >= bal.pace.santraBeklemeSn) Whistle();
+                    }
+                    else stageHold = 0f;
+                    if (Phase == FlowPhase.KickOff && phaseTimer <= 0f)
+                    {
+                        StagingTimeouts++; // kilitlenme emniyeti (Sahneleme kök ilkesi)
+                        Whistle();
                     }
                     break;
 
@@ -143,15 +155,45 @@ namespace TheBadge.Greybox.Sim
                 case FlowPhase.ShotTravel:
                 case FlowPhase.CornerSetup:
                 case FlowPhase.CornerCross:
-                    activeSeconds += h;
+                case FlowPhase.GoalKick:
+                    // Diziliş duraklamalarında maç saati DURUR — 90 dakika saf akışa aittir
+                    // (sahneleme beklemeleri aksiyon yoğunluğunu düşürmesin)
+                    if (!((Phase == FlowPhase.CornerSetup && !ballMoving) || Phase == FlowPhase.GoalKick))
+                        activeSeconds += h;
                     UpdateMomentum(h);
                     MoveBall(h);
                     MovePlayers(h);
                     if (Phase == FlowPhase.CornerSetup && !ballMoving)
                     {
-                        // Diziliş beklemesi: herkes ceza sahasına insin, sonra orta gelsin (İterasyon 2)
+                        // Sahneleme 5: kutu dolmadan orta GELMEZ
                         phaseTimer -= h;
-                        if (phaseTimer <= 0f) StartCornerCross();
+                        if (CornerReady())
+                        {
+                            stageHold += h;
+                            if (stageHold >= bal.corner.dizilisSn) StartCornerCross();
+                        }
+                        else stageHold = 0f;
+                        if (Phase == FlowPhase.CornerSetup && phaseTimer <= 0f)
+                        {
+                            StagingTimeouts++;
+                            StartCornerCross();
+                        }
+                    }
+                    if (Phase == FlowPhase.GoalKick)
+                    {
+                        // Sahneleme 4: kaleci topun başına gelip savunma açılmadan oyun başlamaz
+                        phaseTimer -= h;
+                        if (GoalKickReady())
+                        {
+                            stageHold += h;
+                            if (stageHold >= bal.pace.santraBeklemeSn) ResumeFromGoalKick();
+                        }
+                        else stageHold = 0f;
+                        if (Phase == FlowPhase.GoalKick && phaseTimer <= 0f)
+                        {
+                            StagingTimeouts++;
+                            ResumeFromGoalKick();
+                        }
                     }
                     if (Phase == FlowPhase.OpenPlay && !ballMoving)
                     {
@@ -208,6 +250,24 @@ namespace TheBadge.Greybox.Sim
         {
             decisionTick++;
             pendingLongBallRisk = false;
+
+            // Sahneleme 1: santra pası geriye/yana kısa pastır, kapılamaz
+            if (kickoffPassPending)
+            {
+                kickoffPassPending = false;
+                int back = PickReceiver(possession, 2);
+                if (back < 0) back = PickReceiver(possession, 1);
+                if (back >= 0)
+                {
+                    pendingReceiverIdx = back;
+                    Vec2 t0 = ClampToPitch(players[back].Pos + new Vec2(
+                        ((float)R(Domain.Decision, 5) - 0.5f) * 1.2f,
+                        ((float)R(Domain.Decision, 4) - 0.5f) * 1.2f));
+                    SendBall(t0, PassSpeed(Vec2.Distance(ballPos, t0)));
+                    return;
+                }
+            }
+
             var myTac = tacticByTeam[possession];
             var oppTac = tacticByTeam[1 - possession];
             float p = Progress(possession, ballPos);
@@ -443,7 +503,7 @@ namespace TheBadge.Greybox.Sim
                         (shooter == 0 ? PitchL : 0f) - AttackDir(shooter) * 8.5f);
                     break;
 
-                case 1: // Kurtarış — top kaleci önünde kalır ya da kornere çelinir
+                case 1: // Kurtarış — kaleci topu tutar (Sahne 4), bazen kornere çeler
                     if (shooter == 0) Stats.HomeOnTarget++; else Stats.AwayOnTarget++;
                     Emit(FlowEventType.Save, 1 - shooter);
                     if (R(Domain.Duel, 23) < bal.shot.pKornerKurtarisSonrasi)
@@ -452,20 +512,15 @@ namespace TheBadge.Greybox.Sim
                         break;
                     }
                     possession = 1 - shooter;
-                    carrierIdx = possession * 11; // top kalecide, dağıtım ondan (ışınlama yok — İterasyon 2)
+                    carrierIdx = possession * 11; // top kalecide, dağıtım ondan
                     ballMoving = false;
                     Phase = FlowPhase.OpenPlay;
-                    dwellTimer = 0.6f;
+                    dwellTimer = bal.pace.gkTutmaSn; // kaleci topu tutar, sonra kısa pasla başlatır
                     break;
 
-                case 2: // Dışarı — kale vuruşu
+                case 2: // Aut — KALE VURUŞU sahnesi (Sahne 4)
                     Emit(FlowEventType.ShotWide, shooter);
-                    possession = 1 - shooter;
-                    ballPos = KeeperPoint(possession) + new Vec2(((float)R(Domain.Physics, 20) - 0.5f) * 8f, 0f);
-                    carrierIdx = possession * 11;
-                    ballMoving = false;
-                    Phase = FlowPhase.OpenPlay;
-                    dwellTimer = 0.45f;
+                    BeginGoalKick(1 - shooter);
                     break;
 
                 default: // Kornere sekme
@@ -550,9 +605,86 @@ namespace TheBadge.Greybox.Sim
             ballPos = new Vec2(PitchW * 0.5f, PitchL * 0.5f);
             ballMoving = false;
             Phase = FlowPhase.KickOff;
-            phaseTimer = bal.pace.santraBeklemeSn;
+            phaseTimer = bal.pace.dizilisEmniyetSn; // kilitlenme emniyeti; düdüğü DİZİLİŞ verir
+            stageHold = 0f;
             carrierIdx = team * 11 + 9; // forvet santra başında bekler
             Emit(evt, team);
+        }
+
+        void Whistle()
+        {
+            kickoffPassPending = true;
+            Phase = FlowPhase.OpenPlay;
+            dwellTimer = 0.25f;
+        }
+
+        /// <summary>Sahneleme 1 diziliş koşulu: herkes kendi yarısında, santra kullanmayan
+        /// takım orta yuvarlağın dışında, forvet topun başında (Kural 8).</summary>
+        bool KickoffReady()
+        {
+            Vec2 center = new Vec2(34f, PitchL * 0.5f);
+            for (int t = 0; t < 2; t++)
+            {
+                for (int i = 0; i < 11; i++)
+                {
+                    Vec2 p = players[t * 11 + i].Pos;
+                    bool ownHalf = t == 0 ? p.Y <= PitchL * 0.5f + 1.2f : p.Y >= PitchL * 0.5f - 1.2f;
+                    if (!ownHalf) return false;
+                    if (t != possession && Vec2.Distance(p, center) < 8.6f) return false;
+                }
+            }
+            return Vec2.Distance(players[carrierIdx].Pos, ballPos) < 1.8f;
+        }
+
+        /// <summary>Sahneleme 5 diziliş koşulu: hücumdan ≥5 ve savunmadan ≥5 oyuncu kutuda,
+        /// korner kullanıcısı topun başında.</summary>
+        bool CornerReady()
+        {
+            int atkIn = 0, defIn = 0;
+            for (int i = 1; i < 11; i++)
+            {
+                int ai = possession * 11 + i;
+                if (ai != carrierIdx && InPenaltyBox(players[ai].Pos, possession)) atkIn++;
+                if (InPenaltyBox(players[(1 - possession) * 11 + i].Pos, possession)) defIn++;
+            }
+            return atkIn >= 5 && defIn >= 5 && Vec2.Distance(players[carrierIdx].Pos, ballPos) < 2f;
+        }
+
+        /// <summary>atkTeam'in hücum ettiği kalenin ceza sahası içinde mi (1 m tolerans)?</summary>
+        bool InPenaltyBox(Vec2 p, int atkTeam)
+        {
+            float gy = atkTeam == 0 ? PitchL : 0f;
+            return MathF.Abs(p.X - 34f) <= 21.15f && MathF.Abs(p.Y - gy) <= 17.5f;
+        }
+
+        /// <summary>Sahne 4: aut sonrası kale vuruşu — top kale sahasına, kaleci başına.</summary>
+        void BeginGoalKick(int team)
+        {
+            possession = team;
+            chanceActions = 0;
+            pendingReceiverIdx = -1;
+            float gy = team == 0 ? 5.5f : PitchL - 5.5f;
+            ballPos = new Vec2(34f + ((float)R(Domain.Physics, 24) - 0.5f) * 11f, gy);
+            ballMoving = false;
+            carrierIdx = team * 11; // kaleci kullanır
+            Phase = FlowPhase.GoalKick;
+            phaseTimer = bal.pace.dizilisEmniyetSn * 0.75f;
+            stageHold = 0f;
+        }
+
+        /// <summary>Kale vuruşu koşulu: kaleci topun başında, rakip ceza sahası boşaldı.</summary>
+        bool GoalKickReady()
+        {
+            if (Vec2.Distance(players[carrierIdx].Pos, ballPos) > 2f) return false;
+            for (int i = 0; i < 11; i++)
+                if (InPenaltyBox(players[(1 - possession) * 11 + i].Pos, 1 - possession)) return false;
+            return true;
+        }
+
+        void ResumeFromGoalKick()
+        {
+            Phase = FlowPhase.OpenPlay;
+            dwellTimer = 0.35f; // kaleci kısa pasla oyunu başlatır
         }
 
         // ---------------------------------------------------------------- top ve oyuncular
@@ -590,7 +722,8 @@ namespace TheBadge.Greybox.Sim
                     break;
                 case FlowPhase.ShotTravel: ResolveShot(); break;
                 case FlowPhase.CornerSetup:
-                    phaseTimer = bal.corner.dizilisSn; // top köşede: diziliş süresi başlar
+                    phaseTimer = bal.pace.dizilisEmniyetSn; // top köşede: diziliş koşulu beklenir
+                    stageHold = 0f;
                     break;
                 case FlowPhase.CornerCross: ResolveCorner(); break;
             }
@@ -663,6 +796,9 @@ namespace TheBadge.Greybox.Sim
 
             if (i == 0)
             {
+                // Kale vuruşunda kaleci topun başına gelir (Sahne 4)
+                if (Phase == FlowPhase.GoalKick && team == possession)
+                    return BallSpot();
                 // Kaleci: kale önünde topu izler
                 float gx = Clamp(34f + (ballPos.X - 34f) * 0.22f, 30.5f, 37.5f);
                 float gy = team == 0 ? 1.6f : PitchL - 1.6f;
@@ -670,7 +806,11 @@ namespace TheBadge.Greybox.Sim
             }
 
             if (Phase == FlowPhase.KickOff || Phase == FlowPhase.HalfTimeBreak)
-                return team == possession && idx == carrierIdx ? BallSpot() : anchor;
+                return KickoffTarget(team, i, idx);
+
+            // Kale vuruşu sahnesi: herkes dizilişine açılır, pres yok (Sahne 4)
+            if (Phase == FlowPhase.GoalKick)
+                return anchor;
 
             // Topun sahibi topla oynar — pas beklerken/taşırken dairenin dibinde durur (İterasyon 1)
             if (team == possession && idx == carrierIdx &&
@@ -793,7 +933,32 @@ namespace TheBadge.Greybox.Sim
             return new Vec2(x, y);
         }
 
-        Vec2 KeeperPoint(int team) => new Vec2(34f, team == 0 ? 5.5f : PitchL - 5.5f);
+        /// <summary>Sahneleme 1 diziliş hedefi: kendi yarı saha kilidi + rakip çember dışı +
+        /// santra takımının forvetleri topun başında/çember kenarında.</summary>
+        Vec2 KickoffTarget(int team, int i, int idx)
+        {
+            if (team == possession && idx == carrierIdx) return BallSpot();
+            float half = PitchL * 0.5f;
+            Vec2 a = AnchorWorld(team, i);
+            a.Y = team == 0 ? MathF.Min(a.Y, half - 3f) : MathF.Max(a.Y, half + 3f); // Kural 8
+
+            if (team == possession && i == 10) // ikinci forvet çember kenarında
+                return new Vec2(38f, half - AttackDir(team) * 2.2f);
+
+            if (team != possession)
+            {
+                // Santra kullanmayan takım orta yuvarlağın dışında bekler
+                Vec2 c = new Vec2(34f, half);
+                Vec2 d = a - c;
+                float m = d.Magnitude;
+                if (m < 10.5f)
+                {
+                    a = m < 0.01f ? c + new Vec2(0f, -AttackDir(team) * 10.5f) : c + d * (10.5f / m);
+                    a.Y = team == 0 ? MathF.Min(a.Y, half - 0.8f) : MathF.Max(a.Y, half + 0.8f);
+                }
+            }
+            return a;
+        }
 
         Vec2 BallSpot() => new Vec2(Clamp(ballPos.X, 1.2f, PitchW - 1.2f), Clamp(ballPos.Y, 1.2f, PitchL - 1.2f));
 

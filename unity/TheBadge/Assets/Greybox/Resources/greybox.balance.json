@@ -11,9 +11,11 @@
   "pace": {
     "aksiyonAralikMinSn": 0.15,
     "aksiyonAralikMaxSn": 0.5,
-    "santraBeklemeSn": 1.4,
+    "santraBeklemeSn": 0.6,
     "kutlamaSuresiSn": 3.4,
-    "spikerAralikSn": 8.0
+    "spikerAralikSn": 8.0,
+    "dizilisEmniyetSn": 8.0,
+    "gkTutmaSn": 1.5
   },
   "ball": {
     "pasHiziMinMS": 13.0,
@@ -60,7 +62,7 @@
   "corner": {
     "pKafaSut": 0.55,
     "pGolKafa": 0.13,
-    "dizilisSn": 2.2
+    "dizilisSn": 0.8
   },
   "momentum": {
     "sigma": 0.4,

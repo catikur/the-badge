@@ -32,9 +32,11 @@ namespace TheBadge.Greybox.Sim
         {
             public float aksiyonAralikMinSn;  // top hedefe varınca yeni karar arası bekleme bandı
             public float aksiyonAralikMaxSn;
-            public float santraBeklemeSn;
+            public float santraBeklemeSn;     // diziliş SAĞLANDIKTAN sonra düdük öncesi nefes (Sahneleme 1)
             public float kutlamaSuresiSn;
             public float spikerAralikSn;      // boşta akan spiker satırı sıklığı (sunum)
+            public float dizilisEmniyetSn;    // diziliş kilitlenme emniyeti — Sahneleme kök ilkesi
+            public float gkTutmaSn;           // kurtarış sonrası kalecinin topu tutma süresi (Sahne 4)
         }
 
         [Serializable]
@@ -96,7 +98,7 @@ namespace TheBadge.Greybox.Sim
         {
             public float pKafaSut;            // ortadan kafa şutu çıkma olasılığı
             public float pGolKafa;            // kafa şutundan gol (sim.balance cornerGolBandi aynası)
-            public float dizilisSn;           // korner öncesi ceza sahası diziliş süresi (sahneleme)
+            public float dizilisSn;           // diziliş SAĞLANDIKTAN sonra orta öncesi nefes (Sahne 5)
         }
 
         [Serializable]

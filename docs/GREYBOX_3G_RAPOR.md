@@ -87,6 +87,23 @@ Atilla'nın somutlaştırdığı üç kopma anı + kök neden düzeltmesi:
 
 Kanıt: 300 maç harness yeşil (2.13 gol / 10.4 şut / 3.1 korner / 167 sn); güç ayrışması 45/60 vs 8/60; determinizm-lite geçer; tüm derleme yolları 0 hata/0 uyarı; Sim.Checks yeşil. **His onayı Atilla'nın yeniden oynayışına bağlı.**
 
+## İterasyon 3 — Sahneleme senaryosuna hizalama (2026-07-31/08-01)
+
+Süreç değişikliği (Atilla kararı): sahneler önce yazıyla sabitlendi (`docs/GREYBOX_SAHNELEME.md`, onaylı v1),
+kod senaryoya hizalandı. Kök ilke: **sahneler süreyle değil DİZİLİŞ KOŞULUYLA başlar.**
+
+| Senaryo maddesi | Uygulama |
+|---|---|
+| Santra: herkes kendi yarısında + rakip çember dışı + forvet topun başında olmadan düdük YOK | `KickoffReady()` koşulu + kendi-yarı-saha kilitli santra dizilişi (`KickoffTarget`); santra pası geriye/yana kısa pas; gol sonrası da aynı koşul beklenir |
+| Korner: kutu dolmadan orta GELMEZ (hücum ≥5 + savunma ≥5 kutuda + taker köşede) | `CornerReady()` koşulu; emniyet ~8 sn [KALİBRE-G dizilisEmniyetSn] |
+| Aut → kale vuruşu sahnesi | Yeni `GoalKick` fazı: top kale sahasına, kaleci başına, rakip kutuyu boşaltır, kaleci pasıyla devam |
+| Kurtarış → kaleci topu tutar | `gkTutmaSn` 1.5 sn [KALİBRE-G], sonra kısa dağıtım |
+| Diziliş beklemeleri maç saatini yemesin | Staging duraklamalarında maç saati durur — 90 dk saf akışa ait |
+| Sahne sözleşmesi testleri | Harness: 300 maçta 1211 santra + 908 korner geçişi denetlendi, **0 ihlal, 0 emniyet devreye girişi**; gol topunun ağda bitişi de denetleniyor. EditMode aynası: `SahneSozlesmesiTests` |
+
+Pacing: 2.04 gol / 10.0 şut / 3.0 korner; 1x maç ~197 sn (sahneleme gerçek süreye eklendi — 2x/skip telafi eder).
+Güç ayrışması: 43/60 vs 7/60. Tüm derleme yolları 0 hata/0 uyarı; Sim.Checks yeşil.
+
 ## Atilla'nın sıradaki adımları
 
 `unity/UNITY_SETUP.md` runbook'u: projeyi aç → konsol/testler → Editor'de oyna → iPhone build → 3-5 oyuncu playtest → `docs/PLAYTEST_3G.md` doldur → kapı kararı (GO/NO-GO) → DECISIONS.md.
