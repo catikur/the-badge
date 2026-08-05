@@ -72,6 +72,8 @@ Tüm his/ekonomi sayıları **[KALİBRE-G]** olarak `Assets/Greybox/Resources/gr
 
 İterasyon sonrası kanıt: 300 maç harness yeşil (2.21 gol / 10.2 şut / 3.0 korner / 166 sn); determinizm-lite geçer; tüm derleme yolları 0 hata / 0 uyarı; Sim.Checks yeşil.
 
+**Sahip his notu (2026-07-31, iterasyon 1 sonrası):** Atilla hissi henüz "tamam" bulmuyor; süreç playtest'e taşındı. Kapı kararı 4G.4 gereği yalnız playtest metriğinden çıkar ("his eksik ama ileride düzelir" gerekçesi FAZ 02/05 kilidini AÇMAZ); Atilla'nın kendi gözlemi playtest formuna tasarımcı notu olarak ayrıca işlenecek.
+
 ## Atilla'nın sıradaki adımları
 
 `unity/UNITY_SETUP.md` runbook'u: projeyi aç → konsol/testler → Editor'de oyna → iPhone build → 3-5 oyuncu playtest → `docs/PLAYTEST_3G.md` doldur → kapı kararı (GO/NO-GO) → DECISIONS.md.
