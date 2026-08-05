@@ -1,3 +1,4 @@
+using TheBadge.Greybox.Loop;
 using TheBadge.Greybox.Sim;
 using UnityEngine;
 
@@ -120,16 +121,21 @@ namespace TheBadge.Greybox.View
             Bar("GoalMouth", FlowSim.PitchW * 0.5f, goalY, 7.32f + 0.9f, 0.55f, mouth);
         }
 
-        /// <summary>Her frame sim pozisyonlarını uygular (sim zaten yumuşak hareket üretir).</summary>
-        public void Render(FlowSim sim)
+        /// <summary>Kareler arası interpolasyonlu çizim: önceki sim adımı → şimdiki adım karışımı.
+        /// Her oyun hızında (1x/2x/slow-mo) pürüzsüz hareket (Sahneleme §2).</summary>
+        public void Render(MatchDirector d)
         {
-            if (sim == null) return;
+            if (d == null || d.Sim == null) return;
+            float a = d.InterpAlpha;
             for (int i = 0; i < 22; i++)
             {
-                var p = sim.GetPlayer(i);
-                dots[i].localPosition = W(p.Pos.X, p.Pos.Y);
+                Vec2 pp = d.PrevPos(i);
+                Vec2 cp = d.Sim.GetPlayer(i).Pos;
+                dots[i].localPosition = W(pp.X + (cp.X - pp.X) * a, pp.Y + (cp.Y - pp.Y) * a);
             }
-            ball.localPosition = W(sim.BallPos.X, sim.BallPos.Y);
+            Vec2 bp = d.PrevPos(22);
+            Vec2 bc = d.Sim.BallPos;
+            ball.localPosition = W(bp.X + (bc.X - bp.X) * a, bp.Y + (bc.Y - bp.Y) * a);
         }
     }
 }

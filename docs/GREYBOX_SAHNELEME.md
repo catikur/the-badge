@@ -34,6 +34,14 @@ skip/2x çalışır; spiker "Oyun yeniden başlamak üzere..." der). Santrayı g
 - Savunma: topa en yakın oyuncu prese çıkar; blok topa göre daralır/kayar; hücum bloğu öne kayar.
 - Top kaybı: ara pas kesilir; kapan oyuncunun ayağıyla oyun kesintisiz devam eder.
 
+**Top fiziği (v1.1):**
+- Pas, alıcıya yaklaşırken YAVAŞLAR (sürtünme hissi — top ayağa gelir, düşmez).
+- Topun sahibi topu AYAĞINDA taşır: top taşıyıcıya yapışıktır, taşıyıcı hücum yönüne kısa
+  driplingle ilerler; taşıyıcı toptan uzaksa (kapma anı) önce topa gider.
+- Şutlar serttir: sabit yüksek hız, yavaşlama yok.
+- Sunum her oyun hızında (1x/2x/slow-mo) SABİT SİM ADIMI + kareler arası interpolasyonla
+  akıcı kalır; hız değişimi top-oyuncu ilişkisini bozamaz.
+
 ## 3. HÜCUM POZİSYONU (ceza sahasına giriş)
 
 - Final üçlüde tempo yükselir: 1-2 hızlı pas kutu çevresindeki hücumculara; forvetler kutuya dalar.
@@ -83,5 +91,6 @@ Harness/EditMode assert'leri:
 4. Kilitlenme emniyeti: hiçbir diziliş beklemesi ~8 sn'yi aşamaz (aşarsa sahne zorla başlar, sayaç loglanır).
 
 ## Sürüm
-- v1 (2026-07-31): İlk metin — Atilla onayı bekliyor. Onaydan sonra kod bu senaryoya hizalanır;
-  sapmalar önce BU DOSYADA değiştirilir, sonra koda iner.
+- v1 (2026-07-31): İlk metin — Atilla onayladı; kod hizalandı (iterasyon 3).
+- v1.1 (2026-08-01): §2 Top fiziği eklendi (pas yavaşlaması, ayakta taşıma, sabit sim adımı +
+  interpolasyon) — Atilla'nın "2x'te top-oyuncu dinamikleri karışıyor" geri bildirimi üzerine.

@@ -17,9 +17,15 @@ namespace TheBadge.Greybox.Loop
         public event Action<int> SpeedChanged;
         public event Action<float, float> Skipped;        // atlanan aralık (dk → dk)
 
+        /// <summary>Sabit sim adımı — sunum her hızda bu adımla ilerler, kareler arası interpolasyon
+        /// pürüzsüzlüğü sağlar (Sahneleme §2: hız değişimi top-oyuncu ilişkisini bozamaz).</summary>
+        public const float SimStep = 0.05f;
+
         GreyboxBalance bal;
         FlowSim sim;
         float slowmoTimer;
+        float simAccum;
+        readonly Vec2[] prevPos = new Vec2[23]; // 0..21 oyuncular, 22 top
         bool running;
 
         public int Speed { get; private set; } = 1;
@@ -29,7 +35,24 @@ namespace TheBadge.Greybox.Loop
         public int SpeedChangeCount { get; private set; }
         public bool SlowmoActive => slowmoTimer > 0f;
 
+        /// <summary>Son sim adımından bu yana biriken oranda (0..1) önceki→şimdiki karışım.</summary>
+        public float InterpAlpha => Mathf.Clamp01(simAccum / SimStep);
+        public Vec2 PrevPos(int i) => prevPos[i];
+
         public void Init(GreyboxBalance balance) => bal = balance;
+
+        void Snapshot()
+        {
+            for (int i = 0; i < 22; i++) prevPos[i] = sim.GetPlayer(i).Pos;
+            prevPos[22] = sim.BallPos;
+        }
+
+        void ResetInterp()
+        {
+            if (sim == null) return;
+            Snapshot();
+            simAccum = 0f;
+        }
 
         public void StartMatch(MatchSetup setup)
         {
@@ -40,6 +63,7 @@ namespace TheBadge.Greybox.Loop
             SkipCount = 0;
             SpeedChangeCount = 0;
             running = true;
+            ResetInterp();
         }
 
         public void StopMatch()
@@ -71,6 +95,7 @@ namespace TheBadge.Greybox.Loop
                 DrainEvents(duringSkip: true);
             }
             Skipped?.Invoke(fromMin, sim.MatchMinute);
+            ResetInterp(); // atlama sonrası dev kare-arası karışım olmasın
             if (sim.IsFinished) FinishMatch();
         }
 
@@ -87,8 +112,16 @@ namespace TheBadge.Greybox.Loop
                 factor = bal.vurgu.slowmoCarpan; // gol vurgusu: dünya yavaşlar, UI normal akar
             }
 
-            sim.Step(Time.deltaTime * factor);
-            DrainEvents(duringSkip: false);
+            // Sabit adımlı sim: hız yalnız adım SIKLIĞINI değiştirir, adımın kendisini değil
+            simAccum += Time.deltaTime * factor;
+            int guard = 0;
+            while (simAccum >= SimStep && guard++ < 400 && !sim.IsFinished)
+            {
+                Snapshot();
+                sim.Step(SimStep);
+                simAccum -= SimStep;
+                DrainEvents(duringSkip: false);
+            }
 
             if (sim.IsFinished) FinishMatch();
         }

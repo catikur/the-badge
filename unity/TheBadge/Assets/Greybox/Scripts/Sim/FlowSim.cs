@@ -198,10 +198,7 @@ namespace TheBadge.Greybox.Sim
                     if (Phase == FlowPhase.OpenPlay && !ballMoving)
                     {
                         dwellTimer -= h;
-                        // top "taşınıyor" hissi: karar beklerken hücum yönüne hafif sürüklenme
-                        ballPos = Vec2.MoveTowards(ballPos,
-                            ClampToPitch(ballPos + new Vec2(0f, AttackDir(possession) * 3f)),
-                            bal.ball.tasimaHiziMS * 0.14f * h);
+                        GlueBallToCarrier(h); // top taşıyıcının ayağında (Sahneleme §2 fizik)
                         if (dwellTimer <= 0f) DecideOpenPlay();
                     }
                     CheckHalfTransitions();
@@ -696,10 +693,27 @@ namespace TheBadge.Greybox.Sim
             ballMoving = true;
         }
 
+        /// <summary>Top ayağa yapışık: taşıyıcı yakınsa top onun önünde taşınır (dripling görüntüsü).</summary>
+        void GlueBallToCarrier(float h)
+        {
+            if (carrierIdx < 0 || carrierIdx / 11 != possession) return;
+            Vec2 cp = players[carrierIdx].Pos;
+            if (Vec2.Distance(cp, ballPos) > 2.4f) return; // taşıyıcı önce topa gelsin
+            Vec2 feet = ClampToPitch(cp + new Vec2(0f, AttackDir(possession) * 0.9f));
+            ballPos = Vec2.MoveTowards(ballPos, feet, bal.ball.tasimaHiziMS * h);
+        }
+
         void MoveBall(float h)
         {
             if (!ballMoving) return;
-            ballPos = Vec2.MoveTowards(ballPos, ballTarget, ballSpeed * h);
+            // Pas fiziği: top alıcıya yaklaşırken yavaşlar (Sahneleme §2); şut sert kalır
+            float speedNow = ballSpeed;
+            if (Phase != FlowPhase.ShotTravel)
+            {
+                float rem = Vec2.Distance(ballPos, ballTarget);
+                speedNow *= 0.55f + 0.45f * Clamp(rem / 12f, 0f, 1f);
+            }
+            ballPos = Vec2.MoveTowards(ballPos, ballTarget, speedNow * h);
             if (Vec2.Distance(ballPos, ballTarget) > 0.01f) return;
 
             ballMoving = false;
@@ -812,10 +826,19 @@ namespace TheBadge.Greybox.Sim
             if (Phase == FlowPhase.GoalKick)
                 return anchor;
 
-            // Topun sahibi topla oynar — pas beklerken/taşırken dairenin dibinde durur (İterasyon 1)
-            if (team == possession && idx == carrierIdx &&
-                (Phase == FlowPhase.OpenPlay || Phase == FlowPhase.ChanceBuild || Phase == FlowPhase.CornerSetup))
-                return BallSpot();
+            // Topun sahibi: toptan uzaksa topa gider; ayağındaysa hücum yönüne KISA DRİPLİNG yapar
+            // (top GlueBallToCarrier ile ayağına yapışıktır — Sahneleme §2 fizik)
+            if (team == possession && idx == carrierIdx)
+            {
+                if (Phase == FlowPhase.CornerSetup) return BallSpot(); // korner kullanıcısı köşede
+                if (Phase == FlowPhase.OpenPlay || Phase == FlowPhase.ChanceBuild)
+                {
+                    if (Vec2.Distance(players[idx].Pos, ballPos) > 2.2f) return BallSpot();
+                    return new Vec2(
+                        Clamp(players[idx].Pos.X, 1.2f, PitchW - 1.2f),
+                        Clamp(players[idx].Pos.Y + dir * 3.5f, 1.2f, PitchL - 1.2f));
+                }
+            }
 
             // Pas havadayken ALICI buluşma noktasına koşar — top boş alana düşmez (İterasyon 2)
             if (ballMoving && idx == pendingReceiverIdx)

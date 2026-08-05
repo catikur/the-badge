@@ -104,6 +104,20 @@ kod senaryoya hizalandı. Kök ilke: **sahneler süreyle değil DİZİLİŞ KOŞ
 Pacing: 2.04 gol / 10.0 şut / 3.0 korner; 1x maç ~197 sn (sahneleme gerçek süreye eklendi — 2x/skip telafi eder).
 Güç ayrışması: 43/60 vs 7/60. Tüm derleme yolları 0 hata/0 uyarı; Sim.Checks yeşil.
 
+## İterasyon 4 — 2x pürüzsüzlüğü + top fiziği (2026-08-01, Sahneleme v1.1)
+
+Geri bildirim: "2x hızda top-oyuncu dinamikleri karışıyor; fizik kuralları iyileşmeli."
+Kök neden: kare başına örnekleme — hız arttıkça pozisyonlar her karede iki kat zıplıyordu (sim değil sunum sorunu).
+
+| Değişiklik | Etki |
+|---|---|
+| **Sabit sim adımı (0.05 sn) + kareler arası interpolasyon** (MatchDirector/PitchView) | Her hızda (1x/2x/slow-mo) pürüzsüz hareket; sim kare hızından tamamen bağımsızlaştı; skip sonrası interpolasyon sıfırlanır |
+| **Pas yavaşlaması** (son 12 m'de %55'e iner; şutlar sert kalır) | Top "ayağa gelir", robotik sabit hız gitti |
+| **Top-ayak yapışması + dripling** (GlueBallToCarrier; taşıyıcı uzaksa önce topa gider) | Top ile taşıyıcının ayrı gezmesi bitti; taşıma görüntüsü gerçek dripling |
+
+Kanıt: 300 maç — 1.99 gol / 9.4 şut / 2.8 korner / 193 sn; sahne sözleşmesi 1197+830 geçişte 0 ihlal;
+determinizm-lite geçer; iki derleme yolu 0 hata/0 uyarı; Sim.Checks yeşil.
+
 ## Atilla'nın sıradaki adımları
 
 `unity/UNITY_SETUP.md` runbook'u: projeyi aç → konsol/testler → Editor'de oyna → iPhone build → 3-5 oyuncu playtest → `docs/PLAYTEST_3G.md` doldur → kapı kararı (GO/NO-GO) → DECISIONS.md.

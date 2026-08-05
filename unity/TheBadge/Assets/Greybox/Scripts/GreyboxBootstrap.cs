@@ -124,7 +124,7 @@ namespace TheBadge.Greybox
         void Update()
         {
             if (!matchRunning || director.Sim == null) return;
-            pitch.Render(director.Sim);
+            pitch.Render(director);
             ui.SetScoreLine(HomeShort, awayShort,
                 director.Sim.HomeScore, director.Sim.AwayScore, director.Sim.MatchMinute);
 
@@ -255,8 +255,7 @@ namespace TheBadge.Greybox
 
             postShownAt = Time.realtimeSinceStartup;
             priceDirty = false;
-            director.StopMatch();
-            pitch.Render(null); // son kare sahada kalır; null güvenli
+            director.StopMatch(); // son kare sahada kalır
         }
 
         void NextMatch()
