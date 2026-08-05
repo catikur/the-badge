@@ -112,8 +112,12 @@ namespace TheBadge.Greybox.View
         void GoalMouth(float goalY, Color line)
         {
             float dir = goalY <= 0.01f ? -1f : 1f;
-            Color net = line; net.a = 0.8f;
-            Bar("Goal", FlowSim.PitchW * 0.5f, goalY + dir * 0.9f, 7.32f + 0.8f, 1.6f, net);
+            // Ağ: çizginin arkasında belirgin derinlikte yarı saydam kutu — gol topu İÇİNDE biter (İterasyon 2)
+            Color net = line; net.a = 0.32f;
+            Bar("GoalNet", FlowSim.PitchW * 0.5f, goalY + dir * 1.35f, 7.32f + 1.2f, 2.5f, net);
+            // Kale ağzı: çizgi üstünde parlak bar (direkler arası okunsun)
+            Color mouth = line; mouth.a = 1f;
+            Bar("GoalMouth", FlowSim.PitchW * 0.5f, goalY, 7.32f + 0.9f, 0.55f, mouth);
         }
 
         /// <summary>Her frame sim pozisyonlarını uygular (sim zaten yumuşak hareket üretir).</summary>

@@ -12,7 +12,7 @@
     "aksiyonAralikMinSn": 0.15,
     "aksiyonAralikMaxSn": 0.5,
     "santraBeklemeSn": 1.4,
-    "kutlamaSuresiSn": 2.8,
+    "kutlamaSuresiSn": 3.4,
     "spikerAralikSn": 8.0
   },
   "ball": {
@@ -26,7 +26,7 @@
   "players": {
     "vMaxMS": 7.0,
     "presHizCarpan": 1.15,
-    "wanderGenlikM": 2.4,
+    "wanderGenlikM": 1.6,
     "wanderPeriyotSn": 5.5,
     "hucumKaymaM": 14.0,
     "savunmaKaymaM": 10.0,
@@ -59,7 +59,8 @@
   },
   "corner": {
     "pKafaSut": 0.55,
-    "pGolKafa": 0.13
+    "pGolKafa": 0.13,
+    "dizilisSn": 2.2
   },
   "momentum": {
     "sigma": 0.4,

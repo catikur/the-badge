@@ -96,6 +96,7 @@ namespace TheBadge.Greybox.Sim
         {
             public float pKafaSut;            // ortadan kafa şutu çıkma olasılığı
             public float pGolKafa;            // kafa şutundan gol (sim.balance cornerGolBandi aynası)
+            public float dizilisSn;           // korner öncesi ceza sahası diziliş süresi (sahneleme)
         }
 
         [Serializable]

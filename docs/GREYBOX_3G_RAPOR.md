@@ -74,6 +74,19 @@ Tüm his/ekonomi sayıları **[KALİBRE-G]** olarak `Assets/Greybox/Resources/gr
 
 **Sahip his notu (2026-07-31, iterasyon 1 sonrası):** Atilla hissi henüz "tamam" bulmuyor; süreç playtest'e taşındı. Kapı kararı 4G.4 gereği yalnız playtest metriğinden çıkar ("his eksik ama ileride düzelir" gerekçesi FAZ 02/05 kilidini AÇMAZ); Atilla'nın kendi gözlemi playtest formuna tasarımcı notu olarak ayrıca işlenecek.
 
+## İterasyon 2 — "İzlemek acı verici" sahneleme turu (2026-07-31)
+
+Atilla'nın somutlaştırdığı üç kopma anı + kök neden düzeltmesi:
+
+| Geri bildirim | Yapılan |
+|---|---|
+| "Kornerde herkes rakip sahada değil" | Korner sahnelemesi: orta öncesi diziliş beklemesi (`corner.dizilisSn` 2.2 sn [KALİBRE-G]); hücum kutu içi 6 + kutu önü 2 + kontra sigortası 2 noktaya doluşur, savunma kutuda gol tarafında adam tutar, 2 forvet kontrada bekler; korner kullanıcısı köşede, ortayı kutudaki bir hücumcu karşılar. |
+| "Gollerde top ağlara gitmiyor" | Şut hedef derinliği sonuca bağlandı: gol ağların İÇİNDE biter (+1.7 m) ve kutlama boyunca ağlarda kalır; kurtarış kaleci önünde ölür (ışınlama kaldırıldı); aut çizgiyi geçer. Kale görseli: belirgin ağ kutusu + parlak kale ağzı barı. |
+| "Gol sevinci için toplanmıyorlar" | Kutlama kümelenmesi: atan takım skorer noktasında dar halkada toplanır (sevinç sprinti ×1.25, süre 3.4 sn), kaleci katılmaz, yiyen takım santraya döner. |
+| "Top hareketleri yapay/alakasız" (kök neden) | Pas havadayken ALICI buluşma noktasına koşar — top artık boş alana düşüp beklemez; pas isabeti sıkılaştırıldı (±1.5 m → ±0.6 m); amaçsız salınım 2.4→1.6 m. |
+
+Kanıt: 300 maç harness yeşil (2.13 gol / 10.4 şut / 3.1 korner / 167 sn); güç ayrışması 45/60 vs 8/60; determinizm-lite geçer; tüm derleme yolları 0 hata/0 uyarı; Sim.Checks yeşil. **His onayı Atilla'nın yeniden oynayışına bağlı.**
+
 ## Atilla'nın sıradaki adımları
 
 `unity/UNITY_SETUP.md` runbook'u: projeyi aç → konsol/testler → Editor'de oyna → iPhone build → 3-5 oyuncu playtest → `docs/PLAYTEST_3G.md` doldur → kapı kararı (GO/NO-GO) → DECISIONS.md.

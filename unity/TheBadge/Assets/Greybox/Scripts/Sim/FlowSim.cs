@@ -55,6 +55,7 @@ namespace TheBadge.Greybox.Sim
         bool pendingLongBallRisk;
         int carrierIdx = -1;          // topun sahibi oyuncu (görsel inandırıcılık — İterasyon 1)
         int pendingReceiverIdx = -1;  // havadaki pasın hedef oyuncusu
+        Vec2 celebPos;                // gol sevinci kümelenme noktası (İterasyon 2)
         int lastScorerTeam = -1;
         float momentum;               // + ev sahibi lehine, [-1, 1]
 
@@ -146,6 +147,12 @@ namespace TheBadge.Greybox.Sim
                     UpdateMomentum(h);
                     MoveBall(h);
                     MovePlayers(h);
+                    if (Phase == FlowPhase.CornerSetup && !ballMoving)
+                    {
+                        // Diziliş beklemesi: herkes ceza sahasına insin, sonra orta gelsin (İterasyon 2)
+                        phaseTimer -= h;
+                        if (phaseTimer <= 0f) StartCornerCross();
+                    }
                     if (Phase == FlowPhase.OpenPlay && !ballMoving)
                     {
                         dwellTimer -= h;
@@ -246,8 +253,8 @@ namespace TheBadge.Greybox.Sim
                 pendingReceiverIdx = receiver;
                 pendingLongBallRisk = kind == 3;
                 Vec2 t = players[receiver].Pos + new Vec2(
-                    ((float)R(Domain.Decision, 5) - 0.5f) * 3f,
-                    ((float)R(Domain.Decision, 4) - 0.5f) * 3f);
+                    ((float)R(Domain.Decision, 5) - 0.5f) * 1.2f,
+                    ((float)R(Domain.Decision, 4) - 0.5f) * 1.2f);
                 t = ClampToPitch(t);
                 SendBall(t, PassSpeed(Vec2.Distance(ballPos, t)));
                 return;
@@ -270,8 +277,8 @@ namespace TheBadge.Greybox.Sim
             {
                 pendingReceiverIdx = receiver;
                 Vec2 t = players[receiver].Pos + new Vec2(
-                    ((float)R(Domain.Decision, 15) - 0.5f) * 2.5f,
-                    ((float)R(Domain.Decision, 16) - 0.5f) * 2.5f);
+                    ((float)R(Domain.Decision, 15) - 0.5f) * 1.2f,
+                    ((float)R(Domain.Decision, 16) - 0.5f) * 1.2f);
                 t = ClampToPitch(t);
                 SendBall(t, PassSpeed(Vec2.Distance(ballPos, t)));
             }
@@ -399,8 +406,12 @@ namespace TheBadge.Greybox.Sim
                 pendingShotOutcome = r2 < wK ? 1 : (r2 < wK + wD ? 2 : 3);
             }
 
-            // Hedef: kale ağzı (direk arası ~7.32m); dışarı ise direk dışına
-            float goalY = shooter == 0 ? PitchL + 0.8f : -0.8f;
+            // Hedef derinliği sonuca göre: gol AĞLARIN İÇİNDE biter, kurtarış kaleci önünde,
+            // aut/sekme çizgiyi geçer (İterasyon 2 — "top ağlara gitmiyor").
+            float depth = pendingShotOutcome == 0 ? 1.7f
+                        : pendingShotOutcome == 1 ? -1.4f
+                        : 1.0f;
+            float goalY = shooter == 0 ? PitchL + depth : 0f - depth;
             float tx = pendingShotOutcome == 2
                 ? 34f + Sign((float)R(Domain.Duel, 11) - 0.5f) * Lerp(4.6f, 7.5f, (float)R(Domain.Duel, 19))
                 : 34f + ((float)R(Domain.Duel, 11) - 0.5f) * 6.6f;
@@ -424,11 +435,15 @@ namespace TheBadge.Greybox.Sim
                     Emit(FlowEventType.Goal, shooter);
                     Phase = FlowPhase.GoalCelebration;
                     phaseTimer = bal.pace.kutlamaSuresiSn;
-                    ballMoving = false;
+                    ballMoving = false; // top ağlarda kalır, kutlama biterken santraya taşınır
                     carrierIdx = -1;
+                    // Kutlama noktası: gol atılan kaleye yakın, köşeye çekik (İterasyon 2)
+                    celebPos = new Vec2(
+                        Clamp(34f + Sign(ballPos.X - 34f) * 12f, 8f, PitchW - 8f),
+                        (shooter == 0 ? PitchL : 0f) - AttackDir(shooter) * 8.5f);
                     break;
 
-                case 1: // Kurtarış — top kalecide ya da kornere çelindi
+                case 1: // Kurtarış — top kaleci önünde kalır ya da kornere çelinir
                     if (shooter == 0) Stats.HomeOnTarget++; else Stats.AwayOnTarget++;
                     Emit(FlowEventType.Save, 1 - shooter);
                     if (R(Domain.Duel, 23) < bal.shot.pKornerKurtarisSonrasi)
@@ -437,11 +452,10 @@ namespace TheBadge.Greybox.Sim
                         break;
                     }
                     possession = 1 - shooter;
-                    ballPos = KeeperPoint(possession);
-                    carrierIdx = possession * 11; // top kalecide, dağıtım ondan
+                    carrierIdx = possession * 11; // top kalecide, dağıtım ondan (ışınlama yok — İterasyon 2)
                     ballMoving = false;
                     Phase = FlowPhase.OpenPlay;
-                    dwellTimer = 0.45f;
+                    dwellTimer = 0.6f;
                     break;
 
                 case 2: // Dışarı — kale vuruşu
@@ -575,7 +589,9 @@ namespace TheBadge.Greybox.Sim
                     DecideChanceBuild();
                     break;
                 case FlowPhase.ShotTravel: ResolveShot(); break;
-                case FlowPhase.CornerSetup: StartCornerCross(); break;
+                case FlowPhase.CornerSetup:
+                    phaseTimer = bal.corner.dizilisSn; // top köşede: diziliş süresi başlar
+                    break;
                 case FlowPhase.CornerCross: ResolveCorner(); break;
             }
         }
@@ -603,6 +619,8 @@ namespace TheBadge.Greybox.Sim
                     float vmax = bal.players.vMaxMS * (players[idx].IsKeeper ? 0.75f : 1f);
                     if (idx == pressIdx) vmax *= bal.players.presHizCarpan;
                     if (Phase == FlowPhase.KickOff) vmax *= 1.35f; // dizilişe hızlı dönüş
+                    if (Phase == FlowPhase.CornerSetup) vmax *= 1.2f; // kutuya diziliş koşusu
+                    if (Phase == FlowPhase.GoalCelebration && t == lastScorerTeam) vmax *= 1.25f; // sevinç sprinti
                     players[idx].Pos = Vec2.MoveTowards(players[idx].Pos, target, vmax * h);
                 }
             }
@@ -631,10 +649,14 @@ namespace TheBadge.Greybox.Sim
 
             if (Phase == FlowPhase.GoalCelebration)
             {
-                // Gol atan takım orta yuvarlağa koşar; yiyen takım dizilişine döner
-                return team == lastScorerTeam
-                    ? new Vec2(PitchW * 0.5f + (i - 5) * 1.6f, PitchL * 0.5f + dir * -6f)
-                    : AnchorWorld(team, i);
+                // Gol sevinci: atan takım skorer noktasında KÜMELENİR (İterasyon 2);
+                // yiyen takım santra dizilişine döner. Kaleci sevince katılmaz.
+                if (team != lastScorerTeam || i == 0) return AnchorWorld(team, i);
+                float ang = i * 0.63f;
+                float rad = 1.1f + (i % 3) * 0.7f;
+                return new Vec2(
+                    Clamp(celebPos.X + MathF.Cos(ang) * rad, 1.2f, PitchW - 1.2f),
+                    Clamp(celebPos.Y + MathF.Sin(ang) * rad, 1.2f, PitchL - 1.2f));
             }
 
             Vec2 anchor = AnchorWorld(team, i);
@@ -654,6 +676,14 @@ namespace TheBadge.Greybox.Sim
             if (team == possession && idx == carrierIdx &&
                 (Phase == FlowPhase.OpenPlay || Phase == FlowPhase.ChanceBuild || Phase == FlowPhase.CornerSetup))
                 return BallSpot();
+
+            // Pas havadayken ALICI buluşma noktasına koşar — top boş alana düşmez (İterasyon 2)
+            if (ballMoving && idx == pendingReceiverIdx)
+                return new Vec2(Clamp(ballTarget.X, 1.2f, PitchW - 1.2f), Clamp(ballTarget.Y, 1.2f, PitchL - 1.2f));
+
+            // Korner sahnelemesi: hücum kutuya doluşur, savunma kutuda adam tutar (İterasyon 2)
+            if (Phase == FlowPhase.CornerSetup || Phase == FlowPhase.CornerCross)
+                return CornerStagingTarget(team, i, idx);
 
             // Hat yüksekliği + hücum/savunma blok kayması
             float shift = (tac.hatYuksekligi - 0.5f) * 24f;
@@ -695,6 +725,42 @@ namespace TheBadge.Greybox.Sim
         }
 
         static float BlockFactor(int i) => i >= 8 ? 1.0f : (i >= 5 ? 0.75f : 0.45f); // forvet > orta > savunma
+
+        // Korner diziliş noktaları — ceza sahası içi ızgara (geometri; kalibrasyon değil)
+        static readonly float[][] CornerBoxSpots =
+        {
+            new[] { 26f, 7f }, new[] { 34f, 6f }, new[] { 42f, 7f },
+            new[] { 30f, 11f }, new[] { 38f, 11f }, new[] { 34f, 14.5f }
+        };
+        static readonly float[][] CornerEdgeSpots = { new[] { 26f, 19f }, new[] { 42f, 19f } };
+
+        /// <summary>Korner sahnesi hedefi: hücum kutu içi/kutu önü, savunma gol tarafında markaj,
+        /// 2 savunmacı kontra için yarı sahada bekler. Korner kullanıcısı köşede kalır.</summary>
+        Vec2 CornerStagingTarget(int team, int i, int idx)
+        {
+            int atk = possession;
+            float gy = atk == 0 ? PitchL : 0f;            // hücum edilen kale çizgisi
+            float dirIn = atk == 0 ? -1f : 1f;            // kaleden sahaya doğru yön
+
+            if (team == atk)
+            {
+                if (idx == carrierIdx) return players[idx].Pos; // korner kullanıcısı köşede bekler
+                // Sıra: kutu içi 6 nokta → kutu önü 2 → geride 2 guard
+                int k = i - 1 - (carrierIdx / 11 == atk && carrierIdx % 11 < i ? 1 : 0);
+                if (k < 6)
+                    return new Vec2(CornerBoxSpots[k][0], gy + dirIn * CornerBoxSpots[k][1]);
+                if (k < 8)
+                    return new Vec2(CornerEdgeSpots[k - 6][0], gy + dirIn * CornerEdgeSpots[k - 6][1]);
+                return new Vec2(k == 8 ? 26f : 42f, gy + dirIn * 50f); // kontra sigortası
+            }
+
+            // Savunan takım: kutu içinde adam tutar (gol tarafında 2m); forvetler kontrada bekler
+            if (i >= 9)
+                return new Vec2(i == 9 ? 28f : 40f, gy + dirIn * 56f);
+            int m = i - 1;
+            float[] spot = m < 6 ? CornerBoxSpots[m] : CornerEdgeSpots[m - 6];
+            return new Vec2(spot[0] + (i % 2 == 0 ? 1.1f : -1.1f), gy + dirIn * MathF.Max(2.5f, spot[1] - 2f));
+        }
 
         void UpdateMomentum(float h)
         {
@@ -746,8 +812,8 @@ namespace TheBadge.Greybox.Sim
 
         Vec2 ClampToPitch(Vec2 v) => new Vec2(Clamp(v.X, 2f, PitchW - 2f), Clamp(v.Y, 1.5f, PitchL - 1.5f));
 
-        // Şut hedefi kale çizgisini geçebilsin diye gevşek sınır
-        Vec2 ClampToPitchLoose(Vec2 v) => new Vec2(Clamp(v.X, 0.4f, PitchW - 0.4f), Clamp(v.Y, -1f, PitchL + 1f));
+        // Şut hedefi ağların içine kadar gidebilsin diye gevşek sınır
+        Vec2 ClampToPitchLoose(Vec2 v) => new Vec2(Clamp(v.X, 0.4f, PitchW - 0.4f), Clamp(v.Y, -2.2f, PitchL + 2.2f));
 
         double R(Domain d, uint salt) => Rng.Rand01(seed, d, (uint)possession, decisionTick, salt);
 
