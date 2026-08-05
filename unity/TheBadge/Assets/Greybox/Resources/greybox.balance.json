@@ -23,7 +23,13 @@
     "sutHiziMinMS": 22.0,
     "sutHiziMaxMS": 30.0,
     "ortaHiziMS": 16.0,
-    "tasimaHiziMS": 8.5
+    "tasimaHiziMS": 8.5,
+    "pasYukMaxM": 0.8,
+    "uzunTopYukM": 8.0,
+    "ortaYukM": 7.0,
+    "sutYukM": 1.2,
+    "yukOlcekCarpan": 0.07,
+    "yukKaldirmaCarpan": 0.22
   },
   "players": {
     "vMaxMS": 7.0,
@@ -47,7 +53,8 @@
     "ilerlemeMinM": 8.0,
     "ilerlemeMaxM": 17.0,
     "genislikMaxM": 14.0,
-    "gucTutmaCarpan": 0.008
+    "gucTutmaCarpan": 0.008,
+    "pDegaj": 0.45
   },
   "shot": {
     "pSutChanceBuild": 0.5,

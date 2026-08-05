@@ -118,6 +118,17 @@ Kök neden: kare başına örnekleme — hız arttıkça pozisyonlar her karede 
 Kanıt: 300 maç — 1.99 gol / 9.4 şut / 2.8 korner / 193 sn; sahne sözleşmesi 1197+830 geçişte 0 ihlal;
 determinizm-lite geçer; iki derleme yolu 0 hata/0 uyarı; Sim.Checks yeşil.
 
+## İterasyon 5 — Yükseklik fiziği + yön + ışınlama yasağı (2026-08-01, Sahneleme v1.2)
+
+| Geri bildirim | Yapılan |
+|---|---|
+| "Korner sonrası sahne atlayıp top orta sahadan devam ediyor" | Kök neden: korner uzaklaştırması topu 20 m ışınlıyordu. Artık uzaklaştırma HAVADAN uçan gerçek bir top: kutu dışına süzülür, kapan takımın oyuncusu buluşma noktasına koşar. Işınlama senaryoda YASAK (v1.2) ve yükseklik bandı harness'ta denetleniyor. |
+| "Oyuncuların yönü belli olsun (ayak çıkıntısı)" | Her dairede kenara oturan koyu "ayak/burun" işareti: hareketteyken gidilen yöne, dururken topa döner (yumuşatılmış dönüş). |
+| "Top yükselince büyüsün, düşünce küçülsün (perspektif)" | Top yüksekliği simüle ediliyor (parabolik yay): kısa pas yerden; uzun top/korner ortası/degaj/uzaklaştırma havadan. Sunumda top yükseldikçe BÜYÜR, yerdeki gölgesinden ayrılır (kaldırma), düşünce ayağa iner. [KALİBRE-G]: yük tepeleri + ölçek/kaldırma çarpanları. Tam izometrik/eğik kamera bilinçli kapsam dışı (2.5D prerender FAZ 05+); greybox üstten bakışta yükseklik hissini ölçek+gölgeyle verir. |
+| Proaktif fizik süpürmesi | Kaleci artık sık sık YÜKSEK degaj kullanır (`flow.pDegaj`, kapılma riskli); kafa vuruşları alçak/sert; şut sert kalır. |
+
+Kanıt: 300 maç — 1.96 gol / 9.1 şut / 2.7 korner / 193 sn; sahne sözleşmesi (1187 santra + 797 korner + yükseklik bandı) 0 ihlal; determinizm-lite geçer; derleme yolları 0/0; Sim.Checks yeşil.
+
 ## Atilla'nın sıradaki adımları
 
 `unity/UNITY_SETUP.md` runbook'u: projeyi aç → konsol/testler → Editor'de oyna → iPhone build → 3-5 oyuncu playtest → `docs/PLAYTEST_3G.md` doldur → kapı kararı (GO/NO-GO) → DECISIONS.md.

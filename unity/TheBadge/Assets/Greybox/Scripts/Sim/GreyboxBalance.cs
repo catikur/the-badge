@@ -48,6 +48,12 @@ namespace TheBadge.Greybox.Sim
             public float sutHiziMaxMS;
             public float ortaHiziMS;
             public float tasimaHiziMS;        // oyuncu topla ilerlerken (kısa sürüklemeler)
+            public float pasYukMaxM;          // kısa pas tepe yüksekliği (yerden gider)
+            public float uzunTopYukM;         // uzun top / degaj / uzaklaştırma tepe yüksekliği
+            public float ortaYukM;            // korner ortası tepe yüksekliği
+            public float sutYukM;             // şut tepe yüksekliği (sert ve alçak)
+            public float yukOlcekCarpan;      // sunum: metre başına top ölçeği artışı
+            public float yukKaldirmaCarpan;   // sunum: metre başına ekranda kaldırma (gölgeden ayrılma)
         }
 
         [Serializable]
@@ -78,6 +84,7 @@ namespace TheBadge.Greybox.Sim
             public float ilerlemeMaxM;
             public float genislikMaxM;        // yan pas / sürüklenme genişliği
             public float gucTutmaCarpan;      // kadro gücü farkının top tutmaya etkisi (puan başına)
+            public float pDegaj;              // kalecinin uzun degaj tercihi (Sahne 4)
         }
 
         [Serializable]

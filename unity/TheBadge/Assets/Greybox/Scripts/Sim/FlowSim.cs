@@ -67,6 +67,11 @@ namespace TheBadge.Greybox.Sim
         Vec2 ballPos, ballTarget;
         float ballSpeed;
         bool ballMoving;
+        float ballH;                  // topun yerden yüksekliği (m) — parabolik uçuş (Sahneleme §2 v1.2)
+        float flightTotal, flightPeak;
+
+        /// <summary>Topun anlık yüksekliği (m) — sunum ölçek/gölge/kaldırma için.</summary>
+        public float BallHeight => ballH;
 
         readonly PlayerDot[] players = new PlayerDot[22];
         readonly Vec2[] wanderOffset = new Vec2[22];
@@ -260,7 +265,24 @@ namespace TheBadge.Greybox.Sim
                     Vec2 t0 = ClampToPitch(players[back].Pos + new Vec2(
                         ((float)R(Domain.Decision, 5) - 0.5f) * 1.2f,
                         ((float)R(Domain.Decision, 4) - 0.5f) * 1.2f));
-                    SendBall(t0, PassSpeed(Vec2.Distance(ballPos, t0)));
+                    SendBall(t0, PassSpeed(Vec2.Distance(ballPos, t0)), bal.ball.pasYukMaxM * 0.5f);
+                    return;
+                }
+            }
+
+            // Kaleci degajı — Sahne 4: kaleci sık sık uzun ve YÜKSEK top tercih eder
+            if (carrierIdx == possession * 11 && R(Domain.Decision, 27) < bal.flow.pDegaj)
+            {
+                int punt = PickReceiver(possession, 3);
+                if (punt < 0) punt = PickReceiver(possession, 0);
+                if (punt >= 0)
+                {
+                    pendingReceiverIdx = punt;
+                    Vec2 pt = ClampToPitch(players[punt].Pos + new Vec2(
+                        ((float)R(Domain.Decision, 5) - 0.5f) * 2f,
+                        ((float)R(Domain.Decision, 4) - 0.5f) * 2f));
+                    pendingLongBallRisk = true; // degaj da kapılabilir
+                    SendBall(pt, bal.ball.pasHiziMaxMS, bal.ball.uzunTopYukM * 1.1f);
                     return;
                 }
             }
@@ -313,7 +335,8 @@ namespace TheBadge.Greybox.Sim
                     ((float)R(Domain.Decision, 5) - 0.5f) * 1.2f,
                     ((float)R(Domain.Decision, 4) - 0.5f) * 1.2f);
                 t = ClampToPitch(t);
-                SendBall(t, PassSpeed(Vec2.Distance(ballPos, t)));
+                SendBall(t, PassSpeed(Vec2.Distance(ballPos, t)),
+                    kind == 3 ? bal.ball.uzunTopYukM : bal.ball.pasYukMaxM);
                 return;
             }
 
@@ -323,7 +346,8 @@ namespace TheBadge.Greybox.Sim
                 ? -Lerp(6f, 12f, (float)R(Domain.Decision, 4)) * dir
                 : Lerp(bal.flow.ilerlemeMinM, bal.flow.ilerlemeMaxM, (float)R(Domain.Decision, 4)) * dir;
             float dx = ((float)R(Domain.Decision, 5) - 0.5f) * bal.flow.genislikMaxM;
-            SendBall(ClampToPitch(ballPos + new Vec2(dx, dy)), PassSpeed(MathF.Abs(dy) + MathF.Abs(dx) * 0.5f));
+            SendBall(ClampToPitch(ballPos + new Vec2(dx, dy)), PassSpeed(MathF.Abs(dy) + MathF.Abs(dx) * 0.5f),
+                kind == 3 ? bal.ball.uzunTopYukM : bal.ball.pasYukMaxM);
         }
 
         /// <summary>Ceza sahası çevresindeki en uygun hücumcuya pas (ChanceBuild akışı).</summary>
@@ -337,11 +361,11 @@ namespace TheBadge.Greybox.Sim
                     ((float)R(Domain.Decision, 15) - 0.5f) * 1.2f,
                     ((float)R(Domain.Decision, 16) - 0.5f) * 1.2f);
                 t = ClampToPitch(t);
-                SendBall(t, PassSpeed(Vec2.Distance(ballPos, t)));
+                SendBall(t, PassSpeed(Vec2.Distance(ballPos, t)), bal.ball.pasYukMaxM);
             }
             else
             {
-                SendBall(BoxPoint(possession, 3), PassSpeed(12f));
+                SendBall(BoxPoint(possession, 3), PassSpeed(12f), bal.ball.pasYukMaxM);
             }
         }
 
@@ -474,9 +498,9 @@ namespace TheBadge.Greybox.Sim
                 : 34f + ((float)R(Domain.Duel, 11) - 0.5f) * 6.6f;
 
             Phase = FlowPhase.ShotTravel;
-            ballTarget = new Vec2(tx, goalY);
-            ballSpeed = Lerp(bal.ball.sutHiziMinMS, bal.ball.sutHiziMaxMS, (float)R(Domain.Duel, 12));
-            ballMoving = true;
+            SendBall(new Vec2(tx, goalY),
+                Lerp(bal.ball.sutHiziMinMS, bal.ball.sutHiziMaxMS, (float)R(Domain.Duel, 12)),
+                header ? bal.ball.sutYukM * 0.6f : bal.ball.sutYukM); // kafa vuruşu aşağı doğru
         }
 
         void ResolveShot()
@@ -560,7 +584,7 @@ namespace TheBadge.Greybox.Sim
                 ty = (possession == 0 ? PitchL : 0f) - dir * Lerp(6f, 11f, (float)R(Domain.SetPiece, 14));
             }
             Phase = FlowPhase.CornerCross;
-            SendBall(new Vec2(tx, ty), bal.ball.ortaHiziMS);
+            SendBall(new Vec2(tx, ty), bal.ball.ortaHiziMS, bal.ball.ortaYukM);
         }
 
         void ResolveCorner()
@@ -574,10 +598,19 @@ namespace TheBadge.Greybox.Sim
                 TakeShot(header: true);
                 return;
             }
-            // Savunma uzaklaştırdı
-            Turnover(jitter: false);
-            float dir = AttackDir(possession); // turnover sonrası yeni sahip savunan takım
-            ballPos = ClampToPitch(ballPos + new Vec2(((float)R(Domain.Physics, 20) - 0.5f) * 20f, dir * 20f));
+            // Savunma kafayla uzaklaştırdı: top kutu dışına UÇAR, kapan takım karşılar
+            // (ışınlanma yasak — Sahneleme §5 v1.2; "sahne atlama" bug'ının düzeltmesi)
+            int defTeam = 1 - possession;
+            possession = defTeam;
+            chanceActions = 0;
+            Phase = FlowPhase.OpenPlay;
+            carrierIdx = -1;
+            float dirDef = AttackDir(defTeam);
+            Vec2 clearTo = ClampToPitch(new Vec2(
+                ballPos.X + ((float)R(Domain.Physics, 20) - 0.5f) * 26f,
+                ballPos.Y + dirDef * Lerp(16f, 28f, (float)R(Domain.Physics, 22))));
+            pendingReceiverIdx = NearestOutfield(defTeam, clearTo);
+            SendBall(clearTo, bal.ball.ortaHiziMS, bal.ball.uzunTopYukM * 0.8f);
         }
 
         void Turnover(bool jitter)
@@ -601,6 +634,7 @@ namespace TheBadge.Greybox.Sim
             pendingReceiverIdx = -1;
             ballPos = new Vec2(PitchW * 0.5f, PitchL * 0.5f);
             ballMoving = false;
+            ballH = 0f;
             Phase = FlowPhase.KickOff;
             phaseTimer = bal.pace.dizilisEmniyetSn; // kilitlenme emniyeti; düdüğü DİZİLİŞ verir
             stageHold = 0f;
@@ -663,6 +697,7 @@ namespace TheBadge.Greybox.Sim
             float gy = team == 0 ? 5.5f : PitchL - 5.5f;
             ballPos = new Vec2(34f + ((float)R(Domain.Physics, 24) - 0.5f) * 11f, gy);
             ballMoving = false;
+            ballH = 0f;
             carrierIdx = team * 11; // kaleci kullanır
             Phase = FlowPhase.GoalKick;
             phaseTimer = bal.pace.dizilisEmniyetSn * 0.75f;
@@ -686,11 +721,13 @@ namespace TheBadge.Greybox.Sim
 
         // ---------------------------------------------------------------- top ve oyuncular
 
-        void SendBall(Vec2 target, float speed)
+        void SendBall(Vec2 target, float speed, float peakH = 0f)
         {
             ballTarget = ClampToPitchLoose(target);
             ballSpeed = speed;
             ballMoving = true;
+            flightTotal = MathF.Max(0.1f, Vec2.Distance(ballPos, ballTarget));
+            flightPeak = peakH;
         }
 
         /// <summary>Top ayağa yapışık: taşıyıcı yakınsa top onun önünde taşınır (dripling görüntüsü).</summary>
@@ -701,6 +738,7 @@ namespace TheBadge.Greybox.Sim
             if (Vec2.Distance(cp, ballPos) > 2.4f) return; // taşıyıcı önce topa gelsin
             Vec2 feet = ClampToPitch(cp + new Vec2(0f, AttackDir(possession) * 0.9f));
             ballPos = Vec2.MoveTowards(ballPos, feet, bal.ball.tasimaHiziMS * h);
+            ballH = 0f; // ayaktaki top yerde
         }
 
         void MoveBall(float h)
@@ -708,15 +746,19 @@ namespace TheBadge.Greybox.Sim
             if (!ballMoving) return;
             // Pas fiziği: top alıcıya yaklaşırken yavaşlar (Sahneleme §2); şut sert kalır
             float speedNow = ballSpeed;
+            float rem = Vec2.Distance(ballPos, ballTarget);
             if (Phase != FlowPhase.ShotTravel)
-            {
-                float rem = Vec2.Distance(ballPos, ballTarget);
                 speedNow *= 0.55f + 0.45f * Clamp(rem / 12f, 0f, 1f);
-            }
             ballPos = Vec2.MoveTowards(ballPos, ballTarget, speedNow * h);
+
+            // Yükseklik: parabolik yay — t uçuş ilerleme oranı (Sahneleme §2 v1.2)
+            float t = 1f - Clamp(Vec2.Distance(ballPos, ballTarget) / flightTotal, 0f, 1f);
+            ballH = MathF.Max(0f, 4f * flightPeak * t * (1f - t));
+
             if (Vec2.Distance(ballPos, ballTarget) > 0.01f) return;
 
             ballMoving = false;
+            ballH = 0f;
             switch (Phase)
             {
                 case FlowPhase.OpenPlay:

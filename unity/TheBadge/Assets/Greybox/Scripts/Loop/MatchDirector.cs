@@ -26,6 +26,7 @@ namespace TheBadge.Greybox.Loop
         float slowmoTimer;
         float simAccum;
         readonly Vec2[] prevPos = new Vec2[23]; // 0..21 oyuncular, 22 top
+        float prevBallH;
         bool running;
 
         public int Speed { get; private set; } = 1;
@@ -38,6 +39,8 @@ namespace TheBadge.Greybox.Loop
         /// <summary>Son sim adımından bu yana biriken oranda (0..1) önceki→şimdiki karışım.</summary>
         public float InterpAlpha => Mathf.Clamp01(simAccum / SimStep);
         public Vec2 PrevPos(int i) => prevPos[i];
+        public float BallHeightInterp =>
+            sim == null ? 0f : Mathf.Lerp(prevBallH, sim.BallHeight, InterpAlpha);
 
         public void Init(GreyboxBalance balance) => bal = balance;
 
@@ -45,6 +48,7 @@ namespace TheBadge.Greybox.Loop
         {
             for (int i = 0; i < 22; i++) prevPos[i] = sim.GetPlayer(i).Pos;
             prevPos[22] = sim.BallPos;
+            prevBallH = sim.BallHeight;
         }
 
         void ResetInterp()

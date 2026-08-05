@@ -42,6 +42,17 @@ skip/2x çalışır; spiker "Oyun yeniden başlamak üzere..." der). Santrayı g
 - Sunum her oyun hızında (1x/2x/slow-mo) SABİT SİM ADIMI + kareler arası interpolasyonla
   akıcı kalır; hız değişimi top-oyuncu ilişkisini bozamaz.
 
+**Top yüksekliği ve perspektif (v1.2):**
+- Kısa pas YERDEN gider; uzun top, korner ortası ve kaleci degajı HAVADAN parabolik yayla gider.
+- Havadaki top kameraya yaklaştığı için ekranda BÜYÜR, gölgesinden ayrılır (gölge yerde kalır),
+  düşerken küçülüp ayağa iner. Işınlanan top YASAKTIR — her top hareketi görünür bir uçuştur.
+- Tam izometrik/eğik kamera greybox kapsamı dışıdır (2.5D prerender FAZ 05+); greybox üstten
+  bakışta yükseklik hissini ölçek + gölge + kaldırma ile verir.
+
+**Oyuncu yönü (v1.2):**
+- Her daire, baktığı yönü gösteren küçük bir "ayak/burun" çıkıntısı taşır: hareket halindeyken
+  gittiği yöne, dururken topa döner.
+
 ## 3. HÜCUM POZİSYONU (ceza sahasına giriş)
 
 - Final üçlüde tempo yükselir: 1-2 hızlı pas kutu çevresindeki hücumculara; forvetler kutuya dalar.
@@ -53,7 +64,7 @@ skip/2x çalışır; spiker "Oyun yeniden başlamak üzere..." der). Santrayı g
 |---|---|
 | **GOL** | Top AĞLARIN İÇİNDE durur ve sevinç boyunca orada kalır → Sahne 6. |
 | **KURTARIŞ** | Top kalecinin önünde/ellerinde ölür; kaleci ~1.5 sn tutar, kısa pasla oyunu başlatır (alıcıya). Bazen kornere çeler → Sahne 5. |
-| **AUT** | Top direk dışından çizgiyi geçer → **KALE VURUŞU:** top kale sahasına konur, kaleci başına gelir, savunma açılır, hücum orta sahaya çekilir; kaleci pasıyla devam. |
+| **AUT** | Top direk dışından çizgiyi geçer → **KALE VURUŞU:** top kale sahasına konur, kaleci başına gelir, savunma açılır, hücum orta sahaya çekilir; kaleci KISA PASLA ya da (sık sık) YÜKSEK DEGAJLA devam eder. |
 | **KORNERE SEKME** | → Sahne 5. |
 
 ## 5. KORNER
@@ -65,7 +76,8 @@ skip/2x çalışır; spiker "Oyun yeniden başlamak üzere..." der). Santrayı g
 - Savunma: kutu oyuncuları hücumcuların GOL TARAFINDA adam tutuyor; kaleci çizgide; 1-2 forvet kontra için orta sahada.
 
 **Akış:** Orta kutudaki bir hücumcuya → kafa vuruşu (gol/kurtarış/aut) YA DA savunma uzaklaştırır:
-top kutu dışına, kapan takımın oyuncusunun ayağına → açık oyun.
+uzaklaştırma HAVADAN uçan bir toptur (ışınlanma yok) — top kutu dışına süzülür, kapan takımın
+oyuncusu buluşma noktasına koşup karşılar → açık oyun.
 
 ## 6. GOL SEVİNCİ + YENİDEN BAŞLAMA
 
@@ -94,3 +106,5 @@ Harness/EditMode assert'leri:
 - v1 (2026-07-31): İlk metin — Atilla onayladı; kod hizalandı (iterasyon 3).
 - v1.1 (2026-08-01): §2 Top fiziği eklendi (pas yavaşlaması, ayakta taşıma, sabit sim adımı +
   interpolasyon) — Atilla'nın "2x'te top-oyuncu dinamikleri karışıyor" geri bildirimi üzerine.
+- v1.2 (2026-08-01): Top yüksekliği/perspektif + oyuncu yön çıkıntısı + korner uzaklaştırma
+  uçuşu (ışınlama yasağı) + kaleci degajı — Atilla'nın perspektif/yön geri bildirimi üzerine.

@@ -16,7 +16,12 @@ namespace TheBadge.Greybox.View
 
         GreyboxBalance bal;
         readonly Transform[] dots = new Transform[22];
+        readonly Transform[] facingMarks = new Transform[22]; // yön çıkıntısı (Sahneleme v1.2)
+        readonly Vec2[] facing = new Vec2[22];
+        readonly Vec2[] prevRendered = new Vec2[22];
         Transform ball;
+        Transform ballShadow;
+        float ballBaseScale;
 
         public static PitchView Create(GreyboxBalance bal)
         {
@@ -78,13 +83,28 @@ namespace TheBadge.Greybox.View
                 var sr = SpriteFactory.NewSprite((isHome ? "H" : "A") + (i % 11), transform, SpriteFactory.Circle(), c, OrderDots);
                 sr.transform.localScale = new Vector3(d, d, 1f);
                 dots[i] = sr.transform;
+
+                // Yön çıkıntısı: dairenin kenarında küçük "ayak/burun" (Sahneleme v1.2)
+                var markColor = new Color(c.r * 0.55f, c.g * 0.55f, c.b * 0.55f, 1f);
+                var mark = SpriteFactory.NewSprite("Facing", sr.transform, SpriteFactory.Circle(), markColor, OrderDots + 1);
+                mark.transform.localScale = new Vector3(0.38f, 0.38f, 1f);
+                mark.transform.localPosition = new Vector3(0.5f, 0f, 0f);
+                facingMarks[i] = mark.transform;
+                facing[i] = new Vec2(i < 11 ? 0f : -0.001f, i < 11 ? 1f : -1f); // başlangıç: hücum yönü
             }
+
+            // Top gölgesi: yerde kalır; top yükselince ondan ayrılır (Sahneleme v1.2)
+            float bd = bal.players.topYaricapM * 2f;
+            var sh = SpriteFactory.NewSprite("BallShadow", transform, SpriteFactory.Circle(),
+                new Color(0f, 0f, 0f, 0.32f), OrderBall - 1);
+            sh.transform.localScale = new Vector3(bd * 0.95f, bd * 0.7f, 1f);
+            ballShadow = sh.transform;
 
             var b = SpriteFactory.NewSprite("Ball", transform, SpriteFactory.Circle(),
                 SpriteFactory.Hex(bal.renkler.top, Color.white), OrderBall);
-            float bd = bal.players.topYaricapM * 2f;
             b.transform.localScale = new Vector3(bd, bd, 1f);
             ball = b.transform;
+            ballBaseScale = bd;
 
             // Topa okunabilirlik için koyu dış halka (placeholder, asset değil)
             var outline = SpriteFactory.NewSprite("BallOutline", ball, SpriteFactory.Ring(), new Color(0f, 0f, 0f, 0.55f), OrderBall - 1);
@@ -127,15 +147,38 @@ namespace TheBadge.Greybox.View
         {
             if (d == null || d.Sim == null) return;
             float a = d.InterpAlpha;
+
+            // Top: yerdeki gölge + yükseklikle büyüyüp gölgeden ayrılan gövde (Sahneleme v1.2)
+            Vec2 bp = d.PrevPos(22);
+            Vec2 bc = d.Sim.BallPos;
+            float bx = bp.X + (bc.X - bp.X) * a;
+            float by = bp.Y + (bc.Y - bp.Y) * a;
+            float hgt = d.BallHeightInterp;
+            ballShadow.localPosition = W(bx, by);
+            ball.localPosition = W(bx, by + hgt * bal.ball.yukKaldirmaCarpan);
+            float s = ballBaseScale * (1f + hgt * bal.ball.yukOlcekCarpan);
+            ball.localScale = new Vector3(s, s, 1f);
+
             for (int i = 0; i < 22; i++)
             {
                 Vec2 pp = d.PrevPos(i);
                 Vec2 cp = d.Sim.GetPlayer(i).Pos;
-                dots[i].localPosition = W(pp.X + (cp.X - pp.X) * a, pp.Y + (cp.Y - pp.Y) * a);
+                float px = pp.X + (cp.X - pp.X) * a;
+                float py = pp.Y + (cp.Y - pp.Y) * a;
+                dots[i].localPosition = W(px, py);
+
+                // Yön: hareket halindeyken gidilen yön, dururken topa dönük (Sahneleme v1.2)
+                Vec2 delta = new Vec2(px - prevRendered[i].X, py - prevRendered[i].Y);
+                Vec2 desired = delta.Magnitude > 0.02f
+                    ? delta.Normalized
+                    : new Vec2(bx - px, by - py).Normalized;
+                if (desired.Magnitude > 0.01f)
+                    facing[i] = new Vec2(
+                        facing[i].X + (desired.X - facing[i].X) * 0.22f,
+                        facing[i].Y + (desired.Y - facing[i].Y) * 0.22f).Normalized;
+                facingMarks[i].localPosition = new Vector3(facing[i].X * 0.5f, facing[i].Y * 0.5f, 0f);
+                prevRendered[i] = new Vec2(px, py);
             }
-            Vec2 bp = d.PrevPos(22);
-            Vec2 bc = d.Sim.BallPos;
-            ball.localPosition = W(bp.X + (bc.X - bp.X) * a, bp.Y + (bc.Y - bp.Y) * a);
         }
     }
 }
