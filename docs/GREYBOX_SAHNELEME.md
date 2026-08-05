@@ -49,9 +49,23 @@ skip/2x çalışır; spiker "Oyun yeniden başlamak üzere..." der). Santrayı g
 - Tam izometrik/eğik kamera greybox kapsamı dışıdır (2.5D prerender FAZ 05+); greybox üstten
   bakışta yükseklik hissini ölçek + gölge + kaldırma ile verir.
 
-**Oyuncu yönü (v1.2):**
-- Her daire, baktığı yönü gösteren küçük bir "ayak/burun" çıkıntısı taşır: hareket halindeyken
-  gittiği yöne, dururken topa döner.
+**Oyuncu yönü (v1.2, v1.3 revizyonu):**
+- Her daire, baktığı yönün ÖNÜNDE YAN YANA iki küçük "ayak ucu" çıkıntısı taşır: hareket
+  halindeyken gittiği yöne, dururken topa döner.
+
+**SAHİPLİK DEĞİŞMEZİ (v1.3 — motor kararı, Buckland/Simple Soccer modeli):**
+Top hiçbir an ÖZERK değildir. Her an şu dört durumdan tam birindedir:
+1. **KONTROLDE:** bir oyuncunun ayağında (yapışık); kararlar YALNIZ bu durumdan üretilir.
+2. **HAVADA:** vuran X'ten alan Y'ye giden isimli bir uçuş (pas/orta/şut/degaj/uzaklaştırma).
+3. **DURAN TOP:** santra/korner/kale vuruşu noktasında, kullanıcısını bekliyor.
+4. **SERBEST:** kimsenin değil — iki takımın da en yakın oyuncusu topa koşar, İLK ULAŞAN
+   kontrol eder; serbest topta hiçbir pas/şut kararı üretilemez (4 sn emniyet).
+- **HİÇBİR VURUŞ, vuran oyuncu topun yanında değilken gerçekleşemez (kontrol ~1.6 m; kafa/uzaklaştırma uzanması ≤ ~2.2 m)** — sahne
+  sözleşmesi bunu her vuruşta otomatik denetler.
+- Top kapma: pres yapan oyuncu yakınsa TEMİZ ÇALAR (top ayağına geçer); uzaksa top açığa
+  çıkar (küçük sekme) ve kapışılır.
+- Korner ortasında karşılayan uzaksa top kutuda SERBEST kalır (kapışma/karambol); uzaklaştıran
+  savunmacı da topun yanında olmak zorundadır.
 
 ## 3. HÜCUM POZİSYONU (ceza sahasına giriş)
 
@@ -108,3 +122,5 @@ Harness/EditMode assert'leri:
   interpolasyon) — Atilla'nın "2x'te top-oyuncu dinamikleri karışıyor" geri bildirimi üzerine.
 - v1.2 (2026-08-01): Top yüksekliği/perspektif + oyuncu yön çıkıntısı + korner uzaklaştırma
   uçuşu (ışınlama yasağı) + kaleci degajı — Atilla'nın perspektif/yön geri bildirimi üzerine.
+- v1.3 (2026-08-02): **Sahiplik Değişmezi** (motor kararı: Yol A — Simple Soccer sahiplik modeli
+  retrofit'i; "kimse yokken pas" sınıfı hatanın yapısal yasağı) + ayak ucu çifti revizyonu.

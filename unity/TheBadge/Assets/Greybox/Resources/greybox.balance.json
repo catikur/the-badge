@@ -58,7 +58,7 @@
   },
   "shot": {
     "pSutChanceBuild": 0.5,
-    "pGol": 0.21,
+    "pGol": 0.22,
     "pKurtarma": 0.45,
     "pDisari": 0.27,
     "pKornerSekmesi": 0.28,

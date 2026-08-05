@@ -129,6 +129,27 @@ determinizm-lite geçer; iki derleme yolu 0 hata/0 uyarı; Sim.Checks yeşil.
 
 Kanıt: 300 maç — 1.96 gol / 9.1 şut / 2.7 korner / 193 sn; sahne sözleşmesi (1187 santra + 797 korner + yükseklik bandı) 0 ihlal; determinizm-lite geçer; derleme yolları 0/0; Sim.Checks yeşil.
 
+## İterasyon 6 — Motor kararı: Sahiplik Değişmezi (2026-08-02, Sahneleme v1.3)
+
+Atilla'nın "motoru komple gözden geçir, literatüre bak, yol öner" talebi üzerine üç yol sunuldu
+(A: sahiplik retrofit'i — Buckland/Simple Soccer modeli; B: temiz yeniden yazım; C: FM-tarzı
+koreografi/replay). **Karar: Yol A (Atilla).**
+
+Uygulanan değişmez: top hiçbir an ÖZERK değil — ya bir oyuncunun ayağında, ya İSİMLİ bir uçuşta
+(vuran X → alan Y), ya duran top noktasında, ya SERBEST (ilk ulaşan alır; serbest topta karar üretilemez).
+
+| Mekanizma | Uygulama |
+|---|---|
+| Karar kapısı | Pas/şut kararları yalnız `CarrierHasBall()` (≤1.6 m) sağlanınca üretilir — "kimse yokken pas" YAPISAL olarak imkânsız |
+| Vuruş kaydı | Her `SendBall` vuran oyuncuyu kaydeder (`KickCount`/`LastKickDist`); duran top transportları hariç |
+| Temiz çalma / açık top | Top kaybında pres yakınsa (≤2.5 m) temiz çalar; uzaksa top AÇIĞA çıkar, iki takımın en yakını kapışır (4 sn emniyet) |
+| Korner karambolü | Ortayı karşılayan uzaksa kafa YOK — top kutuda serbest kalır (karambol); uzaklaştıran savunmacı da topun yanında olmak zorunda |
+| Denetim | Sahne sözleşmesine yeni assert: hiçbir vuruş vuran topun yanında değilken olamaz (kontrol ~1.6 m; kafa/uzaklaştırma uzanması ≤ ~2.2 m; denetim toleransı 2.4 m). İlk koşuda 26 sınır ihlali yakalandı → uzanma payı sözleşmeye yazıldı, denetim hizalandı |
+| Ayak uçları | Yön işareti tek burun yerine ÖNDE YAN YANA İKİ ayak ucu çıkıntısına çevrildi (Atilla) |
+
+Kanıt: 300 maç — 1.95 gol / 9.3 şut / 2.7 korner / 192 sn; sahne sözleşmesi (santra + korner +
+gol-ağda + vuruş-yakınlığı) 0 ihlal; determinizm-lite geçer; derleme yolları 0/0; Sim.Checks yeşil.
+
 ## Atilla'nın sıradaki adımları
 
 `unity/UNITY_SETUP.md` runbook'u: projeyi aç → konsol/testler → Editor'de oyna → iPhone build → 3-5 oyuncu playtest → `docs/PLAYTEST_3G.md` doldur → kapı kararı (GO/NO-GO) → DECISIONS.md.

@@ -58,9 +58,21 @@ namespace TheBadge.Greybox.Sim
         Vec2 celebPos;                // gol sevinci kümelenme noktası (İterasyon 2)
         float stageHold;              // diziliş sağlandıktan sonra düdük/orta öncesi nefes sayacı
         bool kickoffPassPending;      // santra pası: ilk karar geriye/yana kısa pas (Sahneleme 1)
+        float looseTimer;             // serbest top süresi (4 sn emniyet)
 
         /// <summary>Diziliş emniyeti kaç kez devreye girdi (sahne sözleşmesi telemetrisi).</summary>
         public int StagingTimeouts { get; private set; }
+
+        /// <summary>Toplam vuruş sayısı — Sahiplik Değişmezi denetimi için (transportlar hariç).</summary>
+        public int KickCount { get; private set; }
+
+        /// <summary>Son vuruş anında vuran oyuncunun topa uzaklığı (m) — ≤ ~1.6 olmalı.</summary>
+        public float LastKickDist { get; private set; }
+
+        /// <summary>Sahiplik Değişmezi: karar yalnız topa sahip oyuncu topun yanındayken üretilir.</summary>
+        bool CarrierHasBall() =>
+            carrierIdx >= 0 && carrierIdx / 11 == possession &&
+            Vec2.Distance(players[carrierIdx].Pos, ballPos) <= 1.6f;
         int lastScorerTeam = -1;
         float momentum;               // + ev sahibi lehine, [-1, 1]
 
@@ -200,11 +212,18 @@ namespace TheBadge.Greybox.Sim
                             ResumeFromGoalKick();
                         }
                     }
-                    if (Phase == FlowPhase.OpenPlay && !ballMoving)
+                    if ((Phase == FlowPhase.OpenPlay || Phase == FlowPhase.ChanceBuild) && !ballMoving)
                     {
+                        // SAHİPLİK DEĞİŞMEZİ (Sahneleme v1.3): karar yalnız topa sahip
+                        // oyuncu topun YANINDAYKEN üretilir; serbest top önce kapışılır.
+                        ResolveLooseBall(h);
+                        GlueBallToCarrier(h);
                         dwellTimer -= h;
-                        GlueBallToCarrier(h); // top taşıyıcının ayağında (Sahneleme §2 fizik)
-                        if (dwellTimer <= 0f) DecideOpenPlay();
+                        if (dwellTimer <= 0f && CarrierHasBall())
+                        {
+                            if (Phase == FlowPhase.OpenPlay) DecideOpenPlay();
+                            else DecideChanceBuild();
+                        }
                     }
                     CheckHalfTransitions();
                     break;
@@ -265,7 +284,7 @@ namespace TheBadge.Greybox.Sim
                     Vec2 t0 = ClampToPitch(players[back].Pos + new Vec2(
                         ((float)R(Domain.Decision, 5) - 0.5f) * 1.2f,
                         ((float)R(Domain.Decision, 4) - 0.5f) * 1.2f));
-                    SendBall(t0, PassSpeed(Vec2.Distance(ballPos, t0)), bal.ball.pasYukMaxM * 0.5f);
+                    SendBall(t0, PassSpeed(Vec2.Distance(ballPos, t0)), bal.ball.pasYukMaxM * 0.5f, carrierIdx);
                     return;
                 }
             }
@@ -282,7 +301,7 @@ namespace TheBadge.Greybox.Sim
                         ((float)R(Domain.Decision, 5) - 0.5f) * 2f,
                         ((float)R(Domain.Decision, 4) - 0.5f) * 2f));
                     pendingLongBallRisk = true; // degaj da kapılabilir
-                    SendBall(pt, bal.ball.pasHiziMaxMS, bal.ball.uzunTopYukM * 1.1f);
+                    SendBall(pt, bal.ball.pasHiziMaxMS, bal.ball.uzunTopYukM * 1.1f, carrierIdx);
                     return;
                 }
             }
@@ -336,7 +355,7 @@ namespace TheBadge.Greybox.Sim
                     ((float)R(Domain.Decision, 4) - 0.5f) * 1.2f);
                 t = ClampToPitch(t);
                 SendBall(t, PassSpeed(Vec2.Distance(ballPos, t)),
-                    kind == 3 ? bal.ball.uzunTopYukM : bal.ball.pasYukMaxM);
+                    kind == 3 ? bal.ball.uzunTopYukM : bal.ball.pasYukMaxM, carrierIdx);
                 return;
             }
 
@@ -347,7 +366,7 @@ namespace TheBadge.Greybox.Sim
                 : Lerp(bal.flow.ilerlemeMinM, bal.flow.ilerlemeMaxM, (float)R(Domain.Decision, 4)) * dir;
             float dx = ((float)R(Domain.Decision, 5) - 0.5f) * bal.flow.genislikMaxM;
             SendBall(ClampToPitch(ballPos + new Vec2(dx, dy)), PassSpeed(MathF.Abs(dy) + MathF.Abs(dx) * 0.5f),
-                kind == 3 ? bal.ball.uzunTopYukM : bal.ball.pasYukMaxM);
+                kind == 3 ? bal.ball.uzunTopYukM : bal.ball.pasYukMaxM, carrierIdx);
         }
 
         /// <summary>Ceza sahası çevresindeki en uygun hücumcuya pas (ChanceBuild akışı).</summary>
@@ -361,11 +380,11 @@ namespace TheBadge.Greybox.Sim
                     ((float)R(Domain.Decision, 15) - 0.5f) * 1.2f,
                     ((float)R(Domain.Decision, 16) - 0.5f) * 1.2f);
                 t = ClampToPitch(t);
-                SendBall(t, PassSpeed(Vec2.Distance(ballPos, t)), bal.ball.pasYukMaxM);
+                SendBall(t, PassSpeed(Vec2.Distance(ballPos, t)), bal.ball.pasYukMaxM, carrierIdx);
             }
             else
             {
-                SendBall(BoxPoint(possession, 3), PassSpeed(12f), bal.ball.pasYukMaxM);
+                SendBall(BoxPoint(possession, 3), PassSpeed(12f), bal.ball.pasYukMaxM, carrierIdx);
             }
         }
 
@@ -500,7 +519,7 @@ namespace TheBadge.Greybox.Sim
             Phase = FlowPhase.ShotTravel;
             SendBall(new Vec2(tx, goalY),
                 Lerp(bal.ball.sutHiziMinMS, bal.ball.sutHiziMaxMS, (float)R(Domain.Duel, 12)),
-                header ? bal.ball.sutYukM * 0.6f : bal.ball.sutYukM); // kafa vuruşu aşağı doğru
+                header ? bal.ball.sutYukM * 0.6f : bal.ball.sutYukM, carrierIdx); // kafa vuruşu aşağı doğru
         }
 
         void ResolveShot()
@@ -561,7 +580,7 @@ namespace TheBadge.Greybox.Sim
             float cy = team == 0 ? PitchL : 0f;
             float cx = ballPos.X < PitchW * 0.5f ? 0.6f : PitchW - 0.6f;
             Phase = FlowPhase.CornerSetup;
-            SendBall(new Vec2(cx, cy), bal.ball.ortaHiziMS * 0.7f);
+            SendBall(new Vec2(cx, cy), bal.ball.ortaHiziMS * 0.7f, 0f, -1); // duran top transportu
             carrierIdx = NearestOutfield(team, new Vec2(cx, cy)); // korner kullanıcısı köşeye gider
         }
 
@@ -584,47 +603,106 @@ namespace TheBadge.Greybox.Sim
                 ty = (possession == 0 ? PitchL : 0f) - dir * Lerp(6f, 11f, (float)R(Domain.SetPiece, 14));
             }
             Phase = FlowPhase.CornerCross;
-            SendBall(new Vec2(tx, ty), bal.ball.ortaHiziMS, bal.ball.ortaYukM);
+            SendBall(new Vec2(tx, ty), bal.ball.ortaHiziMS, bal.ball.ortaYukM, carrierIdx);
         }
 
         void ResolveCorner()
         {
             decisionTick++;
             if (pendingReceiverIdx >= 0 && pendingReceiverIdx / 11 == possession)
-                carrierIdx = pendingReceiverIdx; // ortayı karşılayan oyuncu
+                carrierIdx = pendingReceiverIdx; // ortayı karşılamaya çalışan oyuncu
             pendingReceiverIdx = -1;
-            if (R(Domain.SetPiece, 13) < bal.corner.pKafaSut)
+
+            // Sahiplik Değişmezi: kafa ancak karşılayan TOPUN YANINDAYSA vurulur
+            bool headerRoll = R(Domain.SetPiece, 13) < bal.corner.pKafaSut;
+            bool carrierNear = carrierIdx >= 0 && carrierIdx / 11 == possession &&
+                               Vec2.Distance(players[carrierIdx].Pos, ballPos) <= 2.0f;
+            if (headerRoll && carrierNear)
             {
                 TakeShot(header: true);
                 return;
             }
-            // Savunma kafayla uzaklaştırdı: top kutu dışına UÇAR, kapan takım karşılar
-            // (ışınlanma yasak — Sahneleme §5 v1.2; "sahne atlama" bug'ının düzeltmesi)
+
+            // Savunma uzaklaştırması: uzaklaştıran da topun yanında olmak zorunda
             int defTeam = 1 - possession;
-            possession = defTeam;
-            chanceActions = 0;
-            Phase = FlowPhase.OpenPlay;
+            int clearer = NearestOutfield(defTeam, ballPos);
+            if (Vec2.Distance(players[clearer].Pos, ballPos) <= 2.2f)
+            {
+                possession = defTeam;
+                chanceActions = 0;
+                Phase = FlowPhase.OpenPlay;
+                carrierIdx = clearer;
+                float dirDef = AttackDir(defTeam);
+                Vec2 clearTo = ClampToPitch(new Vec2(
+                    ballPos.X + ((float)R(Domain.Physics, 20) - 0.5f) * 26f,
+                    ballPos.Y + dirDef * Lerp(16f, 28f, (float)R(Domain.Physics, 22))));
+                pendingReceiverIdx = NearestOutfield(defTeam, clearTo);
+                SendBall(clearTo, bal.ball.ortaHiziMS, bal.ball.uzunTopYukM * 0.8f, clearer);
+                return;
+            }
+
+            // Kimse tam yetişemedi: top kutuda SERBEST — karambol, kapışma çözer
             carrierIdx = -1;
-            float dirDef = AttackDir(defTeam);
-            Vec2 clearTo = ClampToPitch(new Vec2(
-                ballPos.X + ((float)R(Domain.Physics, 20) - 0.5f) * 26f,
-                ballPos.Y + dirDef * Lerp(16f, 28f, (float)R(Domain.Physics, 22))));
-            pendingReceiverIdx = NearestOutfield(defTeam, clearTo);
-            SendBall(clearTo, bal.ball.ortaHiziMS, bal.ball.uzunTopYukM * 0.8f);
+            looseTimer = 0f;
+            dwellTimer = 0.15f;
+            Phase = FlowPhase.ChanceBuild; // ilk kapan hücumcuysa şut şansı doğar
         }
 
+        /// <summary>Top kaybı — Sahiplik Değişmezi: pres yapan YAKINSA temiz çalar,
+        /// uzaksa top açığa çıkar (küçük sekme) ve SERBEST kalır (kapışma çözer).</summary>
         void Turnover(bool jitter)
         {
-            possession = 1 - possession;
+            int defTeam = 1 - possession;
+            int taker = NearestOutfield(defTeam, ballPos);
+            float d = Vec2.Distance(players[taker].Pos, ballPos);
             chanceActions = 0;
             pendingReceiverIdx = -1;
             Phase = FlowPhase.OpenPlay;
             ballMoving = false;
-            dwellTimer = 0.3f;
-            if (jitter)
-                ballPos = ClampToPitch(ballPos + new Vec2(((float)R(Domain.Physics, 20) - 0.5f) * 6f,
-                                                          ((float)R(Domain.Physics, 22) - 0.5f) * 6f));
-            carrierIdx = NearestOutfield(possession, ballPos); // topu kapan oyuncu
+            ballH = 0f;
+            possession = defTeam;
+            looseTimer = 0f;
+            if (d <= 2.5f)
+            {
+                carrierIdx = taker; // temiz top çalma — top çalanın ayağında
+                dwellTimer = 0.3f;
+            }
+            else
+            {
+                carrierIdx = -1;    // top açıkta: kimsenin değil
+                dwellTimer = 0.2f;
+                if (jitter)
+                    ballPos = ClampToPitch(ballPos + new Vec2(((float)R(Domain.Physics, 20) - 0.5f) * 4f,
+                                                              ((float)R(Domain.Physics, 22) - 0.5f) * 4f));
+            }
+        }
+
+        /// <summary>Serbest topu ilk ulaşan kontrol eder (iki takım da yarışır); 4 sn emniyet.</summary>
+        void ResolveLooseBall(float h)
+        {
+            if (carrierIdx >= 0 && carrierIdx / 11 == possession) { looseTimer = 0f; return; }
+            looseTimer += h;
+            int bestIdx = -1;
+            float bestD = float.MaxValue;
+            for (int t = 0; t < 2; t++)
+                for (int i = 1; i < 11; i++)
+                {
+                    int idx = t * 11 + i;
+                    float d = Vec2.Distance(players[idx].Pos, ballPos);
+                    if (d < bestD) { bestD = d; bestIdx = idx; }
+                }
+            if (bestD > 1.2f && looseTimer <= 4f) return;
+            if (bestD > 1.2f) StagingTimeouts++; // emniyet: en yakını zorla sahiplendir
+            int newTeam = bestIdx / 11;
+            if (newTeam != possession)
+            {
+                possession = newTeam;
+                chanceActions = 0;
+                if (Phase == FlowPhase.ChanceBuild) Phase = FlowPhase.OpenPlay; // savunma kaptı
+            }
+            carrierIdx = bestIdx;
+            dwellTimer = MathF.Max(dwellTimer, 0.2f); // kontrol dokunuşu
+            looseTimer = 0f;
         }
 
         void BeginKickOff(int team, FlowEventType evt)
@@ -721,8 +799,15 @@ namespace TheBadge.Greybox.Sim
 
         // ---------------------------------------------------------------- top ve oyuncular
 
-        void SendBall(Vec2 target, float speed, float peakH = 0f)
+        /// <summary>Topu uçuşa gönderir. kicker: vuran oyuncu (Sahiplik Değişmezi denetimi);
+        /// -1 = duran top TRANSPORTU (santra/korner yerleşimi — vuruş sayılmaz).</summary>
+        void SendBall(Vec2 target, float speed, float peakH, int kicker)
         {
+            if (kicker >= 0)
+            {
+                KickCount++;
+                LastKickDist = Vec2.Distance(players[kicker].Pos, ballPos);
+            }
             ballTarget = ClampToPitchLoose(target);
             ballSpeed = speed;
             ballMoving = true;
@@ -774,7 +859,7 @@ namespace TheBadge.Greybox.Sim
                     break;
                 case FlowPhase.ChanceBuild:
                     AssignCarrierOnArrival();
-                    DecideChanceBuild();
+                    dwellTimer = 0.12f; // kontrol dokunuşu; karar sahiplik kapısından geçer
                     break;
                 case FlowPhase.ShotTravel: ResolveShot(); break;
                 case FlowPhase.CornerSetup:
@@ -885,6 +970,12 @@ namespace TheBadge.Greybox.Sim
             // Pas havadayken ALICI buluşma noktasına koşar — top boş alana düşmez (İterasyon 2)
             if (ballMoving && idx == pendingReceiverIdx)
                 return new Vec2(Clamp(ballTarget.X, 1.2f, PitchW - 1.2f), Clamp(ballTarget.Y, 1.2f, PitchL - 1.2f));
+
+            // SERBEST TOP: iki takımın da en yakını topa koşar; ilk ulaşan alır (Sahiplik Değişmezi)
+            if (!ballMoving && carrierIdx < 0 &&
+                (Phase == FlowPhase.OpenPlay || Phase == FlowPhase.ChanceBuild) &&
+                idx == NearestOutfield(team, ballPos))
+                return BallSpot();
 
             // Korner sahnelemesi: hücum kutuya doluşur, savunma kutuda adam tutar (İterasyon 2)
             if (Phase == FlowPhase.CornerSetup || Phase == FlowPhase.CornerCross)

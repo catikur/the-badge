@@ -69,6 +69,7 @@ namespace TheBadge.Greybox.Tests
                 int steps = 0, maxSteps = 60 * 60 * 10;
                 var prevPhase = sim.Phase;
                 int prevTimeouts = sim.StagingTimeouts;
+                int prevKicks = sim.KickCount;
 
                 while (!sim.IsFinished && steps < maxSteps)
                 {
@@ -76,6 +77,10 @@ namespace TheBadge.Greybox.Tests
                     steps++;
                     bool timedOut = sim.StagingTimeouts > prevTimeouts;
                     prevTimeouts = sim.StagingTimeouts;
+
+                    // Sahiplik Değişmezi: vuruş anında vuran topun yanında olmalı (v1.3)
+                    if (sim.KickCount > prevKicks && sim.LastKickDist > 2.4f) violations++;
+                    prevKicks = sim.KickCount;
 
                     if (prevPhase == FlowPhase.KickOff && sim.Phase != FlowPhase.KickOff && !timedOut)
                     {
