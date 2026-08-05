@@ -40,7 +40,8 @@
     "savunmaKaymaM": 10.0,
     "topCekimYaricapM": 9.0,
     "oyuncuYaricapM": 1.25,
-    "topYaricapM": 0.62
+    "topYaricapM": 0.62,
+    "perspektifYSkala": 0.88
   },
   "flow": {
     "pIleriPas": 0.46,

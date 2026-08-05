@@ -68,6 +68,7 @@ namespace TheBadge.Greybox.Sim
             public float topCekimYaricapM;    // topa yakın oyuncuların çekim alanı
             public float oyuncuYaricapM;      // GÖRSEL yarıçap (okunabilirlik için abartılı)
             public float topYaricapM;
+            public float perspektifYSkala;    // sunum: TV kamerası perspektif ezmesi (1 = düz üstten)
         }
 
         [Serializable]

@@ -59,6 +59,7 @@ namespace TheBadge.Greybox.Sim
         float stageHold;              // diziliş sağlandıktan sonra düdük/orta öncesi nefes sayacı
         bool kickoffPassPending;      // santra pası: ilk karar geriye/yana kısa pas (Sahneleme 1)
         float looseTimer;             // serbest top süresi (4 sn emniyet)
+        float carrierStallTimer;      // taşıyıcı topa ulaşamıyor bekçisi (akış donması emniyeti)
 
         /// <summary>Diziliş emniyeti kaç kez devreye girdi (sahne sözleşmesi telemetrisi).</summary>
         public int StagingTimeouts { get; private set; }
@@ -173,9 +174,12 @@ namespace TheBadge.Greybox.Sim
                 case FlowPhase.CornerSetup:
                 case FlowPhase.CornerCross:
                 case FlowPhase.GoalKick:
-                    // Diziliş duraklamalarında maç saati DURUR — 90 dakika saf akışa aittir
-                    // (sahneleme beklemeleri aksiyon yoğunluğunu düşürmesin)
-                    if (!((Phase == FlowPhase.CornerSetup && !ballMoving) || Phase == FlowPhase.GoalKick))
+                    // CANLI TOP SAATİ (Sahneleme v1.4): maç dakikası yalnız top OYUNDAYKEN işler
+                    // (uçuşta ya da bir oyuncunun ayağında). Kontrol beklemeleri, dizilişler ve
+                    // olası akış donmaları 90 dakikayı YİYEMEZ — pozisyon sayısı hızdan bağımsız.
+                    if ((ballMoving || CarrierHasBall()) &&
+                        Phase != FlowPhase.GoalKick &&
+                        !(Phase == FlowPhase.CornerSetup && !ballMoving))
                         activeSeconds += h;
                     UpdateMomentum(h);
                     MoveBall(h);
@@ -218,6 +222,21 @@ namespace TheBadge.Greybox.Sim
                         // oyuncu topun YANINDAYKEN üretilir; serbest top önce kapışılır.
                         ResolveLooseBall(h);
                         GlueBallToCarrier(h);
+
+                        // Takılma bekçisi: taşıyıcı 4 sn'de topa ulaşamazsa top SERBEST kalır
+                        if (carrierIdx >= 0 && !CarrierHasBall())
+                        {
+                            carrierStallTimer += h;
+                            if (carrierStallTimer > 4f)
+                            {
+                                StagingTimeouts++;
+                                carrierIdx = -1;
+                                looseTimer = 3.9f; // kapışma emniyeti hemen devreye girebilsin
+                                carrierStallTimer = 0f;
+                            }
+                        }
+                        else carrierStallTimer = 0f;
+
                         dwellTimer -= h;
                         if (dwellTimer <= 0f && CarrierHasBall())
                         {
@@ -895,7 +914,11 @@ namespace TheBadge.Greybox.Sim
                     if (Phase == FlowPhase.KickOff) vmax *= 1.35f; // dizilişe hızlı dönüş
                     if (Phase == FlowPhase.CornerSetup) vmax *= 1.2f; // kutuya diziliş koşusu
                     if (Phase == FlowPhase.GoalCelebration && t == lastScorerTeam) vmax *= 1.25f; // sevinç sprinti
-                    players[idx].Pos = Vec2.MoveTowards(players[idx].Pos, target, vmax * h);
+                    // Varış yavaşlaması (steering 'arrive'): hedefe robotik durma yerine yumuşak varış
+                    float step = vmax * h;
+                    float dRem = Vec2.Distance(players[idx].Pos, target);
+                    if (dRem < 1.5f) step *= MathF.Max(0.35f, dRem / 1.5f);
+                    players[idx].Pos = Vec2.MoveTowards(players[idx].Pos, target, step);
                 }
             }
         }
@@ -937,8 +960,9 @@ namespace TheBadge.Greybox.Sim
 
             if (i == 0)
             {
-                // Kale vuruşunda kaleci topun başına gelir (Sahne 4)
-                if (Phase == FlowPhase.GoalKick && team == possession)
+                // Kaleci TAŞIYICIYSA (kurtarış tutuşu / kale vuruşu) topun başına GİDER —
+                // "top kalecide takıldı" bug'ının düzeltmesi (Sahiplik Değişmezi tamamlaması)
+                if (team == possession && idx == carrierIdx)
                     return BallSpot();
                 // Kaleci: kale önünde topu izler
                 float gx = Clamp(34f + (ballPos.X - 34f) * 0.22f, 30.5f, 37.5f);

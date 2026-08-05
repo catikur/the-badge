@@ -41,7 +41,8 @@ namespace TheBadge.Greybox.View
         {
             // Saha 68x105; kenarlarda küçük pay bırak. Dar kenar (genişlik) portrede belirleyicidir.
             float aspect = cam.aspect;
-            float needHalfH = FlowSim.PitchL * 0.5f * 1.04f;
+            float ps = bal.players.perspektifYSkala <= 0f ? 1f : bal.players.perspektifYSkala;
+            float needHalfH = FlowSim.PitchL * 0.5f * 1.04f * ps; // perspektif ezmesiyle uyumlu çerçeve
             float needHalfHForW = (FlowSim.PitchW * 0.5f * 1.06f) / Mathf.Max(0.2f, aspect);
             cam.orthographicSize = Mathf.Max(needHalfH, needHalfHForW);
 

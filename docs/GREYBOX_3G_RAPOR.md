@@ -150,6 +150,25 @@ Uygulanan değişmez: top hiçbir an ÖZERK değil — ya bir oyuncunun ayağın
 Kanıt: 300 maç — 1.95 gol / 9.3 şut / 2.7 korner / 192 sn; sahne sözleşmesi (santra + korner +
 gol-ağda + vuruş-yakınlığı) 0 ihlal; determinizm-lite geçer; derleme yolları 0/0; Sim.Checks yeşil.
 
+## İterasyon 7 — Canlı top saati + takılma emniyeti + perspektif (2026-08-02, Sahneleme v1.4)
+
+Kök neden analizi: "2x'te az pozisyon" ile "top kalecide takıldı" AYNI hataydı — kaleci taşıyıcıyken
+topa yürümüyordu (hedef formülü kale önüne kilitliyordu) → sahiplik kapısı karar üretemiyordu →
+akış donarken MAÇ SAATİ İŞLEMEYE devam ediyordu → 90 dakika boş yanıyor, pozisyon azalıyordu.
+
+| Değişiklik | Etki |
+|---|---|
+| **Canlı top saati** | Maç dakikası yalnız top oyundayken (uçuş/kontrol) işler — beklemeler ve olası donmalar 90'ı yiyemez; pozisyon sayısı hızdan bağımsız |
+| **Kaleci topa gider** | Taşıyıcı kaleciyse hedefi top (kurtarış/kale vuruşu takılması bitti) |
+| **Takılma bekçisi** | Taşıyıcı 4 sn'de topa ulaşamazsa top serbest kalır (genel donma emniyeti, sayaç loglanır) |
+| **Arrive yavaşlaması** | Oyuncular hedefe son 1.5 m'de yavaşlayarak varır (Buckland steering sentezi) |
+| **TV perspektifi + gölgeler** | Sahne dikey ezme [KALİBRE-G perspektifYSkala 0.88] + oyuncu temas gölgeleri; tam izometrik FAZ 05+ |
+| **Ayak uçları** | Aralık 0.17 → 0.24 (belirgin çift çıkıntı) |
+
+Kanıt: 300 maç — **2.24 gol / 10.7 şut / 3.2 korner** (canlı saat aksiyon yoğunluğunu geri getirdi;
+0-0 %9); 1x maç ~210 sn (2x ~105 sn); sahne sözleşmesi 1273 santra + 968 korner + vuruş-yakınlığı
+denetiminde 0 ihlal, 0 emniyet; determinizm-lite geçer; derleme yolları 0/0; Sim.Checks yeşil.
+
 ## Atilla'nın sıradaki adımları
 
 `unity/UNITY_SETUP.md` runbook'u: projeyi aç → konsol/testler → Editor'de oyna → iPhone build → 3-5 oyuncu playtest → `docs/PLAYTEST_3G.md` doldur → kapı kararı (GO/NO-GO) → DECISIONS.md.

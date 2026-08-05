@@ -27,6 +27,9 @@ namespace TheBadge.Greybox.View
         public static PitchView Create(GreyboxBalance bal)
         {
             var go = new GameObject("PitchView");
+            // Hafif TV perspektifi: sahne dikeyde ezilir — yukarıdan ama "izleme kamerası" hissi
+            float ps = bal.players.perspektifYSkala <= 0f ? 1f : bal.players.perspektifYSkala;
+            go.transform.localScale = new Vector3(1f, ps, 1f);
             var view = go.AddComponent<PitchView>();
             view.bal = bal;
             view.Build();
@@ -84,6 +87,12 @@ namespace TheBadge.Greybox.View
                 var sr = SpriteFactory.NewSprite((isHome ? "H" : "A") + (i % 11), transform, SpriteFactory.Circle(), c, OrderDots);
                 sr.transform.localScale = new Vector3(d, d, 1f);
                 dots[i] = sr.transform;
+
+                // Temas gölgesi: hafif sağ-alt ofsetli koyu elips — derinlik hissi (v1.4)
+                var pShadow = SpriteFactory.NewSprite("Shadow", sr.transform, SpriteFactory.Circle(),
+                    new Color(0f, 0f, 0f, 0.25f), OrderDots - 1);
+                pShadow.transform.localScale = new Vector3(0.95f, 0.7f, 1f);
+                pShadow.transform.localPosition = new Vector3(0.1f, -0.16f, 0f);
 
                 // Ayak uçları: baktığı yönde YAN YANA iki küçük çıkıntı (Atilla geri bildirimi)
                 var markColor = new Color(c.r * 0.55f, c.g * 0.55f, c.b * 0.55f, 1f);
@@ -182,8 +191,8 @@ namespace TheBadge.Greybox.View
                 // İki ayak ucu: bakış yönünün önünde, yöne dik eksende yan yana
                 float fx = facing[i].X, fy = facing[i].Y;
                 float pxn = -fy, pyn = fx; // dik vektör
-                feetL[i].localPosition = new Vector3(fx * 0.46f + pxn * 0.17f, fy * 0.46f + pyn * 0.17f, 0f);
-                feetR[i].localPosition = new Vector3(fx * 0.46f - pxn * 0.17f, fy * 0.46f - pyn * 0.17f, 0f);
+                feetL[i].localPosition = new Vector3(fx * 0.46f + pxn * 0.24f, fy * 0.46f + pyn * 0.24f, 0f);
+                feetR[i].localPosition = new Vector3(fx * 0.46f - pxn * 0.24f, fy * 0.46f - pyn * 0.24f, 0f);
                 prevRendered[i] = new Vec2(px, py);
             }
         }

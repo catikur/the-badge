@@ -116,6 +116,16 @@ Harness/EditMode assert'leri:
 3. **Her golde:** topun son konumu kale ağzı sınırları içinde ve çizginin arkasında.
 4. Kilitlenme emniyeti: hiçbir diziliş beklemesi ~8 sn'yi aşamaz (aşarsa sahne zorla başlar, sayaç loglanır).
 
+**CANLI TOP SAATİ (v1.4):**
+- Maç dakikası yalnız top OYUNDAYKEN işler: uçuşta ya da bir oyuncunun kontrolünde.
+- Kontrol beklemeleri (taşıyıcının topa yürümesi, serbest top kapışması), dizilişler ve olası
+  akış donmaları 90 dakikayı YİYEMEZ → pozisyon sayısı oyun hızından (1x/2x) bağımsızdır.
+- Kaleci taşıyıcıysa (kurtarış/kale vuruşu) topun başına GİDER; taşıyıcı 4 sn'de topa
+  ulaşamazsa top SERBEST kalır (takılma bekçisi — akış donması emniyeti).
+- Oyuncular hedefe steering-'arrive' ile yumuşak varır (robotik ani duruş yok).
+- Sunum: hafif TV perspektif ezmesi (dikey skala [KALİBRE-G]) + oyuncu temas gölgeleri —
+  tam izometrik kamera FAZ 05+ (2.5D prerender) işi olmaya devam eder.
+
 ## Sürüm
 - v1 (2026-07-31): İlk metin — Atilla onayladı; kod hizalandı (iterasyon 3).
 - v1.1 (2026-08-01): §2 Top fiziği eklendi (pas yavaşlaması, ayakta taşıma, sabit sim adımı +
@@ -124,3 +134,6 @@ Harness/EditMode assert'leri:
   uçuşu (ışınlama yasağı) + kaleci degajı — Atilla'nın perspektif/yön geri bildirimi üzerine.
 - v1.3 (2026-08-02): **Sahiplik Değişmezi** (motor kararı: Yol A — Simple Soccer sahiplik modeli
   retrofit'i; "kimse yokken pas" sınıfı hatanın yapısal yasağı) + ayak ucu çifti revizyonu.
+- v1.4 (2026-08-02): **Canlı top saati** (2x orantısızlığı + kaleci takılması kök nedeni), takılma
+  bekçisi, kaleci-topa-gider, arrive yavaşlaması, TV perspektif ezmesi + temas gölgeleri,
+  ayak ucu aralığı genişletildi.
