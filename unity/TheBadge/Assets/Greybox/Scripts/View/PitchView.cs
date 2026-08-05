@@ -16,7 +16,8 @@ namespace TheBadge.Greybox.View
 
         GreyboxBalance bal;
         readonly Transform[] dots = new Transform[22];
-        readonly Transform[] facingMarks = new Transform[22]; // yön çıkıntısı (Sahneleme v1.2)
+        readonly Transform[] feetL = new Transform[22]; // ayak uçları: önde yan yana iki çıkıntı
+        readonly Transform[] feetR = new Transform[22];
         readonly Vec2[] facing = new Vec2[22];
         readonly Vec2[] prevRendered = new Vec2[22];
         Transform ball;
@@ -84,12 +85,14 @@ namespace TheBadge.Greybox.View
                 sr.transform.localScale = new Vector3(d, d, 1f);
                 dots[i] = sr.transform;
 
-                // Yön çıkıntısı: dairenin kenarında küçük "ayak/burun" (Sahneleme v1.2)
+                // Ayak uçları: baktığı yönde YAN YANA iki küçük çıkıntı (Atilla geri bildirimi)
                 var markColor = new Color(c.r * 0.55f, c.g * 0.55f, c.b * 0.55f, 1f);
-                var mark = SpriteFactory.NewSprite("Facing", sr.transform, SpriteFactory.Circle(), markColor, OrderDots + 1);
-                mark.transform.localScale = new Vector3(0.38f, 0.38f, 1f);
-                mark.transform.localPosition = new Vector3(0.5f, 0f, 0f);
-                facingMarks[i] = mark.transform;
+                var mL = SpriteFactory.NewSprite("FootL", sr.transform, SpriteFactory.Circle(), markColor, OrderDots + 1);
+                mL.transform.localScale = new Vector3(0.26f, 0.26f, 1f);
+                feetL[i] = mL.transform;
+                var mR = SpriteFactory.NewSprite("FootR", sr.transform, SpriteFactory.Circle(), markColor, OrderDots + 1);
+                mR.transform.localScale = new Vector3(0.26f, 0.26f, 1f);
+                feetR[i] = mR.transform;
                 facing[i] = new Vec2(i < 11 ? 0f : -0.001f, i < 11 ? 1f : -1f); // başlangıç: hücum yönü
             }
 
@@ -176,7 +179,11 @@ namespace TheBadge.Greybox.View
                     facing[i] = new Vec2(
                         facing[i].X + (desired.X - facing[i].X) * 0.22f,
                         facing[i].Y + (desired.Y - facing[i].Y) * 0.22f).Normalized;
-                facingMarks[i].localPosition = new Vector3(facing[i].X * 0.5f, facing[i].Y * 0.5f, 0f);
+                // İki ayak ucu: bakış yönünün önünde, yöne dik eksende yan yana
+                float fx = facing[i].X, fy = facing[i].Y;
+                float pxn = -fy, pyn = fx; // dik vektör
+                feetL[i].localPosition = new Vector3(fx * 0.46f + pxn * 0.17f, fy * 0.46f + pyn * 0.17f, 0f);
+                feetR[i].localPosition = new Vector3(fx * 0.46f - pxn * 0.17f, fy * 0.46f - pyn * 0.17f, 0f);
                 prevRendered[i] = new Vec2(px, py);
             }
         }
