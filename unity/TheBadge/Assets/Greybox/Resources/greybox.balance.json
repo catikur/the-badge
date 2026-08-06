@@ -147,7 +147,7 @@
   },
   "model": {
     "blokSayisi": 10,
-    "pGolTabani": 0.135,
+    "pGolTabani": 0.125,
     "gucEtkiCarpan": 0.012,
     "momentumEtki": 0.35,
     "taktikTempoEtki": 0.5,
@@ -167,6 +167,36 @@
     "blokOynatmaSn": 6.5,
     "gerilimBeklemeSn": 1.4,
     "vinyetMaxSimSn": 75.0,
-    "vinyetKayitSn": 8.0
+    "vinyetKayitSn": 8.0,
+    "vinyetKutlamaSn": 4.2,
+    "evAvantaj": 0.06,
+    "gucEtkiMax": 0.45,
+    "gucOlcek": 18.0,
+    "fazCarpanlar": [
+      0.9,
+      0.95,
+      1.0,
+      1.0,
+      1.05,
+      1.0,
+      1.05,
+      1.1,
+      1.15,
+      1.25
+    ],
+    "gerideRiskCarpan": 1.12,
+    "ondeKontrolCarpan": 0.92,
+    "formEtkiCarpan": 0.03,
+    "taktikMatchup": [
+      1.0,
+      1.03,
+      0.95,
+      1.08,
+      1.1,
+      0.93,
+      0.94,
+      1.07,
+      0.88
+    ]
   }
 }

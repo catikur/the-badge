@@ -134,6 +134,8 @@ namespace TheBadge.Greybox.Loop
                 }
                 yield return null;
             }
+            // Son karede nefes: sahne aniden kapanmaz (Atilla — "hiçbir şey için acele etme")
+            yield return WaitScaled(0.9f);
             VignetteToggled?.Invoke(false);
         }
     }

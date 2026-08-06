@@ -22,6 +22,22 @@ namespace TheBadge.Greybox.Sim
         public float Win, Draw, Loss;
     }
 
+    /// <summary>Blok olasılığının ETKEN DÖKÜMÜ — "neye göre?" sorusunun şeffaf cevabı
+    /// (docs/GREYBOX_MODEL.md). Her alan çarpan; Sonuc = Taban × hepsi (clamp'li).</summary>
+    public struct FactorSnapshot
+    {
+        public float Taban;
+        public float Guc;        // kadro gücü farkı (tanh doygun)
+        public float Taktik;     // etkileşim matrisi × tempo/şut iştahı
+        public float Faz;        // maç fazı (son bloklarda gol artar)
+        public float Momentum;
+        public float Skor;       // geride risk / önde kontrol
+        public float TempoModu;  // müdahale çarpanı
+        public float Ev;         // ev sahibi avantajı
+        public float Form;       // son 5 maç
+        public float Sonuc;      // clamp'lenmiş nihai olasılık
+    }
+
     /// <summary>
     /// MODEL MAÇI motoru — Fun Gate pivotu (Sahneleme §0, DECISIONS 2026-08-02).
     /// Maç N aksiyon bloğudur; her blokta olasılıklar AÇIK hesaplanır (önce gösterilir,
@@ -34,6 +50,7 @@ namespace TheBadge.Greybox.Sim
         readonly GreyboxBalance.ModelCfg m;
         readonly ulong seed;
         readonly float usStrength, themStrength;
+        readonly float usFormNet;
         GreyboxBalance.TacticCfg usTactic;
         readonly GreyboxBalance.TacticCfg themTactic;
 
@@ -57,6 +74,7 @@ namespace TheBadge.Greybox.Sim
             seed = setup.Seed;
             usStrength = setup.HomeStrength;
             themStrength = setup.AwayStrength;
+            usFormNet = setup.HomeFormNet;
             usTactic = FindTactic(setup.HomeTacticId);
             themTactic = FindTactic(setup.AwayTacticId);
             MovesLeft = m.hamleHakki;
@@ -70,26 +88,67 @@ namespace TheBadge.Greybox.Sim
         }
 
         // ---------------------------------------------------------------- olasılık modeli
+        // KRİTER MODELİ (docs/GREYBOX_MODEL.md): p = Taban × Güç × Taktik × Faz × Momentum
+        //                                          × Skor × TempoModu × Ev × Form → clamp.
+        // Her etken [KALİBRE-G model.*] anahtarıyla ayarlanır; FactorSnapshot ile şeffaftır.
 
-        /// <summary>Bir tarafın blok gol olasılığı — tüm etkenler açık (Sahneleme §0).</summary>
-        float PGoal(bool us)
+        /// <summary>Bir tarafın blok gol olasılığının tam etken dökümü.</summary>
+        public FactorSnapshot Factors(bool us)
         {
             var atk = us ? usTactic : themTactic;
             var def = us ? themTactic : usTactic;
             float strDiff = us ? usStrength - themStrength : themStrength - usStrength;
             float mom = us ? Momentum : -Momentum;
+            int diff = us ? GoalsUs - GoalsThem : GoalsThem - GoalsUs;
+            int blockIdx = Math.Min(CurrentBlock, m.blokSayisi - 1);
 
-            float p = m.pGolTabani;
-            p += strDiff * m.gucEtkiCarpan * m.pGolTabani;                      // kadro gücü
-            p *= 1f + (atk.tempo - 1f) * m.taktikTempoEtki;                     // hücum temposu
-            p *= 1f + (atk.sutIstahi - 1f) * m.taktikSutEtki;                   // şut iştahı
-            p *= 1f - (def.pres - 1f) * m.taktikPresSavunmaEtki;                // rakip pres/savunma
-            p *= 1f + mom * m.momentumEtki;                                     // momentum
-            p *= Tempo == TempoMode.Yukselt ? (us ? m.tempoYukseltBiz : m.tempoYukseltRakip)
-               : Tempo == TempoMode.Kilitlen ? (us ? m.kilitlenBiz : m.kilitlenRakip)
-               : 1f;                                                            // müdahale modu
-            return Clamp(p, m.pGolMin, m.pGolMax);
+            var f = new FactorSnapshot { Taban = m.pGolTabani };
+
+            // 1) Kadro gücü — tanh ile doygun: uç farklar patlamaz
+            f.Guc = 1f + m.gucEtkiMax * (float)Math.Tanh(strDiff / m.gucOlcek);
+
+            // 2) Taktik: etkileşim matrisi (hücum eden × savunan) × tempo/şut iştahı inceliği
+            float matchup = MatchupFactor(atk.id, def.id);
+            f.Taktik = matchup
+                       * (1f + (atk.tempo - 1f) * m.taktikTempoEtki)
+                       * (1f + (atk.sutIstahi - 1f) * m.taktikSutEtki)
+                       * (1f - (def.pres - 1f) * m.taktikPresSavunmaEtki);
+
+            // 3) Maç fazı: son bloklarda gol frekansı yükselir (gerçek futbol istatistiği)
+            f.Faz = m.fazCarpanlar != null && m.fazCarpanlar.Length > blockIdx
+                ? m.fazCarpanlar[blockIdx] : 1f;
+
+            // 4) Momentum
+            f.Momentum = 1f + mom * m.momentumEtki;
+
+            // 5) Skor durumu: geride olan riske girer, önde olan soğutur
+            f.Skor = diff < 0 ? m.gerideRiskCarpan : diff > 0 ? m.ondeKontrolCarpan : 1f;
+
+            // 6) Müdahale modu (tempo)
+            f.TempoModu = Tempo == TempoMode.Yukselt ? (us ? m.tempoYukseltBiz : m.tempoYukseltRakip)
+                        : Tempo == TempoMode.Kilitlen ? (us ? m.kilitlenBiz : m.kilitlenRakip)
+                        : 1f;
+
+            // 7) Ev sahibi avantajı (greybox'ta oyuncu hep ev sahibi)
+            f.Ev = us ? 1f + m.evAvantaj : 1f - m.evAvantaj * 0.5f;
+
+            // 8) Form: son 5 maçın net galibiyeti (yalnız oyuncu tarafı bilinir)
+            f.Form = us ? 1f + usFormNet * m.formEtkiCarpan : 1f;
+
+            f.Sonuc = Clamp(f.Taban * f.Guc * f.Taktik * f.Faz * f.Momentum * f.Skor
+                            * f.TempoModu * f.Ev * f.Form, m.pGolMin, m.pGolMax);
+            return f;
         }
+
+        float MatchupFactor(int atkId, int defId)
+        {
+            if (m.taktikMatchup == null || m.taktikMatchup.Length < 9) return 1f;
+            int r = Math.Max(0, Math.Min(2, atkId));
+            int c = Math.Max(0, Math.Min(2, defId));
+            return m.taktikMatchup[r * 3 + c];
+        }
+
+        float PGoal(bool us) => Factors(us).Sonuc;
 
         /// <summary>Sıradaki bloğun kartı — zar dönmeden ÖNCE ekranda gösterilir.</summary>
         public BlockPreview PreviewNext() => new BlockPreview

@@ -68,6 +68,15 @@ namespace TheBadge.Greybox.Sim
                                 last.GoalMoment = true;
                                 frames[frames.Count - 1] = last;
                             }
+                            // KUTLAMA da kaydedilir: top ağlarda, takım skorerde kümelenir —
+                            // sevinç TAM izlenir, ekran aceleyle kapanmaz (Atilla, iterasyon 9)
+                            int celebSteps = (int)(bal.model.vinyetKutlamaSn / Dt);
+                            for (int cs = 0; cs < celebSteps && !sim.IsFinished; cs++)
+                            {
+                                sim.Step(Dt);
+                                frames.Add(Capture(sim));
+                                while (sim.TryDequeueEvent(out _)) { }
+                            }
                             if (scorerTeam == 1) MirrorFrames(frames); // rakip golü: sahneyi aynala
                             return frames;
                         }

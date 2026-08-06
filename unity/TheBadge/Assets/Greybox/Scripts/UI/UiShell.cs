@@ -220,8 +220,10 @@ namespace TheBadge.Greybox.UI
             stripLoss.anchoredPosition = new Vector2(w + d, 0f);
         }
 
-        public void ShowBlockCard(int blockIdx, int blockCount, int minFrom, int minTo, float pUs, float pThem)
-            => mBlockCard.text = $"BLOK {blockIdx + 1}/{blockCount}  ·  {minFrom}'-{minTo}'\nGol ihtimali — BİZ %{pUs * 100f:0}  ·  RAKİP %{pThem * 100f:0}";
+        public void ShowBlockCard(int blockIdx, int blockCount, int minFrom, int minTo, float pUs, float pThem, string factorLine)
+            => mBlockCard.text = $"BLOK {blockIdx + 1}/{blockCount}  ·  {minFrom}'-{minTo}'\n" +
+                                 $"Gol ihtimali — BİZ %{pUs * 100f:0}  ·  RAKİP %{pThem * 100f:0}\n" +
+                                 $"<size=26>{factorLine}</size>";
 
         public void PushFeed(string line)
         {

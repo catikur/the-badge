@@ -155,6 +155,34 @@ namespace TheBadge.Greybox
             return bal.taktikler[0].ad;
         }
 
+        float FormNet()
+        {
+            float net = 0f;
+            for (int i = 0; i < state.lastResults.Length; i++) net += state.lastResults[i];
+            return net;
+        }
+
+        /// <summary>Blok kartı etken satırı: 1'den sapan çarpanlar — "neye göre?" şeffaflığı.</summary>
+        string FactorLine()
+        {
+            var f = director.Model.Factors(us: true);
+            var parts = new List<string>(6);
+            AddFactor(parts, "güç", f.Guc);
+            AddFactor(parts, "taktik", f.Taktik);
+            AddFactor(parts, "faz", f.Faz);
+            AddFactor(parts, "momentum", f.Momentum);
+            AddFactor(parts, "skor", f.Skor);
+            AddFactor(parts, "tempo", f.TempoModu);
+            AddFactor(parts, "form", f.Form);
+            return parts.Count == 0 ? "etkenler dengede" : "etkenler: " + string.Join(" · ", parts);
+        }
+
+        static void AddFactor(List<string> parts, string name, float v)
+        {
+            if (Mathf.Abs(v - 1f) < 0.015f) return;
+            parts.Add($"{name} ×{v:0.00}");
+        }
+
         void WireDirector()
         {
             director.BlockPreviewShown += (pv, strip) =>
@@ -164,7 +192,7 @@ namespace TheBadge.Greybox
                 ui.SetWinProb(strip);
                 ui.ShowBlockCard(pv.Index, director.Model.BlockCount,
                     director.Model.BlockMinute(pv.Index), director.Model.BlockMinute(pv.Index + 1),
-                    pv.PGoalUs, pv.PGoalThem);
+                    pv.PGoalUs, pv.PGoalThem, FactorLine());
                 momentumHistory.Add(pv.Momentum);
                 ui.SetMomentumHistory(momentumHistory);
             };
@@ -242,6 +270,7 @@ namespace TheBadge.Greybox
             momentumHistory.Clear();
 
             currentSetup = GreyboxWorld.BuildMatch(bal, (ulong)state.worldSeed, state.matchIndex, state.tacticId);
+            currentSetup.HomeFormNet = FormNet(); // son 5 maç formu model etkeni (GREYBOX_MODEL.md)
             director.StartMatch(currentSetup);
             bus.ActiveModel = director.Model;
             matchRunning = true;

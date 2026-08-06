@@ -92,6 +92,7 @@ namespace TheBadge.Greybox.Sim
         public int AwayTacticId;
         public float HomeStrength;   // 0-100 bandı; momentum ve şut kalitesini eğer
         public float AwayStrength;
+        public float HomeFormNet;    // son 5 maç net galibiyet (-5..5) — Model Maçı form etkeni
     }
 
     /// <summary>Maç istatistikleri — pacing kanıtı ve maç sonu ekranı için.</summary>

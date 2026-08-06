@@ -188,6 +188,16 @@ FlowSim sahne sözleşmesi + pacing testleri değişmeden yeşil. Derleme yollar
 Yeni EditMode seti: `ModelMatchTests` (7 test — DP toplamı/simetri, güç, tempo-risk, hamle hakkı
 bus reddi, determinizm, pacing+kalibrasyon, vinyet).
 
+## İterasyon 9 — Kutlamalı vinyet + açık kriter modeli (2026-08-02)
+
+| Geri bildirim | Yapılan |
+|---|---|
+| "Vinyet aceleyle kapanıyor; gol olsun, sevinsinler, toplansınlar" | Vinyet kaydı artık gol karesinde BİTMİYOR: gol + kutlama kümelenmesi sonuna kadar kaydediliyor ([KALİBRE-G vinyetKutlamaSn 4.2] — toplam ~12 sn); oynatma sonunda 0.9 sn nefes payı; ekran aniden kapanmaz |
+| "Olasılıkları neye göre hesaplıyorsun? Kriterleri iyi modelleyelim" | **8 etkenli açık kriter modeli** (docs/GREYBOX_MODEL.md): tanh-doygun kadro gücü, 3×3 taktik etkileşim MATRİSİ (kontra taş-kağıt-makas), maç fazı eğrisi (son bloklar gollü), momentum, skor durumu (geride risk/önde kontrol), tempo modu, ev avantajı, son-5-maç formu (tycoon→maç bağı). `MatchModel.Factors()` tam dökümü verir; blok kartında "etkenler: güç ×1.12 · faz ×1.05" satırı oyun içinde gösterilir |
+
+Kanıt: model 400 maç — 2.83 gol; kalibrasyon sıkılaştı (tahmin %37 vs gerçekleşen %40, <0.10);
+tüm harness + Sim.Checks yeşil; derleme yolları 0/0.
+
 ## Atilla'nın sıradaki adımları
 
 `unity/UNITY_SETUP.md` runbook'u: projeyi aç → konsol/testler → Editor'de oyna → iPhone build → 3-5 oyuncu playtest → `docs/PLAYTEST_3G.md` doldur → kapı kararı (GO/NO-GO) → DECISIONS.md.

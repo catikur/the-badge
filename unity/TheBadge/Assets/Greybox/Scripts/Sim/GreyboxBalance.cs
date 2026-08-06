@@ -204,7 +204,16 @@ namespace TheBadge.Greybox.Sim
             public float blokOynatmaSn;       // 1x hızda blok sunum süresi (gerçek sn)
             public float gerilimBeklemeSn;    // olasılık gösterimi → zar arası bekleme
             public float vinyetMaxSimSn;      // vinyet üretiminde sim arama tavanı
-            public float vinyetKayitSn;       // vinyetin oynatılan uzunluğu
+            public float vinyetKayitSn;       // vinyetin gol ÖNCESİ uzunluğu
+            public float vinyetKutlamaSn;     // gol SONRASI kutlama kaydı — sevinç tam izlenir
+            public float evAvantaj;           // ev sahibi avantajı (greybox'ta oyuncu hep ev)
+            public float gucEtkiMax;          // güç farkının doyuma ulaşan tavan etkisi (tanh)
+            public float gucOlcek;            // tanh ölçeği (puan)
+            public float[] fazCarpanlar;      // blok başına maç fazı çarpanı (son dakika golleri)
+            public float gerideRiskCarpan;    // geride olan taraf riske girer
+            public float ondeKontrolCarpan;   // önde olan taraf maçı soğutur
+            public float formEtkiCarpan;      // son 5 maç formunun etkisi (net galibiyet başına)
+            public float[] taktikMatchup;     // 3x3 etkileşim matrisi (satır: hücum, sütun: savunma)
         }
 
         public MetaInfo _meta;
