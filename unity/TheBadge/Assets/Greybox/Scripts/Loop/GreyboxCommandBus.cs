@@ -17,9 +17,14 @@ namespace TheBadge.Greybox.Loop
         public const string ActSelectTactic = "greybox.select_tactic";
         public const string ActSetTicketPrice = "tycoon.set_ticket_price"; // CB Spec 3.1 örnek aksiyonuyla aynı ad
         public const string ActNextMatch = "greybox.next_match";
+        public const string ActModelTactic = "model.set_tactic";   // maç içi müdahale (Model Maçı)
+        public const string ActModelTempo = "model.set_tempo";     // 0 normal / 1 yükselt / 2 kilitlen
 
         readonly GreyboxBalance bal;
         readonly GreyboxState state;
+
+        /// <summary>Aktif Model Maçı — maç sürerken Bootstrap atar; müdahaleler buna yönlenir.</summary>
+        public MatchModel ActiveModel;
 
         /// <summary>Başarıyla uygulanan her komut sonrası çağrılır (save + telemetri kancası).</summary>
         public event Action<CommandEnvelope> Applied;
@@ -83,6 +88,29 @@ namespace TheBadge.Greybox.Loop
                 case ActNextMatch:
                 {
                     state.matchIndex++;
+                    result = RejectionReason.None;
+                    break;
+                }
+                case ActModelTactic:
+                {
+                    // Maç içi taktik müdahalesi — hamle hakkı biterse NoChargesLeft (CB Spec 11.1)
+                    if (ActiveModel == null) return RejectionReason.StateConflict;
+                    if (!GreyboxJson.TryGetNumber(env.PayloadJson, "tacticId", out double mid))
+                        return RejectionReason.SchemaViolation;
+                    if (ActiveModel.MovesLeft <= 0) return RejectionReason.NoChargesLeft;
+                    if (!ActiveModel.TrySetTactic((int)mid)) return RejectionReason.StateConflict;
+                    state.tacticId = (int)mid; // sonraki maçın ön seçimi de güncellensin
+                    result = RejectionReason.None;
+                    break;
+                }
+                case ActModelTempo:
+                {
+                    if (ActiveModel == null) return RejectionReason.StateConflict;
+                    if (!GreyboxJson.TryGetNumber(env.PayloadJson, "mode", out double mode))
+                        return RejectionReason.SchemaViolation;
+                    if (mode < 0 || mode > 2) return RejectionReason.ParamOutOfBand;
+                    if (ActiveModel.MovesLeft <= 0) return RejectionReason.NoChargesLeft;
+                    if (!ActiveModel.TrySetTempo((TempoMode)(int)mode)) return RejectionReason.StateConflict;
                     result = RejectionReason.None;
                     break;
                 }

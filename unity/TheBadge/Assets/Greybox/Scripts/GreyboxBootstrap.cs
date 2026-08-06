@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using TheBadge.Greybox.Loop;
 using TheBadge.Greybox.Sim;
@@ -10,13 +11,14 @@ using UnityEngine;
 namespace TheBadge.Greybox
 {
     /// <summary>
-    /// Greybox giriş noktası — sahnedeki TEK obje. Kamera, saha, UI ve maç sürücüsünü
-    /// runtime'da kurar; core loop'u yönetir: Maç öncesi → Maç → Maç sonu → Sonraki maç (Brif K3).
-    /// Kullanıcı eylemleri UI callback'i → CommandEnvelope → GreyboxCommandBus yolunu izler (Tek Kapı).
+    /// Greybox giriş noktası — sahnedeki TEK obje. MODEL MAÇI deneyimini yönetir
+    /// (Sahneleme §0, Fun Gate pivotu): Maç öncesi → Blok blok model maçı (müdahaleli,
+    /// gol bloklarında 2D vinyet) → Maç sonu ekonomisi → Sonraki maç.
+    /// Tüm kullanıcı eylemleri (taktik, tempo, bilet, sonraki maç) Tek Kapı'dan geçer.
     /// </summary>
     public sealed class GreyboxBootstrap : MonoBehaviour
     {
-        const string AppVersion = "greybox-0.1.0";
+        const string AppVersion = "greybox-0.2.0-model";
 
         GreyboxBalance bal;
         GreyboxState state;
@@ -25,15 +27,16 @@ namespace TheBadge.Greybox
         UiShell ui;
         PitchView pitch;
         CameraRig camRig;
-        MatchDirector director;
+        ModelMatchDirector director;
 
         string opponentName = "";
         string awayShort = "";
+        MatchSetup currentSetup;
         bool matchRunning;
         float postShownAt;
         bool priceDirty;
         int matchesEndedThisSession;
-        float spikerTimer;
+        readonly List<float> momentumHistory = new List<float>();
 
         static string HomeShort => "ROZET";
 
@@ -52,12 +55,12 @@ namespace TheBadge.Greybox
 
             state = SaveService.LoadOrNew(bal);
             if (state.worldSeed == 0)
-                state.worldSeed = DateTime.Now.Ticks; // sim dışı tohum üretimi — determinizm borcu FAZ 03 (Brif K5)
+                state.worldSeed = DateTime.Now.Ticks; // sim dışı tohum üretimi — determinizm borcu FAZ 03
             state.sessionCount++;
             SaveService.Save(state);
 
             bus = new GreyboxCommandBus(bal, state);
-            bus.Applied += _ => SaveService.Save(state); // uygulanan her komut kalıcı
+            bus.Applied += _ => SaveService.Save(state);
 
             telemetry = new TelemetryLog(
                 Path.Combine(Application.persistentDataPath, "telemetry"),
@@ -73,7 +76,7 @@ namespace TheBadge.Greybox
             camRig = CameraRig.Create(bal);
             pitch = PitchView.Create(bal);
             ui = UiShell.Create(bal);
-            director = gameObject.AddComponent<MatchDirector>();
+            director = gameObject.AddComponent<ModelMatchDirector>();
             director.Init(bal);
 
             WireUi();
@@ -94,9 +97,15 @@ namespace TheBadge.Greybox
             ui.OnSpeedSelected = s =>
             {
                 director.SetSpeed(s);
-                ui.SetSpeedHighlight(s);
+                ui.SetModelSpeedHighlight(s);
+                telemetry.Event("speed").Num("match", state.matchIndex).Num("speed", s).Send();
             };
-            ui.OnSkipPressed = () => director.SkipToKeyMoment();
+            ui.OnSkipPressed = () =>
+            {
+                director.SkipCurrent();
+                telemetry.Event("skip").Num("match", state.matchIndex)
+                         .Num("block", director.Model != null ? director.Model.CurrentBlock : -1).Send();
+            };
             ui.OnPriceChanged = p =>
             {
                 if (bus.Send(GreyboxCommandBus.ActSetTicketPrice, GreyboxJson.Payload("price", p)) == RejectionReason.None)
@@ -106,45 +115,113 @@ namespace TheBadge.Greybox
                 }
             };
             ui.OnNextMatch = NextMatch;
+
+            // Maç içi müdahaleler — Tek Kapı'dan (Model Maçı çekirdek dopamini)
+            ui.OnTacticCycle = () => Intervene(GreyboxCommandBus.ActModelTactic,
+                GreyboxJson.Payload("tacticId", (director.Model.TacticId + 1) % bal.taktikler.Length),
+                "Taktik değişti: " + bal.taktikler[(director.Model.TacticId + 1) % bal.taktikler.Length].ad);
+            ui.OnTempoRaise = () => Intervene(GreyboxCommandBus.ActModelTempo,
+                GreyboxJson.Payload("mode", (int)TempoMode.Yukselt), "Tempo yükseldi — risk iki yönlü arttı");
+            ui.OnTempoLock = () => Intervene(GreyboxCommandBus.ActModelTempo,
+                GreyboxJson.Payload("mode", (int)TempoMode.Kilitlen), "Kilitlendik — maç soğutuluyor");
+        }
+
+        void Intervene(string action, byte[] payload, string feedLine)
+        {
+            if (!matchRunning || director.Model == null) return;
+            var before = director.Model.ComputeWinProb();
+            var r = bus.Send(action, payload);
+            if (r == RejectionReason.NoChargesLeft)
+            {
+                ui.PushFeed("— Hamle hakkın bitti —");
+                return;
+            }
+            if (r != RejectionReason.None) return;
+
+            var after = director.Model.ComputeWinProb();
+            ui.SetWinProb(after);
+            ui.SetInterventionState(TacticName(director.Model.TacticId), (int)director.Model.Tempo, director.Model.MovesLeft);
+            ui.PushFeed($"⚡ {feedLine}  (G %{before.Win * 100f:0} → %{after.Win * 100f:0})");
+            telemetry.Event("intervention").Num("match", state.matchIndex)
+                     .Str("action", action)
+                     .Num("win_before", before.Win).Num("win_after", after.Win)
+                     .Num("moves_left", director.Model.MovesLeft).Send();
+        }
+
+        string TacticName(int id)
+        {
+            for (int i = 0; i < bal.taktikler.Length; i++)
+                if (bal.taktikler[i].id == id) return bal.taktikler[i].ad;
+            return bal.taktikler[0].ad;
         }
 
         void WireDirector()
         {
-            director.EventRaised += OnFlowEvent;
-            director.MatchFinished += OnMatchFinished;
-            director.SpeedChanged += s =>
-                telemetry.Event("speed").Num("match", state.matchIndex)
-                         .Num("minute", director.Sim != null ? director.Sim.MatchMinute : 0f)
-                         .Num("speed", s).Send();
-            director.Skipped += (fromMin, toMin) =>
-                telemetry.Event("skip").Num("match", state.matchIndex)
-                         .Num("minute", fromMin).Num("to_minute", toMin).Send();
-        }
-
-        void Update()
-        {
-            if (!matchRunning || director.Sim == null) return;
-            pitch.Render(director);
-            ui.SetScoreLine(HomeShort, awayShort,
-                director.Sim.HomeScore, director.Sim.AwayScore, director.Sim.MatchMinute);
-
-            // Boşta akan spiker satırı — olay yoğunluğu düşükken maçı anlatır (İterasyon 1)
-            if (director.Sim.Phase == FlowPhase.OpenPlay)
+            director.BlockPreviewShown += (pv, strip) =>
             {
-                spikerTimer += Time.deltaTime;
-                if (spikerTimer >= bal.pace.spikerAralikSn)
+                ui.SetScoreBlockLine(HomeShort, awayShort, director.Model.GoalsUs, director.Model.GoalsThem,
+                    pv.Index, director.Model.BlockCount, director.Model.BlockMinute(pv.Index));
+                ui.SetWinProb(strip);
+                ui.ShowBlockCard(pv.Index, director.Model.BlockCount,
+                    director.Model.BlockMinute(pv.Index), director.Model.BlockMinute(pv.Index + 1),
+                    pv.PGoalUs, pv.PGoalThem);
+                momentumHistory.Add(pv.Momentum);
+                ui.SetMomentumHistory(momentumHistory);
+            };
+
+            director.BlockResolved += (idx, outcome, strip) =>
+            {
+                int minute = director.Model.BlockMinute(idx + 1);
+                switch (outcome)
                 {
-                    spikerTimer = 0f;
-                    ui.Ticker($"{Mathf.FloorToInt(director.Sim.MatchMinute)}' {Commentary.IdleLine(HomeShort, awayShort)}");
+                    case BlockOutcome.GoalUs:
+                        ui.PushFeed($"{minute}' ⚽ GOOOL! {HomeShort} ağları havalandırdı! ({director.Model.GoalsUs}-{director.Model.GoalsThem})");
+                        break;
+                    case BlockOutcome.GoalThem:
+                        ui.PushFeed($"{minute}' ⚽ Gol yedik... {awayShort} skoru yakaladı ({director.Model.GoalsUs}-{director.Model.GoalsThem})");
+                        break;
+                    case BlockOutcome.Danger:
+                        ui.PushFeed($"{minute}' Tehlikeli dakikalar — pozisyonlar karşılıklı, gol yok");
+                        break;
+                    default:
+                        ui.PushFeed($"{minute}' Kontrollü oyun, orta saha mücadelesi");
+                        break;
                 }
-            }
+                ui.SetWinProb(strip);
+                ui.SetScoreBlockLine(HomeShort, awayShort, director.Model.GoalsUs, director.Model.GoalsThem,
+                    idx + 1, director.Model.BlockCount, minute);
+                telemetry.Event("block_result").Num("match", state.matchIndex)
+                         .Num("block", idx).Str("outcome", outcome.ToString())
+                         .Num("win", strip.Win).Send();
+            };
+
+            director.VignetteToggled += on =>
+            {
+                pitch.gameObject.SetActive(on);
+                ui.SetModelWidgetsVisible(!on);
+                if (!on) ui.ShowModelScreen();
+            };
+
+            director.VignetteFramePlayed += f =>
+            {
+                pitch.RenderFrame(f);
+                if (f.GoalMoment)
+                {
+                    camRig.Shake();
+                    ui.GoalFlash($"{HomeShort} {director.Model.GoalsUs} - {director.Model.GoalsThem} {awayShort}");
+#if UNITY_IOS || UNITY_ANDROID
+                    if (bal.vurgu.titresimAktif) Handheld.Vibrate();
+#endif
+                }
+            };
+
+            director.MatchFinished += OnMatchFinished;
         }
 
         // ---------------------------------------------------------------- core loop adımları
 
         void ShowPreMatch()
         {
-            // Rakip önizlemesi StartMatch'teki kurulumla AYNI tohumdan gelir → tutarlı
             var setup = GreyboxWorld.BuildMatch(bal, (ulong)state.worldSeed, state.matchIndex, state.tacticId);
             opponentName = GreyboxWorld.OpponentName(state.matchIndex);
             awayShort = opponentName.Split(' ')[0].ToUpperInvariant();
@@ -152,6 +229,7 @@ namespace TheBadge.Greybox
             var proj = TycoonEconomy.Project(bal.ekonomi, state.ticketPrice, state.lastResults, 0);
             string ticketLine = $"Bilet {state.ticketPrice:0} kr → tahmini {proj.Attendance:N0} seyirci (doluluk %{proj.Occupancy * 100f:0})";
 
+            pitch.gameObject.SetActive(true); // arka fon sahası
             ui.ShowPreMatch(state.matchIndex, opponentName, setup.AwayStrength, state.money,
                 GreyboxWorld.Squad, bal.taktikler, state.tacticId, ticketLine);
         }
@@ -159,103 +237,61 @@ namespace TheBadge.Greybox
         void StartMatch()
         {
             ui.HidePreMatch();
-            ui.ShowHud();
+            pitch.gameObject.SetActive(false); // ana ekran MODEL (Sahneleme §0)
+            ui.ShowModelScreen();
+            momentumHistory.Clear();
 
-            var setup = GreyboxWorld.BuildMatch(bal, (ulong)state.worldSeed, state.matchIndex, state.tacticId);
-            director.StartMatch(setup);
+            currentSetup = GreyboxWorld.BuildMatch(bal, (ulong)state.worldSeed, state.matchIndex, state.tacticId);
+            director.StartMatch(currentSetup);
+            bus.ActiveModel = director.Model;
             matchRunning = true;
+
+            ui.SetModelSpeedHighlight(1);
+            ui.SetInterventionState(TacticName(director.Model.TacticId), (int)director.Model.Tempo, director.Model.MovesLeft);
+            ui.SetWinProb(director.Model.ComputeWinProb());
+            ui.PushFeed($"Maç başladı: {GreyboxWorld.PlayerClubName} — {opponentName} (rakip gücü {currentSetup.AwayStrength:0})");
 
             telemetry.Event("match_start")
                 .Num("match", state.matchIndex)
                 .Str("opp", opponentName)
-                .Num("opp_strength", setup.AwayStrength)
-                .Str("tactic", bal.taktikler[Mathf.Clamp(state.tacticId, 0, bal.taktikler.Length - 1)].ad)
+                .Num("opp_strength", currentSetup.AwayStrength)
+                .Str("tactic", TacticName(state.tacticId))
                 .Num("price", state.ticketPrice).Send();
-
-            ui.SetScoreLine(HomeShort, awayShort, 0, 0, 0f);
-            ui.Banner("MAÇ BAŞLIYOR", 1.2f);
-        }
-
-        void OnFlowEvent(FlowEvent e, bool duringSkip)
-        {
-            string club = e.Team == 0 ? HomeShort : awayShort;
-            string rival = e.Team == 0 ? awayShort : HomeShort;
-
-            switch (e.Type)
-            {
-                case FlowEventType.Goal:
-                    telemetry.Event("goal").Num("match", state.matchIndex)
-                             .Num("minute", e.Minute).Str("team", e.Team == 0 ? "home" : "away")
-                             .Str("score", $"{e.HomeScore}-{e.AwayScore}").Send();
-                    if (duringSkip)
-                    {
-                        ui.Ticker($"{Mathf.FloorToInt(e.Minute)}' GOL — {club} (atlanırken)");
-                    }
-                    else
-                    {
-                        camRig.Shake();                       // vurgu: titreme (Brif K2)
-                        ui.GoalFlash($"{club}  ·  {e.HomeScore} - {e.AwayScore}");
-                        ui.Ticker($"{Mathf.FloorToInt(e.Minute)}' {Commentary.For(e.Type, club, rival)}");
-#if UNITY_IOS || UNITY_ANDROID
-                        if (bal.vurgu.titresimAktif)
-                            Handheld.Vibrate();               // İterasyon 1: gol anında cihaz titreşimi
-#endif
-                    }
-                    break;
-
-                case FlowEventType.Shot:
-                case FlowEventType.CornerHeader:
-                case FlowEventType.Save:
-                case FlowEventType.ShotWide:
-                case FlowEventType.Corner:
-                case FlowEventType.ChanceStart:
-                case FlowEventType.SecondHalfKickOff:
-                    if (!duringSkip)
-                    {
-                        spikerTimer = 0f; // olay satırı geldi; boşta spikeri ertele
-                        ui.Ticker($"{Mathf.FloorToInt(e.Minute)}' {Commentary.For(e.Type, club, rival)}");
-                    }
-                    break;
-
-                case FlowEventType.HalfTime:
-                    if (!duringSkip) ui.Banner("DEVRE ARASI", Mathf.Max(0.8f, bal.clock.devreArasiSaniye - 0.4f));
-                    break;
-            }
         }
 
         void OnMatchFinished()
         {
             matchRunning = false;
             matchesEndedThisSession++;
-            var sim = director.Sim;
-            int hs = sim.HomeScore, aw = sim.AwayScore;
-            int result = hs > aw ? 1 : (hs == aw ? 0 : -1);
+            bus.ActiveModel = null;
+            var model = director.Model;
+            int gu = model.GoalsUs, gt = model.GoalsThem;
+            int result = gu > gt ? 1 : (gu == gt ? 0 : -1);
 
-            var proj = state.Settle(bal, result);   // gelir kasaya + form penceresine (sistem akışı, komut değil)
+            var proj = state.Settle(bal, result); // gelir kasaya + form penceresi (sistem akışı)
             SaveService.Save(state);
 
             telemetry.Event("match_end")
                 .Num("match", state.matchIndex)
-                .Str("score", $"{hs}-{aw}")
+                .Str("score", $"{gu}-{gt}")
                 .Str("result", result > 0 ? "W" : result == 0 ? "D" : "L")
                 .Num("watch_real_sec", director.WatchRealSeconds)
                 .Num("skips", director.SkipCount)
                 .Num("speed_changes", director.SpeedChangeCount)
-                .Num("shots", sim.Stats.TotalShots)
-                .Num("corners", sim.Stats.TotalCorners)
+                .Num("moves_used", bal.model.hamleHakki - model.MovesLeft)
                 .Num("attendance", proj.Attendance)
                 .Num("income", proj.Total)
                 .Num("money_after", state.money).Send();
 
-            ui.HideHud();
+            ui.HideModelScreen();
             string lineA = $"Seyirci: {proj.Attendance:N0} (%{proj.Occupancy * 100f:0})  ·  Bilet geliri: {UiWidgets.Money(proj.TicketIncome)}";
             string lineB = $"Sonuç primi: {UiWidgets.Money(proj.ResultBonus)}  ·  Toplam: +{UiWidgets.Money(proj.Total)}";
-            ui.ShowPostMatch(hs, aw, result, lineA, lineB, state.money, state.ticketPrice,
+            ui.ShowPostMatch(gu, gt, result, lineA, lineB, state.money, state.ticketPrice,
                 ProjectionLine(state.ticketPrice));
 
             postShownAt = Time.realtimeSinceStartup;
             priceDirty = false;
-            director.StopMatch(); // son kare sahada kalır
+            director.StopMatch();
         }
 
         void NextMatch()

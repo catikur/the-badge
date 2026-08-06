@@ -169,6 +169,25 @@ Kanıt: 300 maç — **2.24 gol / 10.7 şut / 3.2 korner** (canlı saat aksiyon 
 0-0 %9); 1x maç ~210 sn (2x ~105 sn); sahne sözleşmesi 1273 santra + 968 korner + vuruş-yakınlığı
 denetiminde 0 ihlal, 0 emniyet; determinizm-lite geçer; derleme yolları 0/0; Sim.Checks yeşil.
 
+## İterasyon 8 — FUN GATE PİVOTU: Model Maçı (2026-08-02, Sahneleme v2.0, DECISIONS kaydı)
+
+Atilla kararı: RA#1 revize edildi — test edilen his artık "model + görünür olasılıklar + müdahale
+döngüsü". Ana ekran model; 2D motor gol bloklarında highlight VİNYETİ.
+
+| Bileşen | Uygulama |
+|---|---|
+| `MatchModel` (saf C#) | 10 aksiyon bloğu; blok gol olasılıkları AÇIK formülle (güç + taktik etkileşimi + momentum + tempo modu, hepsi [KALİBRE-G model.*]); zar Rng ile; KESİN DP kazanma dağılımı (Monte Carlo değil) |
+| Müdahale (Tek Kapı) | `model.set_tactic` / `model.set_tempo` CommandEnvelope ile; hamle hakkı [KALİBRE-G hamleHakki=3]; hak bitince `NoChargesLeft` (CB Spec 11.1); her müdahalede şerit anında yeniden hesaplanır, feed'e "G %38→%45" düşer |
+| Model ekranı | Canlı G/B/M kazanma şeridi (animasyonlu) + momentum çubukları + spiker feed'i + blok kartı ("Gol ihtimali BİZ %18") + müdahale barı + 1x/2x/atla |
+| Vinyet | `VignetteRecorder`: headless FlowSim golü arar (5 deneme + şut fallback), son 8 sn'yi kare kare kaydeder; rakip golünde sahne aynalanır + takım renkleri değişilir; oynatmada vurgu paketi (shake+flaş+titreşim) gol karesinde |
+| Eski canlı 2D akış | `MatchDirector` + `FlowSim` korunuyor (vinyet motoru + olası A/B modu); tüm sahne sözleşmesi testleri yeşil kalmaya devam ediyor |
+
+Kanıt: model 400 maç — ort. **2.88 gol**; kazanma şeridi KALİBRE (tahmin %38 vs gerçekleşen %44,
+<0.10 bant); güç ayrışması ve tempo-risk iki yönlülüğü doğrulandı; vinyet iki takım için de üretiliyor.
+FlowSim sahne sözleşmesi + pacing testleri değişmeden yeşil. Derleme yolları 0/0; Sim.Checks yeşil.
+Yeni EditMode seti: `ModelMatchTests` (7 test — DP toplamı/simetri, güç, tempo-risk, hamle hakkı
+bus reddi, determinizm, pacing+kalibrasyon, vinyet).
+
 ## Atilla'nın sıradaki adımları
 
 `unity/UNITY_SETUP.md` runbook'u: projeyi aç → konsol/testler → Editor'de oyna → iPhone build → 3-5 oyuncu playtest → `docs/PLAYTEST_3G.md` doldur → kapı kararı (GO/NO-GO) → DECISIONS.md.

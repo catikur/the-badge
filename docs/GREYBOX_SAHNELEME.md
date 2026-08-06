@@ -1,4 +1,33 @@
-# Greybox Maç Sahneleme Senaryosu (v1)
+# Greybox Maç Sahneleme Senaryosu
+
+## 0. MODEL MAÇI (v2.0 — Fun Gate pivotu, ANA DENEYİM)
+
+Maç, sahada değil MODELDE oynanır; ekran modeli gösterir. 2D saha yalnız vinyettir (aşağıdaki
+sahne kuralları vinyet üretiminde aynen geçerlidir).
+
+**Ekran (portre, tek ekran):**
+- ÜST: Skor + blok sayacı + **canlı G/B/M kazanma şeridi** (üç bölmeli bar; her olay ve her
+  müdahalede animasyonla yeniden hesaplanır — kesin DP hesabı, tahmin değil).
+- ORTA: **Momentum çubukları** (blok blok tarih) + **spiker/olay akışı** (son olaylar).
+- ALT: **Blok kartı**: "Blok 4/10 · Gol ihtimalimiz %18 · Rakipte %11" — olasılık ÖNCE
+  gösterilir, kısa gerilim beklemesi, SONRA zar döner, sonuç yaşanır.
+- MÜDAHALE: blok aralarında sınırlı hamle hakkı [KALİBRE-G]: **Taktik değiştir** /
+  **Tempo yükselt** (iki yönde de gol ihtimali artar) / **Kilitlen** (iki yönde de düşer).
+  Hamle Tek Kapı'dan (CommandEnvelope) geçer; kazanma şeridi ANINDA yeniden hesaplanır.
+- VİNYET: gol bloklarında 2D motor 6-8 sn'lik gerçek highlight oynatır (sahiplik/sahne
+  kuralları aynen); vurgu paketi (slow-mo + titreşim + flaş) vinyetin gol anında çalışır.
+- Hız: 1x/2x blok oynatma temposunu değiştirir; ▶▶ bloğu anında sonuçlandırır.
+
+**Model girdileri (blok olasılıkları — hepsi [KALİBRE-G]):** kadro gücü farkı, taktik
+etkileşimi (tempo/şut iştahı vs pres), momentum, tempo modu (müdahale). Blok sonuçları:
+bizde gol / rakipte gol / sessiz(±tehlike). Kazanma şeridi kalan bloklar üzerinden kesin
+dağılımla (DP) hesaplanır — Monte Carlo değil, deterministik.
+
+**Fun Gate metriği değişmedi:** "bir maç daha" ≥ %60; test edilen his artık müdahale döngüsü.
+
+---
+
+# EK: 2D Sahne Kuralları (vinyet motoru — v1 serisi)
 
 **Amaç:** 2D greybox maçının her sahnesini KODDAN ÖNCE yazıyla sabitlemek (Atilla süreç kararı, 2026-07-31).
 Kod bu senaryoya uymak zorundadır; senaryoya girmeyen davranış koda giremez.
@@ -137,3 +166,6 @@ Harness/EditMode assert'leri:
 - v1.4 (2026-08-02): **Canlı top saati** (2x orantısızlığı + kaleci takılması kök nedeni), takılma
   bekçisi, kaleci-topa-gider, arrive yavaşlaması, TV perspektif ezmesi + temas gölgeleri,
   ayak ucu aralığı genişletildi.
+- v2.0 (2026-08-02): **MODEL MAÇI pivotu** (Atilla kararı — DECISIONS kaydıyla): ana deneyim
+  model ekranı (blok olasılıkları + canlı kazanma şeridi + müdahale); 2D saha highlight
+  vinyetine indirildi (v1 sahne kuralları vinyette aynen geçerli).

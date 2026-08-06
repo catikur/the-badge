@@ -153,48 +153,59 @@ namespace TheBadge.Greybox.View
             Bar("GoalMouth", FlowSim.PitchW * 0.5f, goalY, 7.32f + 0.9f, 0.55f, mouth);
         }
 
+        void ApplyBall(float bx, float by, float hgt)
+        {
+            ballShadow.localPosition = W(bx, by);
+            ball.localPosition = W(bx, by + hgt * bal.ball.yukKaldirmaCarpan);
+            float s = ballBaseScale * (1f + hgt * bal.ball.yukOlcekCarpan);
+            ball.localScale = new Vector3(s, s, 1f);
+        }
+
+        void ApplyDot(int i, float px, float py, float bx, float by)
+        {
+            dots[i].localPosition = W(px, py);
+            // Yön: hareket halindeyken gidilen yön, dururken topa dönük (Sahneleme v1.2)
+            Vec2 delta = new Vec2(px - prevRendered[i].X, py - prevRendered[i].Y);
+            Vec2 desired = delta.Magnitude > 0.02f
+                ? delta.Normalized
+                : new Vec2(bx - px, by - py).Normalized;
+            if (desired.Magnitude > 0.01f)
+                facing[i] = new Vec2(
+                    facing[i].X + (desired.X - facing[i].X) * 0.22f,
+                    facing[i].Y + (desired.Y - facing[i].Y) * 0.22f).Normalized;
+            // İki ayak ucu: bakış yönünün önünde, yöne dik eksende yan yana
+            float fx = facing[i].X, fy = facing[i].Y;
+            float pxn = -fy, pyn = fx; // dik vektör
+            feetL[i].localPosition = new Vector3(fx * 0.46f + pxn * 0.24f, fy * 0.46f + pyn * 0.24f, 0f);
+            feetR[i].localPosition = new Vector3(fx * 0.46f - pxn * 0.24f, fy * 0.46f - pyn * 0.24f, 0f);
+            prevRendered[i] = new Vec2(px, py);
+        }
+
         /// <summary>Kareler arası interpolasyonlu çizim: önceki sim adımı → şimdiki adım karışımı.
         /// Her oyun hızında (1x/2x/slow-mo) pürüzsüz hareket (Sahneleme §2).</summary>
         public void Render(MatchDirector d)
         {
             if (d == null || d.Sim == null) return;
             float a = d.InterpAlpha;
-
-            // Top: yerdeki gölge + yükseklikle büyüyüp gölgeden ayrılan gövde (Sahneleme v1.2)
             Vec2 bp = d.PrevPos(22);
             Vec2 bc = d.Sim.BallPos;
             float bx = bp.X + (bc.X - bp.X) * a;
             float by = bp.Y + (bc.Y - bp.Y) * a;
-            float hgt = d.BallHeightInterp;
-            ballShadow.localPosition = W(bx, by);
-            ball.localPosition = W(bx, by + hgt * bal.ball.yukKaldirmaCarpan);
-            float s = ballBaseScale * (1f + hgt * bal.ball.yukOlcekCarpan);
-            ball.localScale = new Vector3(s, s, 1f);
-
+            ApplyBall(bx, by, d.BallHeightInterp);
             for (int i = 0; i < 22; i++)
             {
                 Vec2 pp = d.PrevPos(i);
                 Vec2 cp = d.Sim.GetPlayer(i).Pos;
-                float px = pp.X + (cp.X - pp.X) * a;
-                float py = pp.Y + (cp.Y - pp.Y) * a;
-                dots[i].localPosition = W(px, py);
-
-                // Yön: hareket halindeyken gidilen yön, dururken topa dönük (Sahneleme v1.2)
-                Vec2 delta = new Vec2(px - prevRendered[i].X, py - prevRendered[i].Y);
-                Vec2 desired = delta.Magnitude > 0.02f
-                    ? delta.Normalized
-                    : new Vec2(bx - px, by - py).Normalized;
-                if (desired.Magnitude > 0.01f)
-                    facing[i] = new Vec2(
-                        facing[i].X + (desired.X - facing[i].X) * 0.22f,
-                        facing[i].Y + (desired.Y - facing[i].Y) * 0.22f).Normalized;
-                // İki ayak ucu: bakış yönünün önünde, yöne dik eksende yan yana
-                float fx = facing[i].X, fy = facing[i].Y;
-                float pxn = -fy, pyn = fx; // dik vektör
-                feetL[i].localPosition = new Vector3(fx * 0.46f + pxn * 0.24f, fy * 0.46f + pyn * 0.24f, 0f);
-                feetR[i].localPosition = new Vector3(fx * 0.46f - pxn * 0.24f, fy * 0.46f - pyn * 0.24f, 0f);
-                prevRendered[i] = new Vec2(px, py);
+                ApplyDot(i, pp.X + (cp.X - pp.X) * a, pp.Y + (cp.Y - pp.Y) * a, bx, by);
             }
+        }
+
+        /// <summary>Vinyet oynatma: kaydedilmiş kareyi doğrudan çizer (Model Maçı — Sahneleme §0).</summary>
+        public void RenderFrame(VignetteFrame f)
+        {
+            ApplyBall(f.Ball.X, f.Ball.Y, f.BallH);
+            for (int i = 0; i < 22; i++)
+                ApplyDot(i, f.Players[i].X, f.Players[i].Y, f.Ball.X, f.Ball.Y);
         }
     }
 }

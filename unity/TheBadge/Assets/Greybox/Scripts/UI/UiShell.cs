@@ -20,6 +20,10 @@ namespace TheBadge.Greybox.UI
         public Action OnSkipPressed;
         public Action<float> OnPriceChanged;
         public Action OnNextMatch;
+        // Model Maçı müdahaleleri (Sahneleme §0)
+        public Action OnTacticCycle;
+        public Action OnTempoRaise;
+        public Action OnTempoLock;
 
         GreyboxBalance bal;
         Color accent, panelBg, btnBg, btnFg, good, bad;
@@ -46,6 +50,17 @@ namespace TheBadge.Greybox.UI
         Text bannerText;
         Coroutine flashCo, bannerCo;
 
+        // Model Maçı ekranı (Sahneleme §0)
+        RectTransform modelRoot;
+        Text mScoreLine, mBlockCard, mMovesLabel, mFeedText, mTacticBtnLabel, mTempoRaiseLabel, mTempoLockLabel;
+        RectTransform stripWin, stripDraw, stripLoss;
+        Text stripWinT, stripDrawT, stripLossT;
+        readonly System.Collections.Generic.List<RectTransform> momBars = new System.Collections.Generic.List<RectTransform>();
+        readonly System.Collections.Generic.List<string> feedLines = new System.Collections.Generic.List<string>();
+        Coroutine stripCo;
+        Button mSpeed1, mSpeed2;
+        const float StripW = 940f;
+
         public static UiShell Create(GreyboxBalance bal)
         {
             var canvas = UiWidgets.MakeCanvas("GreyboxCanvas");
@@ -65,10 +80,185 @@ namespace TheBadge.Greybox.UI
             bad = new Color(0.94f, 0.45f, 0.38f);
 
             BuildHud(root);
+            BuildModelScreen(root);
             BuildFlash(root);
             BuildBanner(root);
             BuildPreMatch(root);
             BuildPostMatch(root);
+        }
+
+        // ---------------------------------------------------------------- Model Maçı ekranı
+
+        void BuildModelScreen(Transform root)
+        {
+            modelRoot = UiWidgets.MakeRect("ModelScreen", root);
+            UiWidgets.Stretch(modelRoot);
+
+            mScoreLine = UiWidgets.MakeText("ScoreLine", modelRoot, "", 52, Color.white, TextAnchor.MiddleCenter, FontStyle.Bold);
+            UiWidgets.TopBlock((RectTransform)mScoreLine.transform, 48f, 1000f, 64f);
+
+            // Kazanma şeridi: G/B/M üç bölmeli bar — her olayda animasyonla kayar
+            var stripBg = UiWidgets.MakeRect("WinStrip", modelRoot);
+            UiWidgets.TopBlock(stripBg, 128f, StripW, 66f);
+            var stripBgImg = stripBg.gameObject.AddComponent<Image>();
+            stripBgImg.color = new Color(1f, 1f, 1f, 0.07f);
+            stripWin = MakeStripSegment(stripBg, good, out stripWinT);
+            stripDraw = MakeStripSegment(stripBg, new Color(1f, 1f, 1f, 0.30f), out stripDrawT);
+            stripLoss = MakeStripSegment(stripBg, bad, out stripLossT);
+
+            var momLabel = UiWidgets.MakeText("MomLabel", modelRoot, "MOMENTUM", 28, new Color(1f, 1f, 1f, 0.5f));
+            UiWidgets.TopBlock((RectTransform)momLabel.transform, 214f, 1000f, 36f);
+            var momRow = UiWidgets.MakeRect("MomRow", modelRoot);
+            UiWidgets.TopBlock(momRow, 252f, StripW, 150f);
+            for (int i = 0; i < 12; i++)
+            {
+                var bar = UiWidgets.MakeRect("Bar" + i, momRow);
+                bar.anchorMin = bar.anchorMax = new Vector2((i + 0.5f) / 12f, 0.5f);
+                bar.pivot = new Vector2(0.5f, 0.5f);
+                bar.sizeDelta = new Vector2(StripW / 12f - 10f, 8f);
+                var img = bar.gameObject.AddComponent<Image>();
+                img.color = new Color(1f, 1f, 1f, 0.35f);
+                momBars.Add(bar);
+            }
+
+            mFeedText = UiWidgets.MakeText("Feed", modelRoot, "", 33, new Color(0.93f, 0.96f, 0.9f), TextAnchor.UpperLeft);
+            UiWidgets.TopBlock((RectTransform)mFeedText.transform, 430f, StripW, 430f);
+            mFeedText.lineSpacing = 1.25f;
+
+            mBlockCard = UiWidgets.MakeText("BlockCard", modelRoot, "", 42, accent, TextAnchor.MiddleCenter, FontStyle.Bold);
+            UiWidgets.TopBlock((RectTransform)mBlockCard.transform, 900f, 1000f, 110f);
+
+            // Müdahale barı — hamleler Tek Kapı'dan geçer
+            var tac = UiWidgets.MakeButton("MTactic", modelRoot, "", 32, btnBg, btnFg, () => OnTacticCycle?.Invoke());
+            var tRt = (RectTransform)tac.transform;
+            UiWidgets.TopBlock(tRt, 1050f, 300f, 116f);
+            tRt.anchoredPosition = new Vector2(-330f, -1050f);
+            mTacticBtnLabel = tac.GetComponentInChildren<Text>();
+
+            var raise = UiWidgets.MakeButton("MRaise", modelRoot, "TEMPO ↑", 32, btnBg, btnFg, () => OnTempoRaise?.Invoke());
+            UiWidgets.TopBlock((RectTransform)raise.transform, 1050f, 300f, 116f);
+            mTempoRaiseLabel = raise.GetComponentInChildren<Text>();
+
+            var lockB = UiWidgets.MakeButton("MLock", modelRoot, "KİLİTLEN", 32, btnBg, btnFg, () => OnTempoLock?.Invoke());
+            var lRt = (RectTransform)lockB.transform;
+            UiWidgets.TopBlock(lRt, 1050f, 300f, 116f);
+            lRt.anchoredPosition = new Vector2(330f, -1050f);
+            mTempoLockLabel = lockB.GetComponentInChildren<Text>();
+
+            mMovesLabel = UiWidgets.MakeText("Moves", modelRoot, "", 32, new Color(1f, 1f, 1f, 0.7f));
+            UiWidgets.TopBlock((RectTransform)mMovesLabel.transform, 1180f, 1000f, 40f);
+
+            mSpeed1 = UiWidgets.MakeButton("MSpeed1", modelRoot, "1x", 40, btnBg, btnFg, () => OnSpeedSelected?.Invoke(1));
+            UiWidgets.BottomBlock((RectTransform)mSpeed1.transform, 64f, 240f, 110f);
+            ((RectTransform)mSpeed1.transform).anchoredPosition = new Vector2(-330f, 64f);
+            mSpeed2 = UiWidgets.MakeButton("MSpeed2", modelRoot, "2x", 40, btnBg, btnFg, () => OnSpeedSelected?.Invoke(2));
+            UiWidgets.BottomBlock((RectTransform)mSpeed2.transform, 64f, 240f, 110f);
+            var skip2 = UiWidgets.MakeButton("MSkip", modelRoot, "▶▶ Atla", 36, btnBg, btnFg, () => OnSkipPressed?.Invoke());
+            UiWidgets.BottomBlock((RectTransform)skip2.transform, 64f, 340f, 110f);
+            ((RectTransform)skip2.transform).anchoredPosition = new Vector2(330f, 64f);
+
+            modelRoot.gameObject.SetActive(false);
+        }
+
+        RectTransform MakeStripSegment(RectTransform parent, Color c, out Text label)
+        {
+            var seg = UiWidgets.MakeRect("Seg", parent);
+            seg.anchorMin = new Vector2(0f, 0f);
+            seg.anchorMax = new Vector2(0f, 1f);
+            seg.pivot = new Vector2(0f, 0.5f);
+            seg.sizeDelta = new Vector2(0f, 0f);
+            var img = seg.gameObject.AddComponent<Image>();
+            var cc = c; cc.a = Mathf.Max(0.55f, c.a);
+            img.color = cc;
+            label = UiWidgets.MakeText("L", seg, "", 30, Color.black, TextAnchor.MiddleCenter, FontStyle.Bold);
+            UiWidgets.Stretch((RectTransform)label.transform);
+            return seg;
+        }
+
+        public void ShowModelScreen()
+        {
+            feedLines.Clear();
+            mFeedText.text = "";
+            modelRoot.gameObject.SetActive(true);
+        }
+
+        public void HideModelScreen() => modelRoot.gameObject.SetActive(false);
+        public void SetModelWidgetsVisible(bool on) => modelRoot.gameObject.SetActive(on); // vinyet sırasında gizle
+
+        public void SetScoreBlockLine(string home, string away, int gu, int gt, int blockIdx, int blockCount, int minute)
+            => mScoreLine.text = $"{home}  {gu} - {gt}  {away}    ·    {minute}'  (Blok {Mathf.Min(blockIdx + 1, blockCount)}/{blockCount})";
+
+        public void SetWinProb(WinProb p)
+        {
+            if (stripCo != null) StopCoroutine(stripCo);
+            stripCo = StartCoroutine(AnimateStrip(p));
+        }
+
+        IEnumerator AnimateStrip(WinProb p)
+        {
+            float w0 = stripWin.sizeDelta.x, d0 = stripDraw.sizeDelta.x, l0 = stripLoss.sizeDelta.x;
+            float w1 = StripW * p.Win, d1 = StripW * p.Draw, l1 = StripW * p.Loss;
+            for (float t = 0f; t < 0.55f; t += Time.deltaTime)
+            {
+                float k = Mathf.SmoothStep(0f, 1f, t / 0.55f);
+                LayoutStrip(Mathf.Lerp(w0, w1, k), Mathf.Lerp(d0, d1, k), Mathf.Lerp(l0, l1, k));
+                yield return null;
+            }
+            LayoutStrip(w1, d1, l1);
+            stripWinT.text = p.Win >= 0.12f ? $"G %{p.Win * 100f:0}" : "";
+            stripDrawT.text = p.Draw >= 0.12f ? $"B %{p.Draw * 100f:0}" : "";
+            stripLossT.text = p.Loss >= 0.12f ? $"M %{p.Loss * 100f:0}" : "";
+        }
+
+        void LayoutStrip(float w, float d, float l)
+        {
+            stripWin.sizeDelta = new Vector2(w, 0f);
+            stripWin.anchoredPosition = Vector2.zero;
+            stripDraw.sizeDelta = new Vector2(d, 0f);
+            stripDraw.anchoredPosition = new Vector2(w, 0f);
+            stripLoss.sizeDelta = new Vector2(l, 0f);
+            stripLoss.anchoredPosition = new Vector2(w + d, 0f);
+        }
+
+        public void ShowBlockCard(int blockIdx, int blockCount, int minFrom, int minTo, float pUs, float pThem)
+            => mBlockCard.text = $"BLOK {blockIdx + 1}/{blockCount}  ·  {minFrom}'-{minTo}'\nGol ihtimali — BİZ %{pUs * 100f:0}  ·  RAKİP %{pThem * 100f:0}";
+
+        public void PushFeed(string line)
+        {
+            feedLines.Add(line);
+            if (feedLines.Count > 9) feedLines.RemoveAt(0);
+            mFeedText.text = string.Join("\n", feedLines);
+        }
+
+        public void SetMomentumHistory(System.Collections.Generic.IReadOnlyList<float> hist)
+        {
+            for (int i = 0; i < momBars.Count; i++)
+            {
+                int hIdx = hist.Count - momBars.Count + i;
+                float v = hIdx >= 0 && hIdx < hist.Count ? hist[hIdx] : 0f;
+                float hPx = Mathf.Max(8f, Mathf.Abs(v) * 70f);
+                momBars[i].sizeDelta = new Vector2(momBars[i].sizeDelta.x, hPx);
+                momBars[i].anchoredPosition = new Vector2(0f, v * 35f);
+                momBars[i].GetComponent<Image>().color = v >= 0f
+                    ? new Color(good.r, good.g, good.b, 0.85f)
+                    : new Color(bad.r, bad.g, bad.b, 0.85f);
+            }
+        }
+
+        public void SetInterventionState(string tacticName, int tempoMode, int movesLeft)
+        {
+            mTacticBtnLabel.text = $"TAKTİK\n{tacticName}";
+            mTempoRaiseLabel.text = tempoMode == 1 ? "TEMPO ↑ ✓" : "TEMPO ↑";
+            mTempoLockLabel.text = tempoMode == 2 ? "KİLİTLEN ✓" : "KİLİTLEN";
+            mMovesLabel.text = $"Kalan hamle: {movesLeft}";
+        }
+
+        public void SetModelSpeedHighlight(int speed)
+        {
+            mSpeed1.image.color = speed == 1 ? accent : btnBg;
+            mSpeed1.GetComponentInChildren<Text>().color = speed == 1 ? Color.black : btnFg;
+            mSpeed2.image.color = speed == 2 ? accent : btnBg;
+            mSpeed2.GetComponentInChildren<Text>().color = speed == 2 ? Color.black : btnFg;
         }
 
         // ---------------------------------------------------------------- HUD

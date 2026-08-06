@@ -180,7 +180,35 @@ namespace TheBadge.Greybox.Sim
             public string arkaplan;
         }
 
+        [Serializable]
+        public sealed class ModelCfg
+        {
+            public int blokSayisi;            // maç kaç aksiyon bloğu (Sahneleme §0)
+            public float pGolTabani;          // blok başına taban gol olasılığı (taraf başına)
+            public float gucEtkiCarpan;       // güç farkı puanı başına olasılık kayması
+            public float momentumEtki;        // momentumun blok olasılığına etkisi
+            public float taktikTempoEtki;     // tempo çarpanının etki ağırlığı
+            public float taktikSutEtki;       // şut iştahının etki ağırlığı
+            public float taktikPresSavunmaEtki; // rakip presinin savunma etkisi
+            public float pGolMin;
+            public float pGolMax;
+            public float tehlikeCarpan;       // sessiz blokta "tehlike" olayı üretme çarpanı
+            public float momentumGolDelta;    // gol sonrası momentum itmesi
+            public float momentumSonum;       // blok başına ortalamaya dönüş
+            public float momentumBlokGurultu; // blok başına rastgele salınım
+            public int hamleHakki;            // maç başına müdahale hakkı
+            public float tempoYukseltBiz;     // müdahale çarpanları (risk iki yönlü)
+            public float tempoYukseltRakip;
+            public float kilitlenBiz;
+            public float kilitlenRakip;
+            public float blokOynatmaSn;       // 1x hızda blok sunum süresi (gerçek sn)
+            public float gerilimBeklemeSn;    // olasılık gösterimi → zar arası bekleme
+            public float vinyetMaxSimSn;      // vinyet üretiminde sim arama tavanı
+            public float vinyetKayitSn;       // vinyetin oynatılan uzunluğu
+        }
+
         public MetaInfo _meta;
+        public ModelCfg model;
         public ClockCfg clock;
         public PaceCfg pace;
         public BallCfg ball;

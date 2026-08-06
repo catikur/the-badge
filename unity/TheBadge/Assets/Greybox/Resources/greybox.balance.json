@@ -144,5 +144,29 @@
     "depKaleci": "#4FC3F7",
     "top": "#FFFFFF",
     "arkaplan": "#14321E"
+  },
+  "model": {
+    "blokSayisi": 10,
+    "pGolTabani": 0.135,
+    "gucEtkiCarpan": 0.012,
+    "momentumEtki": 0.35,
+    "taktikTempoEtki": 0.5,
+    "taktikSutEtki": 0.6,
+    "taktikPresSavunmaEtki": 0.45,
+    "pGolMin": 0.03,
+    "pGolMax": 0.42,
+    "tehlikeCarpan": 1.8,
+    "momentumGolDelta": 0.45,
+    "momentumSonum": 0.35,
+    "momentumBlokGurultu": 0.22,
+    "hamleHakki": 3,
+    "tempoYukseltBiz": 1.35,
+    "tempoYukseltRakip": 1.22,
+    "kilitlenBiz": 0.75,
+    "kilitlenRakip": 0.62,
+    "blokOynatmaSn": 6.5,
+    "gerilimBeklemeSn": 1.4,
+    "vinyetMaxSimSn": 75.0,
+    "vinyetKayitSn": 8.0
   }
 }
