@@ -42,17 +42,20 @@ Kurallar: kişi başı ≥ 15 dk serbest oynama, YÖNLENDİRME YOK (soru sorarsa
 
 Log dosyalarını `docs/samples/` yanına kopyala (`playtest_<oyuncu>.jsonl`) ve buraya özetle:
 
-| Oyuncu | Oturum | Maç | Ort. izleme sn/maç | Skip/maç | 2x kullanımı | Bilet fiyatı değiştirdi mi? |
-|---|---|---|---|---|---|---|
-|  |  |  |  |  |  |  |
+| Oyuncu | Oturum | Maç | Ort. izleme sn/maç | Skip/maç | 2x | Müdahale/maç (`intervention`) | Değişiklik/maç (`substitution`) | Bilet değişti mi? |
+|---|---|---|---|---|---|---|---|---|
+|  |  |  |  |  |  |  |  |  |
 
 ## Serbest gözlem notları
 - (Ekran karşısında ne yaptı? Nerede güldü, nerede telefonu bıraktı? Skip'i keşfetti mi?)
+- Özellikle izle (İt.11-12): sakatlık KARAR PANELİ çıktığında tepkisi ne oldu? Oyuncu değişikliğini
+  kendiliğinden keşfetti mi? Şerit oynadığında ("G %38→%45") yüzü değişti mi? Kadro güçlerine baktı mı?
 
-## KAPI KARARI
+## KAPI KARARI (revize semantik — DECISIONS 2026-08-07: playtest sonrası kapı HER DURUMDA kapanır, FAZ 03 başlar)
 
-- [ ] **GO** — FAZ 02/03 kilidi açılır (DECISIONS.md'ye işle)
-- [ ] **NO-GO** — pivot oturumu: mekanik değişir ya da proje düşer (Anayasa 4G.4; para/zaman gömülmez)
+- [ ] **GO** — döngü tutuyor: Model Maçı sunumu (şerit + karar anları) FAZ 03 motorunun sunum katmanı olur
+- [ ] **NO-GO** — döngü tutmuyor: FAZ 03 yine başlar ama maç sunumu Dikey Dilim öncesi YENİDEN tasarlanır;
+      neyin tutmadığı (blok yapısı? şerit? müdahale sığlığı?) mülakat verisiyle yazılır
 
 Karar gerekçesi (3-5 cümle):
 

@@ -68,7 +68,12 @@ tüm rastgelelik sayaç-RNG (`Rng.Hash64`, Domain gerekçeli); durum değiştire
 
 Harness/stub scratchpad'te yaşar (repo'ya girmez); yeni oturumda gerekirse rapordaki tarife göre yeniden kurulur.
 
-## 5. YAPILACAKLAR
+## 5. YAPILACAKLAR — GÜNCEL PLAN (2026-08-07 kapanış kararı: playtest → kapı kapanır → FAZ 03)
+
+**İçerik DONDU.** Yeni greybox özelliği yok (DECISIONS kapanış planı); yalnız playtest'i engelleyen
+hata düzeltilir. "FM hissi" işi FAZ 03 motoru + Dikey Dilim'e taşındı — ME Spec 6.1 tam nitelik
+tablosu (kaleci: Reflexes, Handling, OneOnOne, AerialCommand, Kicking, Throwing) orada devreye girer.
+
 
 **Atilla (kapıya giden yol):**
 1. `git pull` (Unity KAPALIYKEN; makine ProjectSettings'i değiştirdiyse önce `git checkout -- .`).
@@ -79,15 +84,16 @@ Harness/stub scratchpad'te yaşar (repo'ya girmez); yeni oturumda gerekirse rapo
    kaleci İSİMLE kurtarıyor mu; (g) DETAY koç masası: Hücum/Savunma reytingleri + kadro güç sütunu;
    (h) şerit altı açıklama satırı; (i) bilet slider'ı kompakt mı; (j) rakip gol vinyeti + feed kalıcı;
    (k) konsol 0 error/0 warning.
-3. His onayı → 30-60 sn kayıt (DoD-G) → iPhone build (runbook) → 3-5 kişi playtest →
-   `docs/PLAYTEST_3G.md` doldur → **GO/NO-GO kararı → DECISIONS.md**.
-4. Geri bildirim varsa iterasyon 12 açılır (süreç: davranış değişikliği önce yazıyla).
-   Not: İt.11 SON içerik iterasyonuydu (timebox); bundan sonrası yeni özellik değil ayar/pürüz turu.
+3. 30-60 sn oynanış kaydı (DoD-G) → iPhone build (runbook) → **3-5 kişiyle playtest (2-3 gün)**:
+   kişi başı ≥15 dk yönlendirmesiz oynama → `docs/PLAYTEST_3G.md` doldur (özellikle: sakatlık karar
+   paneline tepki, şerit oynayınca yüz ifadesi, değişikliği kendiliğinden keşif).
+4. Formu doldurup push'la → Claude kapı raporunu yazar. Çökme/bloklayıcı hata dışında YENİ İSTEK YOK
+   — içerik dondu; "şu da olsa" notları FAZ 03 backlog'una yazılır, greybox'a girmez.
 
 **Claude (bekleyen/koşullu):**
-- Geri bildirim iterasyonları (his Atilla onayına bağlı — sayısal kanıt his kanıtı DEĞİL).
-- GO çıkarsa: greybox emekliliği + FAZ 03'e taşıma haritası (`GREYBOX_MODEL.md` §FAZ 03 hizası:
-  model→ME Spec LOD, [KALİBRE-G]→[KALİBRE] taşıma listesi). NO-GO çıkarsa: pivot dersleriyle tez revizyonu.
+- Playtest verisi gelince: kapı raporu + DECISIONS kapanış satırı → **FAZ 03 açılış brifi**
+  (ME Spec motoru iskeleti + Model Maçı sunum katmanının taşıma planı + [KALİBRE-G]→[KALİBRE] listesi).
+- Playtest'i engelleyen hata çıkarsa aynı gün düzeltme (tek istisna).
 - Bekleyen kararlar (DECISIONS): BRIEF RA#1 metninin v4.2 revizyonu; kapı kararı satırı;
   **Paket B GDD v4.2 adayları** (koşullu ön-emirler, Oto-Koç — otomatik yürütme GDD 12.1'den
   sapmadır, deterministik + Tek Kapı + şeffaf rozet + "canlı insan > oto-koç" bandı ilkeleriyle;
