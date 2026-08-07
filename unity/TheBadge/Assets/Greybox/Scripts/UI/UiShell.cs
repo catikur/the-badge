@@ -53,6 +53,10 @@ namespace TheBadge.Greybox.UI
         // Model Maçı ekranı (Sahneleme §0)
         RectTransform modelRoot;
         Text mScoreLine, mBlockCard, mMovesLabel, mFeedText, mTacticBtnLabel, mTempoRaiseLabel, mTempoLockLabel;
+        Text mStatsLine, mStatsDetailText;
+        RectTransform mStatsPanel;
+        ScrollRect mFeedScroll;
+        public Func<string> StatsDetailProvider; // detay paneli açılınca Bootstrap'tan metin ister
         RectTransform stripWin, stripDraw, stripLoss;
         Text stripWinT, stripDrawT, stripLossT;
         readonly System.Collections.Generic.List<RectTransform> momBars = new System.Collections.Generic.List<RectTransform>();
@@ -121,9 +125,50 @@ namespace TheBadge.Greybox.UI
                 momBars.Add(bar);
             }
 
-            mFeedText = UiWidgets.MakeText("Feed", modelRoot, "", 33, new Color(0.93f, 0.96f, 0.9f), TextAnchor.UpperLeft);
-            UiWidgets.TopBlock((RectTransform)mFeedText.transform, 430f, StripW, 430f);
+            // İstatistik satırı + detay düğmesi (iterasyon 10)
+            mStatsLine = UiWidgets.MakeText("StatsLine", modelRoot, "", 30, new Color(1f, 1f, 1f, 0.85f), TextAnchor.MiddleLeft);
+            var slRt = (RectTransform)mStatsLine.transform;
+            UiWidgets.TopBlock(slRt, 414f, StripW - 220f, 44f);
+            slRt.anchoredPosition = new Vector2(-110f, -414f);
+            var statsBtn = UiWidgets.MakeButton("StatsBtn", modelRoot, "DETAY ▾", 28, btnBg, btnFg, ToggleStatsPanel);
+            var sbRt = (RectTransform)statsBtn.transform;
+            UiWidgets.TopBlock(sbRt, 410f, 200f, 52f);
+            sbRt.anchoredPosition = new Vector2((StripW - 200f) * 0.5f, -410f);
+
+            // Maç anlatımı: KAYBOLMAZ — tüm dakikalar kaydırılabilir listede kalır (iterasyon 10)
+            var feedView = UiWidgets.MakeRect("FeedView", modelRoot);
+            UiWidgets.TopBlock(feedView, 470f, StripW, 400f);
+            feedView.gameObject.AddComponent<RectMask2D>();
+            var feedBg = feedView.gameObject.AddComponent<Image>();
+            feedBg.color = new Color(0f, 0f, 0f, 0.18f);
+            var feedContent = UiWidgets.MakeRect("FeedContent", feedView);
+            feedContent.anchorMin = new Vector2(0f, 1f);
+            feedContent.anchorMax = new Vector2(1f, 1f);
+            feedContent.pivot = new Vector2(0.5f, 1f);
+            feedContent.sizeDelta = new Vector2(0f, 400f);
+            mFeedText = UiWidgets.MakeText("Feed", feedContent, "", 31, new Color(0.93f, 0.96f, 0.9f), TextAnchor.UpperLeft);
+            var ftRt = (RectTransform)mFeedText.transform;
+            UiWidgets.Stretch(ftRt);
+            ftRt.offsetMin = new Vector2(16f, 0f);
+            ftRt.offsetMax = new Vector2(-16f, 0f);
             mFeedText.lineSpacing = 1.25f;
+            mFeedText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            mFeedScroll = feedView.gameObject.AddComponent<ScrollRect>();
+            mFeedScroll.content = feedContent;
+            mFeedScroll.horizontal = false;
+            mFeedScroll.vertical = true;
+
+            // Detay paneli (kapalı başlar): maç istatistikleri özeti
+            var sp = UiWidgets.MakePanel("StatsPanel", modelRoot, new Color(0.02f, 0.07f, 0.04f, 0.96f));
+            mStatsPanel = (RectTransform)sp.transform;
+            var spTitle = UiWidgets.MakeText("T", mStatsPanel, "MAÇ İSTATİSTİKLERİ", 44, accent, TextAnchor.MiddleCenter, FontStyle.Bold);
+            UiWidgets.TopBlock((RectTransform)spTitle.transform, 120f, 1000f, 60f);
+            mStatsDetailText = UiWidgets.MakeText("D", mStatsPanel, "", 34, new Color(0.93f, 0.96f, 0.9f), TextAnchor.UpperLeft);
+            UiWidgets.TopBlock((RectTransform)mStatsDetailText.transform, 220f, StripW, 1200f);
+            mStatsDetailText.lineSpacing = 1.3f;
+            var spClose = UiWidgets.MakeButton("Close", mStatsPanel, "KAPAT", 40, accent, Color.black, ToggleStatsPanel);
+            UiWidgets.BottomBlock((RectTransform)spClose.transform, 90f, 400f, 120f);
+            mStatsPanel.gameObject.SetActive(false);
 
             mBlockCard = UiWidgets.MakeText("BlockCard", modelRoot, "", 42, accent, TextAnchor.MiddleCenter, FontStyle.Bold);
             UiWidgets.TopBlock((RectTransform)mBlockCard.transform, 900f, 1000f, 110f);
@@ -179,6 +224,8 @@ namespace TheBadge.Greybox.UI
         {
             feedLines.Clear();
             mFeedText.text = "";
+            mStatsLine.text = "";
+            mStatsPanel.gameObject.SetActive(false);
             modelRoot.gameObject.SetActive(true);
         }
 
@@ -227,9 +274,22 @@ namespace TheBadge.Greybox.UI
 
         public void PushFeed(string line)
         {
+            // Hiçbir satır silinmez: tam maç anlatımı kaydırılabilir kalır (iterasyon 10)
             feedLines.Add(line);
-            if (feedLines.Count > 9) feedLines.RemoveAt(0);
             mFeedText.text = string.Join("\n", feedLines);
+            float h = Mathf.Max(400f, feedLines.Count * 41f);
+            mFeedScroll.content.sizeDelta = new Vector2(0f, h);
+            mFeedScroll.verticalNormalizedPosition = 0f; // en yeni satıra kaydır
+        }
+
+        public void SetStatsLine(string text) => mStatsLine.text = text;
+
+        void ToggleStatsPanel()
+        {
+            bool opening = !mStatsPanel.gameObject.activeSelf;
+            if (opening && StatsDetailProvider != null)
+                mStatsDetailText.text = StatsDetailProvider();
+            mStatsPanel.gameObject.SetActive(opening);
         }
 
         public void SetMomentumHistory(System.Collections.Generic.IReadOnlyList<float> hist)

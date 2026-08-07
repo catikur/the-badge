@@ -198,6 +198,17 @@ bus reddi, determinizm, pacing+kalibrasyon, vinyet).
 Kanıt: model 400 maç — 2.83 gol; kalibrasyon sıkılaştı (tahmin %37 vs gerçekleşen %40, <0.10);
 tüm harness + Sim.Checks yeşil; derleme yolları 0/0.
 
+## İterasyon 10 — Rakip golü vinyeti + kalıcı feed + istatistik paneli (2026-08-07)
+
+| Geri bildirim | Yapılan |
+|---|---|
+| "Rakip golleri gösterilmeden ana sayfaya dönüyor" | Kök neden: vinyet üretiminde güç eğimi (+8) HEP bize uygulanıyordu; rakip golü ararken zayıf tarafta gol aranıyor, 5 deneme boşa çıkıp vinyet atlanıyordu. Düzeltme: `VignetteRecorder` kurulumda ev = GOL ATACAK taraf olacak şekilde takımları çevirir, eğim her zaman gol arayan tarafa uygulanır; sahne aynalama zaten mevcut (harness `VignetteWorks` iki takım için de doğrular) |
+| "Anlatım yazıları kaybolmasın; hangi dakika ne var hep olsun" | Spiker feed'i 4 satırlık kayan pencereden **kalıcı, kaydırılabilir akışa** çevrildi: hiçbir satır silinmez, tüm dakikalar `ScrollRect + RectMask2D` içinde durur; yeni satırda otomatik en alta iner, oyuncu yukarı kaydırıp geçmişi okuyabilir |
+| "Maç istatistiklerini göster; istenirse detay expand edilsin" | Model ekranına canlı istatistik satırı: **xG (blok gol olasılıkları toplamı) · Tehlike sayısı (taraflı) · Hamle hakkı**. "DETAY ▾" butonu tam ekran panel açar: skor, xG, tehlike, momentum, taktik/tempo, gol listesi (dakika+taraf), yapılan müdahaleler (şerit etkisiyle), sıradaki bloğun 8 etken dökümü. `MatchModel`'e `XgUs/XgThem/DangerUs/DangerThem/LastDangerSide` eklendi (zar akışı Domain.Duel, ayrı salt — skor zarı DEĞİŞMEDİ, determinizm korunur) |
+
+Kanıt: model 400 maç — 2.83 gol; kalibrasyon tahmin %37 vs gerçekleşen %40 (<0.10); `VignetteWorks`
+her iki takım golü için PASS; FlowSim sahne sözleşmesi + pacing yeşil; derleme yolları 0/0; Sim.Checks yeşil.
+
 ## Atilla'nın sıradaki adımları
 
 `unity/UNITY_SETUP.md` runbook'u: projeyi aç → konsol/testler → Editor'de oyna → iPhone build → 3-5 oyuncu playtest → `docs/PLAYTEST_3G.md` doldur → kapı kararı (GO/NO-GO) → DECISIONS.md.

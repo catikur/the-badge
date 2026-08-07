@@ -37,6 +37,8 @@ namespace TheBadge.Greybox
         bool priceDirty;
         int matchesEndedThisSession;
         readonly List<float> momentumHistory = new List<float>();
+        readonly List<string> goalLog = new List<string>();
+        readonly List<string> moveLog = new List<string>();
 
         static string HomeShort => "ROZET";
 
@@ -142,6 +144,8 @@ namespace TheBadge.Greybox
             ui.SetWinProb(after);
             ui.SetInterventionState(TacticName(director.Model.TacticId), (int)director.Model.Tempo, director.Model.MovesLeft);
             ui.PushFeed($"⚡ {feedLine}  (G %{before.Win * 100f:0} → %{after.Win * 100f:0})");
+            moveLog.Add($"{feedLine} (G %{before.Win * 100f:0} → %{after.Win * 100f:0})");
+            ui.SetStatsLine(StatsLine());
             telemetry.Event("intervention").Num("match", state.matchIndex)
                      .Str("action", action)
                      .Num("win_before", before.Win).Num("win_after", after.Win)
@@ -160,6 +164,39 @@ namespace TheBadge.Greybox
             float net = 0f;
             for (int i = 0; i < state.lastResults.Length; i++) net += state.lastResults[i];
             return net;
+        }
+
+        string StatsLine()
+        {
+            var mo = director.Model;
+            return $"xG {mo.XgUs:0.0} - {mo.XgThem:0.0}   ·   Tehlike {mo.DangerUs}-{mo.DangerThem}   ·   Hamle {bal.model.hamleHakki - mo.MovesLeft}/{bal.model.hamleHakki}";
+        }
+
+        string BuildStatsDetail()
+        {
+            var mo = director.Model;
+            if (mo == null) return "";
+            var f = mo.Factors(us: true);
+            var sb = new System.Text.StringBuilder(600);
+            sb.AppendLine($"{GreyboxWorld.PlayerClubName} {mo.GoalsUs} - {mo.GoalsThem} {opponentName}");
+            sb.AppendLine();
+            sb.AppendLine($"Beklenen gol (model-xG):  {mo.XgUs:0.00}  -  {mo.XgThem:0.00}");
+            sb.AppendLine($"Tehlikeli atak:  {mo.DangerUs}  -  {mo.DangerThem}");
+            sb.AppendLine($"Momentum (şu an):  {(mo.Momentum >= 0 ? "+" : "")}{mo.Momentum:0.00}");
+            sb.AppendLine($"Taktik: {TacticName(mo.TacticId)}  ·  Tempo modu: {(mo.Tempo == TempoMode.Yukselt ? "Yüksek" : mo.Tempo == TempoMode.Kilitlen ? "Kilit" : "Normal")}");
+            sb.AppendLine($"Kalan hamle: {mo.MovesLeft}/{bal.model.hamleHakki}");
+            sb.AppendLine();
+            sb.AppendLine("GOLLER");
+            if (goalLog.Count == 0) sb.AppendLine("  — henüz gol yok —");
+            foreach (var g in goalLog) sb.AppendLine("  ⚽ " + g);
+            sb.AppendLine();
+            sb.AppendLine("MÜDAHALELER");
+            if (moveLog.Count == 0) sb.AppendLine("  — henüz hamle yapılmadı —");
+            foreach (var mv in moveLog) sb.AppendLine("  ⚡ " + mv);
+            sb.AppendLine();
+            sb.AppendLine($"Sıradaki blok etkenleri (BİZ): güç ×{f.Guc:0.00} · taktik ×{f.Taktik:0.00} · faz ×{f.Faz:0.00}");
+            sb.AppendLine($"momentum ×{f.Momentum:0.00} · skor ×{f.Skor:0.00} · ev ×{f.Ev:0.00} · form ×{f.Form:0.00}");
+            return sb.ToString();
         }
 
         /// <summary>Blok kartı etken satırı: 1'den sapan çarpanlar — "neye göre?" şeffaflığı.</summary>
@@ -204,18 +241,23 @@ namespace TheBadge.Greybox
                 {
                     case BlockOutcome.GoalUs:
                         ui.PushFeed($"{minute}' ⚽ GOOOL! {HomeShort} ağları havalandırdı! ({director.Model.GoalsUs}-{director.Model.GoalsThem})");
+                        goalLog.Add($"{minute}' — {HomeShort} ({director.Model.GoalsUs}-{director.Model.GoalsThem})");
                         break;
                     case BlockOutcome.GoalThem:
                         ui.PushFeed($"{minute}' ⚽ Gol yedik... {awayShort} skoru yakaladı ({director.Model.GoalsUs}-{director.Model.GoalsThem})");
+                        goalLog.Add($"{minute}' — {awayShort} ({director.Model.GoalsUs}-{director.Model.GoalsThem})");
                         break;
                     case BlockOutcome.Danger:
-                        ui.PushFeed($"{minute}' Tehlikeli dakikalar — pozisyonlar karşılıklı, gol yok");
+                        ui.PushFeed(director.Model.LastDangerSide == 0
+                            ? $"{minute}' Tehlikeli atak — {HomeShort} baskın, son dokunuş eksik!"
+                            : $"{minute}' {awayShort} tehlikeli geldi — savunma son anda sıyırdı!");
                         break;
                     default:
                         ui.PushFeed($"{minute}' Kontrollü oyun, orta saha mücadelesi");
                         break;
                 }
                 ui.SetWinProb(strip);
+                ui.SetStatsLine(StatsLine());
                 ui.SetScoreBlockLine(HomeShort, awayShort, director.Model.GoalsUs, director.Model.GoalsThem,
                     idx + 1, director.Model.BlockCount, minute);
                 telemetry.Event("block_result").Num("match", state.matchIndex)
@@ -268,6 +310,9 @@ namespace TheBadge.Greybox
             pitch.gameObject.SetActive(false); // ana ekran MODEL (Sahneleme §0)
             ui.ShowModelScreen();
             momentumHistory.Clear();
+            goalLog.Clear();
+            moveLog.Clear();
+            ui.StatsDetailProvider = BuildStatsDetail;
 
             currentSetup = GreyboxWorld.BuildMatch(bal, (ulong)state.worldSeed, state.matchIndex, state.tacticId);
             currentSetup.HomeFormNet = FormNet(); // son 5 maç formu model etkeni (GREYBOX_MODEL.md)
@@ -278,6 +323,7 @@ namespace TheBadge.Greybox
             ui.SetModelSpeedHighlight(1);
             ui.SetInterventionState(TacticName(director.Model.TacticId), (int)director.Model.Tempo, director.Model.MovesLeft);
             ui.SetWinProb(director.Model.ComputeWinProb());
+            ui.SetStatsLine(StatsLine());
             ui.PushFeed($"Maç başladı: {GreyboxWorld.PlayerClubName} — {opponentName} (rakip gücü {currentSetup.AwayStrength:0})");
 
             telemetry.Event("match_start")

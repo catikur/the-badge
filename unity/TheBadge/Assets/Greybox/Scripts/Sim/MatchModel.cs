@@ -64,6 +64,13 @@ namespace TheBadge.Greybox.Sim
         public bool IsFinished => CurrentBlock >= m.blokSayisi;
         public int TacticId => usTactic.id;
 
+        // Maç istatistikleri (iterasyon 10): model-xG = blok olasılıklarının toplamı
+        public float XgUs { get; private set; }
+        public float XgThem { get; private set; }
+        public int DangerUs { get; private set; }
+        public int DangerThem { get; private set; }
+        public int LastDangerSide { get; private set; } = -1; // 0 biz / 1 rakip (son Danger bloğu)
+
         /// <summary>Blok başlangıç dakikası (gösterim: 10 blok → 9'ar dk).</summary>
         public int BlockMinute(int block) => (int)Math.Round(90.0 * block / m.blokSayisi);
 
@@ -164,6 +171,8 @@ namespace TheBadge.Greybox.Sim
         {
             var pv = PreviewNext();
             uint tick = (uint)CurrentBlock;
+            XgUs += pv.PGoalUs;   // model-xG: gösterilen olasılıkların birikimi
+            XgThem += pv.PGoalThem;
             double r = Rng.Rand01(seed, Domain.Duel, 500, tick, 1);
             BlockOutcome outcome;
             if (r < pv.PGoalUs) { outcome = BlockOutcome.GoalUs; GoalsUs++; }
@@ -173,6 +182,13 @@ namespace TheBadge.Greybox.Sim
                 double rd = Rng.Rand01(seed, Domain.Duel, 501, tick, 2);
                 outcome = rd < (pv.PGoalUs + pv.PGoalThem) * m.tehlikeCarpan * 0.5
                     ? BlockOutcome.Danger : BlockOutcome.Quiet;
+                if (outcome == BlockOutcome.Danger)
+                {
+                    // Tehlikenin tarafı: olasılık oranıyla — Domain.Duel
+                    double rs = Rng.Rand01(seed, Domain.Duel, 503, tick, 5);
+                    LastDangerSide = rs < pv.PGoalUs / Math.Max(1e-4f, pv.PGoalUs + pv.PGoalThem) ? 0 : 1;
+                    if (LastDangerSide == 0) DangerUs++; else DangerThem++;
+                }
             }
 
             // Momentum güncellemesi — Domain.Chaos: blok salınımı

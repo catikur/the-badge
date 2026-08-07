@@ -41,9 +41,11 @@ namespace TheBadge.Greybox.Sim
                     Seed = s,
                     HomeTacticId = scorerTeam == 0 ? usTacticId : themTacticId,
                     AwayTacticId = scorerTeam == 0 ? themTacticId : usTacticId,
-                    // Gol arayan taraf lehine eğim: vinyet aramasını kısaltır (sunum aracı, model değil)
-                    HomeStrength = scorerTeam == 0 ? Math.Max(usStrength, themStrength) + 8f : Math.Min(usStrength, themStrength),
-                    AwayStrength = scorerTeam == 0 ? Math.Min(usStrength, themStrength) : Math.Max(usStrength, themStrength) + 8f
+                    // Gol HER ZAMAN ev yönünde aranır → ev, GOL ATACAK TARAFI temsil eder ve
+                    // güçlendirilir (iterasyon 10 düzeltmesi: rakip golünde eğim yanlış taraftaydı
+                    // → gol bulunamıyor, vinyet atlanıyordu)
+                    HomeStrength = (scorerTeam == 0 ? usStrength : themStrength) + 8f,
+                    AwayStrength = scorerTeam == 0 ? themStrength : usStrength
                 };
                 var sim = new FlowSim(bal, setup);
                 var ring = new Queue<VignetteFrame>(keepFrames + 4);
