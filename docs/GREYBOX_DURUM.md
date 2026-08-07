@@ -1,6 +1,6 @@
 # GREYBOX DURUM — FAZ 00.5 derleme dokümanı (son hal)
 
-Tarih: 2026-08-07 · Branch: `claude/3g-greybox-task-plan-76qg49` (PR #1, taslak) · Sahip: Atilla · Uygulayıcı: Claude Code
+Tarih: 2026-08-07 (İt.11 sonrası) · Branch: `claude/3g-greybox-task-plan-76qg49` (PR #1, taslak) · Sahip: Atilla · Uygulayıcı: Claude Code
 Amaç: 10 iterasyonluk konuşmanın kalıcı özeti — **ne yaptık, neden yaptık, sırada ne var.** Yeni bir oturum
 bu dokümanla + `docs/DECISIONS.md` ile bağlamı tam kurar. İterasyon iterasyon ayrıntı: `docs/GREYBOX_3G_RAPOR.md`.
 
@@ -20,11 +20,14 @@ Atilla tezi düzeltti — USM 98 DNA'sı "maçı seyretmek" değil, **"karar ver
 
 1. **Maç öncesi:** 3 taktik kartı (Savunma/Denge/Hücum) + kadro gücü + rakip gücü + son-5 form.
 2. **Model Maçı ekranı:** maç 10 aksiyon bloğu. Her blokta ÖNCE olasılık kartı ("Gol ihtimali BİZ %18 ·
-   etkenler: güç ×1.12 · faz ×1.05 …"), SONRA zar. Üstte canlı **G/B/M kazanma şeridi** (kesin DP ile,
-   animasyonlu), momentum çubukları, **kalıcı kaydırılabilir spiker feed'i** (hiçbir dakika silinmez),
-   **canlı istatistik satırı** (xG · Tehlike · Hamle) + "DETAY ▾" tam ekran istatistik paneli.
-3. **Müdahale (Tek Kapı):** blok aralarında taktik/tempo değişimi — 3 hamle hakkı; her müdahale
-   `CommandEnvelope` ile bus'tan geçer, şerit anında yeniden hesaplanır ("G %38→%45" feed'e düşer).
+   etkenler: güç ×1.12 · yorgunluk ×0.96 …"), SONRA zar. Üstte canlı **G/B/M kazanma şeridi** (kesin DP,
+   faz+enerji ileri projeksiyonlu), momentum çubukları, **kalıcı kaydırılabilir spiker feed'i**,
+   **canlı istatistik satırı** (xG · Tehlike · Enerji · Hamle · Değişiklik) + "DETAY ▾" kaydırılabilir
+   **koç masası** paneli (kart/sakatlık/enerji karşılaştırması, günlükler, 16 kişilik kadro durumu).
+3. **Müdahale (Tek Kapı):** taktik/tempo (3 hamle) + **oyuncu değişikliği (3 hak, ayrı havuz)**; her
+   komut `CommandEnvelope` ile bus'tan geçer, şerit anında yeniden hesaplanır ("G %38→%45" feed'e düşer).
+   **Kart/sakatlık olayları** maça doku katar; bizim sakatlıkta akış DURUR: "değiştir / eksik devam"
+   zorunlu karar paneli (İt.11 — tezin vitrini: kararın şeridi görünür oynatması).
 4. **Gol vinyeti:** golde 2D sahne kaydı oynar (FlowSim, sahiplik değişmezli) — gol ağlara, kutlama
    kümelenmesi SONUNA KADAR izlenir (acele yok, Atilla kuralı); rakip golünde sahne aynalanır.
 5. **Maç sonu:** skor + bilet geliri + prim → bilet fiyat slider'ı (canlı doluluk/gelir önizleme) →
@@ -46,6 +49,7 @@ Atilla tezi düzeltti — USM 98 DNA'sı "maçı seyretmek" değil, **"karar ver
 | **İt.8: FUN GATE PİVOTU → Model Maçı** | `MatchModel` (10 blok, açık olasılık formülü, kesin DP kazanma şeridi), müdahaleler Tek Kapı'dan, vinyet boru hattı (`VignetteRecorder` headless FlowSim kaydı) | Atilla: "olasılıkları görünür yapıp modelde oynatmalıyız; fun gate'e yanlış yaklaşmışız" — DECISIONS kaydı |
 | İt.9: kutlamalı vinyet + 8 etkenli kriter modeli | Vinyet kutlama bitene dek kayıt+oynatma; `docs/GREYBOX_MODEL.md`: tanh güç, 3×3 taktik matrisi, faz eğrisi, momentum (OU), skor durumu, tempo, ev avantajı, form; `Factors()` dökümü blok kartında | "Hiçbir şey için acele etme" + "olasılık kriterlerini iyi modelleyelim" |
 | İt.10: rakip vinyeti + kalıcı feed + istatistik | Vinyet güç eğimi hep GOL ATAN tarafa (rakip golü artık bulunuyor); feed kalıcı+kaydırılabilir (hiçbir satır silinmez); xG/Tehlike/Hamle satırı + DETAY paneli (`XgUs/XgThem/DangerUs/DangerThem` — ayrı zar akışı, skor zarına dokunmaz) | "Rakip golleri gösterilmeden dönüyor; anlatım kaybolmasın; istatistik göster, detay expand" |
+| **İt.11: "Koçun Eli"** (öneri → onay → kod) | 10 etkenli model (+Yorgunluk, +Eksik); isimli 11+5 kadro; kart/sakatlık olayları (Referee/Injury domain — skor zarı değişmedi); sakatlıkta ZORUNLU karar paneli (akış kilitlenir, skip atlayamaz); `model.substitution`/`model.continue_short` (değişiklik 3 hak, hamleden ayrı); koç masası istatistik paneli (kaydırılabilir); DP'ye faz+enerji projeksiyonu; vinyet dönüşünde feed silinme kalıntısı düzeltildi. Paket B (ön-emirler, Oto-Koç, online/offline ilkesi) GDD v4.2 bekleyen kararı | Atilla: "kart/sakatlık/yorulma yok; değişiklik/mantalite isterim; istatistik her koçun ihtiyacını taşısın; oto-koç fikri" → `GREYBOX_ONERI_IT11.md`, karar: Paket A tam |
 
 **Değişmeyen anayasa uyumu:** `shared/TheBadge.Sim`'e dokunulmadı (yalnız `Rng` tüketildi);
 tüm rastgelelik sayaç-RNG (`Rng.Hash64`, Domain gerekçeli); durum değiştiren her eylem
@@ -56,7 +60,7 @@ tüm rastgelelik sayaç-RNG (`Rng.Hash64`, Domain gerekçeli); durum değiştire
 | Kapı | Komut | Son durum (2026-08-07) |
 |---|---|---|
 | Çekirdek | `dotnet run --project shared/TheBadge.Sim.Checks -c Release` | ✅ YEŞİL |
-| Harness (scratchpad, repo dışı) | 300 maç FlowSim pacing + sahne sözleşmesi (santra/korner/gol-ağda/vuruş-yakınlığı/yükseklik) + ekonomi + bus + 400 maç model (gol ort. 2.83, kalibrasyon %37 tahmin vs %40 gerçekleşen, güç/tempo, vinyet iki takım) | ✅ TÜM KONTROLLER YEŞİL |
+| Harness (scratchpad, repo dışı) | 300 maç FlowSim pacing + sahne sözleşmesi + ekonomi + bus + 400 maç model (gol 2.71, kalibrasyon %38 vs %40, olay bantları sarı 2.08/kırmızı 0.23/sakatlık 0.64, yorgunluk/taze bacak/karar kilidi/olay determinizmi, değişiklik bus 4 negatif, vinyet iki takım) | ✅ TÜM KONTROLLER YEŞİL |
 | Stub derleme (2 yol: varsayılan + `ENABLE_INPUT_SYSTEM;UNITY_IOS`) | Unity katmanı sözdizimi/tip kontrolü | ✅ 0 hata / 0 hata |
 | EditMode testleri (Editor'de) | pacing, determinizm-lite, sahne sözleşmesi aynası, `ModelMatchTests` (7) | ⏳ Atilla — Editor'de koşulur |
 
@@ -66,18 +70,24 @@ Harness/stub scratchpad'te yaşar (repo'ya girmez); yeni oturumda gerekirse rapo
 
 **Atilla (kapıya giden yol):**
 1. `git pull` (Unity KAPALIYKEN; makine ProjectSettings'i değiştirdiyse önce `git checkout -- .`).
-2. Editor'de oyna — iterasyon 10 kontrol listesi: (a) rakip golünde vinyet OYNUYOR mu ve doğru
-   yönde/renkte mi; (b) feed'de tüm dakikalar duruyor, yukarı kaydırılabiliyor mu; (c) istatistik
-   satırı + DETAY paneli doğru mu; (d) konsol 0 error/0 warning.
+2. Editor'de oyna — iterasyon 11 kontrol listesi: (a) maç öncesi isimli kadro; (b) enerji maç boyu
+   düşüyor, tempo yükseltince daha hızlı mı; (c) sarı/kırmızı/sakatlık feed'e düşüyor mu; (d) bizim
+   sakatlıkta karar paneli açılıyor, değiştir/eksik-devam şeridi oynatıyor mu; (e) OYUNCU DEĞİŞ ile
+   manuel değişiklik + taze bacak etkisi; (f) DETAY "koç masası" (kadro durumu, kaydırma); (g) rakip
+   gol vinyeti oynuyor ve feed vinyet sonrası SİLİNMİYOR mu; (h) konsol 0 error/0 warning.
 3. His onayı → 30-60 sn kayıt (DoD-G) → iPhone build (runbook) → 3-5 kişi playtest →
    `docs/PLAYTEST_3G.md` doldur → **GO/NO-GO kararı → DECISIONS.md**.
-4. Geri bildirim varsa iterasyon 11 açılır (süreç: davranış değişikliği önce yazıyla).
+4. Geri bildirim varsa iterasyon 12 açılır (süreç: davranış değişikliği önce yazıyla).
+   Not: İt.11 SON içerik iterasyonuydu (timebox); bundan sonrası yeni özellik değil ayar/pürüz turu.
 
 **Claude (bekleyen/koşullu):**
 - Geri bildirim iterasyonları (his Atilla onayına bağlı — sayısal kanıt his kanıtı DEĞİL).
 - GO çıkarsa: greybox emekliliği + FAZ 03'e taşıma haritası (`GREYBOX_MODEL.md` §FAZ 03 hizası:
   model→ME Spec LOD, [KALİBRE-G]→[KALİBRE] taşıma listesi). NO-GO çıkarsa: pivot dersleriyle tez revizyonu.
-- Bekleyen kararlar (DECISIONS): BRIEF RA#1 metninin v4.2 revizyonu; kapı kararı satırı.
+- Bekleyen kararlar (DECISIONS): BRIEF RA#1 metninin v4.2 revizyonu; kapı kararı satırı;
+  **Paket B GDD v4.2 adayları** (koşullu ön-emirler, Oto-Koç — otomatik yürütme GDD 12.1'den
+  sapmadır, deterministik + Tek Kapı + şeffaf rozet + "canlı insan > oto-koç" bandı ilkeleriyle;
+  online/offline asimetri yazımı) — `GREYBOX_ONERI_IT11.md` §2.
 
 **Açık borçlar (bilinçli):** 4 kapılı tam doğrulama FAZ 04'te; uzatma dakikaları yok; devre arası
 saha değişimi yok; izometrik kamera FAZ 05+ (greybox ölçek+gölgeyle veriyor); A/B "canlı 2D maç modu"
@@ -100,6 +110,7 @@ kararı playtest sonrasına.
 | `docs/GREYBOX_3G_RAPOR.md` | İterasyon iterasyon teslim raporu + kanıtlar + DoD-G |
 | `docs/GREYBOX_SAHNELEME.md` (v2.0) | §0 Model Maçı ana deneyim sözleşmesi + v1.x 2D sahne kuralları (vinyet sözleşmesi) |
 | `docs/GREYBOX_MODEL.md` | 8 etkenli olasılık kriter modeli + DP açıklaması + kalibrasyon + FAZ 03 hizası |
+| `docs/GREYBOX_ONERI_IT11.md` | İt.11 öneri paketi (A: greybox — UYGULANDI; B: GDD v4.2 adayları — bekliyor) |
 | `docs/PLAYTEST_3G.md` | Kapı formu (doldurulacak) |
 | `docs/DECISIONS.md` | Pivot kaydı + bekleyen kararlar |
 | `unity/UNITY_SETUP.md` | Atilla runbook (açılış → test → build) |

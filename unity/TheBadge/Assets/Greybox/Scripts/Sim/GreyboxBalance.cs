@@ -216,8 +216,40 @@ namespace TheBadge.Greybox.Sim
             public float[] taktikMatchup;     // 3x3 etkileşim matrisi (satır: hücum, sütun: savunma)
         }
 
+        [Serializable]
+        public sealed class SquadCfg
+        {
+            public float enerjiBaslangic;       // ME Spec 12.1 Energy tavanının vekili (1000)
+            public float yorgunlukBlokDrenaj;   // blok başına oyuncu enerji drenajı
+            public float drenajTempoYukselt;    // tempo müdahalesi drenaj çarpanları (risk/bedel)
+            public float drenajKilitlen;
+            public float drenajRakipEtki;       // bizim temponun rakip drenajına yansıma oranı
+            public float drenajTaktikEtki;      // taktik tempo çarpanının drenaja katkısı
+            public float gkDrenajCarpan;        // kaleci yavaş yorulur
+            public float yorgunlukGucTaban;     // ME 12.1 M_kondisyon vekili: E=0'da kalan güç oranı
+            public int degisiklikHakki;         // GDD 12.4 standart 3 (hamle hakkından AYRI)
+            public float tazeBacakEnerji;       // giren oyuncunun enerjisi
+            public float eksikHucumCarpan;      // eksik oyuncu başına kendi gol olasılığı çarpanı
+            public float rakipEksikSavunmaCarpan; // rakip eksikken bizim gol olasılığımız artar
+        }
+
+        [Serializable]
+        public sealed class EventCfg
+        {
+            public float sariMacBasi;           // maç TOPLAM sarı bandı (iki takım) — ME 11.2 ölçekli
+            public float kirmiziMacBasi;        // maç toplam direkt kırmızı
+            public float sakatlikMacBasi;       // maç toplam sakatlık — ME 12.2 bandı ölçekli
+            public float kartTempoYukseltCarpan; // agresif tempoda kart riski artar
+            public float ikinciSariAgirlik;     // agresif tempoda kartlı oyuncunun seçilme ağırlığı
+            public float sakatlikYorgunlukEtki; // ME 12.2 M_yorgunluk vekili (takım enerjisiyle)
+            public float[] kartMevkiAgirlik;    // DF, MF, FW seçilme ağırlıkları
+            public float[] golMevkiAgirlik;     // gol atfı ağırlıkları: DF, MF, FW (kozmetik)
+        }
+
         public MetaInfo _meta;
         public ModelCfg model;
+        public SquadCfg squad;
+        public EventCfg olay;
         public ClockCfg clock;
         public PaceCfg pace;
         public BallCfg ball;

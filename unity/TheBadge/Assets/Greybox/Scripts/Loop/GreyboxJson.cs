@@ -17,6 +17,14 @@ namespace TheBadge.Greybox.Loop
             return Encoding.UTF8.GetBytes(s);
         }
 
+        /// <summary>İki alanlı payload (ör. model.substitution {out, in}).</summary>
+        public static byte[] Payload2(string k1, double v1, string k2, double v2)
+        {
+            string s = "{\"" + k1 + "\":" + v1.ToString("0.###", CultureInfo.InvariantCulture)
+                     + ",\"" + k2 + "\":" + v2.ToString("0.###", CultureInfo.InvariantCulture) + "}";
+            return Encoding.UTF8.GetBytes(s);
+        }
+
         public static bool TryGetNumber(byte[] payloadJson, string key, out double value)
         {
             value = 0;

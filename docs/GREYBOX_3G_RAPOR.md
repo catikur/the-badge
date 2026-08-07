@@ -209,6 +209,26 @@ tüm harness + Sim.Checks yeşil; derleme yolları 0/0.
 Kanıt: model 400 maç — 2.83 gol; kalibrasyon tahmin %37 vs gerçekleşen %40 (<0.10); `VignetteWorks`
 her iki takım golü için PASS; FlowSim sahne sözleşmesi + pacing yeşil; derleme yolları 0/0; Sim.Checks yeşil.
 
+## İterasyon 11 — "Koçun Eli": yorgunluk + kart/sakatlık + değişiklik + koç masası (2026-08-07)
+
+Süreç: Atilla'nın maç içi derinlik istekleri önce `docs/GREYBOX_ONERI_IT11.md` olarak yazıldı;
+**Paket A tam** onayı alındı; kod öneriyle hizalandı (yazı → onay → kod). Model sözleşmesi:
+`GREYBOX_MODEL.md` v2.
+
+| Bileşen | Uygulama |
+|---|---|
+| A1 Yorgunluk | 9. etken: oyuncu başına enerji, blok drenajı tempo/taktikle çarpılır; tempo yükseltmenin GERÇEK bedeli doğdu (drenaj ×1.35). DP şeridi faz+enerjiyi blok blok İLERİ projeksiyon eder — şerit daha dürüst |
+| A2 Kart/sakatlık | Ayrı Rng akışları (Referee/Injury — skor zarı DEĞİŞMEDİ): sarı/ikinci sarı/direkt kırmızı/sakatlık; bantlar ME Spec'ten blok ölçeğine indirildi [KALİBRE-G olay.*]. Bizim sakatlıkta akış KİLİTLENİR: karar paneli "değiştir (hak yakar) / eksik devam (güç düşer)" — çözüm yalnız Tek Kapı komutuyla, skip atlayamaz. 10. etken Eksik: kırmızı/eksik şerit şokunu görünür yapar |
+| A3 İsimli kadro + değişiklik | 11+5 kurgusal isimli kadro (maç öncesiyle maç içi AYNI tohum); `model.substitution` + `model.continue_short` komutları; değişiklik hakkı 3 — hamleden AYRI havuz (GDD 12.4); taze bacak enerji/şerit toparlanması görünür; gol atfı isimlere ("34' GOOOL! Bozkan") |
+| A4 Koç masası | İstatistik satırı: xG · Tehlike · Enerji · Hamle · Değişiklik. DETAY paneli artık KAYDIRILABİLİR: skor/xG/kart/sakatlık/enerji karşılaştırması + gol/olay/müdahale günlükleri + 16 kişilik kadro durumu (enerji, kart, gol, sakat/çıktı) + 10 etken dökümü |
+| Bonus düzeltme | Vinyet dönüşünde `ShowModelScreen` çağrısı feed'i SIFIRLIYORDU (İt.10 kalıntısı) — kaldırıldı; feed artık gerçekten kalıcı |
+
+Kanıt: model 400 maç — 2.71 gol; kalibrasyon tahmin %38 vs gerçekleşen %40 (<0.10, projeksiyon
+şeridi SIKILAŞTIRDI); olay bantları sarı 2.08 / kırmızı 0.23 / sakatlık 0.64 / karar anı 0.31/maç;
+`ModelFatigueDrain`, `ModelFreshLegs`, `ModelIncidentDeterminism`, `ModelDecisionGate`,
+`BusSubstitution` (4 negatif + hak sınırı, CB Spec 10.1) PASS; FlowSim sahne sözleşmesi değişmeden
+yeşil; derleme yolları 0/0; Sim.Checks yeşil. EditMode aynası: +6 test (`ModelMatchTests`).
+
 ## Atilla'nın sıradaki adımları
 
 `unity/UNITY_SETUP.md` runbook'u: projeyi aç → konsol/testler → Editor'de oyna → iPhone build → 3-5 oyuncu playtest → `docs/PLAYTEST_3G.md` doldur → kapı kararı (GO/NO-GO) → DECISIONS.md.

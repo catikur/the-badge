@@ -198,5 +198,29 @@
       1.07,
       0.88
     ]
+  },
+  "squad": {
+    "enerjiBaslangic": 1000.0,
+    "yorgunlukBlokDrenaj": 62.0,
+    "drenajTempoYukselt": 1.35,
+    "drenajKilitlen": 0.85,
+    "drenajRakipEtki": 0.5,
+    "drenajTaktikEtki": 0.5,
+    "gkDrenajCarpan": 0.4,
+    "yorgunlukGucTaban": 0.85,
+    "degisiklikHakki": 3,
+    "tazeBacakEnerji": 1000.0,
+    "eksikHucumCarpan": 0.85,
+    "rakipEksikSavunmaCarpan": 1.15
+  },
+  "olay": {
+    "sariMacBasi": 2.0,
+    "kirmiziMacBasi": 0.1,
+    "sakatlikMacBasi": 0.45,
+    "kartTempoYukseltCarpan": 1.35,
+    "ikinciSariAgirlik": 2.0,
+    "sakatlikYorgunlukEtki": 1.5,
+    "kartMevkiAgirlik": [3.0, 2.0, 1.0],
+    "golMevkiAgirlik": [1.0, 3.0, 6.0]
   }
 }

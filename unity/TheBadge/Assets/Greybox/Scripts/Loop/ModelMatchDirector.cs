@@ -18,6 +18,8 @@ namespace TheBadge.Greybox.Loop
         public event Action<int, BlockOutcome, WinProb> BlockResolved; // blockIndex, sonuç, yeni şerit
         public event Action<VignetteFrame> VignetteFramePlayed;
         public event Action<bool> VignetteToggled;                     // başladı/bitti
+        public event Action DecisionRequired;   // sakatlıkta zorunlu karar — akış DURUR (İt.11 A2)
+        public event Action DecisionResolved;   // karar Tek Kapı'dan çözüldü — akış sürer
         public event Action MatchFinished;
 
         GreyboxBalance bal;
@@ -93,6 +95,15 @@ namespace TheBadge.Greybox.Loop
 
                 if ((outcome == BlockOutcome.GoalUs || outcome == BlockOutcome.GoalThem) && !skipRequested)
                     yield return PlayVignette(outcome == BlockOutcome.GoalUs ? 0 : 1, (uint)preview.Index);
+
+                // Sakatlıkta ZORUNLU karar: akış oyuncu Tek Kapı'dan karar verene dek bekler.
+                // Skip bu beklemeyi ATLAYAMAZ — karar anı deneyimin çekirdeğidir (İt.11 A2).
+                if (model.HasPendingDecision)
+                {
+                    DecisionRequired?.Invoke();
+                    while (running && model.HasPendingDecision) yield return null;
+                    DecisionResolved?.Invoke();
+                }
 
                 yield return WaitScaled(bal.model.blokOynatmaSn * 0.5f);
                 skipRequested = false;

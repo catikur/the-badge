@@ -24,6 +24,10 @@ namespace TheBadge.Greybox.UI
         public Action OnTacticCycle;
         public Action OnTempoRaise;
         public Action OnTempoLock;
+        // Kadro müdahaleleri (İt.11): değişiklik + sakatlıkta eksik devam — hepsi Tek Kapı'ya akar
+        public Action<int, int> OnSubstitution;   // (çıkan, giren)
+        public Action OnContinueShort;
+        public Action OnOpenSubPicker;            // Bootstrap seçenekleri kurup ShowSubPicker çağırır
 
         GreyboxBalance bal;
         Color accent, panelBg, btnBg, btnFg, good, bad;
@@ -65,6 +69,21 @@ namespace TheBadge.Greybox.UI
         Button mSpeed1, mSpeed2;
         const float StripW = 940f;
 
+        // Kadro panelleri (İt.11): sakatlık karar paneli + değişiklik seçici
+        RectTransform mIncidentPanel, mSubPanel, mStatsContent;
+        Text mIncidentTitle, mIncidentBody, mSubBtnLabel;
+        readonly Button[] incidentBenchBtns = new Button[5];
+        readonly Text[] incidentBenchLabels = new Text[5];
+        readonly int[] incidentBenchIds = new int[5];
+        int incidentOutId = -1;
+        readonly Button[] subOutBtns = new Button[10];
+        readonly Text[] subOutLabels = new Text[10];
+        readonly int[] subOutIds = new int[10];
+        readonly Button[] subInBtns = new Button[5];
+        readonly Text[] subInLabels = new Text[5];
+        readonly int[] subInIds = new int[5];
+        int subSelectedOut = -1;
+
         public static UiShell Create(GreyboxBalance bal)
         {
             var canvas = UiWidgets.MakeCanvas("GreyboxCanvas");
@@ -89,6 +108,8 @@ namespace TheBadge.Greybox.UI
             BuildBanner(root);
             BuildPreMatch(root);
             BuildPostMatch(root);
+            BuildIncidentPanel(root);
+            BuildSubPicker(root);
         }
 
         // ---------------------------------------------------------------- Model Maçı ekranı
@@ -158,14 +179,31 @@ namespace TheBadge.Greybox.UI
             mFeedScroll.horizontal = false;
             mFeedScroll.vertical = true;
 
-            // Detay paneli (kapalı başlar): maç istatistikleri özeti
+            // Detay paneli (kapalı başlar): "koç masası" — içerik uzadıkça KAYDIRILIR (İt.11 A4)
             var sp = UiWidgets.MakePanel("StatsPanel", modelRoot, new Color(0.02f, 0.07f, 0.04f, 0.96f));
             mStatsPanel = (RectTransform)sp.transform;
             var spTitle = UiWidgets.MakeText("T", mStatsPanel, "MAÇ İSTATİSTİKLERİ", 44, accent, TextAnchor.MiddleCenter, FontStyle.Bold);
-            UiWidgets.TopBlock((RectTransform)spTitle.transform, 120f, 1000f, 60f);
-            mStatsDetailText = UiWidgets.MakeText("D", mStatsPanel, "", 34, new Color(0.93f, 0.96f, 0.9f), TextAnchor.UpperLeft);
-            UiWidgets.TopBlock((RectTransform)mStatsDetailText.transform, 220f, StripW, 1200f);
-            mStatsDetailText.lineSpacing = 1.3f;
+            UiWidgets.TopBlock((RectTransform)spTitle.transform, 110f, 1000f, 60f);
+            var spView = UiWidgets.MakeRect("StatsView", mStatsPanel);
+            UiWidgets.TopBlock(spView, 190f, StripW, 1400f);
+            spView.gameObject.AddComponent<RectMask2D>();
+            var spViewBg = spView.gameObject.AddComponent<Image>();
+            spViewBg.color = new Color(0f, 0f, 0f, 0.15f);
+            mStatsContent = UiWidgets.MakeRect("StatsContent", spView);
+            mStatsContent.anchorMin = new Vector2(0f, 1f);
+            mStatsContent.anchorMax = new Vector2(1f, 1f);
+            mStatsContent.pivot = new Vector2(0.5f, 1f);
+            mStatsContent.sizeDelta = new Vector2(0f, 1400f);
+            mStatsDetailText = UiWidgets.MakeText("D", mStatsContent, "", 30, new Color(0.93f, 0.96f, 0.9f), TextAnchor.UpperLeft);
+            var sdRt = (RectTransform)mStatsDetailText.transform;
+            UiWidgets.Stretch(sdRt);
+            sdRt.offsetMin = new Vector2(18f, 0f);
+            sdRt.offsetMax = new Vector2(-18f, 0f);
+            mStatsDetailText.lineSpacing = 1.25f;
+            var spScroll = spView.gameObject.AddComponent<ScrollRect>();
+            spScroll.content = mStatsContent;
+            spScroll.horizontal = false;
+            spScroll.vertical = true;
             var spClose = UiWidgets.MakeButton("Close", mStatsPanel, "KAPAT", 40, accent, Color.black, ToggleStatsPanel);
             UiWidgets.BottomBlock((RectTransform)spClose.transform, 90f, 400f, 120f);
             mStatsPanel.gameObject.SetActive(false);
@@ -192,6 +230,12 @@ namespace TheBadge.Greybox.UI
 
             mMovesLabel = UiWidgets.MakeText("Moves", modelRoot, "", 32, new Color(1f, 1f, 1f, 0.7f));
             UiWidgets.TopBlock((RectTransform)mMovesLabel.transform, 1180f, 1000f, 40f);
+
+            // Oyuncu değişikliği — hak havuzu hamleden AYRI (İt.11 A3, GDD 12.4)
+            var subBtn = UiWidgets.MakeButton("MSub", modelRoot, "OYUNCU DEĞİŞ", 32, btnBg, btnFg,
+                () => OnOpenSubPicker?.Invoke());
+            UiWidgets.TopBlock((RectTransform)subBtn.transform, 1236f, 520f, 104f);
+            mSubBtnLabel = subBtn.GetComponentInChildren<Text>();
 
             mSpeed1 = UiWidgets.MakeButton("MSpeed1", modelRoot, "1x", 40, btnBg, btnFg, () => OnSpeedSelected?.Invoke(1));
             UiWidgets.BottomBlock((RectTransform)mSpeed1.transform, 64f, 240f, 110f);
@@ -226,10 +270,17 @@ namespace TheBadge.Greybox.UI
             mFeedText.text = "";
             mStatsLine.text = "";
             mStatsPanel.gameObject.SetActive(false);
+            if (mIncidentPanel != null) mIncidentPanel.gameObject.SetActive(false);
+            if (mSubPanel != null) mSubPanel.gameObject.SetActive(false);
             modelRoot.gameObject.SetActive(true);
         }
 
-        public void HideModelScreen() => modelRoot.gameObject.SetActive(false);
+        public void HideModelScreen()
+        {
+            modelRoot.gameObject.SetActive(false);
+            mIncidentPanel.gameObject.SetActive(false);
+            mSubPanel.gameObject.SetActive(false);
+        }
         public void SetModelWidgetsVisible(bool on) => modelRoot.gameObject.SetActive(on); // vinyet sırasında gizle
 
         public void SetScoreBlockLine(string home, string away, int gu, int gt, int blockIdx, int blockCount, int minute)
@@ -288,7 +339,12 @@ namespace TheBadge.Greybox.UI
         {
             bool opening = !mStatsPanel.gameObject.activeSelf;
             if (opening && StatsDetailProvider != null)
-                mStatsDetailText.text = StatsDetailProvider();
+            {
+                string text = StatsDetailProvider();
+                mStatsDetailText.text = text;
+                int lines = text.Split('\n').Length;
+                mStatsContent.sizeDelta = new Vector2(0f, Mathf.Max(1400f, lines * 42f + 30f));
+            }
             mStatsPanel.gameObject.SetActive(opening);
         }
 
@@ -322,6 +378,137 @@ namespace TheBadge.Greybox.UI
             mSpeed2.image.color = speed == 2 ? accent : btnBg;
             mSpeed2.GetComponentInChildren<Text>().color = speed == 2 ? Color.black : btnFg;
         }
+
+        // ---------------------------------------------------------------- Kadro panelleri (İt.11)
+
+        void BuildIncidentPanel(Transform root)
+        {
+            var p = UiWidgets.MakePanel("IncidentPanel", root, new Color(0.11f, 0.03f, 0.03f, 0.96f));
+            mIncidentPanel = (RectTransform)p.transform;
+
+            mIncidentTitle = UiWidgets.MakeText("Title", mIncidentPanel, "", 54, bad, TextAnchor.MiddleCenter, FontStyle.Bold);
+            UiWidgets.TopBlock((RectTransform)mIncidentTitle.transform, 210f, 1000f, 70f);
+
+            mIncidentBody = UiWidgets.MakeText("Body", mIncidentPanel, "", 36, new Color(0.95f, 0.93f, 0.9f), TextAnchor.MiddleCenter);
+            UiWidgets.TopBlock((RectTransform)mIncidentBody.transform, 300f, 940f, 130f);
+            mIncidentBody.lineSpacing = 1.2f;
+
+            for (int i = 0; i < incidentBenchBtns.Length; i++)
+            {
+                int captured = i;
+                var b = UiWidgets.MakeButton("Bench" + i, mIncidentPanel, "", 34, btnBg, btnFg,
+                    () => OnSubstitution?.Invoke(incidentOutId, incidentBenchIds[captured]));
+                UiWidgets.TopBlock((RectTransform)b.transform, 470f + i * 128f, 720f, 108f);
+                incidentBenchBtns[i] = b;
+                incidentBenchLabels[i] = b.GetComponentInChildren<Text>();
+            }
+
+            var cont = UiWidgets.MakeButton("Continue", mIncidentPanel, "EKSİK DEVAM ET\n<size=26>(değişiklik hakkı yanmaz, hücum zayıflar)</size>",
+                32, new Color(1f, 1f, 1f, 0.09f), btnFg, () => OnContinueShort?.Invoke());
+            UiWidgets.TopBlock((RectTransform)cont.transform, 1140f, 720f, 140f);
+
+            mIncidentPanel.gameObject.SetActive(false);
+        }
+
+        /// <summary>Sakatlıkta zorunlu karar paneli — akış bu panel çözülmeden İLERLEMEZ.</summary>
+        public void ShowIncidentDecision(string title, string body, int outPlayerId,
+                                         int[] benchIds, string[] benchLabels)
+        {
+            mIncidentTitle.text = title;
+            mIncidentBody.text = body;
+            incidentOutId = outPlayerId;
+            for (int i = 0; i < incidentBenchBtns.Length; i++)
+            {
+                bool on = i < benchIds.Length;
+                incidentBenchBtns[i].gameObject.SetActive(on);
+                if (!on) continue;
+                incidentBenchIds[i] = benchIds[i];
+                incidentBenchLabels[i].text = benchLabels[i];
+            }
+            mIncidentPanel.gameObject.SetActive(true);
+        }
+
+        public void HideIncidentPanel() => mIncidentPanel.gameObject.SetActive(false);
+
+        void BuildSubPicker(Transform root)
+        {
+            var p = UiWidgets.MakePanel("SubPicker", root, new Color(0.02f, 0.07f, 0.04f, 0.96f));
+            mSubPanel = (RectTransform)p.transform;
+
+            var title = UiWidgets.MakeText("Title", mSubPanel, "OYUNCU DEĞİŞİKLİĞİ", 46, accent, TextAnchor.MiddleCenter, FontStyle.Bold);
+            UiWidgets.TopBlock((RectTransform)title.transform, 120f, 1000f, 60f);
+
+            var outLabel = UiWidgets.MakeText("OutLabel", mSubPanel, "ÇIKACAK (sahada)", 30, new Color(1f, 1f, 1f, 0.6f));
+            UiWidgets.TopBlock((RectTransform)outLabel.transform, 210f, 1000f, 40f);
+            for (int i = 0; i < subOutBtns.Length; i++)
+            {
+                int captured = i;
+                var b = UiWidgets.MakeButton("Out" + i, mSubPanel, "", 28, btnBg, btnFg, () => SelectSubOut(captured));
+                var rt = (RectTransform)b.transform;
+                UiWidgets.TopBlock(rt, 262f + (i / 2) * 104f, 460f, 92f);
+                rt.anchoredPosition = new Vector2(i % 2 == 0 ? -240f : 240f, -(262f + (i / 2) * 104f));
+                subOutBtns[i] = b;
+                subOutLabels[i] = b.GetComponentInChildren<Text>();
+            }
+
+            var inLabel = UiWidgets.MakeText("InLabel", mSubPanel, "GİRECEK (yedek)", 30, new Color(1f, 1f, 1f, 0.6f));
+            UiWidgets.TopBlock((RectTransform)inLabel.transform, 812f, 1000f, 40f);
+            for (int i = 0; i < subInBtns.Length; i++)
+            {
+                int captured = i;
+                var b = UiWidgets.MakeButton("In" + i, mSubPanel, "", 30, btnBg, btnFg,
+                    () => { if (subSelectedOut >= 0) OnSubstitution?.Invoke(subSelectedOut, subInIds[captured]); });
+                UiWidgets.TopBlock((RectTransform)b.transform, 864f + i * 110f, 720f, 96f);
+                subInBtns[i] = b;
+                subInLabels[i] = b.GetComponentInChildren<Text>();
+            }
+
+            var close = UiWidgets.MakeButton("Close", mSubPanel, "VAZGEÇ", 38, btnBg, btnFg, HideSubPicker);
+            UiWidgets.BottomBlock((RectTransform)close.transform, 90f, 400f, 120f);
+
+            mSubPanel.gameObject.SetActive(false);
+        }
+
+        void SelectSubOut(int idx)
+        {
+            subSelectedOut = subOutIds[idx];
+            for (int i = 0; i < subOutBtns.Length; i++)
+            {
+                bool sel = i == idx;
+                subOutBtns[i].image.color = sel ? accent : btnBg;
+                subOutLabels[i].color = sel ? Color.black : btnFg;
+            }
+        }
+
+        /// <summary>Değişiklik seçici: önce çıkan, sonra giren seçilir; komut Tek Kapı'ya akar.</summary>
+        public void ShowSubPicker(int[] outIds, string[] outLabels, int[] inIds, string[] inLabels)
+        {
+            subSelectedOut = -1;
+            for (int i = 0; i < subOutBtns.Length; i++)
+            {
+                bool on = i < outIds.Length;
+                subOutBtns[i].gameObject.SetActive(on);
+                subOutBtns[i].image.color = btnBg;
+                if (!on) continue;
+                subOutIds[i] = outIds[i];
+                subOutLabels[i].text = outLabels[i];
+                subOutLabels[i].color = btnFg;
+            }
+            for (int i = 0; i < subInBtns.Length; i++)
+            {
+                bool on = i < inIds.Length;
+                subInBtns[i].gameObject.SetActive(on);
+                if (!on) continue;
+                subInIds[i] = inIds[i];
+                subInLabels[i].text = inLabels[i];
+            }
+            mSubPanel.gameObject.SetActive(true);
+        }
+
+        public void HideSubPicker() => mSubPanel.gameObject.SetActive(false);
+
+        public void SetSubState(int subsLeft) =>
+            mSubBtnLabel.text = $"OYUNCU DEĞİŞ ({subsLeft})";
 
         // ---------------------------------------------------------------- HUD
 

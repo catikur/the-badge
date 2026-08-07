@@ -39,6 +39,7 @@ namespace TheBadge.Greybox
         readonly List<float> momentumHistory = new List<float>();
         readonly List<string> goalLog = new List<string>();
         readonly List<string> moveLog = new List<string>();
+        readonly List<string> incidentLog = new List<string>(); // kart/sakatlık günlüğü (İt.11)
 
         static string HomeShort => "ROZET";
 
@@ -126,6 +127,125 @@ namespace TheBadge.Greybox
                 GreyboxJson.Payload("mode", (int)TempoMode.Yukselt), "Tempo yükseldi — risk iki yönlü arttı");
             ui.OnTempoLock = () => Intervene(GreyboxCommandBus.ActModelTempo,
                 GreyboxJson.Payload("mode", (int)TempoMode.Kilitlen), "Kilitlendik — maç soğutuluyor");
+
+            // Kadro müdahaleleri (İt.11) — değişiklik hakkı hamleden AYRI havuz
+            ui.OnOpenSubPicker = OpenSubPicker;
+            ui.OnSubstitution = DoSubstitution;
+            ui.OnContinueShort = DoContinueShort;
+        }
+
+        static string PosName(PlayerPos pos) =>
+            pos == PlayerPos.GK ? "KL" : pos == PlayerPos.DF ? "DF" : pos == PlayerPos.MF ? "OS" : "FV";
+
+        string PlayerRow(SquadPlayer p)
+        {
+            string marks = p.Yellow > 0 ? " [S]" : "";
+            return $"{PosName(p.Pos)}  {p.Name}  ·  %{p.Energy / bal.squad.enerjiBaslangic * 100f:0}{marks}";
+        }
+
+        void BuildSquadOptions(out int[] outIds, out string[] outLabels, out int[] inIds, out string[] inLabels)
+        {
+            var mo = director.Model;
+            var outs = new List<SquadPlayer>(10);
+            var ins = new List<SquadPlayer>(5);
+            foreach (var p in mo.SquadUs.Players)
+            {
+                if (p.Pos == PlayerPos.GK) continue;
+                if (p.OnPitch) outs.Add(p);
+                else if (p.Id >= 11 && !p.Injured && !p.SentOff) ins.Add(p);
+            }
+            outs.Sort((a, b) => a.Energy.CompareTo(b.Energy)); // en yorgun üstte — koç gözü
+            outIds = new int[outs.Count]; outLabels = new string[outs.Count];
+            for (int i = 0; i < outs.Count; i++) { outIds[i] = outs[i].Id; outLabels[i] = PlayerRow(outs[i]); }
+            inIds = new int[ins.Count]; inLabels = new string[ins.Count];
+            for (int i = 0; i < ins.Count; i++) { inIds[i] = ins[i].Id; inLabels[i] = PlayerRow(ins[i]); }
+        }
+
+        void OpenSubPicker()
+        {
+            var mo = director.Model;
+            if (!matchRunning || mo == null || mo.HasPendingDecision) return; // sakatlıkta kendi paneli açık
+            if (mo.SubsLeft <= 0) { ui.PushFeed("— Değişiklik hakkın bitti —"); return; }
+            BuildSquadOptions(out var outIds, out var outLabels, out var inIds, out var inLabels);
+            if (inIds.Length == 0) { ui.PushFeed("— Kulübede uygun yedek kalmadı —"); return; }
+            ui.ShowSubPicker(outIds, outLabels, inIds, inLabels);
+        }
+
+        void DoSubstitution(int outId, int inId)
+        {
+            var mo = director.Model;
+            if (!matchRunning || mo == null) return;
+            var before = mo.ComputeWinProb();
+            var pOut = mo.SquadUs.Find(outId);
+            var pIn = mo.SquadUs.Find(inId);
+            var r = bus.Send(GreyboxCommandBus.ActModelSub, GreyboxJson.Payload2("out", outId, "in", inId));
+            ui.HideSubPicker();
+            if (r == RejectionReason.NoChargesLeft) { ui.PushFeed("— Değişiklik hakkın bitti —"); return; }
+            if (r != RejectionReason.None || pOut == null || pIn == null) return;
+
+            var after = mo.ComputeWinProb();
+            int minute = mo.BlockMinute(Mathf.Min(mo.CurrentBlock, mo.BlockCount));
+            ui.SetWinProb(after);
+            ui.SetSubState(mo.SubsLeft);
+            ui.SetStatsLine(StatsLine());
+            ui.PushFeed($"{minute}' DEĞİŞİKLİK: {pOut.Name} → {pIn.Name}  (G %{before.Win * 100f:0} → %{after.Win * 100f:0})");
+            moveLog.Add($"Değişiklik: {pOut.Name} → {pIn.Name} (G %{before.Win * 100f:0} → %{after.Win * 100f:0})");
+            telemetry.Event("substitution").Num("match", state.matchIndex)
+                     .Str("out", pOut.Name).Str("in", pIn.Name)
+                     .Num("win_before", before.Win).Num("win_after", after.Win)
+                     .Num("subs_left", mo.SubsLeft).Send();
+        }
+
+        void DoContinueShort()
+        {
+            var mo = director.Model;
+            if (mo == null) return;
+            if (bus.Send(GreyboxCommandBus.ActModelContinueShort, null) != RejectionReason.None) return;
+            var after = mo.ComputeWinProb();
+            ui.SetWinProb(after);
+            ui.SetStatsLine(StatsLine());
+            ui.PushFeed($"— Eksik devam ediyoruz; hücum zayıfladı (G %{after.Win * 100f:0}) —");
+            moveLog.Add("Sakatlıkta eksik devam kararı");
+            telemetry.Event("continue_short").Num("match", state.matchIndex).Num("win_after", after.Win).Send();
+        }
+
+        void AnnounceIncident(Incident inc, int minute)
+        {
+            var mo = director.Model;
+            var squad = inc.Team == 0 ? mo.SquadUs : mo.SquadThem;
+            string name = squad.Find(inc.PlayerId) != null ? squad.Find(inc.PlayerId).Name : "?";
+            string side = inc.Team == 0 ? HomeShort : awayShort;
+            string line;
+            switch (inc.Type)
+            {
+                case IncidentType.Yellow:
+                    line = $"{minute}' SARI KART — {name} ({side})";
+                    break;
+                case IncidentType.SecondYellowRed:
+                    line = $"{minute}' İKİNCİ SARIDAN KIRMIZI! {name} ({side}) — {(inc.Team == 0 ? "10 kişiyiz!" : "rakip 10 kişi!")}";
+                    break;
+                case IncidentType.RedDirect:
+                    line = $"{minute}' KIRMIZI KART! {name} ({side}) — {(inc.Team == 0 ? "10 kişiyiz!" : "rakip 10 kişi!")}";
+                    break;
+                default: // Injury
+                    if (inc.Team == 0)
+                        line = mo.HasPendingDecision
+                            ? $"{minute}' SAKATLIK — {name} devam edemiyor; karar bekleniyor..."
+                            : $"{minute}' SAKATLIK — {name} çıktı; hak/yedek yok, eksik devam ediyoruz";
+                    else
+                    {
+                        var subIn = inc.AutoSubInId >= 0 ? mo.SquadThem.Find(inc.AutoSubInId) : null;
+                        line = subIn != null
+                            ? $"{minute}' Rakipte sakatlık: {name} çıktı, {subIn.Name} girdi"
+                            : $"{minute}' Rakipte sakatlık: {name} çıktı — rakip eksik kaldı";
+                    }
+                    break;
+            }
+            ui.PushFeed(line);
+            incidentLog.Add(line);
+            telemetry.Event("incident").Num("match", state.matchIndex)
+                     .Str("type", inc.Type.ToString()).Num("team", inc.Team)
+                     .Str("player", name).Num("block", inc.Block).Send();
         }
 
         void Intervene(string action, byte[] payload, string feedLine)
@@ -169,7 +289,34 @@ namespace TheBadge.Greybox
         string StatsLine()
         {
             var mo = director.Model;
-            return $"xG {mo.XgUs:0.0} - {mo.XgThem:0.0}   ·   Tehlike {mo.DangerUs}-{mo.DangerThem}   ·   Hamle {bal.model.hamleHakki - mo.MovesLeft}/{bal.model.hamleHakki}";
+            float ePct = mo.SquadUs.TeamEnergyMean() / bal.squad.enerjiBaslangic * 100f;
+            return $"xG {mo.XgUs:0.0}-{mo.XgThem:0.0} · Teh {mo.DangerUs}-{mo.DangerThem} · E %{ePct:0}" +
+                   $" · H {bal.model.hamleHakki - mo.MovesLeft}/{bal.model.hamleHakki}" +
+                   $" · D {bal.squad.degisiklikHakki - mo.SubsLeft}/{bal.squad.degisiklikHakki}";
+        }
+
+        static string CardLine(Squad s)
+        {
+            int y = 0, r = 0;
+            foreach (var p in s.Players) { y += p.Yellow; if (p.SentOff) r++; }
+            return $"{y}S/{r}K";
+        }
+
+        static int InjuryCount(Squad s)
+        {
+            int n = 0;
+            foreach (var p in s.Players) if (p.Injured) n++;
+            return n;
+        }
+
+        string SquadRow(SquadPlayer p)
+        {
+            string status = p.SentOff ? "  · KIRMIZI" : p.Injured ? "  · SAKAT"
+                          : p.OnPitch ? "" : (p.Id >= 11 ? "  · yedek" : "  · çıktı");
+            string marks = "";
+            for (int k = 0; k < p.Yellow; k++) marks += " [S]";
+            if (p.Goals > 0) marks += $"  ⚽{p.Goals}";
+            return $"{PosName(p.Pos)}  {p.Name}  ·  %{p.Energy / bal.squad.enerjiBaslangic * 100f:0}{marks}{status}";
         }
 
         string BuildStatsDetail()
@@ -182,20 +329,31 @@ namespace TheBadge.Greybox
             sb.AppendLine();
             sb.AppendLine($"Beklenen gol (model-xG):  {mo.XgUs:0.00}  -  {mo.XgThem:0.00}");
             sb.AppendLine($"Tehlikeli atak:  {mo.DangerUs}  -  {mo.DangerThem}");
+            sb.AppendLine($"Kart:  {CardLine(mo.SquadUs)}  -  {CardLine(mo.SquadThem)}");
+            sb.AppendLine($"Sakatlık:  {InjuryCount(mo.SquadUs)}  -  {InjuryCount(mo.SquadThem)}");
+            sb.AppendLine($"Takım enerjisi:  %{mo.SquadUs.TeamEnergyMean() / bal.squad.enerjiBaslangic * 100f:0}  -  %{mo.SquadThem.TeamEnergyMean() / bal.squad.enerjiBaslangic * 100f:0}");
             sb.AppendLine($"Momentum (şu an):  {(mo.Momentum >= 0 ? "+" : "")}{mo.Momentum:0.00}");
             sb.AppendLine($"Taktik: {TacticName(mo.TacticId)}  ·  Tempo modu: {(mo.Tempo == TempoMode.Yukselt ? "Yüksek" : mo.Tempo == TempoMode.Kilitlen ? "Kilit" : "Normal")}");
-            sb.AppendLine($"Kalan hamle: {mo.MovesLeft}/{bal.model.hamleHakki}");
+            sb.AppendLine($"Hamle: {bal.model.hamleHakki - mo.MovesLeft}/{bal.model.hamleHakki}  ·  Değişiklik: {bal.squad.degisiklikHakki - mo.SubsLeft}/{bal.squad.degisiklikHakki}");
             sb.AppendLine();
             sb.AppendLine("GOLLER");
             if (goalLog.Count == 0) sb.AppendLine("  — henüz gol yok —");
             foreach (var g in goalLog) sb.AppendLine("  ⚽ " + g);
             sb.AppendLine();
+            sb.AppendLine("OLAYLAR (kart / sakatlık)");
+            if (incidentLog.Count == 0) sb.AppendLine("  — olay yok —");
+            foreach (var ev in incidentLog) sb.AppendLine("  ▪ " + ev);
+            sb.AppendLine();
             sb.AppendLine("MÜDAHALELER");
             if (moveLog.Count == 0) sb.AppendLine("  — henüz hamle yapılmadı —");
             foreach (var mv in moveLog) sb.AppendLine("  ⚡ " + mv);
             sb.AppendLine();
+            sb.AppendLine("KADRO — ROZET SK (enerji · durum)");
+            foreach (var p in mo.SquadUs.Players) sb.AppendLine("  " + SquadRow(p));
+            sb.AppendLine();
             sb.AppendLine($"Sıradaki blok etkenleri (BİZ): güç ×{f.Guc:0.00} · taktik ×{f.Taktik:0.00} · faz ×{f.Faz:0.00}");
             sb.AppendLine($"momentum ×{f.Momentum:0.00} · skor ×{f.Skor:0.00} · ev ×{f.Ev:0.00} · form ×{f.Form:0.00}");
+            sb.AppendLine($"yorgunluk ×{f.Yorgunluk:0.00} · eksik ×{f.Eksik:0.00}");
             return sb.ToString();
         }
 
@@ -211,6 +369,8 @@ namespace TheBadge.Greybox
             AddFactor(parts, "skor", f.Skor);
             AddFactor(parts, "tempo", f.TempoModu);
             AddFactor(parts, "form", f.Form);
+            AddFactor(parts, "yorgunluk", f.Yorgunluk);
+            AddFactor(parts, "eksik", f.Eksik);
             return parts.Count == 0 ? "etkenler dengede" : "etkenler: " + string.Join(" · ", parts);
         }
 
@@ -237,15 +397,16 @@ namespace TheBadge.Greybox
             director.BlockResolved += (idx, outcome, strip) =>
             {
                 int minute = director.Model.BlockMinute(idx + 1);
+                string scorer = director.Model.LastScorerName;
                 switch (outcome)
                 {
                     case BlockOutcome.GoalUs:
-                        ui.PushFeed($"{minute}' ⚽ GOOOL! {HomeShort} ağları havalandırdı! ({director.Model.GoalsUs}-{director.Model.GoalsThem})");
-                        goalLog.Add($"{minute}' — {HomeShort} ({director.Model.GoalsUs}-{director.Model.GoalsThem})");
+                        ui.PushFeed($"{minute}' ⚽ GOOOL! {scorer ?? HomeShort} ağları havalandırdı! ({director.Model.GoalsUs}-{director.Model.GoalsThem})");
+                        goalLog.Add($"{minute}' {scorer ?? HomeShort} — {HomeShort} ({director.Model.GoalsUs}-{director.Model.GoalsThem})");
                         break;
                     case BlockOutcome.GoalThem:
-                        ui.PushFeed($"{minute}' ⚽ Gol yedik... {awayShort} skoru yakaladı ({director.Model.GoalsUs}-{director.Model.GoalsThem})");
-                        goalLog.Add($"{minute}' — {awayShort} ({director.Model.GoalsUs}-{director.Model.GoalsThem})");
+                        ui.PushFeed($"{minute}' ⚽ Gol yedik... {scorer ?? awayShort} ({awayShort}) skoru yakaladı ({director.Model.GoalsUs}-{director.Model.GoalsThem})");
+                        goalLog.Add($"{minute}' {scorer ?? awayShort} — {awayShort} ({director.Model.GoalsUs}-{director.Model.GoalsThem})");
                         break;
                     case BlockOutcome.Danger:
                         ui.PushFeed(director.Model.LastDangerSide == 0
@@ -256,8 +417,12 @@ namespace TheBadge.Greybox
                         ui.PushFeed($"{minute}' Kontrollü oyun, orta saha mücadelesi");
                         break;
                 }
+                // Kart/sakatlık olayları (İt.11): feed + olay günlüğü + telemetri
+                foreach (var inc in director.Model.LastBlockIncidents)
+                    AnnounceIncident(inc, minute);
                 ui.SetWinProb(strip);
                 ui.SetStatsLine(StatsLine());
+                ui.SetSubState(director.Model.SubsLeft);
                 ui.SetScoreBlockLine(HomeShort, awayShort, director.Model.GoalsUs, director.Model.GoalsThem,
                     idx + 1, director.Model.BlockCount, minute);
                 telemetry.Event("block_result").Num("match", state.matchIndex)
@@ -265,11 +430,27 @@ namespace TheBadge.Greybox
                          .Num("win", strip.Win).Send();
             };
 
+            // Sakatlıkta zorunlu karar — akış panel çözülene dek durur (İt.11 A2)
+            director.DecisionRequired += () =>
+            {
+                var mo = director.Model;
+                var inc = mo.PendingIncident;
+                var injured = mo.SquadUs.Find(inc.PlayerId);
+                int minute = mo.BlockMinute(Mathf.Min(inc.Block + 1, mo.BlockCount));
+                BuildSquadOptions(out _, out _, out var inIds, out var inLabels);
+                ui.ShowIncidentDecision(
+                    $"SAKATLIK — {minute}'",
+                    $"{injured.Name} ({PosName(injured.Pos)}) devam edemiyor.\nDeğişiklik hakkı: {mo.SubsLeft} — kimi alalım?",
+                    inc.PlayerId, inIds, inLabels);
+            };
+            director.DecisionResolved += () => ui.HideIncidentPanel();
+
             director.VignetteToggled += on =>
             {
                 pitch.gameObject.SetActive(on);
+                // ShowModelScreen ÇAĞRILMAZ: o feed/istatistiği sıfırlar (yalnız maç başında);
+                // vinyet dönüşünde ekran içeriğiyle birlikte geri gelir (İt.11 düzeltmesi)
                 ui.SetModelWidgetsVisible(!on);
-                if (!on) ui.ShowModelScreen();
             };
 
             director.VignetteFramePlayed += f =>
@@ -299,9 +480,18 @@ namespace TheBadge.Greybox
             var proj = TycoonEconomy.Project(bal.ekonomi, state.ticketPrice, state.lastResults, 0);
             string ticketLine = $"Bilet {state.ticketPrice:0} kr → tahmini {proj.Attendance:N0} seyirci (doluluk %{proj.Occupancy * 100f:0})";
 
+            // Kadro maç modeliyle AYNI tohumdan üretilir — maç öncesi isimler maç içiyle birebir (İt.11)
+            var squadPreview = Squad.Generate(setup.Seed, 0, bal.squad.enerjiBaslangic);
+            var rows = new string[12];
+            for (int i = 0; i < 11; i++)
+                rows[i] = $"{PosName(squadPreview.Players[i].Pos)}  {squadPreview.Players[i].Name}";
+            var benchNames = new List<string>(5);
+            for (int i = 11; i < 16; i++) benchNames.Add(squadPreview.Players[i].Name);
+            rows[11] = "Yedek: " + string.Join(", ", benchNames);
+
             pitch.gameObject.SetActive(true); // arka fon sahası
             ui.ShowPreMatch(state.matchIndex, opponentName, setup.AwayStrength, state.money,
-                GreyboxWorld.Squad, bal.taktikler, state.tacticId, ticketLine);
+                rows, bal.taktikler, state.tacticId, ticketLine);
         }
 
         void StartMatch()
@@ -312,6 +502,7 @@ namespace TheBadge.Greybox
             momentumHistory.Clear();
             goalLog.Clear();
             moveLog.Clear();
+            incidentLog.Clear();
             ui.StatsDetailProvider = BuildStatsDetail;
 
             currentSetup = GreyboxWorld.BuildMatch(bal, (ulong)state.worldSeed, state.matchIndex, state.tacticId);
@@ -322,6 +513,7 @@ namespace TheBadge.Greybox
 
             ui.SetModelSpeedHighlight(1);
             ui.SetInterventionState(TacticName(director.Model.TacticId), (int)director.Model.Tempo, director.Model.MovesLeft);
+            ui.SetSubState(director.Model.SubsLeft);
             ui.SetWinProb(director.Model.ComputeWinProb());
             ui.SetStatsLine(StatsLine());
             ui.PushFeed($"Maç başladı: {GreyboxWorld.PlayerClubName} — {opponentName} (rakip gücü {currentSetup.AwayStrength:0})");
@@ -354,6 +546,7 @@ namespace TheBadge.Greybox
                 .Num("skips", director.SkipCount)
                 .Num("speed_changes", director.SpeedChangeCount)
                 .Num("moves_used", bal.model.hamleHakki - model.MovesLeft)
+                .Num("subs_used", bal.squad.degisiklikHakki - model.SubsLeft)
                 .Num("attendance", proj.Attendance)
                 .Num("income", proj.Total)
                 .Num("money_after", state.money).Send();

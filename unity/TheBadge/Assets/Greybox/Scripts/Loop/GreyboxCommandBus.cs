@@ -19,6 +19,8 @@ namespace TheBadge.Greybox.Loop
         public const string ActNextMatch = "greybox.next_match";
         public const string ActModelTactic = "model.set_tactic";   // maç içi müdahale (Model Maçı)
         public const string ActModelTempo = "model.set_tempo";     // 0 normal / 1 yükselt / 2 kilitlen
+        public const string ActModelSub = "model.substitution";    // CB Spec katalog adıyla aynı (İt.11)
+        public const string ActModelContinueShort = "model.continue_short"; // sakatlıkta eksik devam kararı
 
         readonly GreyboxBalance bal;
         readonly GreyboxState state;
@@ -111,6 +113,28 @@ namespace TheBadge.Greybox.Loop
                     if (mode < 0 || mode > 2) return RejectionReason.ParamOutOfBand;
                     if (ActiveModel.MovesLeft <= 0) return RejectionReason.NoChargesLeft;
                     if (!ActiveModel.TrySetTempo((TempoMode)(int)mode)) return RejectionReason.StateConflict;
+                    result = RejectionReason.None;
+                    break;
+                }
+                case ActModelSub:
+                {
+                    // Oyuncu değişikliği — hak sayısı AYRI havuz (değişiklik ≠ hamle; GDD 12.4)
+                    if (ActiveModel == null) return RejectionReason.StateConflict;
+                    if (!GreyboxJson.TryGetNumber(env.PayloadJson, "out", out double outId) ||
+                        !GreyboxJson.TryGetNumber(env.PayloadJson, "in", out double inId))
+                        return RejectionReason.SchemaViolation;
+                    if (outId < 0 || outId > 15 || inId < 0 || inId > 15)
+                        return RejectionReason.ParamOutOfBand;
+                    if (ActiveModel.SubsLeft <= 0) return RejectionReason.NoChargesLeft;
+                    if (!ActiveModel.TrySubstitute((int)outId, (int)inId)) return RejectionReason.StateConflict;
+                    result = RejectionReason.None;
+                    break;
+                }
+                case ActModelContinueShort:
+                {
+                    // Sakatlıkta "eksik devam" — yalnız bekleyen karar varken anlamlı
+                    if (ActiveModel == null) return RejectionReason.StateConflict;
+                    if (!ActiveModel.TryContinueShort()) return RejectionReason.StateConflict;
                     result = RejectionReason.None;
                     break;
                 }
