@@ -775,7 +775,17 @@ namespace TheBadge.Greybox.UI
             priceSlider = UiWidgets.MakeSlider("PriceSlider", postRoot, bal.ekonomi.fiyatMin, bal.ekonomi.fiyatMax,
                 bal.ekonomi.refFiyat, v => OnPriceChanged?.Invoke(v));
             var srt = (RectTransform)priceSlider.transform;
-            UiWidgets.TopBlock(srt, 910f, 780f, 130f);
+            UiWidgets.TopBlock(srt, 906f, 620f, 72f); // kompakt: eski 780×130 blok ekranı eziyordu (İt.12)
+
+            // Ray altı bant etiketleri: min / referans / max — kaydırmadan bağlam
+            var lo = UiWidgets.MakeText("PriceLo", postRoot, $"{bal.ekonomi.fiyatMin:0} kr", 24, new Color(1f, 1f, 1f, 0.45f));
+            UiWidgets.TopBlock((RectTransform)lo.transform, 982f, 200f, 30f);
+            ((RectTransform)lo.transform).anchoredPosition = new Vector2(-260f, -982f);
+            var refT = UiWidgets.MakeText("PriceRef", postRoot, $"ref {bal.ekonomi.refFiyat:0}", 24, new Color(1f, 0.83f, 0.31f, 0.6f));
+            UiWidgets.TopBlock((RectTransform)refT.transform, 982f, 200f, 30f);
+            var hi = UiWidgets.MakeText("PriceHi", postRoot, $"{bal.ekonomi.fiyatMax:0} kr", 24, new Color(1f, 1f, 1f, 0.45f));
+            UiWidgets.TopBlock((RectTransform)hi.transform, 982f, 200f, 30f);
+            ((RectTransform)hi.transform).anchoredPosition = new Vector2(260f, -982f);
 
             postProjection = UiWidgets.MakeText("Projection", postRoot, "", 38, accent, TextAnchor.MiddleCenter, FontStyle.Bold);
             UiWidgets.TopBlock((RectTransform)postProjection.transform, 1050f, 1000f, 96f);

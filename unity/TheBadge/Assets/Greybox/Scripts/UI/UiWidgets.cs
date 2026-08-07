@@ -97,19 +97,20 @@ namespace TheBadge.Greybox.UI
             var rt = MakeRect(name, parent);
             var slider = rt.gameObject.AddComponent<Slider>();
 
+            // İnce ray + küçük tutamaç: eski 56×88 beyaz blok ekranı domine ediyordu (İt.12 görsel düzeltme)
             var bg = MakeRect("Background", rt);
-            bg.anchorMin = new Vector2(0f, 0.42f);
-            bg.anchorMax = new Vector2(1f, 0.58f);
-            bg.offsetMin = Vector2.zero;
-            bg.offsetMax = Vector2.zero;
+            bg.anchorMin = new Vector2(0f, 0.5f);
+            bg.anchorMax = new Vector2(1f, 0.5f);
+            bg.pivot = new Vector2(0.5f, 0.5f);
+            bg.sizeDelta = new Vector2(0f, 12f);
             var bgImg = bg.gameObject.AddComponent<Image>();
-            bgImg.color = new Color(1f, 1f, 1f, 0.16f);
+            bgImg.color = new Color(1f, 1f, 1f, 0.18f);
 
             var fillArea = MakeRect("Fill Area", rt);
-            fillArea.anchorMin = new Vector2(0f, 0.42f);
-            fillArea.anchorMax = new Vector2(1f, 0.58f);
-            fillArea.offsetMin = new Vector2(6f, 0f);
-            fillArea.offsetMax = new Vector2(-6f, 0f);
+            fillArea.anchorMin = new Vector2(0f, 0.5f);
+            fillArea.anchorMax = new Vector2(1f, 0.5f);
+            fillArea.pivot = new Vector2(0.5f, 0.5f);
+            fillArea.sizeDelta = new Vector2(-12f, 12f);
             var fill = MakeRect("Fill", fillArea);
             var fillImg = fill.gameObject.AddComponent<Image>();
             fillImg.color = new Color(1f, 0.83f, 0.31f, 0.9f);
@@ -117,13 +118,16 @@ namespace TheBadge.Greybox.UI
 
             var handleArea = MakeRect("Handle Slide Area", rt);
             Stretch(handleArea);
-            handleArea.offsetMin = new Vector2(28f, 0f);
-            handleArea.offsetMax = new Vector2(-28f, 0f);
+            handleArea.offsetMin = new Vector2(22f, 0f);
+            handleArea.offsetMax = new Vector2(-22f, 0f);
             var handle = MakeRect("Handle", handleArea);
-            handle.sizeDelta = new Vector2(56f, 88f);
+            handle.sizeDelta = new Vector2(44f, 44f);
             var handleImg = handle.gameObject.AddComponent<Image>();
             handleImg.sprite = null;
-            handleImg.color = Color.white;
+            handleImg.color = new Color(1f, 0.83f, 0.31f);
+            var handleOutline = handle.gameObject.AddComponent<Outline>();
+            handleOutline.effectColor = new Color(0f, 0f, 0f, 0.55f);
+            handleOutline.effectDistance = new Vector2(2f, -2f);
 
             slider.fillRect = fill;
             slider.handleRect = handle;
