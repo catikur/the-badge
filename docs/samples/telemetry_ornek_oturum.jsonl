@@ -1,21 +1,21 @@
-{"t":"session_start","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.233Z","app_ver":"greybox-0.1.0","device":"harness-sim"}
-{"t":"match_start","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.252Z","match":1,"opp":"Kuzey Feneri SK","tactic":"Dengeli","price":20.0}
-{"t":"match_end","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.252Z","match":1,"score":"2-0","result":"W","watch_real_sec":168.0,"skips":0,"income":81000,"attendance":3900}
-{"t":"ticket_price_set","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.252Z","match":1,"new_price":24.0}
-{"t":"next_match_click","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.252Z","match":1,"since_end_sec":6.5}
-{"t":"match_start","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.263Z","match":2,"opp":"Anadolu Şimşekleri","tactic":"Dengeli","price":24.0}
-{"t":"speed","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.263Z","match":2,"minute":12.4,"speed":2}
-{"t":"skip","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.263Z","match":2,"minute":20}
-{"t":"skip","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.263Z","match":2,"minute":32}
-{"t":"match_end","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.263Z","match":2,"score":"0-0","result":"D","watch_real_sec":130.0,"skips":2,"income":80400,"attendance":3300}
-{"t":"ticket_price_set","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.263Z","match":2,"new_price":28.0}
-{"t":"next_match_click","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.263Z","match":2,"since_end_sec":6.5}
-{"t":"match_start","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.274Z","match":3,"opp":"Liman İdmanyurdu","tactic":"Dengeli","price":28.0}
-{"t":"speed","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.274Z","match":3,"minute":12.4,"speed":2}
-{"t":"skip","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.274Z","match":3,"minute":20}
-{"t":"skip","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.274Z","match":3,"minute":32}
-{"t":"skip","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.274Z","match":3,"minute":44}
-{"t":"skip","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.274Z","match":3,"minute":56}
-{"t":"skip","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.274Z","match":3,"minute":68}
-{"t":"match_end","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.275Z","match":3,"score":"1-1","result":"D","watch_real_sec":96.0,"skips":5,"income":69800,"attendance":2450}
-{"t":"session_end","sid":"ornek_oturum","ts":"2026-08-07T15:31:11.275Z","matches":3,"money":251200}
+{"t":"session_start","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.401Z","app_ver":"greybox-0.1.0","device":"harness-sim"}
+{"t":"match_start","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.416Z","match":1,"opp":"Kuzey Feneri SK","tactic":"Dengeli","price":20.0}
+{"t":"match_end","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.417Z","match":1,"score":"2-0","result":"W","watch_real_sec":168.0,"skips":0,"income":81000,"attendance":3900}
+{"t":"ticket_price_set","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.417Z","match":1,"new_price":24.0}
+{"t":"next_match_click","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.417Z","match":1,"since_end_sec":6.5}
+{"t":"match_start","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.425Z","match":2,"opp":"Anadolu Şimşekleri","tactic":"Dengeli","price":24.0}
+{"t":"speed","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.425Z","match":2,"minute":12.4,"speed":2}
+{"t":"skip","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.425Z","match":2,"minute":20}
+{"t":"skip","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.425Z","match":2,"minute":32}
+{"t":"match_end","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.425Z","match":2,"score":"0-0","result":"D","watch_real_sec":130.0,"skips":2,"income":80400,"attendance":3300}
+{"t":"ticket_price_set","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.425Z","match":2,"new_price":28.0}
+{"t":"next_match_click","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.425Z","match":2,"since_end_sec":6.5}
+{"t":"match_start","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.435Z","match":3,"opp":"Liman İdmanyurdu","tactic":"Dengeli","price":28.0}
+{"t":"speed","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.435Z","match":3,"minute":12.4,"speed":2}
+{"t":"skip","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.435Z","match":3,"minute":20}
+{"t":"skip","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.435Z","match":3,"minute":32}
+{"t":"skip","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.435Z","match":3,"minute":44}
+{"t":"skip","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.435Z","match":3,"minute":56}
+{"t":"skip","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.435Z","match":3,"minute":68}
+{"t":"match_end","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.435Z","match":3,"score":"1-1","result":"D","watch_real_sec":96.0,"skips":5,"income":69800,"attendance":2450}
+{"t":"session_end","sid":"ornek_oturum","ts":"2026-08-07T17:07:51.435Z","matches":3,"money":251200}

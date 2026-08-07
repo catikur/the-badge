@@ -229,6 +229,22 @@ Kanıt: model 400 maç — 2.71 gol; kalibrasyon tahmin %38 vs gerçekleşen %40
 `BusSubstitution` (4 negatif + hak sınırı, CB Spec 10.1) PASS; FlowSim sahne sözleşmesi değişmeden
 yeşil; derleme yolları 0/0; Sim.Checks yeşil. EditMode aynası: +6 test (`ModelMatchTests`).
 
+## İterasyon 12 — "Kadro Kimliği": bireysel güç + kaleci etkisi + görsel düzeltmeler (2026-08-07)
+
+Süreç: tespitler + öneri `docs/GREYBOX_ONERI_IT12.md` olarak yazıldı; **S1** onayı alındı; kod
+hizalandı. Model sözleşmesi: `GREYBOX_MODEL.md` v3.
+
+| Geri bildirim | Yapılan |
+|---|---|
+| "Kaleciler aşırı etkisiz" | Dürüst tespit: kaleci modelde YALNIZ kozmetikti. v3'te savunma reytinginin EN AĞIR mevkisi (wD: GK 3, DF 3, MF 2, FW 1) — kötü kaleci rakip golünü görünür artırır (`ModelGkMatters`). Danger bloklarında feed kaleciyi isimle anar: "…{kaleci} kurtardı!" |
+| "Oyuncuların özellikleri olmalı" | Her oyuncuya bireysel GÜÇ (ME Spec 6.1'in tek-puan vekili; tam nitelik tablosu FAZ 03'te): taban ± `gucYayilim`, kulübe `yedekGucFarki` zayıf, ilk 11 ortalaması tabana normalize (kalibrasyon KORUNDU — `ModelSquadGen`). Güç etkeni artık `tanh(Hücum_biz − Savunma_rakip)`; Yorgunluk/Eksik etkenleri reytingin İÇİNE taşındı (çifte sayım bitti). Yıldız kaybı vasat kaybından çok acıtır (`ModelStarLoss`); değişiklik "yorgun yıldız mı taze vasat mı?" kararına dönüştü (panellerde güç görünür); gol atfı güç ağırlıklı; DP şeridi reyting eğimiyle projeksiyon |
+| "Kazanma olasılığı neye göre?" | Şerit altına kalıcı satır: "Şerit: kalan blokların KESİN olasılık dağılımı · etken dökümü DETAY'da"; koç masasına Hücum/Savunma reyting satırı + güç etkeninin açıklaması eklendi |
+| "Bilet slider'ı çok büyük/çirkin" | Kompakt slider: ince ray (12px) + küçük accent tutamaç (44px, dış çizgili) + altına min/ref/max bant etiketleri; eski 56×88 beyaz blok ve 780×130 alan kaldırıldı |
+
+Kanıt: model 400 maç — 2.77 gol; kalibrasyon tahmin %38 vs gerçekleşen %41 (<0.10); olay bantları
+değişmedi; `ModelGkMatters` + `ModelStarLoss` + `ModelSquadGen` PASS (EditMode aynaları eklendi);
+tüm harness + Sim.Checks yeşil; derleme yolları 0/0.
+
 ## Atilla'nın sıradaki adımları
 
 `unity/UNITY_SETUP.md` runbook'u: projeyi aç → konsol/testler → Editor'de oyna → iPhone build → 3-5 oyuncu playtest → `docs/PLAYTEST_3G.md` doldur → kapı kararı (GO/NO-GO) → DECISIONS.md.

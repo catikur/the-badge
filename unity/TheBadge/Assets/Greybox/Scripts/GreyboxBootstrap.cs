@@ -139,8 +139,9 @@ namespace TheBadge.Greybox
 
         string PlayerRow(SquadPlayer p)
         {
+            // Güç + enerji birlikte: "yorgun yıldız mı, taze vasat mı?" kararı görünür (İt.12)
             string marks = p.Yellow > 0 ? " [S]" : "";
-            return $"{PosName(p.Pos)}  {p.Name}  ·  %{p.Energy / bal.squad.enerjiBaslangic * 100f:0}{marks}";
+            return $"{PosName(p.Pos)}  {p.Name} {p.Guc:0}  ·  %{p.Energy / bal.squad.enerjiBaslangic * 100f:0}{marks}";
         }
 
         void BuildSquadOptions(out int[] outIds, out string[] outLabels, out int[] inIds, out string[] inLabels)
@@ -316,7 +317,7 @@ namespace TheBadge.Greybox
             string marks = "";
             for (int k = 0; k < p.Yellow; k++) marks += " [S]";
             if (p.Goals > 0) marks += $"  ⚽{p.Goals}";
-            return $"{PosName(p.Pos)}  {p.Name}  ·  %{p.Energy / bal.squad.enerjiBaslangic * 100f:0}{marks}{status}";
+            return $"{PosName(p.Pos)}  {p.Name} {p.Guc:0}  ·  %{p.Energy / bal.squad.enerjiBaslangic * 100f:0}{marks}{status}";
         }
 
         string BuildStatsDetail()
@@ -332,6 +333,8 @@ namespace TheBadge.Greybox
             sb.AppendLine($"Kart:  {CardLine(mo.SquadUs)}  -  {CardLine(mo.SquadThem)}");
             sb.AppendLine($"Sakatlık:  {InjuryCount(mo.SquadUs)}  -  {InjuryCount(mo.SquadThem)}");
             sb.AppendLine($"Takım enerjisi:  %{mo.SquadUs.TeamEnergyMean() / bal.squad.enerjiBaslangic * 100f:0}  -  %{mo.SquadThem.TeamEnergyMean() / bal.squad.enerjiBaslangic * 100f:0}");
+            mo.GetRatings(out float rAtkU, out float rDefU, out float rAtkT, out float rDefT);
+            sb.AppendLine($"Hücum / Savunma reytingi:  {rAtkU:0}/{rDefU:0}  -  {rAtkT:0}/{rDefT:0}");
             sb.AppendLine($"Momentum (şu an):  {(mo.Momentum >= 0 ? "+" : "")}{mo.Momentum:0.00}");
             sb.AppendLine($"Taktik: {TacticName(mo.TacticId)}  ·  Tempo modu: {(mo.Tempo == TempoMode.Yukselt ? "Yüksek" : mo.Tempo == TempoMode.Kilitlen ? "Kilit" : "Normal")}");
             sb.AppendLine($"Hamle: {bal.model.hamleHakki - mo.MovesLeft}/{bal.model.hamleHakki}  ·  Değişiklik: {bal.squad.degisiklikHakki - mo.SubsLeft}/{bal.squad.degisiklikHakki}");
@@ -353,7 +356,8 @@ namespace TheBadge.Greybox
             sb.AppendLine();
             sb.AppendLine($"Sıradaki blok etkenleri (BİZ): güç ×{f.Guc:0.00} · taktik ×{f.Taktik:0.00} · faz ×{f.Faz:0.00}");
             sb.AppendLine($"momentum ×{f.Momentum:0.00} · skor ×{f.Skor:0.00} · ev ×{f.Ev:0.00} · form ×{f.Form:0.00}");
-            sb.AppendLine($"yorgunluk ×{f.Yorgunluk:0.00} · eksik ×{f.Eksik:0.00}");
+            sb.AppendLine("(güç etkeni = Hücum reytingimiz vs rakip Savunma reytingi; enerji,");
+            sb.AppendLine(" eksikler ve KALECİ bu reytinglerin içindedir — GREYBOX_MODEL.md v3)");
             return sb.ToString();
         }
 
@@ -369,8 +373,6 @@ namespace TheBadge.Greybox
             AddFactor(parts, "skor", f.Skor);
             AddFactor(parts, "tempo", f.TempoModu);
             AddFactor(parts, "form", f.Form);
-            AddFactor(parts, "yorgunluk", f.Yorgunluk);
-            AddFactor(parts, "eksik", f.Eksik);
             return parts.Count == 0 ? "etkenler dengede" : "etkenler: " + string.Join(" · ", parts);
         }
 
@@ -409,9 +411,10 @@ namespace TheBadge.Greybox
                         goalLog.Add($"{minute}' {scorer ?? awayShort} — {awayShort} ({director.Model.GoalsUs}-{director.Model.GoalsThem})");
                         break;
                     case BlockOutcome.Danger:
+                        // Kaleci artık İSİMLE kurtarır (İt.12 lezzeti — Players[0] = GK)
                         ui.PushFeed(director.Model.LastDangerSide == 0
-                            ? $"{minute}' Tehlikeli atak — {HomeShort} baskın, son dokunuş eksik!"
-                            : $"{minute}' {awayShort} tehlikeli geldi — savunma son anda sıyırdı!");
+                            ? $"{minute}' Tehlikeli atak — {HomeShort} baskın, {director.Model.SquadThem.Players[0].Name} açıyı kapattı!"
+                            : $"{minute}' {awayShort} tehlikeli geldi — {director.Model.SquadUs.Players[0].Name} kurtardı!");
                         break;
                     default:
                         ui.PushFeed($"{minute}' Kontrollü oyun, orta saha mücadelesi");
@@ -480,13 +483,14 @@ namespace TheBadge.Greybox
             var proj = TycoonEconomy.Project(bal.ekonomi, state.ticketPrice, state.lastResults, 0);
             string ticketLine = $"Bilet {state.ticketPrice:0} kr → tahmini {proj.Attendance:N0} seyirci (doluluk %{proj.Occupancy * 100f:0})";
 
-            // Kadro maç modeliyle AYNI tohumdan üretilir — maç öncesi isimler maç içiyle birebir (İt.11)
-            var squadPreview = Squad.Generate(setup.Seed, 0, bal.squad.enerjiBaslangic);
+            // Kadro maç modeliyle AYNI tohumdan üretilir — maç öncesi isim/güçler maç içiyle birebir
+            var squadPreview = Squad.Generate(setup.Seed, 0, bal.squad, setup.HomeStrength);
             var rows = new string[12];
             for (int i = 0; i < 11; i++)
-                rows[i] = $"{PosName(squadPreview.Players[i].Pos)}  {squadPreview.Players[i].Name}";
+                rows[i] = $"{PosName(squadPreview.Players[i].Pos)}  {squadPreview.Players[i].Name}  {squadPreview.Players[i].Guc:0}";
             var benchNames = new List<string>(5);
-            for (int i = 11; i < 16; i++) benchNames.Add(squadPreview.Players[i].Name);
+            for (int i = 11; i < 16; i++)
+                benchNames.Add($"{squadPreview.Players[i].Name} {squadPreview.Players[i].Guc:0}");
             rows[11] = "Yedek: " + string.Join(", ", benchNames);
 
             pitch.gameObject.SetActive(true); // arka fon sahası

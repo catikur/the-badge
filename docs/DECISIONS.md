@@ -42,7 +42,7 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
 - 3G Greybox Fun Gate GO/NO-GO — playtest verisi bekleniyor (`docs/PLAYTEST_3G.md`, Model Maçı deneyimiyle).
 - BRIEF_3G_GREYBOX RA#1 metninin pivot sonrası revizyonu (GDD v4.2 turu).
 - ~~Greybox iterasyon 11 kapsamı~~ → **KARAR (2026-08-07, Atilla): Paket A TAM** — yorgunluk + kart/sakatlık zorunlu karar anları + isimli kadro/değişiklik + koç masası greybox'a girdi (İt.11, GREYBOX_MODEL.md v2). Bu SON içerik iterasyonudur; sırada his onayı + playtest.
-- **Greybox iterasyon 12 kapsamı** — "Kadro Kimliği" (bireysel güç puanı + Hücum/Savunma kanalları + kaleci etkisi; tespit: kaleci modelde yalnız kozmetik, oyuncularda bireysel özellik yok): öneri `docs/GREYBOX_ONERI_IT12.md`, Atilla seçimi bekleniyor (2026-08-07). Timebox notu: S1 seçilirse playtest 2 haftalık kutunun kenarına iter; gerekirse bilinçli uzatma buraya yazılır.
+- ~~Greybox iterasyon 12 kapsamı~~ → **KARAR (2026-08-07, Atilla): S1 — Kadro Kimliği** uygulandı: bireysel oyuncu gücü + mevki ağırlıklı Hücum/Savunma kanalları (kaleci savunmada en ağır) + şerit görünürlük satırı (İt.12, GREYBOX_MODEL.md v3). Timebox: playtest 2 haftalık kutunun kenarında — kayarsa bilinçli uzatma bu satıra işlenir.
 - **GDD v4.2 adayları (Atilla fikri, 2026-08-07):** (a) koşullu ön-emirler (ücretsiz katman, offline adaleti); (b) **Oto-Koç** — aylık kiralık OTOMATİK yürüten ajan: GDD 12.1 Taktik Analist "önerir"den sapma, kural-tabanlı deterministik (LLM değil), Tek Kapı + replay izi + public ligde şeffaf rozet + "canlı insan > oto-koç" optimal-altı bant ilkesi; (c) online/offline asimetri ilkesinin net yazımı. Öneri: `docs/GREYBOX_ONERI_IT11.md` §2.
 
 ## Karar günlüğü (tarihsel özet)

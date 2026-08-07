@@ -211,7 +211,13 @@
     "degisiklikHakki": 3,
     "tazeBacakEnerji": 1000.0,
     "eksikHucumCarpan": 0.85,
-    "rakipEksikSavunmaCarpan": 1.15
+    "rakipEksikSavunmaCarpan": 1.15,
+    "gucYayilim": 8.0,
+    "yedekGucFarki": -6.0,
+    "gucMin": 30.0,
+    "gucMax": 95.0,
+    "hucumAgirlik": [0.0, 1.0, 2.0, 3.0],
+    "savunmaAgirlik": [3.0, 3.0, 2.0, 1.0]
   },
   "olay": {
     "sariMacBasi": 2.0,

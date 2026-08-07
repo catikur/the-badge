@@ -131,10 +131,16 @@ namespace TheBadge.Greybox.UI
             stripDraw = MakeStripSegment(stripBg, new Color(1f, 1f, 1f, 0.30f), out stripDrawT);
             stripLoss = MakeStripSegment(stripBg, bad, out stripLossT);
 
+            // Şerit hesabının tek satırlık açıklaması — "neye göre?" oyun içinde de söylenir (İt.12)
+            var stripHint = UiWidgets.MakeText("StripHint", modelRoot,
+                "Şerit: kalan blokların KESİN olasılık dağılımı · etken dökümü DETAY'da", 20,
+                new Color(1f, 1f, 1f, 0.42f));
+            UiWidgets.TopBlock((RectTransform)stripHint.transform, 196f, 1000f, 24f);
+
             var momLabel = UiWidgets.MakeText("MomLabel", modelRoot, "MOMENTUM", 28, new Color(1f, 1f, 1f, 0.5f));
-            UiWidgets.TopBlock((RectTransform)momLabel.transform, 214f, 1000f, 36f);
+            UiWidgets.TopBlock((RectTransform)momLabel.transform, 226f, 1000f, 36f);
             var momRow = UiWidgets.MakeRect("MomRow", modelRoot);
-            UiWidgets.TopBlock(momRow, 252f, StripW, 150f);
+            UiWidgets.TopBlock(momRow, 260f, StripW, 150f);
             for (int i = 0; i < 12; i++)
             {
                 var bar = UiWidgets.MakeRect("Bar" + i, momRow);

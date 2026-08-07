@@ -229,8 +229,15 @@ namespace TheBadge.Greybox.Sim
             public float yorgunlukGucTaban;     // ME 12.1 M_kondisyon vekili: E=0'da kalan güç oranı
             public int degisiklikHakki;         // GDD 12.4 standart 3 (hamle hakkından AYRI)
             public float tazeBacakEnerji;       // giren oyuncunun enerjisi
-            public float eksikHucumCarpan;      // eksik oyuncu başına kendi gol olasılığı çarpanı
-            public float rakipEksikSavunmaCarpan; // rakip eksikken bizim gol olasılığımız artar
+            public float eksikHucumCarpan;      // (İt.11 kalıntısı — İt.12'de etki reytinge taşındı)
+            public float rakipEksikSavunmaCarpan; // (İt.11 kalıntısı — İt.12'de etki reytinge taşındı)
+            // İt.12 "Kadro Kimliği": bireysel güç + mevki ağırlıklı Hücum/Savunma kanalları
+            public float gucYayilim;            // oyuncu gücü üretim yayılımı (Gauss sigma, puan)
+            public float yedekGucFarki;         // kulübenin taban güç farkı (negatif = zayıf)
+            public float gucMin;                // bireysel güç bandı
+            public float gucMax;
+            public float[] hucumAgirlik;        // mevki ağırlıkları [GK, DF, MF, FW] — hücum reytingi
+            public float[] savunmaAgirlik;      // mevki ağırlıkları [GK, DF, MF, FW] — KALECİ en ağır
         }
 
         [Serializable]

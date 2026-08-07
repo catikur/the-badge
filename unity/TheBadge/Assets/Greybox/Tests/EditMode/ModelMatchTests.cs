@@ -195,6 +195,39 @@ namespace TheBadge.Greybox.Tests
         }
 
         [Test]
+        public void Kaleci_SavunmaKanalindaEtkili()
+        {
+            // İt.12: "kaleciler aşırı etkisiz" tespiti — GK artık savunma reytinginde en ağır mevki
+            var bal = Bal();
+            var m = new MatchModel(bal, Setup(555));
+            float baseP = m.Factors(us: false).Sonuc;
+            m.SquadUs.Players[0].Guc = bal.squad.gucMin;
+            Assert.Greater(m.Factors(us: false).Sonuc, baseP, "zayıf kaleci rakip golünü artırmalı");
+            m.SquadUs.Players[0].Guc = bal.squad.gucMax;
+            Assert.Less(m.Factors(us: false).Sonuc, baseP, "iyi kaleci rakip golünü düşürmeli");
+        }
+
+        [Test]
+        public void YildizKaybi_VasatKaybindanCokAcitir()
+        {
+            var bal = Bal();
+            var mA = new MatchModel(bal, Setup(556));
+            var mB = new MatchModel(bal, Setup(556));
+            // Aynı mevki içinde karşılaştır (4 orta saha, 5-8): mevki ağırlığı sabit kalsın
+            int star = 5, weak = 5;
+            for (int k = 5; k <= 8; k++)
+            {
+                if (mA.SquadUs.Players[k].Guc > mA.SquadUs.Players[star].Guc) star = k;
+                if (mA.SquadUs.Players[k].Guc < mA.SquadUs.Players[weak].Guc) weak = k;
+            }
+            Assert.AreNotEqual(star, weak, "kadroda güç yayılımı olmalı");
+            mA.SquadUs.Players[star].OnPitch = false;
+            mB.SquadUs.Players[weak].OnPitch = false;
+            Assert.Less(mA.Factors(us: true).Sonuc, mB.Factors(us: true).Sonuc,
+                "yıldızı kaybetmek hücumu daha çok düşürmeli (İt.12 tam-payda reyting)");
+        }
+
+        [Test]
         public void OlayDizisi_Deterministik()
         {
             var bal = Bal();

@@ -28,7 +28,9 @@ namespace TheBadge.Greybox.Sim
     public struct FactorSnapshot
     {
         public float Taban;
-        public float Guc;        // kadro gücü farkı (tanh doygun)
+        public float Guc;        // HÜCUM(kendi) − SAVUNMA(rakip) reyting farkı (tanh doygun) — İt.12:
+                                 // bireysel güçler + mevki ağırlıkları + enerji + eksikler bu tek
+                                 // etkenin İÇİNDE (kaleci savunma kanalında en ağır)
         public float Taktik;     // etkileşim matrisi × tempo/şut iştahı
         public float Faz;        // maç fazı (son bloklarda gol artar)
         public float Momentum;
@@ -36,8 +38,6 @@ namespace TheBadge.Greybox.Sim
         public float TempoModu;  // müdahale çarpanı
         public float Ev;         // ev sahibi avantajı
         public float Form;       // son 5 maç
-        public float Yorgunluk;  // takım enerjisi etkisi (ME Spec 12.1 vekili) — İt.11
-        public float Eksik;      // kırmızı/sakatlık eksik etkisi (kendi hücum + rakip savunma)
         public float Sonuc;      // clamp'lenmiş nihai olasılık
     }
 
@@ -108,10 +108,19 @@ namespace TheBadge.Greybox.Sim
             MovesLeft = m.hamleHakki;
             sq = balance.squad;
             ev = balance.olay;
-            SquadUs = Squad.Generate(setup.Seed, 0, sq.enerjiBaslangic);
-            SquadThem = Squad.Generate(setup.Seed, 1, sq.enerjiBaslangic);
+            SquadUs = Squad.Generate(setup.Seed, 0, sq, setup.HomeStrength);
+            SquadThem = Squad.Generate(setup.Seed, 1, sq, setup.AwayStrength);
             SubsLeft = sq.degisiklikHakki;
             themSubsLeft = sq.degisiklikHakki;
+        }
+
+        /// <summary>Anlık takım reytingleri (UI/koç masası) — İt.12.</summary>
+        public void GetRatings(out float atkUs, out float defUs, out float atkThem, out float defThem)
+        {
+            SquadUs.RatingAndSlope(attack: true, sq, DrainRate(0), out atkUs, out _);
+            SquadUs.RatingAndSlope(attack: false, sq, DrainRate(0), out defUs, out _);
+            SquadThem.RatingAndSlope(attack: true, sq, DrainRate(1), out atkThem, out _);
+            SquadThem.RatingAndSlope(attack: false, sq, DrainRate(1), out defThem, out _);
         }
 
         GreyboxBalance.TacticCfg FindTactic(int id)
@@ -126,25 +135,29 @@ namespace TheBadge.Greybox.Sim
         //                                          × Skor × TempoModu × Ev × Form → clamp.
         // Her etken [KALİBRE-G model.*] anahtarıyla ayarlanır; FactorSnapshot ile şeffaftır.
 
-        /// <summary>Bir tarafın blok gol olasılığının tam etken dökümü (sıradaki blok, güncel enerji).</summary>
-        public FactorSnapshot Factors(bool us) =>
-            FactorsAt(us, Math.Min(CurrentBlock, m.blokSayisi - 1),
-                      SquadUs.TeamEnergyMean(), SquadThem.TeamEnergyMean());
+        /// <summary>Bir tarafın blok gol olasılığının tam etken dökümü (sıradaki blok, güncel reytingler).</summary>
+        public FactorSnapshot Factors(bool us)
+        {
+            GetRatings(out float atkU, out float defU, out float atkT, out float defT);
+            return FactorsAt(us, Math.Min(CurrentBlock, m.blokSayisi - 1),
+                             us ? atkU : atkT, us ? defT : defU);
+        }
 
-        /// <summary>Parametrik etken hesabı — DP projeksiyonu ileri blokları faz+enerji ile çağırır.
-        /// Skor/momentum/eksikler mevcut değerlerinde sabittir (stokastik — dürüst yaklaşıklık).</summary>
-        FactorSnapshot FactorsAt(bool us, int blockIdx, float eUs, float eThem)
+        /// <summary>Parametrik etken hesabı — DP projeksiyonu ileri blokları faz + reyting eğimiyle
+        /// çağırır. Skor/momentum mevcut değerlerinde sabittir (stokastik — dürüst yaklaşıklık).
+        /// atkSelf/defOpp: mevki ağırlıklı reytingler (İt.12) — enerji ve eksikler İÇİNDE.</summary>
+        FactorSnapshot FactorsAt(bool us, int blockIdx, float atkSelf, float defOpp)
         {
             var atk = us ? usTactic : themTactic;
             var def = us ? themTactic : usTactic;
-            float strDiff = us ? usStrength - themStrength : themStrength - usStrength;
             float mom = us ? Momentum : -Momentum;
             int diff = us ? GoalsUs - GoalsThem : GoalsThem - GoalsUs;
 
             var f = new FactorSnapshot { Taban = m.pGolTabani };
 
-            // 1) Kadro gücü — tanh ile doygun: uç farklar patlamaz
-            f.Guc = 1f + m.gucEtkiMax * (float)Math.Tanh(strDiff / m.gucOlcek);
+            // 1) Kadro gücü — İt.12: HÜCUM(kendi) vs SAVUNMA(rakip) reyting farkı; tanh ile doygun.
+            //    Kaleci savunma reytingine en yüksek ağırlıkla girer — "etkisiz kaleci" bitti.
+            f.Guc = 1f + m.gucEtkiMax * (float)Math.Tanh((atkSelf - defOpp) / m.gucOlcek);
 
             // 2) Taktik: etkileşim matrisi (hücum eden × savunan) × tempo/şut iştahı inceliği
             float matchup = MatchupFactor(atk.id, def.id);
@@ -174,30 +187,12 @@ namespace TheBadge.Greybox.Sim
             // 8) Form: son 5 maçın net galibiyeti (yalnız oyuncu tarafı bilinir)
             f.Form = us ? 1f + usFormNet * m.formEtkiCarpan : 1f;
 
-            // 9) Yorgunluk: takım enerjisi güç etkisini kademeli düşürür — ME Spec 12.1
-            //    M_kondisyon'un blok ölçekli vekili (taze takımda ×1.0, bitkinlikte tabana iner)
-            float eSelf = us ? eUs : eThem;
-            f.Yorgunluk = sq.yorgunlukGucTaban
-                          + (1f - sq.yorgunlukGucTaban) * (eSelf / sq.enerjiBaslangic);
-
-            // 10) Eksik oyuncu: kırmızı/değiştirilmemiş sakatlık hücumu düşürür, rakip eksiği
-            //     bizim hücumu güçlendirir (savunma seyrekleşir)
-            int missSelf = us ? SquadUs.MissingCount() : SquadThem.MissingCount();
-            int missOpp = us ? SquadThem.MissingCount() : SquadUs.MissingCount();
-            f.Eksik = PowInt(sq.eksikHucumCarpan, missSelf)
-                      * PowInt(sq.rakipEksikSavunmaCarpan, missOpp);
+            // (Eski Yorgunluk/Eksik etkenleri İt.12'de Güç reytinginin İÇİNE taşındı:
+            //  bireysel enerji çarpanı + eksik oyuncunun 0 katkısı — çifte sayım yok.)
 
             f.Sonuc = Clamp(f.Taban * f.Guc * f.Taktik * f.Faz * f.Momentum * f.Skor
-                            * f.TempoModu * f.Ev * f.Form * f.Yorgunluk * f.Eksik,
-                            m.pGolMin, m.pGolMax);
+                            * f.TempoModu * f.Ev * f.Form, m.pGolMin, m.pGolMax);
             return f;
-        }
-
-        static float PowInt(float b, int e)
-        {
-            float r = 1f;
-            for (int i = 0; i < e; i++) r *= b;
-            return r;
         }
 
         float MatchupFactor(int atkId, int defId)
@@ -465,14 +460,16 @@ namespace TheBadge.Greybox.Sim
             return pick;
         }
 
-        /// <summary>Gol atfı — kozmetik (Domain.Crowd), forvet ağırlıklı [golMevkiAgirlik].</summary>
+        /// <summary>Gol atfı — kozmetik (Domain.Crowd), forvet + bireysel güç ağırlıklı (İt.12:
+        /// yıldız daha çok atar).</summary>
         string AttributeGoal(Squad squad, int team, uint tick)
         {
             float total = 0f;
             for (int i = 0; i < squad.Players.Length; i++)
             {
                 var p = squad.Players[i];
-                if (p.OnPitch && p.Pos != PlayerPos.GK) total += ev.golMevkiAgirlik[(int)p.Pos - 1];
+                if (p.OnPitch && p.Pos != PlayerPos.GK)
+                    total += ev.golMevkiAgirlik[(int)p.Pos - 1] * p.Guc;
             }
             if (total <= 0f) return null;
             double roll = Rng.Rand01(seed, Domain.Crowd, (uint)(620 + team), tick, 7) * total;
@@ -480,7 +477,7 @@ namespace TheBadge.Greybox.Sim
             {
                 var p = squad.Players[i];
                 if (!p.OnPitch || p.Pos == PlayerPos.GK) continue;
-                roll -= ev.golMevkiAgirlik[(int)p.Pos - 1];
+                roll -= ev.golMevkiAgirlik[(int)p.Pos - 1] * p.Guc;
                 if (roll <= 0) { p.Goals++; return p.Name; }
             }
             return null;
@@ -551,16 +548,19 @@ namespace TheBadge.Greybox.Sim
             var dist = new double[size];
             dist[offset] = 1.0;                        // fark 0'dan başla (kalan bloklar için)
 
-            // İt.11: faz eğrisi ve enerji drenajı blok blok İLERİ projeksiyon edilir — ikisi de
-            // deterministik olduğundan şerit "bu gidişat sürerse" sorusuna daha dürüst cevap verir.
-            float eU = SquadUs.TeamEnergyMean(), eT = SquadThem.TeamEnergyMean();
-            float dU = DrainRate(0), dT = DrainRate(1);
+            // İt.11/12: faz eğrisi ve REYTİNG drenajı blok blok İLERİ projeksiyon edilir — ikisi de
+            // deterministik olduğundan şerit "bu gidişat sürerse" sorusuna dürüst cevap verir.
+            // Reyting eğimi lineerdir (enerji çarpanı enerjide lineer, drenaj sabit oranlı).
+            SquadUs.RatingAndSlope(attack: true, sq, DrainRate(0), out float atkU, out float sAtkU);
+            SquadUs.RatingAndSlope(attack: false, sq, DrainRate(0), out float defU, out float sDefU);
+            SquadThem.RatingAndSlope(attack: true, sq, DrainRate(1), out float atkT, out float sAtkT);
+            SquadThem.RatingAndSlope(attack: false, sq, DrainRate(1), out float defT, out float sDefT);
 
             for (int b = 0; b < remaining; b++)
             {
                 int blockIdx = Math.Min(CurrentBlock + b, m.blokSayisi - 1);
-                float pU = FactorsAt(us: true, blockIdx, eU, eT).Sonuc;
-                float pT = FactorsAt(us: false, blockIdx, eU, eT).Sonuc;
+                float pU = FactorsAt(us: true, blockIdx, atkU - b * sAtkU, defT - b * sDefT).Sonuc;
+                float pT = FactorsAt(us: false, blockIdx, atkT - b * sAtkT, defU - b * sDefU).Sonuc;
                 var next = new double[size];
                 for (int dIdx = 0; dIdx < size; dIdx++)
                 {
@@ -571,8 +571,6 @@ namespace TheBadge.Greybox.Sim
                     next[dIdx] += pr * (1.0 - pU - pT);                        // sessiz
                 }
                 dist = next;
-                eU = Math.Max(0f, eU - dU);
-                eT = Math.Max(0f, eT - dT);
             }
 
             int baseDiff = GoalsUs - GoalsThem;

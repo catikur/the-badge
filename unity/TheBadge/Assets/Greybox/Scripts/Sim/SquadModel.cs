@@ -23,6 +23,7 @@ namespace TheBadge.Greybox.Sim
         public int Id;
         public string Name;
         public PlayerPos Pos;
+        public float Guc;         // 0-100 bireysel güç — ME Spec 6.1 nitelik tablosunun greybox VEKİLİ (İt.12)
         public float Energy;      // 0..enerjiBaslangic — ME Spec 12.1 Energy'nin vekili
         public int Yellow;
         public bool SentOff;
@@ -56,8 +57,10 @@ namespace TheBadge.Greybox.Sim
             PlayerPos.DF, PlayerPos.MF, PlayerPos.MF, PlayerPos.FW, PlayerPos.FW
         };
 
-        /// <summary>Deterministik kadro üretimi — Domain.Crowd (yalnız isim kozmetiği; skor akışına girmez).</summary>
-        public static Squad Generate(ulong seed, int teamIdx, float initialEnergy)
+        /// <summary>Deterministik kadro üretimi. İsimler Domain.Crowd (kozmetik); bireysel GÜÇLER
+        /// Domain.Decision (dünya üretimi — OYNANIŞA girer, İt.12). İlk 11'in düz güç ortalaması
+        /// takım tabanına NORMALİZE edilir: mevcut gol bandı/kalibrasyon bozulmaz (Öneri İt.12 S1.1).</summary>
+        public static Squad Generate(ulong seed, int teamIdx, GreyboxBalance.SquadCfg cfg, float baseStrength)
         {
             var s = new Squad { Players = new SquadPlayer[16] };
             var used = new bool[Hece1.Length * Hece2.Length];
@@ -69,17 +72,30 @@ namespace TheBadge.Greybox.Sim
                 pick = Math.Min(pick, Hece1.Length * Hece2.Length - 1);
                 while (used[pick]) pick = (pick + 1) % (Hece1.Length * Hece2.Length); // deterministik çakışma taraması
                 used[pick] = true;
+                float g = baseStrength
+                          + (float)Rng.Gauss01(seed, Domain.Decision, (uint)(710 + teamIdx), (uint)i, 1) * cfg.gucYayilim
+                          + (i >= 11 ? cfg.yedekGucFarki : 0f); // kulübe ortalamada zayıf — gerçek kadro dokusu
                 s.Players[i] = new SquadPlayer
                 {
                     Id = i,
                     Name = Hece1[pick / Hece2.Length] + Hece2[pick % Hece2.Length],
                     Pos = Dizilim[i],
-                    Energy = initialEnergy,
+                    Guc = Clamp(g, cfg.gucMin, cfg.gucMax),
+                    Energy = cfg.enerjiBaslangic,
                     OnPitch = i < 11
                 };
             }
+            // Normalizasyon: ilk 11 ortalaması tabana çekilir (yedek farkı görece korunur)
+            float mean11 = 0f;
+            for (int i = 0; i < 11; i++) mean11 += s.Players[i].Guc;
+            mean11 /= 11f;
+            float d = baseStrength - mean11;
+            for (int i = 0; i < 16; i++)
+                s.Players[i].Guc = Clamp(s.Players[i].Guc + d, cfg.gucMin, cfg.gucMax);
             return s;
         }
+
+        static float Clamp(float v, float lo, float hi) => v < lo ? lo : (v > hi ? hi : v);
 
         public SquadPlayer Find(int id) =>
             id >= 0 && id < Players.Length ? Players[id] : null;
@@ -93,7 +109,7 @@ namespace TheBadge.Greybox.Sim
             return n > 0 ? sum / n : 0f;
         }
 
-        /// <summary>Eksik oyuncu sayısı (kırmızı / değiştirilmemiş sakatlık) — Eksik etkeninin girdisi.</summary>
+        /// <summary>Eksik oyuncu sayısı (kırmızı / değiştirilmemiş sakatlık) — gösterim için.</summary>
         public int MissingCount()
         {
             int n = 0;
@@ -101,5 +117,34 @@ namespace TheBadge.Greybox.Sim
                 if (Players[i].OnPitch) n++;
             return Math.Max(0, 11 - n);
         }
+
+        /// <summary>Mevki ağırlıklı takım reytingi (İt.12 — Öneri S1.2): sahadakilerin
+        /// güç × bireysel yorgunluk çarpanı katkısı. Payda TAM 11 slotun ağırlık toplamıdır —
+        /// eksik oyuncu 0 katkı verir ama paydada kalır: kayıp, oyuncunun kalitesiyle orantılı
+        /// acıtır (eski Yorgunluk/Eksik etkenleri bu yapının İÇİNE taşındı, çifte sayım yok).
+        /// slopePerBlock: mevcut drenajla blok başına reyting düşüşü — DP projeksiyonu girdisi.</summary>
+        public void RatingAndSlope(bool attack, GreyboxBalance.SquadCfg cfg, float drainRate,
+                                   out float rating, out float slopePerBlock)
+        {
+            float wFull = 0f;
+            for (int i = 0; i < 11; i++)
+                wFull += Weight(attack, Dizilim[i], cfg);
+            float sum = 0f, slopeSum = 0f;
+            float k = (1f - cfg.yorgunlukGucTaban) / cfg.enerjiBaslangic;
+            for (int i = 0; i < Players.Length; i++)
+            {
+                var p = Players[i];
+                if (!p.OnPitch) continue;
+                float w = Weight(attack, p.Pos, cfg);
+                float fmul = cfg.yorgunlukGucTaban + (1f - cfg.yorgunlukGucTaban) * (p.Energy / cfg.enerjiBaslangic);
+                sum += p.Guc * fmul * w;
+                slopeSum += p.Guc * w * k * drainRate * (p.Pos == PlayerPos.GK ? cfg.gkDrenajCarpan : 1f);
+            }
+            rating = wFull > 0f ? sum / wFull : 0f;
+            slopePerBlock = wFull > 0f ? slopeSum / wFull : 0f;
+        }
+
+        static float Weight(bool attack, PlayerPos pos, GreyboxBalance.SquadCfg cfg) =>
+            (attack ? cfg.hucumAgirlik : cfg.savunmaAgirlik)[(int)pos];
     }
 }
