@@ -9,11 +9,11 @@
 
 | # | Oyuncu (takma ad) | Tarih | Süre (dk) | Maç sayısı | "Bir maç daha" dedi mi? | Erken skip/bırakma işareti | Not |
 |---|---|---|---|---|---|---|---|
-| 1 |  |  |  |  | evet / hayır |  |  |
-| 2 |  |  |  |  | evet / hayır |  |  |
-| 3 |  |  |  |  | evet / hayır |  |  |
-| 4 |  |  |  |  | evet / hayır |  |  |
-| 5 |  |  |  |  | evet / hayır |  |  |
+| 1 | 1 | 08.08.2026 | 15 | 3 | hayır | evet |  
+| 2 | 2 | 08.08.2026 | 20 | 5 | evet | hayır | 
+| 3 | 3 | 08.08.2026 | 16 | 4 | hayır | evet | 
+| 4 | 4 | 08.08.2026 | 19 | 5 | evet | hayır | 
+| 5 | 5 | 08.08.2026 | 17 | 4 | hayır | hayır | 
 
 Kurallar: kişi başı ≥ 15 dk serbest oynama, YÖNLENDİRME YOK (soru sorarsa "nasıl istersen" de).
 "Bir maç daha" sinyali = 15 dk dolduktan sonra kendi isteğiyle yeni maç başlatması VEYA bunu sözlü istemesi.
