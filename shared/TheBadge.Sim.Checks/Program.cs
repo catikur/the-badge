@@ -2,6 +2,7 @@ using System;
 using TheBadge.Sim.Commands;
 using TheBadge.Sim.Core;
 using TheBadge.Sim.Determinism;
+using TheBadge.Sim.Match;
 
 // Bağımlılıksız determinizm kapısı — CI ve yerel geliştirme her commit öncesi koşar.
 // Kural (CLAUDE.md): Bu program yeşil değilse commit YOK.
@@ -73,6 +74,65 @@ var env = new CommandEnvelope
 if (env.ActionType.Length == 0 || env.Source != CommandSource.UI)
     failures += Fail("Envelope", "beklenmeyen durum");
 else Pass("Envelope");
+
+// 7) FAZ 03 M0 — Motor iskeleti determinizm kapıları (ME Spec 3.2/4.2; BRIEF_FAZ03_ACILIS M0)
+
+// xxHash64 RESMİ test vektörleri: ""=0xEF46DB3751D8E999, "a"=0xD24EC4F1A98C6E5B, "abc"=0x44BC2CF5AD770999
+ulong xh0 = XxHash64.Hash(ReadOnlySpan<byte>.Empty);
+ulong xhA = XxHash64.Hash(System.Text.Encoding.ASCII.GetBytes("a"));
+ulong xhAbc = XxHash64.Hash(System.Text.Encoding.ASCII.GetBytes("abc"));
+if (xh0 != 0xEF46DB3751D8E999UL || xhA != 0xD24EC4F1A98C6E5BUL || xhAbc != 0x44BC2CF5AD770999UL)
+    failures += Fail("XxHash64Vectors", $"bos=0x{xh0:X} a=0x{xhA:X} abc=0x{xhAbc:X}");
+else Pass("XxHash64Vectors");
+
+// Motor koşucu: sabit başlangıç + komut zaman çizelgesi, N tick
+static (ulong finalHash, ulong traceHash, uint applied, ulong at600) RunSkeleton(bool reorderEnqueue)
+{
+    var q = new CommandQueue();
+    var early = new TacticChangeCmd(200, 0, new TacticDelta(1, 0, -1, 0));
+    var late = new MotivationCmd(500, 1, ToneType.Atesle);
+    // Aynı zaman çizelgesi, farklı KUYRUĞA GİRİŞ sırası — tick'ler arası uygulama sırası değişmemeli
+    if (reorderEnqueue) { q.Enqueue(late); q.Enqueue(early); }
+    else { q.Enqueue(early); q.Enqueue(late); }
+
+    var eng = new MatchEngine(0xFA20300UL, q);
+    var st = MatchEngine.CreateInitialState();
+    st.Ball.Vx = 4200; st.Ball.Vy = -1300; // mm/sn — fizik iskeleti hash'i hareket ettirsin
+    ulong at600 = 0;
+    for (int t = 0; t < 1200; t++)
+    {
+        eng.Tick(ref st);
+        if (st.Tick == 600) at600 = st.LastChecksum;
+    }
+    return (MatchEngine.StateHash(in st), q.AppliedTraceHash, q.AppliedCount, at600);
+}
+
+var runA = RunSkeleton(reorderEnqueue: false);
+var runB = RunSkeleton(reorderEnqueue: false);
+var runC = RunSkeleton(reorderEnqueue: true);
+
+Console.WriteLine($"[info] M0 durum hash (1200 tick): 0x{runA.finalHash:X}");
+
+// 7a) Determinizm: aynı girdi = bit düzeyinde aynı hash + aynı checksum kadans değeri
+if (runA.finalHash != runB.finalHash || runA.at600 != runB.at600)
+    failures += Fail("MatchSkeletonDeterminism", $"0x{runA.finalHash:X} != 0x{runB.finalHash:X}");
+else Pass("MatchSkeletonDeterminism");
+
+// 7b) Golden: durum hash'i sabitlendi — alan/sıra değişikliği bilinçli golden güncellemesi ister
+const ulong MATCH_GOLDEN = 0x8954F2FA14EC7BFAUL; // sabitlendi — alan/sıra değişikliği bilinçli güncelleme ister
+if (MATCH_GOLDEN != 0 && runA.finalHash != MATCH_GOLDEN)
+    failures += Fail("MatchSkeletonGolden", $"0x{runA.finalHash:X} != 0x{MATCH_GOLDEN:X}");
+else Pass("MatchSkeletonGolden");
+
+// 7c) Checksum kadansı: 600. tick'te yazılmış ve son duruma eşit değil (durum ilerledi)
+if (runA.at600 == 0 || runA.at600 == runA.finalHash)
+    failures += Fail("MatchChecksumCadence", $"600. tick checksum'u beklenen gibi degil (0x{runA.at600:X})");
+else Pass("MatchChecksumCadence");
+
+// 7d) Komut sırası: kuyruğa giriş sırası tick'ler arası uygulama sırasını DEĞİŞTİREMEZ (ME 14.1)
+if (runA.applied != 2 || runC.applied != 2 || runA.traceHash != runC.traceHash)
+    failures += Fail("MatchCommandOrder", $"iz A=0x{runA.traceHash:X} C=0x{runC.traceHash:X}");
+else Pass("MatchCommandOrder");
 
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");
 return failures == 0 ? 0 : 1;
