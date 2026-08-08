@@ -13,8 +13,9 @@ namespace TheBadge.Sim.Match
     {
         public int X, Y, Z;      // mm
         public int Vx, Vy, Vz;   // mm/sn
-        public int SpinY;        // falso bileşeni (mm/sn2 eşleniği) — fizik dilimi kullanır (ME 8)
+        public int SpinY;        // falso bileşeni (mm/sn2 eşleniği) — M3+ orta/frikik kullanır (ME 8.3)
         public short OwnerId;    // -1 = serbest top ("aynı anda iki sahip" yapısal imkansız, ME 4.3)
+        public byte LastTouchTeam; // 0/1; 2 = henüz dokunulmadı — taç/aut sahipliği bundan türer (M2)
     }
 
     /// <summary>Ajan kalıcı durumu — ME Spec 5.3 şeması birebir; float alan YOK.</summary>
@@ -25,6 +26,7 @@ namespace TheBadge.Sim.Match
         public byte RoleId;              // rol tablosu M-karar diliminde (ME 7.4)
         public int X, Y, Vx, Vy;         // mm, mm/sn
         public int AnchorX, AnchorY;     // kullanıcının serbest diziliş çapası (taktik girdisi)
+        public int TargetX, TargetY;     // karar çıktısı hedef nokta (mm) — tick'ler arası taşınır (M2)
         public ushort Energy;            // 0-1000 (0,1 hassasiyet) — ME 12.1
         public sbyte Momentum;           // -10..+10 — ME 12.3
         public byte YellowCards;
