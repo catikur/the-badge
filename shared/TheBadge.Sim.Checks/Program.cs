@@ -75,6 +75,22 @@ if (env.ActionType.Length == 0 || env.Source != CommandSource.UI)
     failures += Fail("Envelope", "beklenmeyen durum");
 else Pass("Envelope");
 
+// --- Balance yükleme (M1+): çekirdek parse etmez — host (burada Checks) System.Text.Json ile doldurur
+static string FindRepoFile(string relative)
+{
+    var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+    for (int up = 0; up < 8 && dir != null; up++, dir = dir.Parent)
+    {
+        string p = System.IO.Path.Combine(dir.FullName, relative);
+        if (System.IO.File.Exists(p)) return p;
+    }
+    throw new System.IO.FileNotFoundException(relative);
+}
+
+var balOpts = new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true };
+var simBal = System.Text.Json.JsonSerializer.Deserialize<TheBadge.Sim.Config.SimBalance>(
+    System.IO.File.ReadAllText(FindRepoFile("balance/sim.balance.json")), balOpts);
+
 // 7) FAZ 03 M0 — Motor iskeleti determinizm kapıları (ME Spec 3.2/4.2; BRIEF_FAZ03_ACILIS M0)
 
 // xxHash64 RESMİ test vektörleri: ""=0xEF46DB3751D8E999, "a"=0xD24EC4F1A98C6E5B, "abc"=0x44BC2CF5AD770999
@@ -85,8 +101,8 @@ if (xh0 != 0xEF46DB3751D8E999UL || xhA != 0xD24EC4F1A98C6E5BUL || xhAbc != 0x44B
     failures += Fail("XxHash64Vectors", $"bos=0x{xh0:X} a=0x{xhA:X} abc=0x{xhAbc:X}");
 else Pass("XxHash64Vectors");
 
-// Motor koşucu: sabit başlangıç + komut zaman çizelgesi, N tick
-static (ulong finalHash, ulong traceHash, uint applied, ulong at600) RunSkeleton(bool reorderEnqueue)
+// Motor koşucu: sabit başlangıç + komut zaman çizelgesi, N tick (M2'den beri tam motor koşar)
+(ulong finalHash, ulong traceHash, uint applied, ulong at600) RunSkeleton(bool reorderEnqueue)
 {
     var q = new CommandQueue();
     var early = new TacticChangeCmd(200, 0, new TacticDelta(1, 0, -1, 0));
@@ -95,9 +111,9 @@ static (ulong finalHash, ulong traceHash, uint applied, ulong at600) RunSkeleton
     if (reorderEnqueue) { q.Enqueue(late); q.Enqueue(early); }
     else { q.Enqueue(early); q.Enqueue(late); }
 
-    var eng = new MatchEngine(0xFA20300UL, q);
+    var eng = new MatchEngine(0xFA20300UL, q, null, simBal);
     var st = MatchEngine.CreateInitialState();
-    st.Ball.Vx = 4200; st.Ball.Vy = -1300; // mm/sn — fizik iskeleti hash'i hareket ettirsin
+    st.Ball.Vx = 4200; st.Ball.Vy = -1300; // mm/sn — fizik hash'i hareket ettirsin
     ulong at600 = 0;
     for (int t = 0; t < 1200; t++)
     {
@@ -119,7 +135,7 @@ if (runA.finalHash != runB.finalHash || runA.at600 != runB.at600)
 else Pass("MatchSkeletonDeterminism");
 
 // 7b) Golden: durum hash'i sabitlendi — alan/sıra değişikliği bilinçli golden güncellemesi ister
-const ulong MATCH_GOLDEN = 0x8954F2FA14EC7BFAUL; // sabitlendi — alan/sıra değişikliği bilinçli güncelleme ister
+const ulong MATCH_GOLDEN = 0x2F1B33BD03085FD1UL; // M2'de yeniden sabitlendi (şema+davranış — bilinçli)
 if (MATCH_GOLDEN != 0 && runA.finalHash != MATCH_GOLDEN)
     failures += Fail("MatchSkeletonGolden", $"0x{runA.finalHash:X} != 0x{MATCH_GOLDEN:X}");
 else Pass("MatchSkeletonGolden");
@@ -135,22 +151,6 @@ if (runA.applied != 2 || runC.applied != 2 || runA.traceHash != runC.traceHash)
 else Pass("MatchCommandOrder");
 
 // 8) FAZ 03 M1 — Nitelik tablosu + TeamSheet kapıları (ME Spec 6.1-6.2; BRIEF_FAZ03_ACILIS M1)
-
-// Balance yükleme: çekirdek parse etmez — host (burada Checks) System.Text.Json ile doldurur
-static string FindRepoFile(string relative)
-{
-    var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
-    for (int up = 0; up < 8 && dir != null; up++, dir = dir.Parent)
-    {
-        string p = System.IO.Path.Combine(dir.FullName, relative);
-        if (System.IO.File.Exists(p)) return p;
-    }
-    throw new System.IO.FileNotFoundException(relative);
-}
-
-var balOpts = new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true };
-var simBal = System.Text.Json.JsonSerializer.Deserialize<TheBadge.Sim.Config.SimBalance>(
-    System.IO.File.ReadAllText(FindRepoFile("balance/sim.balance.json")), balOpts);
 var at = simBal.attribute;
 if (at.kondisyonTaban is < 0.5 or > 0.9 || at.kondisyonKuvvet is < 0.1 or > 0.5 ||
     at.kondisyonUs is < 0.4 or > 1.0 || at.moralCarpanPerMomentum is < 0.001 or > 0.02)
@@ -204,21 +204,36 @@ else Pass("AeffFullEnergy");
 }
 
 // 8e) TeamSheet → kurulum determinizmi: aynı kadro = aynı durum hash'i; rol/anchor yansır
-static TeamSheet BuildSheet(ulong seed, uint entity)
+static TeamSheet BuildSheet(ulong seed, uint entity) => BuildSheetSide(seed, entity, home: true);
+
+static TeamSheet BuildSheetSide(ulong seed, uint entity, bool home)
 {
+    // Test kadrosu: gerçekçi 4-4-2 çapaları (ev −x yarı sahada, deplasman aynalı);
+    // nitelikler deterministik türetilir (üretim kadroları FAZ 04 veri katmanından gelir)
     var sheet = new TeamSheet { Starters = new PlayerEntry[11], Bench = new PlayerEntry[5] };
+    int sign = home ? -1 : 1;
     for (int i = 0; i < 16; i++)
     {
-        // Test kadrosu: nitelikler deterministik türetilir (üretim kadroları FAZ 04 veri katmanından gelir)
-        byte V(uint salt) => (byte)(30 + (int)(Rng.Rand01(seed, Domain.Decision, entity, (uint)i, salt) * 60));
+        byte V(uint salt) => (byte)(35 + (int)(Rng.Rand01(seed, Domain.Decision, entity, (uint)i, salt) * 50));
+        int ax, ay;
+        if (i == 0) { ax = 48000; ay = 0; }                                   // KL
+        else if (i < 5) { ax = 33000; ay = (i - 1) * 16000 - 24000; }         // DF hattı
+        else if (i < 9) { ax = 12000; ay = (i - 5) * 16000 - 24000; }         // OS hattı
+        else { ax = 3000; ay = i == 9 ? -8000 : 8000; }                       // FV ikilisi
         var e = new PlayerEntry
         {
             PlayerId = (short)(entity * 100 + i),
             Name = $"Test-{entity}-{i}",
             RoleId = (byte)(i == 0 ? 1 : i < 5 ? 2 : i < 9 ? 3 : 4),
-            AnchorXmm = (int)(entity * 1000) + i * 2500,
-            AnchorYmm = 10000 + i * 3000,
-            Attributes = new PlayerAttributes { Passing = V(1), Finishing = V(2), Pace = V(3), Stamina = V(4), Reflexes = V(5), Handling = V(6) }
+            AnchorXmm = sign * ax,
+            AnchorYmm = ay,
+            Attributes = new PlayerAttributes
+            {
+                Passing = V(1), Finishing = V(2), Dribbling = V(7), Tackling = V(8),
+                FirstTouch = V(9), Positioning = V(10), Vision = V(11), Composure = V(12),
+                Pace = V(3), Acceleration = V(13), Stamina = V(4), Strength = V(14), Agility = V(15),
+                Reflexes = V(5), Handling = V(6)
+            }
         };
         if (i < 11) sheet.Starters[i] = e; else sheet.Bench[i - 11] = e;
     }
@@ -247,6 +262,76 @@ static TeamSheet BuildSheet(ulong seed, uint entity)
     if (!rejected) failures += Fail("TeamSheetValidate", "tekrarlı PlayerId kabul edildi");
     else Pass("TeamSheetValidate");
 }
+
+// 9) FAZ 03 M2 — Karar/hareket çekirdeği kapıları (ME 4.3, 6.3-6.5, 7.2/7.4, 8; BRIEF M2)
+
+// TrigLut vektörleri: 0 / çeyrek / yarım tur tam değerler
+if (TrigLut.SinQ16(0) != 0 || TrigLut.SinQ16(TrigLut.Size / 4) != 65536 ||
+    TrigLut.SinQ16(TrigLut.Size / 2) != 0 || TrigLut.CosQ16(0) != 65536)
+    failures += Fail("TrigLutVectors", $"{TrigLut.SinQ16(0)}/{TrigLut.SinQ16(TrigLut.Size / 4)}");
+else Pass("TrigLutVectors");
+
+// Menzil ters formülü (ME 8.2): v0=sqrt(2·a·d) ile atılan yerden top ~d metrede durmalı
+{
+    var q0 = new CommandQueue();
+    var e0 = new MatchEngine(1, q0, null, simBal);
+    var s0 = MatchEngine.CreateInitialState();
+    for (int i = 0; i < 22; i++) { s0.Agents[i].X = -50000; s0.Agents[i].Y = -30000; } // uzağa çek
+    s0.Ball.X = 0; s0.Ball.Y = 0;
+    double dTarget = 14.0;
+    s0.Ball.Vx = Units.QuantizeMm(Math.Sqrt(2.0 * simBal.physics.aRollKuru * dTarget));
+    for (int t = 0; t < 80; t++) e0.Tick(ref s0);
+    double stopped = s0.Ball.X / 1000.0;
+    if (Math.Abs(stopped - dTarget) > 1.5)
+        failures += Fail("BallRangeFormula", $"hedef {dTarget:0.0}m, durdu {stopped:0.0}m");
+    else Pass("BallRangeFormula");
+}
+
+// Tam maç koşusu (kadrolu): determinizm + golden + bant/değişmez denetimleri
+(ulong h, int pa, int pc, int tk, int oob, int poss, bool bounds, bool ownerOk) RunM2(ulong sd)
+{
+    var q2 = new CommandQueue();
+    var cfg2 = new MatchConfig { Seed = sd, EngineVersion = "m2", Home = BuildSheetSide(300, 7, home: true), Away = BuildSheetSide(300, 8, home: false) };
+    var e2 = new MatchEngine(sd, q2, cfg2, simBal);
+    var s2 = MatchEngine.CreateInitialState(cfg2);
+    bool bounds2 = true, ownerOk2 = true;
+    for (int t = 0; t < 6000; t++) // 10 dakika maç zamanı
+    {
+        e2.Tick(ref s2);
+        if (Math.Abs(s2.Ball.X) > MatchEngine.PitchHalfXmm + 500 ||
+            Math.Abs(s2.Ball.Y) > MatchEngine.PitchHalfYmm + 500) bounds2 = false;
+        int ow = s2.Ball.OwnerId;
+        if (ow < -1 || ow > 21 || (ow >= 0 && s2.Agents[ow].SentOff)) ownerOk2 = false;
+    }
+    return (MatchEngine.StateHash(in s2), e2.PassAttempts, e2.PassCompletions, e2.Tackles,
+            e2.OutOfBounds, e2.PossessionChanges, bounds2, ownerOk2);
+}
+
+var mA2 = RunM2(0xB00713UL);
+var mB2 = RunM2(0xB00713UL);
+Console.WriteLine($"[info] M2 10dk: pas {mA2.pa} (tamam {mA2.pc}) · tackle {mA2.tk} · taç/aut {mA2.oob} · sahiplik değişimi {mA2.poss}");
+Console.WriteLine($"[info] M2 durum hash: 0x{mA2.h:X}");
+
+if (mA2.h != mB2.h) failures += Fail("M2Determinism", $"0x{mA2.h:X} != 0x{mB2.h:X}");
+else Pass("M2Determinism");
+
+const ulong M2_GOLDEN = 0x39F2F1E717FED332UL; // sabitlendi — davranış/şema değişikliği bilinçli güncelleme ister
+if (M2_GOLDEN != 0 && mA2.h != M2_GOLDEN) failures += Fail("M2Golden", $"0x{mA2.h:X}");
+else Pass("M2Golden");
+
+if (!mA2.bounds) failures += Fail("M2BallInBounds", "top saha+pay dışına çıktı");
+else Pass("M2BallInBounds");
+if (!mA2.ownerOk) failures += Fail("M2OwnerValid", "geçersiz sahip");
+else Pass("M2OwnerValid");
+
+// Oyun canlılığı bantları: 10 dakikada pas/mücadele üretimi ve makul tamamlama oranı
+double compRate = mA2.pa > 0 ? (double)mA2.pc / mA2.pa : 0;
+if (mA2.pa < 30 || compRate < 0.35 || compRate > 0.99)
+    failures += Fail("M2PassBand", $"pas {mA2.pa}, tamamlama {compRate:P0}");
+else Pass($"M2PassBand({compRate:P0})");
+if (mA2.poss < 3 || mA2.tk + mA2.oob == 0)
+    failures += Fail("M2Liveliness", $"sahiplik {mA2.poss}, tackle {mA2.tk}, out {mA2.oob}");
+else Pass("M2Liveliness");
 
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");
 return failures == 0 ? 0 : 1;

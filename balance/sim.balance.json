@@ -20,7 +20,35 @@
     "distFactorPerM": 0.02857,
     "presFactorPerRakip": 0.15,
     "groundSpeedMin": 12.0,
-    "groundSpeedMax": 19.0
+    "groundSpeedMax": 19.0,
+    "presYaricapM": 6.0
+  },
+  "possession": {
+    "kontrolYaricapM": 1.0,
+    "tackleYaricapM": 1.2,
+    "tackleCooldownTicks": 10,
+    "tackleLooseHizMS": 3.5
+  },
+  "utility": {
+    "wThreat": 1.0,
+    "wRisk": 0.6,
+    "wVar": 1.0,
+    "kararKilidiTicks": 5,
+    "adayTabani": 4,
+    "adayVisionBolen": 15,
+    "dribbleIleriM": 6.0,
+    "kayipTaban": 0.08,
+    "kayipKoridorRakip": 0.22,
+    "kayipMesafePerM": 0.006
+  },
+  "offball": {
+    "wTop": 0.25,
+    "fazIleriM": 6.0,
+    "savunmaCekilmeM": 8.0
+  },
+  "xt": {
+    "kolon": [0.001, 0.002, 0.003, 0.004, 0.006, 0.008, 0.011, 0.016, 0.024, 0.045, 0.1, 0.2],
+    "satir": [0.6, 0.75, 0.95, 1.3, 1.3, 0.95, 0.75, 0.6]
   },
   "shot": {
     "xg": {
@@ -134,6 +162,7 @@
   "physics": {
     "aRollKuru": 3.3,
     "sekmeEKuru": 0.62,
+    "sekmeYatayCarpan": 0.78,
     "dragK": 0.0045,
     "magnusK": 0.0032
   },
