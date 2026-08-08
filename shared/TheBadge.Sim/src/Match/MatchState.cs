@@ -48,6 +48,12 @@ namespace TheBadge.Sim.Match
 
     /// <summary>Maçın KALICI durumu — yalnız tamsayı alanlar (ME Spec 3.2/5.2).
     /// Checksum bu yapının kanonik serileştirmesinden alınır (MatchEngine.StateHash).</summary>
+    /// <summary>Duran top türü — ME Spec 10; 0 = açık oyun.</summary>
+    public enum SetPieceType : byte
+    {
+        None = 0, ThrowIn = 1, GoalKick = 2, Corner = 3, FreeKick = 4, Penalty = 5, Kickoff = 6
+    }
+
     public struct MatchState
     {
         public uint Tick;
@@ -57,5 +63,13 @@ namespace TheBadge.Sim.Match
         public PlayerAgentState[] Agents;   // [22] — maç başında bir kez tahsis (zero-alloc sıcak yol, ME 16.2)
         public TeamRuntime HomeRt, AwayRt;
         public ulong LastChecksum;          // 600 tick kadansıyla yazılır (ME 3.2); hash'e DAHİL DEĞİL
+
+        // M4 — duran top + saat (ME 10, 3.4)
+        public SetPieceType SetPiece;       // bekleyen duran top türü
+        public byte SetPieceTeam;           // kullanacak takım
+        public short SetPieceTaker;         // kullanacak oyuncu slotu (-1 = henüz atanmadı)
+        public uint StoppageTicks;          // duraklama birikimi → uzatma (ME 3.4)
+        public byte Half;                   // 1 ilk devre, 2 ikinci devre
+        public uint HalfEndTick;            // bu devrenin bitiş tick'i (uzatma dahil hesaplanır)
     }
 }
