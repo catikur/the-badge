@@ -1,0 +1,211 @@
+using TheBadge.Greybox.Loop;
+using TheBadge.Greybox.Sim;
+using UnityEngine;
+
+namespace TheBadge.Greybox.View
+{
+    /// <summary>
+    /// Greybox saha görünümü — Brif K2: SADECE placeholder (daireler + dikdörtgen saha).
+    /// Sim koordinatı (0..68, 0..105) → dünya koordinatı (merkez orijin) çevirisi burada.
+    /// Sunum katmanı sim durumunu yalnız OKUR (UNITY_SETUP.md kuralı).
+    /// </summary>
+    public sealed class PitchView : MonoBehaviour
+    {
+        const int OrderGrass = 0, OrderLines = 1, OrderDots = 5, OrderBall = 8;
+        const float LineW = 0.35f;
+
+        GreyboxBalance bal;
+        readonly Transform[] dots = new Transform[22];
+        readonly Transform[] feetL = new Transform[22]; // ayak uçları: önde yan yana iki çıkıntı
+        readonly Transform[] feetR = new Transform[22];
+        readonly Vec2[] facing = new Vec2[22];
+        readonly Vec2[] prevRendered = new Vec2[22];
+        Transform ball;
+        Transform ballShadow;
+        float ballBaseScale;
+
+        public static PitchView Create(GreyboxBalance bal)
+        {
+            var go = new GameObject("PitchView");
+            // Hafif TV perspektifi: sahne dikeyde ezilir — yukarıdan ama "izleme kamerası" hissi
+            float ps = bal.players.perspektifYSkala <= 0f ? 1f : bal.players.perspektifYSkala;
+            go.transform.localScale = new Vector3(1f, ps, 1f);
+            var view = go.AddComponent<PitchView>();
+            view.bal = bal;
+            view.Build();
+            return view;
+        }
+
+        static Vector3 W(float x, float y) => new Vector3(x - FlowSim.PitchW * 0.5f, y - FlowSim.PitchL * 0.5f, 0f);
+
+        void Build()
+        {
+            Color grass = SpriteFactory.Hex(bal.renkler.saha, new Color(0.18f, 0.49f, 0.27f));
+            Color line = SpriteFactory.Hex(bal.renkler.cizgi, new Color(0.86f, 0.93f, 0.78f));
+            line.a = 0.9f;
+
+            var g = SpriteFactory.NewSprite("Grass", transform, SpriteFactory.Solid(), grass, OrderGrass);
+            g.transform.localScale = new Vector3(FlowSim.PitchW + 6f, FlowSim.PitchL + 6f, 1f);
+
+            // Çim şeritleri: hafif ton farkıyla canlılık (placeholder sınırları içinde)
+            Color stripe = grass * 1.06f; stripe.a = 1f;
+            for (int i = 0; i < 6; i++)
+            {
+                var s = SpriteFactory.NewSprite("Stripe" + i, transform, SpriteFactory.Solid(), stripe, OrderGrass);
+                s.transform.localScale = new Vector3(FlowSim.PitchW, FlowSim.PitchL / 12f, 1f);
+                s.transform.localPosition = W(FlowSim.PitchW * 0.5f, FlowSim.PitchL * (i * 2 + 0.5f) / 12f);
+            }
+
+            // Saha çizgileri
+            Bar("TouchL", 0f, FlowSim.PitchL * 0.5f, LineW, FlowSim.PitchL + LineW, line);
+            Bar("TouchR", FlowSim.PitchW, FlowSim.PitchL * 0.5f, LineW, FlowSim.PitchL + LineW, line);
+            Bar("GoalLineB", FlowSim.PitchW * 0.5f, 0f, FlowSim.PitchW + LineW, LineW, line);
+            Bar("GoalLineT", FlowSim.PitchW * 0.5f, FlowSim.PitchL, FlowSim.PitchW + LineW, LineW, line);
+            Bar("Halfway", FlowSim.PitchW * 0.5f, FlowSim.PitchL * 0.5f, FlowSim.PitchW, LineW, line);
+
+            var ring = SpriteFactory.NewSprite("CenterCircle", transform, SpriteFactory.Ring(), line, OrderLines);
+            ring.transform.localScale = new Vector3(18.3f, 18.3f, 1f);
+            ring.transform.localPosition = W(FlowSim.PitchW * 0.5f, FlowSim.PitchL * 0.5f);
+
+            // Ceza sahaları (40.3 x 16.5) + kale ağızları
+            PenaltyBox(0f, line);
+            PenaltyBox(FlowSim.PitchL, line);
+            GoalMouth(0f, line);
+            GoalMouth(FlowSim.PitchL, line);
+
+            // Oyuncular + top
+            Color home = SpriteFactory.Hex(bal.renkler.evTakim, Color.white);
+            Color homeGk = SpriteFactory.Hex(bal.renkler.evKaleci, Color.yellow);
+            Color away = SpriteFactory.Hex(bal.renkler.depTakim, new Color(0.2f, 0.28f, 0.31f));
+            Color awayGk = SpriteFactory.Hex(bal.renkler.depKaleci, Color.cyan);
+            float d = bal.players.oyuncuYaricapM * 2f;
+            for (int i = 0; i < 22; i++)
+            {
+                bool isHome = i < 11;
+                bool isGk = i % 11 == 0;
+                var c = isHome ? (isGk ? homeGk : home) : (isGk ? awayGk : away);
+                var sr = SpriteFactory.NewSprite((isHome ? "H" : "A") + (i % 11), transform, SpriteFactory.Circle(), c, OrderDots);
+                sr.transform.localScale = new Vector3(d, d, 1f);
+                dots[i] = sr.transform;
+
+                // Temas gölgesi: hafif sağ-alt ofsetli koyu elips — derinlik hissi (v1.4)
+                var pShadow = SpriteFactory.NewSprite("Shadow", sr.transform, SpriteFactory.Circle(),
+                    new Color(0f, 0f, 0f, 0.25f), OrderDots - 1);
+                pShadow.transform.localScale = new Vector3(0.95f, 0.7f, 1f);
+                pShadow.transform.localPosition = new Vector3(0.1f, -0.16f, 0f);
+
+                // Ayak uçları: baktığı yönde YAN YANA iki küçük çıkıntı (Atilla geri bildirimi)
+                var markColor = new Color(c.r * 0.55f, c.g * 0.55f, c.b * 0.55f, 1f);
+                var mL = SpriteFactory.NewSprite("FootL", sr.transform, SpriteFactory.Circle(), markColor, OrderDots + 1);
+                mL.transform.localScale = new Vector3(0.26f, 0.26f, 1f);
+                feetL[i] = mL.transform;
+                var mR = SpriteFactory.NewSprite("FootR", sr.transform, SpriteFactory.Circle(), markColor, OrderDots + 1);
+                mR.transform.localScale = new Vector3(0.26f, 0.26f, 1f);
+                feetR[i] = mR.transform;
+                facing[i] = new Vec2(i < 11 ? 0f : -0.001f, i < 11 ? 1f : -1f); // başlangıç: hücum yönü
+            }
+
+            // Top gölgesi: yerde kalır; top yükselince ondan ayrılır (Sahneleme v1.2)
+            float bd = bal.players.topYaricapM * 2f;
+            var sh = SpriteFactory.NewSprite("BallShadow", transform, SpriteFactory.Circle(),
+                new Color(0f, 0f, 0f, 0.32f), OrderBall - 1);
+            sh.transform.localScale = new Vector3(bd * 0.95f, bd * 0.7f, 1f);
+            ballShadow = sh.transform;
+
+            var b = SpriteFactory.NewSprite("Ball", transform, SpriteFactory.Circle(),
+                SpriteFactory.Hex(bal.renkler.top, Color.white), OrderBall);
+            b.transform.localScale = new Vector3(bd, bd, 1f);
+            ball = b.transform;
+            ballBaseScale = bd;
+
+            // Topa okunabilirlik için koyu dış halka (placeholder, asset değil)
+            var outline = SpriteFactory.NewSprite("BallOutline", ball, SpriteFactory.Ring(), new Color(0f, 0f, 0f, 0.55f), OrderBall - 1);
+            outline.transform.localScale = new Vector3(1.35f, 1.35f, 1f);
+        }
+
+        void Bar(string name, float cx, float cy, float w, float h, Color c)
+        {
+            var sr = SpriteFactory.NewSprite(name, transform, SpriteFactory.Solid(), c, OrderLines);
+            sr.transform.localScale = new Vector3(w, h, 1f);
+            sr.transform.localPosition = W(cx, cy);
+        }
+
+        void PenaltyBox(float goalY, Color line)
+        {
+            float dir = goalY <= 0.01f ? 1f : -1f;
+            float depth = 16.5f, halfW = 20.15f, cx = FlowSim.PitchW * 0.5f;
+            Bar("BoxFront", cx, goalY + dir * depth, halfW * 2f, LineW, line);
+            Bar("BoxSideL", cx - halfW, goalY + dir * depth * 0.5f, LineW, depth, line);
+            Bar("BoxSideR", cx + halfW, goalY + dir * depth * 0.5f, LineW, depth, line);
+            var spot = SpriteFactory.NewSprite("PenSpot", transform, SpriteFactory.Circle(), line, OrderLines);
+            spot.transform.localScale = new Vector3(0.5f, 0.5f, 1f);
+            spot.transform.localPosition = W(cx, goalY + dir * 11f);
+        }
+
+        void GoalMouth(float goalY, Color line)
+        {
+            float dir = goalY <= 0.01f ? -1f : 1f;
+            // Ağ: çizginin arkasında belirgin derinlikte yarı saydam kutu — gol topu İÇİNDE biter (İterasyon 2)
+            Color net = line; net.a = 0.32f;
+            Bar("GoalNet", FlowSim.PitchW * 0.5f, goalY + dir * 1.35f, 7.32f + 1.2f, 2.5f, net);
+            // Kale ağzı: çizgi üstünde parlak bar (direkler arası okunsun)
+            Color mouth = line; mouth.a = 1f;
+            Bar("GoalMouth", FlowSim.PitchW * 0.5f, goalY, 7.32f + 0.9f, 0.55f, mouth);
+        }
+
+        void ApplyBall(float bx, float by, float hgt)
+        {
+            ballShadow.localPosition = W(bx, by);
+            ball.localPosition = W(bx, by + hgt * bal.ball.yukKaldirmaCarpan);
+            float s = ballBaseScale * (1f + hgt * bal.ball.yukOlcekCarpan);
+            ball.localScale = new Vector3(s, s, 1f);
+        }
+
+        void ApplyDot(int i, float px, float py, float bx, float by)
+        {
+            dots[i].localPosition = W(px, py);
+            // Yön: hareket halindeyken gidilen yön, dururken topa dönük (Sahneleme v1.2)
+            Vec2 delta = new Vec2(px - prevRendered[i].X, py - prevRendered[i].Y);
+            Vec2 desired = delta.Magnitude > 0.02f
+                ? delta.Normalized
+                : new Vec2(bx - px, by - py).Normalized;
+            if (desired.Magnitude > 0.01f)
+                facing[i] = new Vec2(
+                    facing[i].X + (desired.X - facing[i].X) * 0.22f,
+                    facing[i].Y + (desired.Y - facing[i].Y) * 0.22f).Normalized;
+            // İki ayak ucu: bakış yönünün önünde, yöne dik eksende yan yana
+            float fx = facing[i].X, fy = facing[i].Y;
+            float pxn = -fy, pyn = fx; // dik vektör
+            feetL[i].localPosition = new Vector3(fx * 0.46f + pxn * 0.24f, fy * 0.46f + pyn * 0.24f, 0f);
+            feetR[i].localPosition = new Vector3(fx * 0.46f - pxn * 0.24f, fy * 0.46f - pyn * 0.24f, 0f);
+            prevRendered[i] = new Vec2(px, py);
+        }
+
+        /// <summary>Kareler arası interpolasyonlu çizim: önceki sim adımı → şimdiki adım karışımı.
+        /// Her oyun hızında (1x/2x/slow-mo) pürüzsüz hareket (Sahneleme §2).</summary>
+        public void Render(MatchDirector d)
+        {
+            if (d == null || d.Sim == null) return;
+            float a = d.InterpAlpha;
+            Vec2 bp = d.PrevPos(22);
+            Vec2 bc = d.Sim.BallPos;
+            float bx = bp.X + (bc.X - bp.X) * a;
+            float by = bp.Y + (bc.Y - bp.Y) * a;
+            ApplyBall(bx, by, d.BallHeightInterp);
+            for (int i = 0; i < 22; i++)
+            {
+                Vec2 pp = d.PrevPos(i);
+                Vec2 cp = d.Sim.GetPlayer(i).Pos;
+                ApplyDot(i, pp.X + (cp.X - pp.X) * a, pp.Y + (cp.Y - pp.Y) * a, bx, by);
+            }
+        }
+
+        /// <summary>Vinyet oynatma: kaydedilmiş kareyi doğrudan çizer (Model Maçı — Sahneleme §0).</summary>
+        public void RenderFrame(VignetteFrame f)
+        {
+            ApplyBall(f.Ball.X, f.Ball.Y, f.BallH);
+            for (int i = 0; i < 22; i++)
+                ApplyDot(i, f.Players[i].X, f.Players[i].Y, f.Ball.X, f.Ball.Y);
+        }
+    }
+}

@@ -1,0 +1,232 @@
+{
+  "_meta": {
+    "schema": "thebadge.greybox.balance/1",
+    "comment": "FAZ 00.5 greybox [KALIBRE-G] — his prototipi ayarlari. config_hash DISI; balance/sim.balance.json'a TASINMAZ ve onu degistirmez. Fun Gate kapandiginda bu dosya prototiple birlikte emekli edilir."
+  },
+  "clock": {
+    "macSuresiSaniye": 150.0,
+    "devreArasiSaniye": 2.6,
+    "skipDilimSaniye": 0.06
+  },
+  "pace": {
+    "aksiyonAralikMinSn": 0.15,
+    "aksiyonAralikMaxSn": 0.5,
+    "santraBeklemeSn": 0.6,
+    "kutlamaSuresiSn": 3.4,
+    "spikerAralikSn": 8.0,
+    "dizilisEmniyetSn": 8.0,
+    "gkTutmaSn": 1.5
+  },
+  "ball": {
+    "pasHiziMinMS": 13.0,
+    "pasHiziMaxMS": 19.0,
+    "sutHiziMinMS": 22.0,
+    "sutHiziMaxMS": 30.0,
+    "ortaHiziMS": 16.0,
+    "tasimaHiziMS": 8.5,
+    "pasYukMaxM": 0.8,
+    "uzunTopYukM": 8.0,
+    "ortaYukM": 7.0,
+    "sutYukM": 1.2,
+    "yukOlcekCarpan": 0.07,
+    "yukKaldirmaCarpan": 0.22
+  },
+  "players": {
+    "vMaxMS": 7.0,
+    "presHizCarpan": 1.15,
+    "wanderGenlikM": 1.6,
+    "wanderPeriyotSn": 5.5,
+    "hucumKaymaM": 14.0,
+    "savunmaKaymaM": 10.0,
+    "topCekimYaricapM": 9.0,
+    "oyuncuYaricapM": 1.25,
+    "topYaricapM": 0.62,
+    "perspektifYSkala": 0.88
+  },
+  "flow": {
+    "pIleriPas": 0.46,
+    "pYanPas": 0.22,
+    "pGeriPas": 0.12,
+    "pUzunTop": 0.08,
+    "pTopKaybiTaban": 0.16,
+    "pTopKaybiPresEtki": 1.0,
+    "pCezaSahasinaGiris": 0.42,
+    "ilerlemeMinM": 8.0,
+    "ilerlemeMaxM": 17.0,
+    "genislikMaxM": 14.0,
+    "gucTutmaCarpan": 0.008,
+    "pDegaj": 0.45
+  },
+  "shot": {
+    "pSutChanceBuild": 0.5,
+    "pGol": 0.22,
+    "pKurtarma": 0.45,
+    "pDisari": 0.27,
+    "pKornerSekmesi": 0.28,
+    "pKornerKurtarisSonrasi": 0.22,
+    "gucEtkiCarpan": 0.004,
+    "momentumEtki": 0.03
+  },
+  "corner": {
+    "pKafaSut": 0.55,
+    "pGolKafa": 0.13,
+    "dizilisSn": 0.8
+  },
+  "momentum": {
+    "sigma": 0.4,
+    "sonum": 0.3,
+    "golBoost": 0.45,
+    "gucFarkiCarpan": 0.01
+  },
+  "vurgu": {
+    "slowmoCarpan": 0.3,
+    "slowmoSureSn": 1.1,
+    "shakeGenlikM": 1.0,
+    "shakeSureSn": 1.5,
+    "golFlasSureSn": 0.45,
+    "titresimAktif": true
+  },
+  "ekonomi": {
+    "kapasite": 5000,
+    "refFiyat": 20.0,
+    "fiyatMin": 5.0,
+    "fiyatMax": 60.0,
+    "talepTaban": 0.78,
+    "fiyatEsneklik": 0.85,
+    "formEtkiGalibiyet": 0.05,
+    "formEtkiMaglubiyet": 0.04,
+    "dolulukMin": 0.05,
+    "galibiyetPrimi": 3000,
+    "beraberlikPrimi": 1200,
+    "maglubiyetPrimi": 400,
+    "baslangicPara": 20000
+  },
+  "takimlar": {
+    "oyuncuTakimGucu": 60.0,
+    "rakipGucMin": 48.0,
+    "rakipGucMax": 72.0
+  },
+  "taktikler": [
+    {
+      "id": 0,
+      "ad": "Dengeli",
+      "formasyon": "442",
+      "hatYuksekligi": 0.5,
+      "tempo": 1.0,
+      "sutIstahi": 1.0,
+      "pres": 1.0
+    },
+    {
+      "id": 1,
+      "ad": "Hücum Baskısı",
+      "formasyon": "433",
+      "hatYuksekligi": 0.62,
+      "tempo": 1.18,
+      "sutIstahi": 1.25,
+      "pres": 1.15
+    },
+    {
+      "id": 2,
+      "ad": "Savunma Bloku",
+      "formasyon": "532",
+      "hatYuksekligi": 0.38,
+      "tempo": 0.9,
+      "sutIstahi": 0.8,
+      "pres": 0.9
+    }
+  ],
+  "renkler": {
+    "saha": "#2E7D46",
+    "cizgi": "#DCEDC8",
+    "evTakim": "#F5F5F5",
+    "evKaleci": "#FFD54F",
+    "depTakim": "#37474F",
+    "depKaleci": "#4FC3F7",
+    "top": "#FFFFFF",
+    "arkaplan": "#14321E"
+  },
+  "model": {
+    "blokSayisi": 10,
+    "pGolTabani": 0.125,
+    "gucEtkiCarpan": 0.012,
+    "momentumEtki": 0.35,
+    "taktikTempoEtki": 0.5,
+    "taktikSutEtki": 0.6,
+    "taktikPresSavunmaEtki": 0.45,
+    "pGolMin": 0.03,
+    "pGolMax": 0.42,
+    "tehlikeCarpan": 1.8,
+    "momentumGolDelta": 0.45,
+    "momentumSonum": 0.35,
+    "momentumBlokGurultu": 0.22,
+    "hamleHakki": 3,
+    "tempoYukseltBiz": 1.35,
+    "tempoYukseltRakip": 1.22,
+    "kilitlenBiz": 0.75,
+    "kilitlenRakip": 0.62,
+    "blokOynatmaSn": 6.5,
+    "gerilimBeklemeSn": 1.4,
+    "vinyetMaxSimSn": 75.0,
+    "vinyetKayitSn": 8.0,
+    "vinyetKutlamaSn": 4.2,
+    "evAvantaj": 0.06,
+    "gucEtkiMax": 0.45,
+    "gucOlcek": 18.0,
+    "fazCarpanlar": [
+      0.9,
+      0.95,
+      1.0,
+      1.0,
+      1.05,
+      1.0,
+      1.05,
+      1.1,
+      1.15,
+      1.25
+    ],
+    "gerideRiskCarpan": 1.12,
+    "ondeKontrolCarpan": 0.92,
+    "formEtkiCarpan": 0.03,
+    "taktikMatchup": [
+      1.0,
+      1.03,
+      0.95,
+      1.08,
+      1.1,
+      0.93,
+      0.94,
+      1.07,
+      0.88
+    ]
+  },
+  "squad": {
+    "enerjiBaslangic": 1000.0,
+    "yorgunlukBlokDrenaj": 62.0,
+    "drenajTempoYukselt": 1.35,
+    "drenajKilitlen": 0.85,
+    "drenajRakipEtki": 0.5,
+    "drenajTaktikEtki": 0.5,
+    "gkDrenajCarpan": 0.4,
+    "yorgunlukGucTaban": 0.85,
+    "degisiklikHakki": 3,
+    "tazeBacakEnerji": 1000.0,
+    "eksikHucumCarpan": 0.85,
+    "rakipEksikSavunmaCarpan": 1.15,
+    "gucYayilim": 8.0,
+    "yedekGucFarki": -6.0,
+    "gucMin": 30.0,
+    "gucMax": 95.0,
+    "hucumAgirlik": [0.0, 1.0, 2.0, 3.0],
+    "savunmaAgirlik": [3.0, 3.0, 2.0, 1.0]
+  },
+  "olay": {
+    "sariMacBasi": 2.0,
+    "kirmiziMacBasi": 0.1,
+    "sakatlikMacBasi": 0.45,
+    "kartTempoYukseltCarpan": 1.35,
+    "ikinciSariAgirlik": 2.0,
+    "sakatlikYorgunlukEtki": 1.5,
+    "kartMevkiAgirlik": [3.0, 2.0, 1.0],
+    "golMevkiAgirlik": [1.0, 3.0, 6.0]
+  }
+}
