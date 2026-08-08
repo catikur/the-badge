@@ -22,11 +22,11 @@ Kurallar: kişi başı ≥ 15 dk serbest oynama, YÖNLENDİRME YOK (soru sorarsa
 
 | Metrik | Eşik | Ölçülen | Kaynak | Geçti? |
 |---|---|---|---|---|
-| "Bir maç daha" oranı | ≥ %60 (5 kişide ≥ 3) | | gözlem tablosu | |
-| Sıkılma işareti (erken skip / bırakma) | < 3 / maç | | telemetri: `skip` + gözlem | |
-| Oturum başına maç sayısı (referans) | — | | telemetri: `match_end` sayısı / oturum | |
-| "Sonraki Maç" tıklama oranı (referans) | — | | `next_match_click` / `match_end` | |
-| Maç başına izleme süresi (referans) | — | | `match_end.watch_real_sec` ort. | |
+| "Bir maç daha" oranı | ≥ %60 (5 kişide ≥ 3) | **2/5 = %40** | gözlem tablosu | **HAYIR** |
+| Sıkılma işareti (erken skip / bırakma) | < 3 / maç | gözlemde 2/5 oyuncuda işaret; telemetri paylaşılmadığından maç başı sayı yok | gözlem | veri kısmi |
+| Oturum başına maç sayısı (referans) | — | ort. **4.2** (3-5 bandı) | oturum tablosu | — |
+| "Sonraki Maç" tıklama oranı (referans) | — | telemetri paylaşılmadı | — | — |
+| Maç başına izleme süresi (referans) | — | ~4.1 dk/maç (oturum süresinden kaba) | oturum tablosu | — |
 
 ## Mini mülakat (oyuncu başına, maks 5 dk)
 
@@ -54,8 +54,19 @@ Log dosyalarını `docs/samples/` yanına kopyala (`playtest_<oyuncu>.jsonl`) ve
 ## KAPI KARARI (revize semantik — DECISIONS 2026-08-07: playtest sonrası kapı HER DURUMDA kapanır, FAZ 03 başlar)
 
 - [ ] **GO** — döngü tutuyor: Model Maçı sunumu (şerit + karar anları) FAZ 03 motorunun sunum katmanı olur
-- [ ] **NO-GO** — döngü tutmuyor: FAZ 03 yine başlar ama maç sunumu Dikey Dilim öncesi YENİDEN tasarlanır;
+- [x] **NO-GO** — döngü tutmuyor: FAZ 03 yine başlar ama maç sunumu Dikey Dilim öncesi YENİDEN tasarlanır;
       neyin tutmadığı (blok yapısı? şerit? müdahale sığlığı?) mülakat verisiyle yazılır
 
 Karar gerekçesi (3-5 cümle):
+
+"Bir maç daha" oranı %40 (2/5) — %60 eşiğinin altında: kapı metriği GEÇMEDİ, kayıt NO-GO.
+Sinyal yine de karışık: tutunan 2 oyuncu en uzun oturumları yaptı ve en çok maçı oynadı (5'er maç,
+skip yok) — döngü bir oyuncu profilini tutuyor; 2 oyuncu aktif koptu (erken skip/bırakma), 1 nötr.
+Mini mülakat ve telemetri kaydedilmediğinden KOPUŞ NEDENİ (blok yapısı mı, tempo mu, müdahale
+sığlığı mı) bu turda yazılamıyor — sunum revizyonunun girdisi olarak Dikey Dilim öncesi küçük,
+gözlemli bir doğrulama turu gerekir. Kapanış planı gereği (DECISIONS 2026-08-07) FAZ 03 motoru
+başlar; Model Maçı sunumu olduğu gibi TAŞINMAZ, motor üstünde yeniden ele alınır.
+
+> Mini mülakat tablosu boş bırakıldı — görüşmeler kaydedilmedi (dürüst kayıt; uydurma veri yok).
+> Telemetri JSONL'leri repoya kopyalanmadı; ileride benzer turlarda rapor gücü için eklenmeli.
 

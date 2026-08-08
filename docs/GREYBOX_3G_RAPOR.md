@@ -245,6 +245,18 @@ Kanıt: model 400 maç — 2.77 gol; kalibrasyon tahmin %38 vs gerçekleşen %41
 değişmedi; `ModelGkMatters` + `ModelStarLoss` + `ModelSquadGen` PASS (EditMode aynaları eklendi);
 tüm harness + Sim.Checks yeşil; derleme yolları 0/0.
 
+## KAPANIŞ — Playtest sonucu ve Fun Gate kararı (2026-08-08)
+
+5 kişilik playtest (`PLAYTEST_3G.md`): "bir maç daha" **2/5 = %40** < %60 eşik → **NO-GO**.
+Sinyal karışık: tutunan 2 oyuncu en uzun oturum + en çok maçı oynadı (5'er maç, skip'siz) — döngü
+bir profili tutuyor; 2 oyuncu aktif koptu, 1 nötr. Mülakat/telemetri kaydedilmediğinden kopuş
+nedeni bu turda verisiz (bilinen sınır; gelecek tur kuralı: mülakatsız playtest koşulmaz).
+
+Kapanış planı (DECISIONS 2026-08-07) gereği: **Fun Gate KAPANDI, FAZ 03 Match Engine başlıyor**
+(`docs/briefs/BRIEF_FAZ03_ACILIS.md`). Model Maçı sunumu motora olduğu gibi taşınmaz — Dikey Dilim
+öncesi motor üstünde yeniden tasarlanır ve mülakatlı küçük bir turla doğrulanır (borç). Greybox
+prototipi emekli; bu rapor FAZ 00.5'in kalıcı arşividir.
+
 ## Atilla'nın sıradaki adımları
 
 `unity/UNITY_SETUP.md` runbook'u: projeyi aç → konsol/testler → Editor'de oyna → iPhone build → 3-5 oyuncu playtest → `docs/PLAYTEST_3G.md` doldur → kapı kararı (GO/NO-GO) → DECISIONS.md.

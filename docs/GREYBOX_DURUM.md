@@ -1,6 +1,9 @@
-# GREYBOX DURUM — FAZ 00.5 derleme dokümanı (son hal)
+# GREYBOX DURUM — FAZ 00.5 derleme dokümanı (ARŞİV — faz kapandı)
 
-Tarih: 2026-08-07 (İt.11 sonrası) · Branch: `claude/3g-greybox-task-plan-76qg49` (PR #1, taslak) · Sahip: Atilla · Uygulayıcı: Claude Code
+**2026-08-08: FUN GATE KAPANDI (NO-GO %40, `PLAYTEST_3G.md`) → FAZ 03 başlıyor:
+`docs/briefs/BRIEF_FAZ03_ACILIS.md`. Bu doküman FAZ 00.5 arşividir; güncel iş FAZ 03 brifindedir.**
+
+Tarih: 2026-08-07 (İt.12 sonrası) · Branch: `claude/3g-greybox-task-plan-76qg49` (PR #1, taslak) · Sahip: Atilla · Uygulayıcı: Claude Code
 Amaç: 10 iterasyonluk konuşmanın kalıcı özeti — **ne yaptık, neden yaptık, sırada ne var.** Yeni bir oturum
 bu dokümanla + `docs/DECISIONS.md` ile bağlamı tam kurar. İterasyon iterasyon ayrıntı: `docs/GREYBOX_3G_RAPOR.md`.
 
