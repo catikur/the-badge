@@ -14,8 +14,19 @@ namespace TheBadge.Sim.Match
     {
         readonly int[] kondQ16;    // [101] — energy/10 indeksli M_kondisyon (Q16)
         readonly int[] moralQ16;   // [21]  — momentum(-10..+10)+10 indeksli M_moral (Q16)
+        readonly int[] drenajQ16;  // [101] — (v/v_max)^2,2 drenaj eğrisi (ME 12.1), Q16
 
-        AttributeLuts(int[] kond, int[] moral) { kondQ16 = kond; moralQ16 = moral; }
+        AttributeLuts(int[] kond, int[] moral, int[] drenaj)
+        { kondQ16 = kond; moralQ16 = moral; drenajQ16 = drenaj; }
+
+        /// <summary>Stamina drenaj eğrisi (ME 12.1: (v/v_max)^2,2) — Math.Pow sıcak yolda YASAK
+        /// (platform bit farkı), tablo kuruluşta bir kez üretilip Q16'ya kuantalanır.</summary>
+        public int DrenajQ16(double vRatio)
+        {
+            int i = (int)(vRatio * 100.0 + 0.5);
+            if (i < 0) i = 0; else if (i > 100) i = 100;
+            return drenajQ16[i];
+        }
 
         /// <summary>Balance'tan LUT kurulumu — soğuk yol, maç başına bir kez (host init).</summary>
         public static AttributeLuts Build(SimBalance bal)
@@ -31,7 +42,10 @@ namespace TheBadge.Sim.Match
             var moral = new int[21];
             for (int m10 = -10; m10 <= 10; m10++)
                 moral[m10 + 10] = (int)Math.Round((1.0 + m10 * a.moralCarpanPerMomentum) * 65536.0);
-            return new AttributeLuts(kond, moral);
+            var drenaj = new int[101];
+            for (int i = 0; i <= 100; i++)
+                drenaj[i] = (int)Math.Round(Math.Pow(i / 100.0, 2.2) * 65536.0);
+            return new AttributeLuts(kond, moral, drenaj);
         }
 
         public int KondQ16(ushort energy)
