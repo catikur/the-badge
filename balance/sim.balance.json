@@ -39,7 +39,8 @@
     "dribbleIleriM": 6.0,
     "kayipTaban": 0.08,
     "kayipKoridorRakip": 0.22,
-    "kayipMesafePerM": 0.006
+    "kayipMesafePerM": 0.006,
+    "sutTehditCarpan": 2.2
   },
   "offball": {
     "wTop": 0.25,
@@ -47,8 +48,30 @@
     "savunmaCekilmeM": 8.0
   },
   "xt": {
-    "kolon": [0.001, 0.002, 0.003, 0.004, 0.006, 0.008, 0.011, 0.016, 0.024, 0.045, 0.1, 0.2],
-    "satir": [0.6, 0.75, 0.95, 1.3, 1.3, 0.95, 0.75, 0.6]
+    "kolon": [
+      0.001,
+      0.002,
+      0.003,
+      0.004,
+      0.006,
+      0.008,
+      0.011,
+      0.016,
+      0.024,
+      0.045,
+      0.1,
+      0.2
+    ],
+    "satir": [
+      0.6,
+      0.75,
+      0.95,
+      1.3,
+      1.3,
+      0.95,
+      0.75,
+      0.6
+    ]
   },
   "shot": {
     "xg": {
@@ -68,7 +91,18 @@
     "reachAgilityFactor": 1.9,
     "logisticSlope": 6.5,
     "saveClampMin": 0.04,
-    "saveClampMax": 0.96
+    "saveClampMax": 0.96,
+    "dalisSureCarpan": 0.45,
+    "cildirmaAcisiDeg": 35.0,
+    "derinlikTaban": 0.9,
+    "derinlikPerM": 0.08,
+    "derinlikMax": 5.5
+  },
+  "shotExec": {
+    "sutMaxMesafeM": 30.0,
+    "sutHiziMS": 24.0,
+    "sutSigmaTabanM": 1.6,
+    "sutSigmaMesafePerM": 0.02
   },
   "setpiece": {
     "penalty": {
