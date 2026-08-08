@@ -25,6 +25,42 @@ namespace TheBadge.Sim.Config
         public ShotExecCfg shotExec = new ShotExecCfg();
         public ShotCfg shot = new ShotCfg();
         public RefereeCfg referee = new RefereeCfg();
+        public StaminaCfg stamina = new StaminaCfg();
+        public InjuryCfg injury = new InjuryCfg();
+        public MomentumCfg momentum = new MomentumCfg();
+
+        /// <summary>Stamina — ME Spec 12.1 [KALİBRE].</summary>
+        [System.Serializable]
+        public sealed class StaminaCfg
+        {
+            public double kE;                    // drenaj katsayısı
+            public double deadBallRecoveryPerSn; // ölü topta toparlanma (+2/sn)
+            public double devreArasi;            // devre arası toparlanma (+150)
+            public int yorgunlukEsik;            // altında DECISION sigma +%20 (12.1)
+            public double presEkMaliyet;         // pres yapan ajanın ek drenajı
+        }
+
+        /// <summary>Sakatlık — ME Spec 12.2 [KALİBRE].</summary>
+        [System.Serializable]
+        public sealed class InjuryCfg
+        {
+            public double[] siddetDagilimi = new double[0]; // Hafif/Küçük/Orta/Ağır
+            public double[] macBasiBandi = new double[0];   // kalibrasyon bandı (doğrulama)
+            public double sertMudahaleEsik;                 // s > bu → sakatlık çekilişi (11.3)
+            public double pTabanMudahale;                   // müdahale kaynaklı p_taban
+            public double pTabanSprint;                     // yorgunken sprint kaynaklı p_taban
+        }
+
+        /// <summary>Momentum — ME Spec 12.3 [KALİBRE].</summary>
+        [System.Serializable]
+        public sealed class MomentumCfg
+        {
+            public int golDelta;                  // gol ±4
+            public double sonumPerDk;             // dakikada 0'a sönüm
+            public double decisionSigmaEtkiYuzde; // karar gürültüsüne ±% etki
+            public int moralPuanTavan;            // M_moral tavanı (±5 puan)
+            public double baskiNisanCarpan;       // kritik dakika baskısının nişana etkisi
+        }
         public SetPieceCfg setpiece = new SetPieceCfg();
         public ExtraTimeCfg extraTime = new ExtraTimeCfg();
 
@@ -122,6 +158,8 @@ namespace TheBadge.Sim.Config
             public double vMaxBase, vMaxPaceSpan;        // v_max = base + span × Pace/100 (m/sn)
             public double aMaxBase, aMaxAccelSpan;       // a_max = base + span × Accel/100 (m/sn²)
             public double dribbleCarpanBase, dribbleCarpanPerPuan; // topla v_max çarpanı (ME 8.1)
+            public double seyirYogunlugu;   // topa uzakken v_max çarpanı (jog) — M5
+            public double sprintYaricapM;   // bu yarıçap içinde tam gaz (topa/göreve yakınlık)
         }
 
         /// <summary>Top fiziği — ME Spec 8.2-8.3 [KALİBRE].</summary>
@@ -185,6 +223,9 @@ namespace TheBadge.Sim.Config
             public double sutTehditCarpan;        // şut adayının tehdit ağırlığı (M3)
             public double sutBaskiCezasi;         // yakın rakip başına şut iştahı cezası (M4)
             public double sutMesafeUs;            // şut iştahının mesafe üssü (M4 kalibrasyonu)
+            public double araPasIleriM;           // ara pasın alıcının önüne bıraktığı mesafe (M5)
+            public double araPasRisk;             // ara pasın ek kayıp riski
+            public double araPasKotuZamanlama;    // koşu zamanlama hatası → ofsayt (ME 10.5)
         }
 
         /// <summary>Topsuz vektör karması ağırlıkları — ME Spec 7.4 [KALİBRE] (M2 alt kümesi).</summary>
@@ -198,6 +239,10 @@ namespace TheBadge.Sim.Config
             public double hatDerinlikMf;
             public double hatDerinlikFw;
             public double hatYanAnchor;      // yanal konum: anchor payı (kalanı topa hizalanır)
+            public double kanatGenislikM;    // kanat rollerinin touchline açılımı (ME 7.4-A)
+            public double kanatAnchorEsikMm; // bu |anchorY| üstü kanat sayılır
+            public double markajGolTarafi;   // markajcının hedefin gol tarafına iniş oranı (ME 7.5)
+            public int markajSayisi;         // takım başına markaj görevi sayısı
         }
 
         /// <summary>xT (beklenen tehdit) tablosu — ME Spec 7.2 [KALİBRE]. M2: ayrıştırılabilir

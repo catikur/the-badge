@@ -2,10 +2,15 @@ namespace TheBadge.Sim.Match
 {
     /// <summary>Sakatlık durumu — ME Spec 12.2 dilimi (M-durum) sınıfları genişletir;
     /// kalıcı durumda tamsayı disiplini gereği byte tabanlı enum. — ME Spec 5.3</summary>
+    /// <summary>Sakatlık şiddeti — ME Spec 12.2 tablosu. Hafif oyuncu sahada kalır (nitelikler −5);
+    /// Küçük ve üstü sahayı terk eder (maç içi etki), iyileşme günleri FAZ 04 kariyer katmanında.</summary>
     public enum InjuryState : byte
     {
-        None = 0
-        // Hafif / Orta / Ağır sınıfları 12.2 diliminde eklenir (şiddet dağılımı [KALİBRE])
+        None = 0,
+        Hafif = 1,   // devam eder, nitelikler −5
+        Kucuk = 2,   // çıkmalı: 3-10 gün
+        Orta = 3,    // 2-5 hafta
+        Agir = 4     // 6-16 hafta
     }
 
     /// <summary>Top durumu — yalnız tamsayı (mm, mm/sn): ME Spec 3.2 + 5.2.</summary>
@@ -36,6 +41,11 @@ namespace TheBadge.Sim.Match
         public InjuryState Injury;
         public byte CurrentAction;       // aksiyon kataloğu M-karar diliminde
         public uint ActionUntilTick;
+        public ushort Sprints;           // yüksek yoğunluklu efor sayacı (ME 12.1 — Panorama/antrenman verisi)
+        public short MarkTarget;         // markaj görevi: hedef ajan slotu (-1 = bölgesel) — ME 7.5
+
+        /// <summary>Sahada aktif mi — kırmızı kart ya da sahayı terk ettiren sakatlık yoksa (ME 12.2).</summary>
+        public bool Active => !SentOff && Injury <= InjuryState.Hafif;
     }
 
     /// <summary>Takım koşu-zamanı durumu — ME Spec 5.2 (hat yüksekliği, pres modu, momentum).</summary>

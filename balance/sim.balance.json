@@ -43,9 +43,12 @@
     "kayipTaban": 0.08,
     "kayipKoridorRakip": 0.22,
     "kayipMesafePerM": 0.006,
-    "sutTehditCarpan": 0.26,
+    "sutTehditCarpan": 0.2,
     "sutBaskiCezasi": 0.35,
-    "sutMesafeUs": 1.1
+    "sutMesafeUs": 1.1,
+    "araPasIleriM": 12.0,
+    "araPasRisk": 0.4,
+    "araPasKotuZamanlama": 0.14
   },
   "offball": {
     "wTop": 0.25,
@@ -54,7 +57,11 @@
     "hatDerinlikDf": 0.55,
     "hatDerinlikMf": 0.8,
     "hatDerinlikFw": 1.0,
-    "hatYanAnchor": 0.55
+    "hatYanAnchor": 0.55,
+    "kanatGenislikM": 6.0,
+    "kanatAnchorEsikMm": 15000,
+    "markajGolTarafi": 0.18,
+    "markajSayisi": 3
   },
   "xt": {
     "kolon": [
@@ -140,7 +147,7 @@
     "foulEsikTaban": 0.38,
     "strictnessCarpan": 0.002,
     "griBantOrta": 0.06,
-    "sariEsik": 0.5,
+    "sariEsik": 0.46,
     "kirmiziEsik": 0.8,
     "cezaSahasiIhtiyatCarpan": 0.6
   },
@@ -154,10 +161,11 @@
     "beklemeSnMax": 90
   },
   "stamina": {
-    "kE": 0.85,
+    "kE": 0.055,
     "deadBallRecoveryPerSn": 2.0,
     "devreArasi": 150,
-    "yorgunlukEsik": 250
+    "yorgunlukEsik": 250,
+    "presEkMaliyet": 0.15
   },
   "injury": {
     "siddetDagilimi": [
@@ -169,13 +177,17 @@
     "macBasiBandi": [
       0.35,
       0.6
-    ]
+    ],
+    "sertMudahaleEsik": 0.45,
+    "pTabanMudahale": 0.005,
+    "pTabanSprint": 0.0001
   },
   "momentum": {
     "golDelta": 4,
     "sonumPerDk": 0.3,
     "decisionSigmaEtkiYuzde": 15,
-    "moralPuanTavan": 5
+    "moralPuanTavan": 5,
+    "baskiNisanCarpan": 0.35
   },
   "chaos": {
     "duelSigma": {
@@ -210,7 +222,9 @@
     "aMaxBase": 3.0,
     "aMaxAccelSpan": 4.0,
     "dribbleCarpanBase": 0.72,
-    "dribbleCarpanPerPuan": 0.0022
+    "dribbleCarpanPerPuan": 0.0022,
+    "seyirYogunlugu": 0.55,
+    "sprintYaricapM": 18.0
   },
   "physics": {
     "aRollKuru": 3.3,

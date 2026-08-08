@@ -21,6 +21,7 @@ namespace TheBadge.Greybox.EngineDev
         CommandQueue queue;
         SimBalance bal;
         Transform[] dots;
+        SpriteRenderer[] dotRenderers = new SpriteRenderer[22];
         Transform ballDot;
         float acc;
         int speed = 1;
@@ -61,6 +62,7 @@ namespace TheBadge.Greybox.EngineDev
             {
                 var sr = SpriteFactory.NewSprite("P" + i, transform, SpriteFactory.Circle(),
                     i < 11 ? new Color(0.92f, 0.92f, 0.95f) : new Color(0.25f, 0.3f, 0.38f), 10);
+                dotRenderers[i] = sr;
                 sr.transform.localScale = new Vector3(1.6f, 1.6f, 1f);
                 dots[i] = sr.transform;
             }
@@ -130,7 +132,16 @@ namespace TheBadge.Greybox.EngineDev
                 engine.Tick(ref state);
             }
             for (int i = 0; i < 22; i++)
+            {
                 dots[i].localPosition = new Vector3(state.Agents[i].X / 1000f, state.Agents[i].Y / 1000f, 0f);
+                // Sahada olmayan (kırmızı kart / sakatlık) oyuncu görünmez; enerji parlaklığa yansır
+                var ag = state.Agents[i];
+                bool on = ag.Active;
+                dots[i].localScale = on ? new Vector3(1.6f, 1.6f, 1f) : Vector3.zero;
+                float k = 0.45f + 0.55f * (ag.Energy / 1000f);
+                var baseCol = i < 11 ? new Color(0.92f, 0.92f, 0.95f) : new Color(0.25f, 0.3f, 0.38f);
+                dotRenderers[i].color = new Color(baseCol.r * k, baseCol.g * k, baseCol.b * k);
+            }
             ballDot.localPosition = new Vector3(state.Ball.X / 1000f, state.Ball.Y / 1000f, -0.1f);
             float zScale = 0.9f + state.Ball.Z / 1000f * 0.12f; // yükseklik ipucu
             ballDot.localScale = new Vector3(zScale, zScale, 1f);
@@ -146,10 +157,14 @@ namespace TheBadge.Greybox.EngineDev
             GUILayout.Label($"şut {engine.Shots} (blok {engine.Blocks}) · kurtarış {engine.Saves} · xG {engine.XgHome:0.00}-{engine.XgAway:0.00}");
             GUILayout.Label($"faul {engine.Fouls} · kart {engine.Yellows}S/{engine.Reds}K · korner {engine.Corners} · " +
                             $"taç {engine.ThrowIns} · kale vuruşu {engine.GoalKicks} · penaltı {engine.Penalties}");
-            GUILayout.Label($"pas {engine.PassAttempts} (tamam {engine.PassCompletions}) · tackle {engine.Tackles} · sahiplik değişimi {engine.PossessionChanges}");
+            GUILayout.Label($"pas {engine.PassAttempts} (tamam {engine.PassCompletions}, ara pas {engine.ThroughPasses}) · " +
+                            $"tackle {engine.Tackles} · ofsayt {engine.Offsides} · sakatlık {engine.Injuries}");
+            float enAvg = 0; int sprints = 0;
+            for (int i = 0; i < 22; i++) { enAvg += state.Agents[i].Energy; sprints += state.Agents[i].Sprints; }
+            GUILayout.Label($"enerji ort. {enAvg / 22f:0} · sprint {sprints} · momentum EV {state.HomeRt.Momentum:+0;-0;0} / DEP {state.AwayRt.Momentum:+0;-0;0}");
             GUILayout.Label($"top: {(state.Ball.OwnerId < 0 ? "serbest" : (state.Ball.OwnerId < 11 ? "EV #" : "DEP #") + state.Ball.OwnerId)}" +
                             $"  ·  duran top: {state.SetPiece}  ·  checksum 0x{state.LastChecksum:X}");
-            GUILayout.Label("(durum modeli: stamina/sakatlık/moral ve müdahale katmanı sonraki dilimler)");
+            GUILayout.Label("(müdahale katmanı — taktik/değişiklik/motivasyon komutları — M6'da bağlanır)");
             if (GUILayout.Button($"Hız: {speed}x → değiştir")) speed = speed == 1 ? 5 : speed == 5 ? 25 : 1;
         }
     }
