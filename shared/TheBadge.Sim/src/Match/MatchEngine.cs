@@ -53,6 +53,41 @@ namespace TheBadge.Sim.Match
             return s;
         }
 
+        /// <summary>Kadrodan başlangıç durumu (M1 — ME 5.2): ajan slot eşlemesi ev Starters[i]→Agents[i],
+        /// deplasman→Agents[11+i]; rol/anchor TeamSheet'ten, başlangıç pozisyonu = anchor (gerçek
+        /// diziliş yerleşimi M2 pozisyonlama diliminde). Agents.Id SLOT indeksidir; kanonik PlayerId
+        /// eşlemesi TeamSheet sırasında yaşar (durum yalnız tamsayı kalır).</summary>
+        public static MatchState CreateInitialState(MatchConfig cfg)
+        {
+            if (cfg == null) throw new ArgumentNullException(nameof(cfg));
+            cfg.Home.Validate("Home");
+            cfg.Away.Validate("Away");
+            // Kanonik ID'ler KÜRESEL benzersizdir (GDD kanonik ID mimarisi) — takımlar arası
+            // çakışma da veri bozulmasıdır ve kurulumda reddedilir
+            for (int i = 0; i < 11; i++)
+                for (int j = 0; j < 11; j++)
+                    if (cfg.Home.Starters[i].PlayerId == cfg.Away.Starters[j].PlayerId)
+                        throw new ArgumentException(
+                            $"PlayerId {cfg.Home.Starters[i].PlayerId} iki takımda birden.");
+
+            var s = CreateInitialState();
+            for (int i = 0; i < 11; i++)
+            {
+                ApplyEntry(ref s.Agents[i], cfg.Home.Starters[i]);
+                ApplyEntry(ref s.Agents[11 + i], cfg.Away.Starters[i]);
+            }
+            return s;
+        }
+
+        static void ApplyEntry(ref PlayerAgentState a, PlayerEntry e)
+        {
+            a.RoleId = e.RoleId;
+            a.AnchorX = e.AnchorXmm;
+            a.AnchorY = e.AnchorYmm;
+            a.X = e.AnchorXmm;
+            a.Y = e.AnchorYmm;
+        }
+
         /// <summary>Bir tick — aşama sırası SABİT (ME Spec 4.2); sıralı güncelleme kuralı (ME 3.2).</summary>
         public void Tick(ref MatchState st)
         {

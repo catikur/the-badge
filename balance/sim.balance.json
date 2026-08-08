@@ -3,6 +3,12 @@
     "schema": "usm.sim.balance/1",
     "comment": "Tum [KALIBRE] katsayilar burada — koda sabit yazilmaz (GDD 16.2, ME Spec 18.1). Bu dosya config_hash kapsamindadir; SEZON ICINDE degistirilemez (ME Spec 3.3, 8.2)."
   },
+  "attribute": {
+    "kondisyonTaban": 0.7,
+    "kondisyonKuvvet": 0.3,
+    "kondisyonUs": 0.7,
+    "moralCarpanPerMomentum": 0.005
+  },
   "duel": {
     "pTabanDefault": 0.48,
     "kDuel": 0.9,
