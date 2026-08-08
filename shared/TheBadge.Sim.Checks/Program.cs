@@ -135,7 +135,7 @@ if (runA.finalHash != runB.finalHash || runA.at600 != runB.at600)
 else Pass("MatchSkeletonDeterminism");
 
 // 7b) Golden: durum hash'i sabitlendi — alan/sıra değişikliği bilinçli golden güncellemesi ister
-const ulong MATCH_GOLDEN = 0x2F1B33BD03085FD1UL; // M2'de yeniden sabitlendi (şema+davranış — bilinçli)
+const ulong MATCH_GOLDEN = 0x0497209D3044AF27UL; // M3'te yeniden sabitlendi (Flight alanı + şut — bilinçli)
 if (MATCH_GOLDEN != 0 && runA.finalHash != MATCH_GOLDEN)
     failures += Fail("MatchSkeletonGolden", $"0x{runA.finalHash:X} != 0x{MATCH_GOLDEN:X}");
 else Pass("MatchSkeletonGolden");
@@ -288,14 +288,22 @@ else Pass("TrigLutVectors");
 }
 
 // Tam maç koşusu (kadrolu): determinizm + golden + bant/değişmez denetimleri
-(ulong h, int pa, int pc, int tk, int oob, int poss, bool bounds, bool ownerOk) RunM2(ulong sd)
+(ulong h, int pa, int pc, int tk, int oob, int poss, bool bounds, bool ownerOk,
+ int gh, int ga, int shots, int saves, double xg) RunM2(ulong sd, int ticks = 6000, int gkBoost = 0)
 {
     var q2 = new CommandQueue();
-    var cfg2 = new MatchConfig { Seed = sd, EngineVersion = "m2", Home = BuildSheetSide(300, 7, home: true), Away = BuildSheetSide(300, 8, home: false) };
+    var away = BuildSheetSide(300, 8, home: false);
+    if (gkBoost > 0)
+    {
+        // Kaleci işaret testi: deplasman kalecisinin kurtarış nitelikleri tavana çekilir
+        away.Starters[0].Attributes.Reflexes = (byte)Math.Min(99, away.Starters[0].Attributes.Reflexes + gkBoost);
+        away.Starters[0].Attributes.Agility = (byte)Math.Min(99, away.Starters[0].Attributes.Agility + gkBoost);
+    }
+    var cfg2 = new MatchConfig { Seed = sd, EngineVersion = "m2", Home = BuildSheetSide(300, 7, home: true), Away = away };
     var e2 = new MatchEngine(sd, q2, cfg2, simBal);
     var s2 = MatchEngine.CreateInitialState(cfg2);
     bool bounds2 = true, ownerOk2 = true;
-    for (int t = 0; t < 6000; t++) // 10 dakika maç zamanı
+    for (int t = 0; t < ticks; t++)
     {
         e2.Tick(ref s2);
         if (Math.Abs(s2.Ball.X) > MatchEngine.PitchHalfXmm + 500 ||
@@ -304,7 +312,8 @@ else Pass("TrigLutVectors");
         if (ow < -1 || ow > 21 || (ow >= 0 && s2.Agents[ow].SentOff)) ownerOk2 = false;
     }
     return (MatchEngine.StateHash(in s2), e2.PassAttempts, e2.PassCompletions, e2.Tackles,
-            e2.OutOfBounds, e2.PossessionChanges, bounds2, ownerOk2);
+            e2.OutOfBounds, e2.PossessionChanges, bounds2, ownerOk2,
+            s2.HomeGoals, s2.AwayGoals, e2.Shots, e2.Saves, e2.XgHome + e2.XgAway);
 }
 
 var mA2 = RunM2(0xB00713UL);
@@ -315,7 +324,7 @@ Console.WriteLine($"[info] M2 durum hash: 0x{mA2.h:X}");
 if (mA2.h != mB2.h) failures += Fail("M2Determinism", $"0x{mA2.h:X} != 0x{mB2.h:X}");
 else Pass("M2Determinism");
 
-const ulong M2_GOLDEN = 0x39F2F1E717FED332UL; // sabitlendi — davranış/şema değişikliği bilinçli güncelleme ister
+const ulong M2_GOLDEN = 0x5CA060573176939AUL; // M3'te yeniden sabitlendi — davranış/şema değişikliği bilinçli güncelleme ister
 if (M2_GOLDEN != 0 && mA2.h != M2_GOLDEN) failures += Fail("M2Golden", $"0x{mA2.h:X}");
 else Pass("M2Golden");
 
@@ -332,6 +341,25 @@ else Pass($"M2PassBand({compRate:P0})");
 if (mA2.poss < 3 || mA2.tk + mA2.oob == 0)
     failures += Fail("M2Liveliness", $"sahiplik {mA2.poss}, tackle {mA2.tk}, out {mA2.oob}");
 else Pass("M2Liveliness");
+
+// 10) FAZ 03 M3 — Kaleci + şut/xG kapıları (ME 9.1-9.2, 15.2; BRIEF M3)
+var m3 = RunM2(0xC0AC11UL, ticks: 54000); // 90 dakika maç zamanı
+Console.WriteLine($"[info] M3 90dk: skor {m3.gh}-{m3.ga} · şut {m3.shots} · kurtarış {m3.saves} · ΣxG {m3.xg:0.00}");
+if (m3.shots < 8) failures += Fail("M3ShotsBand", $"şut {m3.shots}");
+else Pass($"M3ShotsBand({m3.shots})");
+int golT = m3.gh + m3.ga;
+if (golT < 1 || golT > 12) failures += Fail("M3GoalsBand", $"gol {golT}/90dk");
+else Pass($"M3GoalsBand({m3.gh}-{m3.ga})");
+if (m3.saves < 1) failures += Fail("M3SavesHappen", "hiç kurtarış yok");
+else Pass($"M3SavesHappen({m3.saves})");
+// xG tutarlılığı (17.2'nin gevşek M3 hali): |gol − ΣxG| makul bantta
+if (Math.Abs(golT - m3.xg) > Math.Max(4.0, m3.xg * 1.2))
+    failures += Fail("M3XgConsistency", $"gol {golT} vs ΣxG {m3.xg:0.00}");
+else Pass($"M3XgConsistency({m3.xg:0.00})");
+// Kaleci İŞARET testi: deplasman GK Reflexes/Agility tavana → ev golü ARTMAMALI
+var m3gk = RunM2(0xC0AC11UL, ticks: 54000, gkBoost: 60);
+if (m3gk.gh > m3.gh) failures += Fail("M3GkMatters", $"iyi GK'ya rağmen ev golü {m3.gh}→{m3gk.gh}");
+else Pass($"M3GkMatters({m3.gh}→{m3gk.gh})");
 
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");
 return failures == 0 ? 0 : 1;

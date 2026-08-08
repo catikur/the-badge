@@ -141,10 +141,11 @@ namespace TheBadge.Greybox.EngineDev
             if (loadError != null) { GUILayout.Label(loadError); return; }
             if (engine == null) return;
             int sec = (int)(state.Tick / (uint)MatchEngine.TicksPerSecond);
-            GUILayout.Label($"MOTOR TEST — M2 | tick {state.Tick}  ({sec / 60:00}:{sec % 60:00})  faz {state.Phase}  hız {speed}x");
+            GUILayout.Label($"MOTOR TEST — M3 | SKOR {state.HomeGoals} - {state.AwayGoals} | tick {state.Tick}  ({sec / 60:00}:{sec % 60:00})  faz {state.Phase}  hız {speed}x");
+            GUILayout.Label($"şut {engine.Shots} · kurtarış {engine.Saves} · xG {engine.XgHome:0.00}-{engine.XgAway:0.00}");
             GUILayout.Label($"pas {engine.PassAttempts} (tamam {engine.PassCompletions}) · tackle {engine.Tackles} · taç/aut {engine.OutOfBounds} · sahiplik değişimi {engine.PossessionChanges}");
             GUILayout.Label($"top sahibi: {(state.Ball.OwnerId < 0 ? "serbest" : (state.Ball.OwnerId < 11 ? "EV #" : "DEP #") + state.Ball.OwnerId)}  ·  checksum 0x{state.LastChecksum:X}");
-            GUILayout.Label("(gol/şut/kaleci modeli M3'te — bu ekran ham motor durumudur)");
+            GUILayout.Label("(duran toplar/hakem/durum modeli sonraki dilimler — ham motor ekranı)");
             if (GUILayout.Button($"Hız: {speed}x → değiştir")) speed = speed == 1 ? 5 : speed == 5 ? 25 : 1;
         }
     }

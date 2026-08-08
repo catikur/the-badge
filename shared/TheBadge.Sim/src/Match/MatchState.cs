@@ -16,6 +16,8 @@ namespace TheBadge.Sim.Match
         public int SpinY;        // falso bileşeni (mm/sn2 eşleniği) — M3+ orta/frikik kullanır (ME 8.3)
         public short OwnerId;    // -1 = serbest top ("aynı anda iki sahip" yapısal imkansız, ME 4.3)
         public byte LastTouchTeam; // 0/1; 2 = henüz dokunulmadı — taç/aut sahipliği bundan türer (M2)
+        public byte Flight;      // M3 şut uçuşu: 0 serbest · 1 karara bağlı (kimse alamaz — 9.2
+                                 // analitik çözüm sahneleniyor) · 2 kaleci tutuşu (yalnız savunan GK alır)
     }
 
     /// <summary>Ajan kalıcı durumu — ME Spec 5.3 şeması birebir; float alan YOK.</summary>

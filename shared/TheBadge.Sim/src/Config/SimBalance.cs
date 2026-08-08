@@ -21,6 +21,43 @@ namespace TheBadge.Sim.Config
         public OffballCfg offball = new OffballCfg();
         public XtCfg xt = new XtCfg();
         public ChaosCfg chaos = new ChaosCfg();
+        public GkCfg gk = new GkCfg();
+        public ShotExecCfg shotExec = new ShotExecCfg();
+        public ShotCfg shot = new ShotCfg();
+
+        /// <summary>Kaleci kurtarış modeli — ME Spec 9.1-9.2 [KALİBRE].</summary>
+        [System.Serializable]
+        public sealed class GkCfg
+        {
+            public double tReactBase, tReactPerReflexEksik;   // t_react = taban + (100−Reflexes)×bu
+            public double reachBase, reachAgilityFactor;      // erişim = taban + Agility/100×faktör (m)
+            public double logisticSlope;                      // P_save = lojistik(slope × marj)
+            public double saveClampMin, saveClampMax;
+            public double dalisSureCarpan;                    // t_traverse = mesafe/(erişim/bu)
+            public double cildirmaAcisiDeg;                   // çeldide sapma açısı
+            public double derinlikTaban, derinlikPerM, derinlikMax; // 9.1 pozisyon derinliği
+        }
+
+        /// <summary>Şut yürütme — ME 6.4 kompoziti + 8.3 (M3 ekleme) [KALİBRE].</summary>
+        [System.Serializable]
+        public sealed class ShotExecCfg
+        {
+            public double sutMaxMesafeM;       // karar: bu mesafenin dışında şut aday olmaz
+            public double sutHiziMS;
+            public double sutSigmaTabanM;      // nişan sapması (kale düzleminde, m)
+            public double sutSigmaMesafePerM;
+        }
+
+        /// <summary>xG kayıt modeli — ME Spec 15.2 [KALİBRE]. Yalnız KAYIT/analiz — sonuç
+        /// üretimine girmez (17.2 tutarlılık kapısı ayrıca denetler).</summary>
+        [System.Serializable]
+        public sealed class ShotCfg
+        {
+            public XgCfg xg = new XgCfg();
+            [System.Serializable]
+            public sealed class XgCfg
+            { public double b0, bLnDist, bAngle, bPres, bHeader, bBigChance, bOneOnOne; }
+        }
 
         /// <summary>Efektif nitelik çarpanları — ME Spec 6.2 [KALİBRE].</summary>
         [System.Serializable]
@@ -96,6 +133,7 @@ namespace TheBadge.Sim.Config
             public int adayTabani, adayVisionBolen; // aday_sayısı = taban + Vision/bolen (ME 7.2)
             public double dribbleIleriM;          // dribling hedef ilerlemesi
             public double kayipTaban, kayipKoridorRakip, kayipMesafePerM; // P_kayıp hızlı tahmini
+            public double sutTehditCarpan;        // şut adayının tehdit ağırlığı (M3)
         }
 
         /// <summary>Topsuz vektör karması ağırlıkları — ME Spec 7.4 [KALİBRE] (M2 alt kümesi).</summary>
