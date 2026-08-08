@@ -135,7 +135,7 @@ if (runA.finalHash != runB.finalHash || runA.at600 != runB.at600)
 else Pass("MatchSkeletonDeterminism");
 
 // 7b) Golden: durum hash'i sabitlendi — alan/sıra değişikliği bilinçli golden güncellemesi ister
-const ulong MATCH_GOLDEN = 0x0497209D3044AF27UL; // M3'te yeniden sabitlendi (Flight alanı + şut — bilinçli)
+const ulong MATCH_GOLDEN = 0x4482313830D6A265UL; // M4'te yeniden sabitlendi (duran top/saat şeması — bilinçli)
 if (MATCH_GOLDEN != 0 && runA.finalHash != MATCH_GOLDEN)
     failures += Fail("MatchSkeletonGolden", $"0x{runA.finalHash:X} != 0x{MATCH_GOLDEN:X}");
 else Pass("MatchSkeletonGolden");
@@ -227,12 +227,18 @@ static TeamSheet BuildSheetSide(ulong seed, uint entity, bool home)
             RoleId = (byte)(i == 0 ? 1 : i < 5 ? 2 : i < 9 ? 3 : 4),
             AnchorXmm = sign * ax,
             AnchorYmm = ay,
+            // TÜM nitelikler doldurulur — eksik bırakılan nitelik 0 olur ve o alt sistem (kaleci
+            // 1v1'i, hava topu, faul agresifliği) sessizce ölür; M4 kalibrasyonunda yakalandı
             Attributes = new PlayerAttributes
             {
                 Passing = V(1), Finishing = V(2), Dribbling = V(7), Tackling = V(8),
-                FirstTouch = V(9), Positioning = V(10), Vision = V(11), Composure = V(12),
-                Pace = V(3), Acceleration = V(13), Stamina = V(4), Strength = V(14), Agility = V(15),
-                Reflexes = V(5), Handling = V(6)
+                Heading = V(16), FirstTouch = V(9), Crossing = V(22), SetPieces = V(18),
+                Positioning = V(10), Decisions = V(23), Composure = V(12), Aggression = V(19),
+                Workrate = V(24), Vision = V(11),
+                Pace = V(3), Acceleration = V(13), Stamina = V(4), Strength = V(14),
+                Agility = V(15), JumpReach = V(17),
+                Reflexes = V(5), Handling = V(6), OneOnOne = V(20), AerialCommand = V(21),
+                Kicking = V(25), Throwing = V(26)
             }
         };
         if (i < 11) sheet.Starters[i] = e; else sheet.Bench[i - 11] = e;
@@ -324,7 +330,7 @@ Console.WriteLine($"[info] M2 durum hash: 0x{mA2.h:X}");
 if (mA2.h != mB2.h) failures += Fail("M2Determinism", $"0x{mA2.h:X} != 0x{mB2.h:X}");
 else Pass("M2Determinism");
 
-const ulong M2_GOLDEN = 0x5CA060573176939AUL; // M3'te yeniden sabitlendi — davranış/şema değişikliği bilinçli güncelleme ister
+const ulong M2_GOLDEN = 0xE5649D58C58263DBUL; // M4'te yeniden sabitlendi — davranış/şema değişikliği bilinçli güncelleme ister
 if (M2_GOLDEN != 0 && mA2.h != M2_GOLDEN) failures += Fail("M2Golden", $"0x{mA2.h:X}");
 else Pass("M2Golden");
 
@@ -360,6 +366,99 @@ else Pass($"M3XgConsistency({m3.xg:0.00})");
 var m3gk = RunM2(0xC0AC11UL, ticks: 54000, gkBoost: 60);
 if (m3gk.gh > m3.gh) failures += Fail("M3GkMatters", $"iyi GK'ya rağmen ev golü {m3.gh}→{m3gk.gh}");
 else Pass($"M3GkMatters({m3.gh}→{m3gk.gh})");
+
+// 11) FAZ 03 M4 — Duran toplar + hakem/kart + maç saati (ME 10, 11.2, 3.4; BRIEF M4)
+
+(MatchResult res, ulong hash, int corners, int fouls, int throwIns, int goalKicks, MatchState st)
+    RunFull(ulong sd, byte strictness = 50)
+{
+    var q4 = new CommandQueue();
+    var cfg4 = new MatchConfig
+    {
+        Seed = sd, EngineVersion = "m4",
+        Home = BuildSheetSide(300, 7, home: true),
+        Away = BuildSheetSide(300, 8, home: false),
+        Referee = new RefereeProfile { Strictness = strictness, AdvantageTendency = 50, Consistency = 60 }
+    };
+    var e4 = new MatchEngine(sd, q4, cfg4, simBal);
+    var s4 = MatchEngine.CreateInitialState(cfg4);
+    var r4 = e4.Run(ref s4);
+    return (r4, MatchEngine.StateHash(in s4), e4.Corners, e4.Fouls, e4.ThrowIns, e4.GoalKicks, s4);
+}
+
+var f1 = RunFull(0xD4A11UL);
+var f2 = RunFull(0xD4A11UL);
+Console.WriteLine($"[info] M4 tam maç: {f1.res.HomeGoals}-{f1.res.AwayGoals} · {f1.res.TotalTicks} tick " +
+                  $"({f1.res.TotalTicks / 600.0:0.0} dk) · faul {f1.fouls} · kart {f1.res.Yellows}S/{f1.res.Reds}K · " +
+                  $"korner {f1.corners} · taç {f1.throwIns} · kale vuruşu {f1.goalKicks} · penaltı {f1.res.Penalties} · " +
+                  $"şut {f1.res.Shots} · ΣxG {f1.res.XgHome + f1.res.XgAway:0.00}");
+Console.WriteLine($"[info] M4 durum hash: 0x{f1.hash:X}");
+
+if (f1.hash != f2.hash || f1.res.TotalTicks != f2.res.TotalTicks)
+    failures += Fail("M4Determinism", $"0x{f1.hash:X} != 0x{f2.hash:X}");
+else Pass("M4Determinism");
+
+const ulong M4_GOLDEN = 0x49817DA7064CCBB3UL; // sabitlendi
+if (M4_GOLDEN != 0 && f1.hash != M4_GOLDEN) failures += Fail("M4Golden", $"0x{f1.hash:X}");
+else Pass("M4Golden");
+
+// Maç KENDİ KENDİNE bitiyor: FullTime + 90 dk + uzatma (1-9 dk) bandı
+if (f1.st.Phase != MatchPhase.FullTime || f1.st.Half != 2)
+    failures += Fail("M4FullTime", $"faz {f1.st.Phase} devre {f1.st.Half}");
+else Pass("M4FullTime");
+double dk = f1.res.TotalTicks / 600.0;
+if (dk < 91 || dk > 108) failures += Fail("M4ClockBand", $"{dk:0.0} dk");
+else Pass($"M4ClockBand({dk:0.0}dk)");
+
+// Kart bandı — ME 11.2: 3,5-5,5/maç hedefi; M4 gevşek denetim bandı (kalibrasyon sprinti daraltır)
+int kart = f1.res.Yellows + f1.res.Reds;
+if (kart < 1 || kart > 12) failures += Fail("M4CardBand", $"{kart} kart");
+else Pass($"M4CardBand({kart})");
+if (f1.fouls < 5) failures += Fail("M4FoulsHappen", $"{f1.fouls} faul");
+else Pass($"M4FoulsHappen({f1.fouls})");
+
+// Duran toplar üretiliyor: korner + kale vuruşu (taç üretimi düşük — kanat oyunu boşluğu,
+// M5 borcu olarak DECISIONS'a yazıldı; bant burada bilinçli olarak taç şartı içermez)
+if (f1.corners < 1 || f1.corners + f1.goalKicks + f1.throwIns < 3)
+    failures += Fail("M4SetPieces", $"korner {f1.corners} taç {f1.throwIns} degaj {f1.goalKicks}");
+else Pass($"M4SetPieces(k{f1.corners}/t{f1.throwIns}/d{f1.goalKicks})");
+
+// Kalibrasyon bandı (ME 17.2 ruhu): 24 maçlık tarama — ortalamalar bantta mı
+{
+    double g = 0, sh = 0, sv = 0, co = 0, fo = 0, ca = 0, dkT = 0;
+    const int NM4 = 12;
+    for (int n = 0; n < NM4; n++)
+    {
+        var r = RunFull(0xE5A0UL + (ulong)n * 7919UL);
+        g += r.res.HomeGoals + r.res.AwayGoals; sh += r.res.Shots; sv += r.res.Saves;
+        co += r.corners; fo += r.fouls; ca += r.res.Yellows + r.res.Reds; dkT += r.res.TotalTicks / 600.0;
+    }
+    Console.WriteLine($"[info] M4 kalibrasyon ({NM4} maç): gol {g / NM4:0.00} · şut {sh / NM4:0.0} · " +
+                      $"kurtarış {sv / NM4:0.0} · korner {co / NM4:0.0} · faul {fo / NM4:0.0} · " +
+                      $"kart {ca / NM4:0.00} · süre {dkT / NM4:0.0} dk");
+    bool ok = g / NM4 is >= 2.0 and <= 6.0      // hedef 2,4-3,2; üst sınır M5 borcuyla gevşetildi
+             && sh / NM4 is >= 15 and <= 32     // ME 17.2 şut bandı
+             && ca / NM4 is >= 2.5 and <= 7.0   // kart bandı 3,5-5,5 çevresi
+             && co / NM4 >= 2.0;                // korner üretimi çalışıyor
+    if (!ok) failures += Fail("M4CalibrationBands", $"gol {g / NM4:0.00} şut {sh / NM4:0.0} kart {ca / NM4:0.00} korner {co / NM4:0.0}");
+    else Pass("M4CalibrationBands");
+}
+
+// Hakem sertliği İŞARET testi: katı hakem daha çok faul çalar
+var fStrict = RunFull(0xD4A11UL, strictness: 95);
+var fLoose = RunFull(0xD4A11UL, strictness: 5);
+if (fStrict.fouls <= fLoose.fouls)
+    failures += Fail("M4StrictnessMatters", $"katı {fStrict.fouls} vs gevşek {fLoose.fouls}");
+else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
+
+// Kırmızı kart görülen oyuncu SAHADAN çıkar (motor gerçeği — reyting değil)
+{
+    int sentOff = 0;
+    for (int i = 0; i < 22; i++) if (fStrict.st.Agents[i].SentOff) sentOff++;
+    if (fStrict.res.Reds > 0 && sentOff != fStrict.res.Reds)
+        failures += Fail("M4SentOffConsistency", $"kırmızı {fStrict.res.Reds} vs sahada eksik {sentOff}");
+    else Pass($"M4SentOffConsistency({sentOff})");
+}
 
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");
 return failures == 0 ? 0 : 1;

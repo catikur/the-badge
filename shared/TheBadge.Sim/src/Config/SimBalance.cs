@@ -24,6 +24,49 @@ namespace TheBadge.Sim.Config
         public GkCfg gk = new GkCfg();
         public ShotExecCfg shotExec = new ShotExecCfg();
         public ShotCfg shot = new ShotCfg();
+        public RefereeCfg referee = new RefereeCfg();
+        public SetPieceCfg setpiece = new SetPieceCfg();
+        public ExtraTimeCfg extraTime = new ExtraTimeCfg();
+
+        /// <summary>Hakem eşikleri — ME Spec 11.2 [KALİBRE].</summary>
+        [System.Serializable]
+        public sealed class RefereeCfg
+        {
+            public double foulEsikTaban;      // s eşiği tabanı (0,30)
+            public double strictnessCarpan;   // eşik kayması: (Strictness−50) × bu
+            public double griBantOrta;        // ± gri bant genişliği
+            public double sariEsik, kirmiziEsik;
+            public double cezaSahasiIhtiyatCarpan; // kendi ceza sahasında şiddet skoru çarpanı
+        }
+
+        /// <summary>Duran toplar — ME Spec 10 [KALİBRE].</summary>
+        [System.Serializable]
+        public sealed class SetPieceCfg
+        {
+            public PenaltyCfg penalty = new PenaltyCfg();
+            public double[] cornerGolBandi = new double[0]; // kalibrasyon bandı (doğrulama, ME 17.2)
+            public double frikikDirektEsikM;
+            public double kornerOrtaHiziMS;      // korner ortası ilk hızı (M4 ekleme)
+            public double kornerHedefDerinlikM;  // ortanın kaleye uzaklığı (hedef bölge)
+            public double havaTopuYaricapM;      // hava topu düellosu yarıçapı
+            public double havaTopuYukseklikM;    // bu yüksekliğin altına inince düello çözülür (ME 8.3)
+            public double uzaklastirmaHizMS;     // savunmanın uzaklaştırma hızı
+            public int hazirlikTicks;            // duran top hazırlığı (sıkıştırılmış çözüm, ME 3.4)
+
+            [System.Serializable]
+            public sealed class PenaltyCfg
+            {
+                public double dogruTahmin, yanlisTahmin, ortaOrta, direk, hedefOrtalama;
+            }
+        }
+
+        /// <summary>Uzatma süresi — ME Spec 3.4 formülü [KALİBRE].</summary>
+        [System.Serializable]
+        public sealed class ExtraTimeCfg
+        {
+            public double durakCarpan, kartCarpan, golCarpan;
+            public int minDk, maxDk;
+        }
 
         /// <summary>Kaleci kurtarış modeli — ME Spec 9.1-9.2 [KALİBRE].</summary>
         [System.Serializable]
@@ -36,6 +79,8 @@ namespace TheBadge.Sim.Config
             public double dalisSureCarpan;                    // t_traverse = mesafe/(erişim/bu)
             public double cildirmaAcisiDeg;                   // çeldide sapma açısı
             public double derinlikTaban, derinlikPerM, derinlikMax; // 9.1 pozisyon derinliği
+            public double yakinMesafeM;         // 1v1 kapatma etkisinin başladığı mesafe (ME 9.3)
+            public double yakinKapatmaKatsayi;  // OneOnOne'ın marja katkısı (sn)
         }
 
         /// <summary>Şut yürütme — ME 6.4 kompoziti + 8.3 (M3 ekleme) [KALİBRE].</summary>
@@ -44,8 +89,9 @@ namespace TheBadge.Sim.Config
         {
             public double sutMaxMesafeM;       // karar: bu mesafenin dışında şut aday olmaz
             public double sutHiziMS;
-            public double sutSigmaTabanM;      // nişan sapması (kale düzleminde, m)
-            public double sutSigmaMesafePerM;
+            public double sutSigmaTabanDeg;    // nişan sapması AÇISAL (derece) — mesafeyle büyür
+            public double nisanDirekOrani;     // nişan noktası: direk yarı genişliğinin bu oranı
+            public double blokOlasilik;        // koridorda savunucu varsa blok olasılığı (ME 15.1)
         }
 
         /// <summary>xG kayıt modeli — ME Spec 15.2 [KALİBRE]. Yalnız KAYIT/analiz — sonuç
@@ -94,6 +140,8 @@ namespace TheBadge.Sim.Config
         public sealed class DuelCfg
         {
             public double pTabanDefault, kDuel, clampMin, clampMax;
+            public double pTabanTackle;   // top kapma düellosu tabanı (ME 6.3 "tipe göre")
+            public double pTabanDriblin;  // dribling düellosu: taşıyıcının adam geçme tabanı
         }
 
         /// <summary>Pas modeli — ME Spec 6.5 [KALİBRE].</summary>
@@ -120,6 +168,7 @@ namespace TheBadge.Sim.Config
         {
             public double kontrolYaricapM;     // serbest topu kontrol alma yarıçapı
             public double tackleYaricapM;      // taşıyıcıya müdahale yarıçapı
+            public double driblinYaricapM;     // dribling düellosunu tetikleyen ön mesafe
             public int tackleCooldownTicks;    // müdahale sonrası aksiyon kilidi
             public double tackleLooseHizMS;    // kazanılan top bu hızla açığa çıkar
         }
@@ -134,6 +183,8 @@ namespace TheBadge.Sim.Config
             public double dribbleIleriM;          // dribling hedef ilerlemesi
             public double kayipTaban, kayipKoridorRakip, kayipMesafePerM; // P_kayıp hızlı tahmini
             public double sutTehditCarpan;        // şut adayının tehdit ağırlığı (M3)
+            public double sutBaskiCezasi;         // yakın rakip başına şut iştahı cezası (M4)
+            public double sutMesafeUs;            // şut iştahının mesafe üssü (M4 kalibrasyonu)
         }
 
         /// <summary>Topsuz vektör karması ağırlıkları — ME Spec 7.4 [KALİBRE] (M2 alt kümesi).</summary>
@@ -142,7 +193,11 @@ namespace TheBadge.Sim.Config
         {
             public double wTop;              // top çekimi ağırlığı
             public double fazIleriM;         // hücumda ileri itme (m)
-            public double savunmaCekilmeM;   // savunmada topla kendi kalesi arasına çekilme (m)
+            public double savunmaCekilmeM;   // (eski) — savunma bloku vektörüne devredildi
+            public double hatDerinlikDf;     // savunma bloku: top-kale çizgisinde DF derinliği
+            public double hatDerinlikMf;
+            public double hatDerinlikFw;
+            public double hatYanAnchor;      // yanal konum: anchor payı (kalanı topa hizalanır)
         }
 
         /// <summary>xT (beklenen tehdit) tablosu — ME Spec 7.2 [KALİBRE]. M2: ayrıştırılabilir

@@ -13,7 +13,9 @@
     "pTabanDefault": 0.48,
     "kDuel": 0.9,
     "clampMin": 0.08,
-    "clampMax": 0.92
+    "clampMax": 0.92,
+    "pTabanTackle": 0.3,
+    "pTabanDriblin": 0.45
   },
   "pass": {
     "sigma0Deg": 6.5,
@@ -26,26 +28,33 @@
   "possession": {
     "kontrolYaricapM": 1.0,
     "tackleYaricapM": 1.2,
-    "tackleCooldownTicks": 10,
-    "tackleLooseHizMS": 3.5
+    "tackleCooldownTicks": 40,
+    "tackleLooseHizMS": 5.0,
+    "driblinYaricapM": 3.0
   },
   "utility": {
-    "wThreat": 1.0,
+    "wThreat": 8.0,
     "wRisk": 0.6,
     "wVar": 1.0,
-    "kararKilidiTicks": 5,
+    "kararKilidiTicks": 12,
     "adayTabani": 4,
     "adayVisionBolen": 15,
     "dribbleIleriM": 6.0,
     "kayipTaban": 0.08,
     "kayipKoridorRakip": 0.22,
     "kayipMesafePerM": 0.006,
-    "sutTehditCarpan": 2.2
+    "sutTehditCarpan": 0.26,
+    "sutBaskiCezasi": 0.35,
+    "sutMesafeUs": 1.1
   },
   "offball": {
     "wTop": 0.25,
     "fazIleriM": 6.0,
-    "savunmaCekilmeM": 8.0
+    "savunmaCekilmeM": 8.0,
+    "hatDerinlikDf": 0.55,
+    "hatDerinlikMf": 0.8,
+    "hatDerinlikFw": 1.0,
+    "hatYanAnchor": 0.55
   },
   "xt": {
     "kolon": [
@@ -87,22 +96,25 @@
   "gk": {
     "tReactBase": 0.16,
     "tReactPerReflexEksik": 0.0016,
-    "reachBase": 0.9,
-    "reachAgilityFactor": 1.9,
+    "reachBase": 1.6,
+    "reachAgilityFactor": 2.2,
     "logisticSlope": 6.5,
     "saveClampMin": 0.04,
     "saveClampMax": 0.96,
-    "dalisSureCarpan": 0.45,
-    "cildirmaAcisiDeg": 35.0,
+    "dalisSureCarpan": 0.22,
+    "cildirmaAcisiDeg": 50.0,
     "derinlikTaban": 0.9,
     "derinlikPerM": 0.08,
-    "derinlikMax": 5.5
+    "derinlikMax": 5.5,
+    "yakinMesafeM": 15.0,
+    "yakinKapatmaKatsayi": 0.95
   },
   "shotExec": {
     "sutMaxMesafeM": 30.0,
     "sutHiziMS": 24.0,
-    "sutSigmaTabanM": 1.6,
-    "sutSigmaMesafePerM": 0.02
+    "sutSigmaTabanDeg": 30.0,
+    "nisanDirekOrani": 0.45,
+    "blokOlasilik": 0.45
   },
   "setpiece": {
     "penalty": {
@@ -116,14 +128,21 @@
       0.1,
       0.16
     ],
-    "frikikDirektEsikM": 28
+    "frikikDirektEsikM": 28,
+    "kornerOrtaHiziMS": 17.0,
+    "kornerHedefDerinlikM": 10.5,
+    "havaTopuYaricapM": 4.0,
+    "havaTopuYukseklikM": 1.6,
+    "uzaklastirmaHizMS": 14.0,
+    "hazirlikTicks": 25
   },
   "referee": {
-    "foulEsikTaban": 0.3,
+    "foulEsikTaban": 0.38,
     "strictnessCarpan": 0.002,
     "griBantOrta": 0.06,
-    "sariEsik": 0.55,
-    "kirmiziEsik": 0.8
+    "sariEsik": 0.5,
+    "kirmiziEsik": 0.8,
+    "cezaSahasiIhtiyatCarpan": 0.6
   },
   "var": {
     "sahaKarariKalirOran": {

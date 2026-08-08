@@ -141,11 +141,15 @@ namespace TheBadge.Greybox.EngineDev
             if (loadError != null) { GUILayout.Label(loadError); return; }
             if (engine == null) return;
             int sec = (int)(state.Tick / (uint)MatchEngine.TicksPerSecond);
-            GUILayout.Label($"MOTOR TEST — M3 | SKOR {state.HomeGoals} - {state.AwayGoals} | tick {state.Tick}  ({sec / 60:00}:{sec % 60:00})  faz {state.Phase}  hız {speed}x");
-            GUILayout.Label($"şut {engine.Shots} · kurtarış {engine.Saves} · xG {engine.XgHome:0.00}-{engine.XgAway:0.00}");
-            GUILayout.Label($"pas {engine.PassAttempts} (tamam {engine.PassCompletions}) · tackle {engine.Tackles} · taç/aut {engine.OutOfBounds} · sahiplik değişimi {engine.PossessionChanges}");
-            GUILayout.Label($"top sahibi: {(state.Ball.OwnerId < 0 ? "serbest" : (state.Ball.OwnerId < 11 ? "EV #" : "DEP #") + state.Ball.OwnerId)}  ·  checksum 0x{state.LastChecksum:X}");
-            GUILayout.Label("(duran toplar/hakem/durum modeli sonraki dilimler — ham motor ekranı)");
+            GUILayout.Label($"MOTOR TEST — M4 | SKOR {state.HomeGoals} - {state.AwayGoals} | {sec / 60:00}:{sec % 60:00}  " +
+                            $"{state.Half}. devre  faz {state.Phase}  hız {speed}x");
+            GUILayout.Label($"şut {engine.Shots} (blok {engine.Blocks}) · kurtarış {engine.Saves} · xG {engine.XgHome:0.00}-{engine.XgAway:0.00}");
+            GUILayout.Label($"faul {engine.Fouls} · kart {engine.Yellows}S/{engine.Reds}K · korner {engine.Corners} · " +
+                            $"taç {engine.ThrowIns} · kale vuruşu {engine.GoalKicks} · penaltı {engine.Penalties}");
+            GUILayout.Label($"pas {engine.PassAttempts} (tamam {engine.PassCompletions}) · tackle {engine.Tackles} · sahiplik değişimi {engine.PossessionChanges}");
+            GUILayout.Label($"top: {(state.Ball.OwnerId < 0 ? "serbest" : (state.Ball.OwnerId < 11 ? "EV #" : "DEP #") + state.Ball.OwnerId)}" +
+                            $"  ·  duran top: {state.SetPiece}  ·  checksum 0x{state.LastChecksum:X}");
+            GUILayout.Label("(durum modeli: stamina/sakatlık/moral ve müdahale katmanı sonraki dilimler)");
             if (GUILayout.Button($"Hız: {speed}x → değiştir")) speed = speed == 1 ? 5 : speed == 5 ? 25 : 1;
         }
     }
