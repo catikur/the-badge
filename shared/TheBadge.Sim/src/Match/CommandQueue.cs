@@ -36,6 +36,15 @@ namespace TheBadge.Sim.Match
             pending.Add(new Entry { Seq = nextSeq++, Cmd = cmd });
         }
 
+        /// <summary>Komutun DAVRANIŞINI uygulayan taraf (motor). Kuyruk yalnız sıralamadan sorumludur;
+        /// uygulama anları ve doğrulama ME 14.2'ye tabidir (M6).</summary>
+        public interface ISink { void ApplyCommand(MatchCommand cmd, ref MatchState st); }
+
+        ISink sink;
+
+        /// <summary>Motor kendini kuyruğa tanıtır (kurulumda bir kez).</summary>
+        public void Bind(ISink handler) => sink = handler;
+
         /// <summary>Vadesi gelen (IssueTick ≤ tick) komutları deterministik sırayla uygular — ME 4.2 aşama 1.</summary>
         public void ApplyDue(uint tick, ref MatchState state)
         {
@@ -62,8 +71,9 @@ namespace TheBadge.Sim.Match
 
         void Apply(MatchCommand cmd, ref MatchState state)
         {
-            // M0: davranış yok — yalnız kanonik iz. M-müdahale dilimi burada 14.2 uygulama
-            // anlarını (taktik ≤250ms, değişiklik DEAD_BALL) ve doğrulamayı ekler.
+            // Sıralama kuyruğun, DAVRANIŞ motorun işidir (M6): motor 14.2 uygulama anlarını
+            // (taktik ≤250 ms, değişiklik DEAD_BALL) ve bant doğrulamasını uygular.
+            sink?.ApplyCommand(cmd, ref state);
             AppliedCount++;
             Span<byte> buf = stackalloc byte[14];
             buf[0] = TypeTag(cmd);

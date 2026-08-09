@@ -25,6 +25,7 @@ namespace TheBadge.Greybox.EngineDev
         Transform ballDot;
         float acc;
         int speed = 1;
+        int nextBench;          // ekrandan gönderilen değişikliklerde sıradaki kulübe indeksi
         string loadError;
 
         void Awake()
@@ -152,7 +153,7 @@ namespace TheBadge.Greybox.EngineDev
             if (loadError != null) { GUILayout.Label(loadError); return; }
             if (engine == null) return;
             int sec = (int)(state.Tick / (uint)MatchEngine.TicksPerSecond);
-            GUILayout.Label($"MOTOR TEST — M4 | SKOR {state.HomeGoals} - {state.AwayGoals} | {sec / 60:00}:{sec % 60:00}  " +
+            GUILayout.Label($"MOTOR TEST — M6 | SKOR {state.HomeGoals} - {state.AwayGoals} | {sec / 60:00}:{sec % 60:00}  " +
                             $"{state.Half}. devre  faz {state.Phase}  hız {speed}x");
             GUILayout.Label($"şut {engine.Shots} (blok {engine.Blocks}) · kurtarış {engine.Saves} · xG {engine.XgHome:0.00}-{engine.XgAway:0.00}");
             GUILayout.Label($"faul {engine.Fouls} · kart {engine.Yellows}S/{engine.Reds}K · korner {engine.Corners} · " +
@@ -164,8 +165,56 @@ namespace TheBadge.Greybox.EngineDev
             GUILayout.Label($"enerji ort. {enAvg / 22f:0} · sprint {sprints} · momentum EV {state.HomeRt.Momentum:+0;-0;0} / DEP {state.AwayRt.Momentum:+0;-0;0}");
             GUILayout.Label($"top: {(state.Ball.OwnerId < 0 ? "serbest" : (state.Ball.OwnerId < 11 ? "EV #" : "DEP #") + state.Ball.OwnerId)}" +
                             $"  ·  duran top: {state.SetPiece}  ·  checksum 0x{state.LastChecksum:X}");
-            GUILayout.Label("(müdahale katmanı — taktik/değişiklik/motivasyon komutları — M6'da bağlanır)");
+
+            // M6 MÜDAHALE KATMANI — butonlar durumu DOĞRUDAN yazmaz, komutu KUYRUĞA atar (Tek Kapı).
+            // Reddedilen komut sayacı ekranda: bant dışı/hakkı biten komut sessizce kaybolmaz.
+            var hr = state.HomeRt;
+            GUILayout.Label($"TAKTİK EV — mentalite {hr.Mentalite:+0;-0;0} · tempo {hr.Tempo:+0;-0;0} · " +
+                            $"pres {hr.Pres:+0;-0;0} · hat {hr.Hat:+0;-0;0}  ·  değişiklik {hr.SubsUsed}/{MatchEngine.MaxSubs} " +
+                            $"(bekleyen {MatchEngine.PendingSubCount(in state, 0)})  ·  konuşma " +
+                            $"{(state.Tick < hr.MotivationReadyTick ? $"{(hr.MotivationReadyTick - state.Tick) / (uint)MatchEngine.TicksPerSecond} sn sonra" : "hazır")}");
+            GUILayout.Label($"komut: {engine.TacticChanges} taktik · {engine.SubsMade} değişiklik " +
+                            $"({engine.AutoSubs} otomatik) · {engine.Motivations} konuşma · {engine.RejectedCommands} RED");
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Mentalite +")) SendTactic(+1, 0, 0, 0);
+            if (GUILayout.Button("Mentalite −")) SendTactic(-1, 0, 0, 0);
+            if (GUILayout.Button("Tempo +")) SendTactic(0, +1, 0, 0);
+            if (GUILayout.Button("Pres +")) SendTactic(0, 0, +1, 0);
+            if (GUILayout.Button("Hat +")) SendTactic(0, 0, 0, +1);
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Ateşle")) queue.Enqueue(new MotivationCmd(state.Tick + 1, 0, ToneType.Atesle));
+            if (GUILayout.Button("Sakinleştir")) queue.Enqueue(new MotivationCmd(state.Tick + 1, 0, ToneType.Sakinlestir));
+            if (GUILayout.Button("Uyar")) queue.Enqueue(new MotivationCmd(state.Tick + 1, 0, ToneType.Uyar));
+            if (GUILayout.Button("En yorgunu değiştir")) SendSubstitution();
+            GUILayout.EndHorizontal();
+
             if (GUILayout.Button($"Hız: {speed}x → değiştir")) speed = speed == 1 ? 5 : speed == 5 ? 25 : 1;
+        }
+
+        /// <summary>Taktik komutu: kolun MEVCUT değerine göre mutlak hedef üretilir (-2..+2 bandı).</summary>
+        void SendTactic(int dM, int dT, int dP, int dH)
+        {
+            var r = state.HomeRt;
+            queue.Enqueue(new TacticChangeCmd(state.Tick + 1, 0, new TacticDelta(
+                Band(r.Mentalite + dM), Band(r.Tempo + dT), Band(r.Pres + dP), Band(r.Hat + dH))));
+        }
+
+        static sbyte Band(int v) => (sbyte)(v < -2 ? -2 : v > 2 ? 2 : v);
+
+        /// <summary>En yorgun (ya da sahayı terk etmiş) saha oyuncusunu kulübeyle değiştirir.
+        /// Uygulama ölü topta olur — ekranda "bekleyen" sayacı bunu gösterir (ME 14.2).</summary>
+        void SendSubstitution()
+        {
+            int worst = -1, lowest = int.MaxValue;
+            for (int i = 1; i < 11; i++)                    // kaleci hariç
+            {
+                if (!state.Agents[i].Active) { worst = i; break; }
+                if (state.Agents[i].Energy < lowest) { lowest = state.Agents[i].Energy; worst = i; }
+            }
+            if (worst < 0) return;
+            queue.Enqueue(new SubstitutionCmd(state.Tick + 1, 0, (short)worst, (short)nextBench));
+            nextBench++;
         }
     }
 }

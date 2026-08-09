@@ -125,10 +125,49 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
 - **M5 kalibrasyon (12-24 maç ort.):** gol 2,7-3,7 · şut 21 · kart 4,9-5,5 · korner 4,6 ·
   **bitiş enerji 432-482 (ME 12.1 hedefi 350-550 ✓)** · **sakatlık 0,42 (bant 0,35-0,60 ✓)** ·
   **ofsayt 3,2-4,2 (bant 2-5 ✓)** · taç 1,5 (hâlâ düşük) · kurtarış %64.
-- **M6 borcu:** (a) müdahale katmanı motora bağlanmadı (taktik/değişiklik/motivasyon komutları —
-  ME 14.2 uygulama anları; oyuncu değişikliği olmadığı için sakatlanan oyuncunun yeri boş kalıyor);
-  (b) hareket modelinde jog/yürüyüş kademesi kaba — mutlak sprint sayısı gerçek futbolun ~5 katı;
-  (c) taç üretimi düşük; (d) VAR (11.4), hava/zemin (12.4), LOD (16.1) hiç başlamadı.
+- **M6 borcu (M5 sonunda yazıldı):** (a) müdahale katmanı motora bağlanmadı (taktik/değişiklik/
+  motivasyon komutları — ME 14.2 uygulama anları; oyuncu değişikliği olmadığı için sakatlanan
+  oyuncunun yeri boş kalıyor); (b) hareket modelinde jog/yürüyüş kademesi kaba — mutlak sprint
+  sayısı gerçek futbolun ~5 katı; (c) taç üretimi düşük; (d) VAR (11.4), hava/zemin (12.4),
+  LOD (16.1) hiç başlamadı.
+
+- M6 (müdahale katmanı) uygulandı (2026-08-09, plan onayı Atilla):
+  **ME 14.1-14.3 — menajerin maç içi elleri.** `CommandQueue.ISink` ile motor kuyruğa kendini
+  tanıtır; komutun SIRASI kuyruğun, DAVRANIŞI motorun işidir. Uygulanan anlar: taktik deltası
+  anında (bant doğrulaması -2..+2, dışı REDDEDİLİR), oyuncu değişikliği yalnız **ölü topta**
+  (giren oyuncu tam enerjiyle, kart sicili sıfır), motivasyon konuşması anında + **10 dk bekleme**
+  (Ateşle +momentum, Sakinleştir negatifi söndürür, Uyar 10 dk karar sigmasını %10 düşürür;
+  etki çarpanı kaptan Leadership vekili × skor bağlamı yerindeliği). Taktik kolları GERÇEKTEN
+  işler: mentalite fayda ağırlıklarını (wThreat/wRisk) kaydırır ve topsuz şekli yukarı taşır,
+  tempo "topu tut"u cezalandırır, pres presçi sayısını (1-4) belirler, hat savunma derinliğini
+  kaydırır. **AutoManage** (offline adaleti): canlı kullanıcı yokken sakatlanan oyuncunun yeri
+  motor tarafından doldurulur — kural seti bilinçli olarak DAR (Oto-Koç ürün kararı hâlâ bekliyor).
+- **M6'da yakalanan hata — sessiz komut kaybı:** bekleyen değişiklik takım başına TEK slottaydı;
+  ölü top gelmeden ikinci komut geldiğinde birincisi sessizce eziliyordu (kapıdan geçmiş komut
+  yok oluyordu). Düzeltme: takım başına MaxSubs kadar bekleme kuyruğu (gerçek maçtaki çoklu
+  değişiklik tek durakta) + hak hesabına bekleyenlerin dahil edilmesi. Artık her komut ya uygulanır
+  ya REDDEDİLİR; sayaç ekranda. Durum şeması değiştiği için M0/M2/M4 golden'ları yeniden sabitlendi.
+- **M6 kalibrasyon krizi ve çözümü (ME 17.2):** taktik ilk sürümde ileri aksiyonlara SABİT bonus
+  veriyordu (`mentaliteIleriBias`). Sonuç: mentalite +2 → maç başına **15 gol / 73 şut**. Sabit
+  bonus, fayda skorunun baskın terimiyle aynı büyüklükte olduğu için tüm kararları tek yöne
+  kilitliyordu. Model çarpımsala çevrildi (`mentaliteTehditCarpan`, `mentaliteRiskTolerans`):
+  kötü aksiyon ofansif kurulumda da kötü kalır. Aynı turda ikinci kök neden bulundu: **ara pas
+  bedavaydı** — hat arkası boşluk hedefe kimin önce varacağı hesaba katılmadan tehdit sayılıyordu
+  (maç başına 24-88 ara pas). ME 7.6 alan kontrolü eklendi: hedef noktaya koşucu mu, en yakın
+  savunan mı (KALECİ dahil) önce varır (`araPasUlasimBandiM`); ulaşılamayan top tehdit değildir.
+  Ara pas 32,8 → **9,3/maç** (gerçekçi bant), ofsayt 2,5 (bant 2-5 ✓). Kapı da sertleştirildi:
+  M6TacticEffect artık 6 tohumda ORTALAMA alır ve **üst sınır** denetler (etki var ama patlama yok).
+- **M6 kalibrasyon sonuçları (12 maç ort.):** gol 3,00 · şut 13,3 · korner 2,1 · faul 11,1 ·
+  kart 3,00 · ara pas 9,3 · ofsayt 2,5 · sakatlık 0,92 · bitiş enerji 442 · süre 91,3 dk.
+  Taktik yanıtı (6 tohum ort., tüm kollar ofansif): ileri üretim 36,3 → 70,3.
+- **M7 borcu (M6'da ölçülerek yazıldı):** (a) **defansif mentalite ödüllendirmiyor** — aynı kadro
+  ayna maçta (24 maç) mentalite −2 kendi xG'sini 5,52→2,34 düşürürken yediği xG'yi 3,76→5,14
+  ARTIRIYOR; kök neden derin blokta alan yoğunluğu yok (ME 7.6 tam alan kontrolü + kontra
+  geçişleri). Bu haliyle "hep hücum" baskın strateji riski taşır — 5G Dikey Dilim öncesi
+  kapatılmalı; (b) korner 2,1/maç (gerçek ~10) ve taç üretimi hâlâ düşük — kanat/orta akışı zayıf;
+  (c) sprint sayacı ~7000/maç (gerçeğin ~5 katı) — jog/yürüyüş kademesi hâlâ kaba; (d) ΣxG şut
+  başına yüksek — xG modeli ile şut kalitesi dağılımı birlikte kalibre edilmeli; (e) VAR (11.4),
+  hava/zemin (12.4), LOD (16.1), maç sonu veri paketi (15.4) hiç başlamadı.
 
 ## Bekleyen kararlar
 - Premium etkilerin public ligde şeffaf rozeti (panel M-bulgusu) → tasarım kararı, FAZ 02 öncesi.

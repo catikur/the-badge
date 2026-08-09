@@ -225,7 +225,11 @@ namespace TheBadge.Sim.Config
             public double sutMesafeUs;            // şut iştahının mesafe üssü (M4 kalibrasyonu)
             public double araPasIleriM;           // ara pasın alıcının önüne bıraktığı mesafe (M5)
             public double araPasRisk;             // ara pasın ek kayıp riski
-            public double araPasKotuZamanlama;    // koşu zamanlama hatası → ofsayt (ME 10.5)
+            public double araPasUlasimBandiM;     // ulaşım yarışında %50→%100'e taşıyan mesafe farkı (m)
+            public double araPasKotuZamanlama;// koşu zamanlama hatası → ofsayt (ME 10.5)
+            public double mentaliteTehditCarpan;  // mentalite ucunda wThreat kayması (±oran, ME 7.2/14.2)
+            public double mentaliteRiskTolerans;  // mentalite ucunda wRisk kayması (±oran — kayıp korkusu)
+            public double tempoTutCezasi;         // tempo başına "topu tut" cezası
         }
 
         /// <summary>Topsuz vektör karması ağırlıkları — ME Spec 7.4 [KALİBRE] (M2 alt kümesi).</summary>
@@ -243,6 +247,9 @@ namespace TheBadge.Sim.Config
             public double kanatAnchorEsikMm; // bu |anchorY| üstü kanat sayılır
             public double markajGolTarafi;   // markajcının hedefin gol tarafına iniş oranı (ME 7.5)
             public int markajSayisi;         // takım başına markaj görevi sayısı
+            public double hatTalimatEtki;    // hat talimatı başına savunma derinliği kayması (ME 7.6)
+            public double mentaliteIleriItmeM; // mentalite başına hücumda ileri itme (m, ME 7.4/14.2)
+            public double mentaliteHatEtki;  // mentalite başına savunma hattı derinliği kayması
         }
 
         /// <summary>xT (beklenen tehdit) tablosu — ME Spec 7.2 [KALİBRE]. M2: ayrıştırılabilir

@@ -43,12 +43,16 @@
     "kayipTaban": 0.08,
     "kayipKoridorRakip": 0.22,
     "kayipMesafePerM": 0.006,
-    "sutTehditCarpan": 0.2,
+    "sutTehditCarpan": 0.28,
     "sutBaskiCezasi": 0.35,
     "sutMesafeUs": 1.1,
     "araPasIleriM": 12.0,
-    "araPasRisk": 0.4,
-    "araPasKotuZamanlama": 0.14
+    "araPasRisk": 0.28,
+    "araPasUlasimBandiM": 18.0,
+    "araPasKotuZamanlama": 0.3,
+    "mentaliteTehditCarpan": 0.15,
+    "mentaliteRiskTolerans": 0.1,
+    "tempoTutCezasi": 0.08
   },
   "offball": {
     "wTop": 0.25,
@@ -61,7 +65,10 @@
     "kanatGenislikM": 6.0,
     "kanatAnchorEsikMm": 15000,
     "markajGolTarafi": 0.18,
-    "markajSayisi": 3
+    "markajSayisi": 3,
+    "hatTalimatEtki": 0.09,
+    "mentaliteIleriItmeM": 1.5,
+    "mentaliteHatEtki": 0.06
   },
   "xt": {
     "kolon": [
