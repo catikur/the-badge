@@ -42,13 +42,13 @@
     "dribbleIleriM": 6.0,
     "kayipTaban": 0.08,
     "kayipKoridorRakip": 0.22,
+    "pasKesmeBandiSn": 0.7,
     "kayipMesafePerM": 0.006,
-    "sutTehditCarpan": 0.28,
+    "sutTehditCarpan": 0.15,
     "sutBaskiCezasi": 0.35,
-    "sutMesafeUs": 1.1,
     "araPasIleriM": 12.0,
     "araPasRisk": 0.28,
-    "araPasUlasimBandiM": 18.0,
+    "araPasUlasimBandiM": 24.0,
     "araPasKotuZamanlama": 0.3,
     "mentaliteTehditCarpan": 0.15,
     "mentaliteRiskTolerans": 0.1,
@@ -58,17 +58,22 @@
     "wTop": 0.25,
     "fazIleriM": 6.0,
     "savunmaCekilmeM": 8.0,
-    "hatDerinlikDf": 0.55,
-    "hatDerinlikMf": 0.8,
-    "hatDerinlikFw": 1.0,
+    "hatTabanM": 26.0,
+    "hatTopKatsayi": 0.35,
+    "hatMinM": 12.0,
+    "hatMaxM": 48.0,
+    "hatIleriMfM": 13.0,
+    "hatIleriFwM": 26.0,
     "hatYanAnchor": 0.55,
     "kanatGenislikM": 6.0,
     "kanatAnchorEsikMm": 15000,
     "markajGolTarafi": 0.18,
     "markajSayisi": 3,
-    "hatTalimatEtki": 0.09,
+    "presKesmeSn": 0.6,
+    "kanalKapamaM": 4.0,
+    "hatTalimatM": 4.0,
     "mentaliteIleriItmeM": 1.5,
-    "mentaliteHatEtki": 0.06
+    "mentaliteHatM": 3.0
   },
   "xt": {
     "kolon": [
@@ -110,7 +115,7 @@
   "gk": {
     "tReactBase": 0.16,
     "tReactPerReflexEksik": 0.0016,
-    "reachBase": 1.6,
+    "reachBase": 1.9,
     "reachAgilityFactor": 2.2,
     "logisticSlope": 6.5,
     "saveClampMin": 0.04,
@@ -121,14 +126,15 @@
     "derinlikPerM": 0.08,
     "derinlikMax": 5.5,
     "yakinMesafeM": 15.0,
-    "yakinKapatmaKatsayi": 0.95
+    "yakinKapatmaKatsayi": 1.6
   },
   "shotExec": {
     "sutMaxMesafeM": 30.0,
+    "sutYariMesafeM": 12.0,
     "sutHiziMS": 24.0,
-    "sutSigmaTabanDeg": 30.0,
+    "sutSigmaTabanDeg": 38.0,
     "nisanDirekOrani": 0.45,
-    "blokOlasilik": 0.45
+    "blokOlasilik": 0.55
   },
   "setpiece": {
     "penalty": {
@@ -154,7 +160,7 @@
     "foulEsikTaban": 0.38,
     "strictnessCarpan": 0.002,
     "griBantOrta": 0.06,
-    "sariEsik": 0.46,
+    "sariEsik": 0.48,
     "kirmiziEsik": 0.8,
     "cezaSahasiIhtiyatCarpan": 0.6
   },

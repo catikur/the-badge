@@ -124,6 +124,7 @@ namespace TheBadge.Sim.Config
         public sealed class ShotExecCfg
         {
             public double sutMaxMesafeM;       // karar: bu mesafenin dışında şut aday olmaz
+            public double sutYariMesafeM;      // mesafe tehdidinin yarıya düştüğü mesafe (m, rasyonel çekirdek)
             public double sutHiziMS;
             public double sutSigmaTabanDeg;    // nişan sapması AÇISAL (derece) — mesafeyle büyür
             public double nisanDirekOrani;     // nişan noktası: direk yarı genişliğinin bu oranı
@@ -207,7 +208,8 @@ namespace TheBadge.Sim.Config
             public double kontrolYaricapM;     // serbest topu kontrol alma yarıçapı
             public double tackleYaricapM;      // taşıyıcıya müdahale yarıçapı
             public double driblinYaricapM;     // dribling düellosunu tetikleyen ön mesafe
-            public int tackleCooldownTicks;    // müdahale sonrası aksiyon kilidi
+            public int tackleCooldownTicks;
+            public int yenidenAlmaTicks;     // topu oynayanın geri alma kilidi (tick, ME 4.3)    // müdahale sonrası aksiyon kilidi
             public double tackleLooseHizMS;    // kazanılan top bu hızla açığa çıkar
         }
 
@@ -220,9 +222,9 @@ namespace TheBadge.Sim.Config
             public int adayTabani, adayVisionBolen; // aday_sayısı = taban + Vision/bolen (ME 7.2)
             public double dribbleIleriM;          // dribling hedef ilerlemesi
             public double kayipTaban, kayipKoridorRakip, kayipMesafePerM; // P_kayıp hızlı tahmini
+            public double pasKesmeBandiSn;        // pas kesme yarışında %50→%100 taşıyan zaman marjı (sn)
             public double sutTehditCarpan;        // şut adayının tehdit ağırlığı (M3)
             public double sutBaskiCezasi;         // yakın rakip başına şut iştahı cezası (M4)
-            public double sutMesafeUs;            // şut iştahının mesafe üssü (M4 kalibrasyonu)
             public double araPasIleriM;           // ara pasın alıcının önüne bıraktığı mesafe (M5)
             public double araPasRisk;             // ara pasın ek kayıp riski
             public double araPasUlasimBandiM;     // ulaşım yarışında %50→%100'e taşıyan mesafe farkı (m)
@@ -239,17 +241,23 @@ namespace TheBadge.Sim.Config
             public double wTop;              // top çekimi ağırlığı
             public double fazIleriM;         // hücumda ileri itme (m)
             public double savunmaCekilmeM;   // (eski) — savunma bloku vektörüne devredildi
-            public double hatDerinlikDf;     // savunma bloku: top-kale çizgisinde DF derinliği
-            public double hatDerinlikMf;
-            public double hatDerinlikFw;
+            // ME 7.6 hat formülü: hat_x = taban(talimat) + hatTopKatsayi × (top_x − saha_ortası)
+            public double hatTabanM;         // savunma hattının kendi kalesine mesafesi (m)
+            public double hatTopKatsayi;     // topun orta sahaya göre kaymasının hatta etkisi (spec: 0,35)
+            public double hatMinM;           // hat taban kırpması — en derin blok (m)
+            public double hatMaxM;           // hat taban kırpması — en yüksek blok (m)
+            public double hatIleriMfM;       // orta sahanın hattın önündeki mesafesi (m)
+            public double hatIleriFwM;       // forvetin hattın önündeki mesafesi (m)
             public double hatYanAnchor;      // yanal konum: anchor payı (kalanı topa hizalanır)
             public double kanatGenislikM;    // kanat rollerinin touchline açılımı (ME 7.4-A)
             public double kanatAnchorEsikMm; // bu |anchorY| üstü kanat sayılır
             public double markajGolTarafi;   // markajcının hedefin gol tarafına iniş oranı (ME 7.5)
             public int markajSayisi;         // takım başına markaj görevi sayısı
-            public double hatTalimatEtki;    // hat talimatı başına savunma derinliği kayması (ME 7.6)
+            public double presKesmeSn;       // pres öngörü süresi — kesme noktası (sn, ME 7.4-B)
+            public double kanalKapamaM;      // ikinci savunanın topun gol tarafına iniş mesafesi (m)
+            public double hatTalimatM;       // hat talimatı başına hat kayması (m, ME 7.6/14.2)
             public double mentaliteIleriItmeM; // mentalite başına hücumda ileri itme (m, ME 7.4/14.2)
-            public double mentaliteHatEtki;  // mentalite başına savunma hattı derinliği kayması
+            public double mentaliteHatM;     // ofansif mentalite başına hat yükselmesi (m)
         }
 
         /// <summary>xT (beklenen tehdit) tablosu — ME Spec 7.2 [KALİBRE]. M2: ayrıştırılabilir

@@ -169,6 +169,41 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   başına yüksek — xG modeli ile şut kalitesi dağılımı birlikte kalibre edilmeli; (e) VAR (11.4),
   hava/zemin (12.4), LOD (16.1), maç sonu veri paketi (15.4) hiç başlamadı.
 
+- M7 (savunma hattı + taktik dengesi) uygulandı (2026-08-09, plan onayı Atilla):
+  **ME 7.6 hat formülü BİREBİR uygulandı** — `hat_x = taban(talimat) + 0,35 × (top_x − saha_ortası)`.
+  Eski "kaleye oran" biçimi (hat = kale + oran×(top−kale)) top geri gelince savunma hattını kale
+  çizgisine YAPIŞTIRIYOR, ofsayt çizgisi de onunla çöküyor, rakip forvet altı pasa kadar kamp
+  kurabiliyordu — M6'da yazılan "defansif mentalite ödüllendirmiyor" borcunun kök nedeni buydu.
+  Ayrıca: **kesme ve kanal kapama** (ME 7.4-B) — birinci presçi taşıyıcının/topun öngörü noktasına,
+  ikincisi topun KENDİ KALESİ tarafına iner; **serbest topta buluşma noktası** (ME 6.5/8.2:
+  yuvarlanma yavaşlaması altında topun t saniye sonraki yeri); **buluşma noktalı pas** — top
+  uçarken alıcı yerinde durmadığı için pas alıcının GELECEK konumuna atılır; **fiziksel pas kesme
+  riski** — koridordaki rakip SAYMAK yerine "top mu çizgiye önce varır" zaman yarışı;
+  **rasyonel şut mesafe çekirdeği** 1/(1+(d/d0)²) — doğrusal biçim 14 m ötesini tümüyle eliyordu.
+  Teşhis sayaçları eklendi (hash dışı, ME 15.4 paketinin çekirdeği): şut mesafesi, şut anındaki
+  baskı, xG'ye giren şut sayısı.
+- **M7 kalibrasyon (12 maç ort.):** gol 3,75 · şut 29,6 · **korner 9,7 (ME 17.2 bandı 8-12 ✓, M6'da
+  2,1'di)** · faul 12,7 · kart 4,17 · ofsayt 2,4 ✓ · sakatlık 0,25 · ara pas 6,7 · bitiş enerji 422.
+  Hat formülü korner ve faul üretimini kendiliğinden banda taşıdı — kanat/duran top borcunun bir
+  kısmı savunma geometrisi hatasıymış.
+- **Yeni kapı — M7 taktik dengesi (ayna kadro, 10 maç):** nitelikleri BİREBİR aynı iki takım,
+  tek değişken taktik. Sonuç: nötr 6,83/5,11 · ofansif 9,33/5,99 · defansif 3,80/10,44.
+  `M7MirrorSymmetry` (taraf yanlılığı yok, %29) ve `M7AttackTradeoff` (+%37 üretim / +%17 risk)
+  YEŞİL: hücum artık bedelsiz değil.
+- **M8 BAŞLIĞI — alım/sahiplik modeli (ölçülerek yazıldı, Dikey Dilim öncesi kapatılmalı):**
+  `M7DefendRegresyon` kapısı bugünkü gerçeği kilitliyor ama HEDEFİ tutmuyor: defansif kurulum
+  yediği xG'yi ×2,04 ARTIRIYOR (hedef <1,00). Kök neden zinciri ölçüldü: **pas isabeti %55**
+  (ME 17.2 bandı %78-86) → kendi yarı sahanda güvenli oynamak "top kaybı = net şans" demek →
+  savunmak cezalandırılıyor. Denenen ve GERİ ALINAN müdahaleler (kanıtlarıyla): (a) nişan sapması
+  sıfırlandı → isabet yine %55 (yani sorun nişan DEĞİL); (b) süpürme (swept) sahiplik testi →
+  maç başına 28 gol / 143 şut, çekirdek dengesizleşti; (c) geri alma kilidi + bağıl hız kontrol
+  yarıçapı → gerçek isabet %21-25 olarak ortaya çıktı (mevcut %55'in önemli kısmı pasçının kendi
+  pasını geri alması). Sonuç: alım/sahiplik modeli (süpürme çarpışması + ilk dokunuş + lane seçimi)
+  KENDİ dilimini ve kendi kalibrasyon bütçesini hak ediyor; parça parça yamayla düzelmiyor.
+- **M7 sonrası kalan borçlar:** şut başına xG 0,47 (gerçek ~0,10; ortalama şut mesafesi 9,7 m,
+  gerçek ~17 m — aynı kök: ceza sahasında yoğunluk yok); sprint sayacı ~6200/maç; taç üretimi 0;
+  VAR (11.4), hava/zemin (12.4), LOD (16.1), maç sonu veri paketi (15.4) başlamadı.
+
 ## Bekleyen kararlar
 - Premium etkilerin public ligde şeffaf rozeti (panel M-bulgusu) → tasarım kararı, FAZ 02 öncesi.
 - ~~3G Greybox Fun Gate GO/NO-GO~~ → **KAPANDI (2026-08-08): NO-GO %40** — uygulama yukarıdaki kapanış bölümünde; sunum revizyonu + mülakatlı doğrulama turu Dikey Dilim öncesi BORÇ.
