@@ -43,6 +43,7 @@ namespace TheBadge.Sim.Match
         public uint ActionUntilTick;
         public ushort Sprints;           // yüksek yoğunluklu efor sayacı (ME 12.1 — Panorama/antrenman verisi)
         public short MarkTarget;         // markaj görevi: hedef ajan slotu (-1 = bölgesel) — ME 7.5
+        public byte BenchSlot;           // 0 = ilk 11; 1..N = bu formayı giyen yedeğin indeksi+1 (M6)
 
         /// <summary>Sahada aktif mi — kırmızı kart ya da sahayı terk ettiren sakatlık yoksa (ME 12.2).</summary>
         public bool Active => !SentOff && Injury <= InjuryState.Hafif;
@@ -54,6 +55,18 @@ namespace TheBadge.Sim.Match
         public int LineHeightMm;         // savunma hattı (mm) — taktik delta hedefi (ME 14.2)
         public byte PressMode;
         public sbyte Momentum;           // -10..+10 takım momentumu (ME 12.3)
+
+        // M6 — canlı taktik durumu (ME 14.2 delta hedefleri; CB Spec squad.set_team_tactic alanları).
+        // Hepsi -2..+2 bandında sbyte: nötr 0, uçlar "çok defansif / çok ofansif" (GDD 3.2).
+        public sbyte Mentalite;          // hücum iştahı + hat yüksekliği eğilimi
+        public sbyte Tempo;              // karar hızı / ileri oynama eğilimi
+        public sbyte Pres;               // pres şiddeti (tetik yarıçapı + enerji maliyeti)
+        public sbyte Hat;                // savunma hattı yüksekliği ayarı
+
+        public byte SubsUsed;            // kullanılan değişiklik hakkı (ME 14.2 / GDD 12.4)
+        public uint MotivationReadyTick; // motivasyon konuşması bekleme süresi (ME 14.3: 10 dk)
+        public uint MotivationUntilTick; // aktif konuşma etkisinin bitiş tick'i
+        public byte MotivationTone;      // 0 sakinleştir / 1 ateşle / 2 uyar (etkisi süre boyunca)
     }
 
     /// <summary>Maçın KALICI durumu — yalnız tamsayı alanlar (ME Spec 3.2/5.2).
@@ -81,5 +94,12 @@ namespace TheBadge.Sim.Match
         public uint StoppageTicks;          // duraklama birikimi → uzatma (ME 3.4)
         public byte Half;                   // 1 ilk devre, 2 ikinci devre
         public uint HalfEndTick;            // bu devrenin bitiş tick'i (uzatma dahil hesaplanır)
+
+        // M6 — bekleyen oyuncu değişiklikleri (ME 14.2: sonraki DEAD_BALL fazında uygulanır).
+        // Takım başına MaxSubs kadar bekleyebilir: gerçek maçtaki çoklu değişiklik TEK durakta
+        // yapılır. Yer/hak kalmadıysa komut KABUL anında reddedilir — kabul edilmiş bir komut
+        // asla sessizce kaybolmaz (Tek Kapı: her komudun görünür bir sonucu vardır).
+        // Yerleşim: [(takım * MaxSubs + slot) * 2] = çıkan forma slotu, +1 = kulübe indeksi; -1 = boş.
+        public short[] PendingSubs;   // [2 * MaxSubs * 2] — maç başında bir kez tahsis (ME 16.2)
     }
 }

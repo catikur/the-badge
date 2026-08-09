@@ -14,7 +14,7 @@ namespace TheBadge.Sim.Match
     /// Determinizm: yalnız int kalıcı durum + QuantizeMm; sin/cos TrigLut; ajan sırası sabit;
     /// tüm zarlar Rng domain akışlarından (gerekçeler çağrı yerlerinde).
     /// </summary>
-    public sealed class MatchEngine
+    public sealed class MatchEngine : CommandQueue.ISink
     {
         public const int TickMs = 100;                    // ME Spec 3.4 (LOD 0)
         public const int TicksPerSecond = 1000 / TickMs;
@@ -42,11 +42,15 @@ namespace TheBadge.Sim.Match
         public int Fouls, Advantages, Yellows, Reds, Corners, GoalKicks, ThrowIns, Penalties, FreeKicks, Blocks, Offsides;
         public int Injuries, ThroughPasses;
         public double XgHome, XgAway; // xG KAYIT gerçeği (ME 15.2) — sonuç üretimine girmez
+        public double ShotDistSumM;   // şut mesafesi toplamı (m) — kalibrasyon teşhisi, hash dışı
+        public int ShotPresSum;       // şut anındaki baskı (1,2 m içi savunucu) toplamı
+        public int ShotsRecorded;     // xG'ye giren şut sayısı (penaltı hariç)
         int pendingPassTeam = -1; // pas sonrası ilk kontrol aynı takımsa tamamlanmış sayılır
         // Devre başı taban değerleri (uzatma hesabı, ME 3.4) — koşu boyunca deterministik türer;
         // durum serileştirmesi (replay resume) M-replay diliminde bunları da taşıyacak
         int halfCardsBase, halfGoalsBase; uint halfStoppageBase;
         short pendingOffsidePlayer = -1; // pas anında ofsayt konumundaki alıcı (ME 10.5)
+        short pendingReceiver = -1;      // pasın hedefi — topu KARŞILAMAYA koşar (ME 6.5)
         readonly double[] energyAccum = new double[22]; // kesirli drenaj birikimi (Energy tamsayıdır)
         readonly bool[] sprinting = new bool[22];
         readonly uint[] sprintCooldownUntil = new uint[22];
@@ -63,12 +67,43 @@ namespace TheBadge.Sim.Match
             luts = AttributeLuts.Build(balance);
             referee = cfg != null ? cfg.Referee : RefereeProfile.Default;
             if (cfg != null)
+            {
                 for (int i = 0; i < 11; i++)
                 {
                     attrs[i] = cfg.Home.Starters[i].Attributes;
                     attrs[11 + i] = cfg.Away.Starters[i].Attributes;
                 }
+                // Kulübe (M6): değişiklikte forma sahibi değişir — nitelikler buradan gelir
+                bench[0] = cfg.Home.Bench ?? Array.Empty<PlayerEntry>();
+                bench[1] = cfg.Away.Bench ?? Array.Empty<PlayerEntry>();
+            }
+            else { bench[0] = Array.Empty<PlayerEntry>(); bench[1] = Array.Empty<PlayerEntry>(); }
+            queue.Bind(this);
         }
+
+        readonly PlayerEntry[][] bench = new PlayerEntry[2][];
+        readonly bool[,] benchUsed = new bool[2, 16];
+
+        /// <summary>Takımın kulübe kadrosu (dev ekranı/otomasyon okur).</summary>
+        public PlayerEntry[] Bench(int team) => bench[team];
+
+        /// <summary>Kabul edilebilir YENİ değişiklik komutu sayısı: kullanılan haklar + henüz
+        /// uygulanmamış (ölü top bekleyen) haklar düşülür. Bekleyeni saymazsak aynı hak iki komuta
+        /// birden verilir ve biri sessizce kaybolur — M6'da yakalanan hata buydu.</summary>
+        public int SubsLeft(in MatchState st, int team) =>
+            MaxSubs - (team == 0 ? st.HomeRt.SubsUsed : st.AwayRt.SubsUsed) - PendingSubCount(in st, team);
+
+        /// <summary>Takımın ölü top bekleyen değişiklik sayısı.</summary>
+        public static int PendingSubCount(in MatchState st, int team)
+        {
+            if (st.PendingSubs == null) return 0;
+            int n = 0;
+            for (int s = 0; s < MaxSubs; s++)
+                if (st.PendingSubs[(team * MaxSubs + s) * 2] >= 0) n++;
+            return n;
+        }
+
+        public const int MaxSubs = 3;   // GDD 12.4 standart; premium genişletme FAZ 04
 
         public static MatchState CreateInitialState()
         {
@@ -79,8 +114,10 @@ namespace TheBadge.Sim.Match
                 Half = 1,
                 SetPiece = SetPieceType.Kickoff,
                 SetPieceTaker = -1,
+                PendingSubs = new short[2 * MaxSubs * 2],
                 Agents = new PlayerAgentState[22] // tek tahsis — sıcak yol zero-alloc (ME 16.2)
             };
+            for (int i = 0; i < s.PendingSubs.Length; i++) s.PendingSubs[i] = -1;
             s.Ball.OwnerId = -1;
             s.Ball.LastTouchTeam = 2;
             for (short i = 0; i < 22; i++)
@@ -90,7 +127,8 @@ namespace TheBadge.Sim.Match
                     Id = i,
                     TeamIdx = (byte)(i < 11 ? 0 : 1),
                     Energy = 1000,
-                    Injury = InjuryState.None
+                    Injury = InjuryState.None,
+                    MarkTarget = -1
                 };
             }
             return s;
@@ -159,6 +197,8 @@ namespace TheBadge.Sim.Match
             if (st.Phase == MatchPhase.FullTime) return; // maç bitti — durum donar
             RefreshStateCache(ref st);         // 0) A_eff bağlam önbelleği (enerji/momentum/sakatlık)
             queue.ApplyDue(st.Tick, ref st);   // 1) müdahaleler (Bölüm 14)
+            // Ölü topta bekleyen değişiklikler uygulanır (ME 14.2 uygulama anı)
+            if (st.Phase != MatchPhase.OpenPlay) ApplyPendingSubs(ref st);
             PerceptionPass(ref st);            // 2) uzamsal grid — M-karar ilerisi doldurur
             DecisionPass(ref st);              // 3) kademeli karar (agentId mod 5) — ME 4.2
             ActionResolutionPass(ref st);      // 4) kontrol/tackle düelloları + yapıştırma
@@ -224,24 +264,38 @@ namespace TheBadge.Sim.Match
             // Zar gerekçesi: karar gürültüsü DECISION domain'i — "yanlış tercih" chaos'u (ME 7.2/13.2).
             // Sigma ölçekleri: yorgun beyin hatası (Energy<250 → +%20, ME 12.1) ve takım momentumu
             // (±%15, ME 12.3 → 7.6 momentum yayılımı).
+            var rtM = a.TeamIdx == 0 ? st.HomeRt : st.AwayRt;
             double sigmaMul = (a.Energy < bal.stamina.yorgunlukEsik ? 1.2 : 1.0)
-                              * (1.0 - momentumCache[agentId] / 10.0 * bal.momentum.decisionSigmaEtkiYuzde / 100.0);
+                              * (1.0 - momentumCache[agentId] / 10.0 * bal.momentum.decisionSigmaEtkiYuzde / 100.0)
+                              // "Uyar" tonu: hedef takımın karar sigması 10 dk %10 düşer (ME 14.3)
+                              * (rtM.MotivationTone == (byte)ToneType.Uyar && st.Tick < rtM.MotivationUntilTick ? 0.9 : 1.0);
             double Noise(uint salt) =>
                 bal.chaos.decisionSigma.orta * sigmaMul
                 * Rng.Gauss01(seed, Domain.Decision, (uint)(100 + agentId), tick, salt);
 
-            // Tut (HoldShield) — P_kayıp düşük ama tehdit üretmez
+            // TAKTİK EĞİLİMİ — ME 7.2/14.2: mentalite fayda AĞIRLIKLARINI kaydırır, sabit bonus VERMEZ.
+            // Ofansif kurulum tehdidi daha çok değerler ve top kaybından daha az korkar; defansif tersi.
+            // Çarpımsal olduğu için kendini sınırlar: kötü aksiyon ofansif kurulumda da kötü kalır.
+            // (Sabit "ileri bonusu" denendi ve motoru patlattı — mentalite +2 maç başına 15 gol / 73 şut
+            //  üretiyordu; kalibrasyon kaydı DECISIONS.md M6.)
+            var rtA = a.TeamIdx == 0 ? st.HomeRt : st.AwayRt;
+            double mentK = rtA.Mentalite / 2.0;                                   // -1..+1
+            double wThreat = u.wThreat * (1.0 + mentK * u.mentaliteTehditCarpan);
+            double wRisk = u.wRisk * (1.0 - mentK * u.mentaliteRiskTolerans);
+
+            // Tut (HoldShield) — P_kayıp düşük ama tehdit üretmez; yüksek tempo tutmayı cezalandırır
             {
-                double s0 = u.wRisk * (1.0 - 0.15) + u.wVar * Noise(1);
+                double s0 = wRisk * (1.0 - 0.15) - rtA.Tempo * u.tempoTutCezasi + u.wVar * Noise(1);
                 if (s0 > best) { best = s0; bestKind = 0; bestTarget = -1; }
             }
+
             // Dribble: rakip kalesine doğru ilerleme
             {
                 int dir = a.TeamIdx == 0 ? 1 : -1;
                 int nxMm = ClampX(a.X + dir * (int)(u.dribbleIleriM * 1000));
                 double dXt = XtAt(nxMm, a.Y, a.TeamIdx) - curXt;
                 double pLoss = u.kayipTaban + NearOpponents(ref st, a.X, a.Y, a.TeamIdx) * 0.12;
-                double s1 = u.wThreat * dXt + u.wRisk * (1.0 - Math.Min(0.9, pLoss)) + u.wVar * Noise(2);
+                double s1 = wThreat * dXt + wRisk * (1.0 - Math.Min(0.9, pLoss)) + u.wVar * Noise(2);
                 if (s1 > best) { best = s1; bestKind = 1; bestTarget = -1; }
             }
             // Kısa paslar
@@ -251,8 +305,10 @@ namespace TheBadge.Sim.Match
                 double dM = Math.Sqrt((double)candD2[c]) / 1000.0;
                 double dXt = XtAt(st.Agents[j].X, st.Agents[j].Y, a.TeamIdx) - curXt;
                 double pLoss = u.kayipTaban + u.kayipMesafePerM * dM
-                               + u.kayipKoridorRakip * CorridorOpponents(ref st, a.X, a.Y, st.Agents[j].X, st.Agents[j].Y, a.TeamIdx);
-                double sc = u.wThreat * dXt + u.wRisk * (1.0 - Math.Min(0.95, pLoss)) + u.wVar * Noise((uint)(3 + c));
+                               + u.kayipKoridorRakip * PassInterceptRisk(ref st, a.X, a.Y,
+                                     st.Agents[j].X, st.Agents[j].Y, a.TeamIdx, PassSpeed(dM));
+                double sc = wThreat * dXt + wRisk * (1.0 - Math.Min(0.95, pLoss))
+                            + u.wVar * Noise((uint)(3 + c));
                 if (sc > best) { best = sc; bestKind = 2; bestTarget = j; }
             }
 
@@ -264,7 +320,12 @@ namespace TheBadge.Sim.Match
                 double dGoal = Math.Sqrt(dxG * dxG + dyG * dyG);
                 if (dGoal <= bal.shotExec.sutMaxMesafeM)
                 {
-                    double closeness = 1.0 - dGoal / bal.shotExec.sutMaxMesafeM;
+                    // Mesafe tehdidi: RASYONEL çekirdek 1/(1+(d/d0)²). Doğrusal "closeness" biçimi
+                    // 14 m'nin ötesini tümüyle eliyordu → ortalama şut mesafesi 10 m (gerçek ~17 m)
+                    // ve xG/şut 0,50 (gerçek ~0,10). ln/atan karar yolunda yasak (ME 3.2); rasyonel
+                    // biçim deterministik, ucuz ve kuyruğu gerçekçi.
+                    double dRatio = dGoal / bal.shotExec.sutYariMesafeM;
+                    double closeness = 1.0 / (1.0 + dRatio * dRatio);
                     double central = 1.0 - Math.Min(1.0, Math.Abs((double)a.Y) / PitchHalfYmm);
                     double fin = Composite(i, 0.55, attrs[i].Finishing, 0.25, attrs[i].Composure, 0.2, attrs[i].FirstTouch) / 100.0;
                     // Baskı: kalabalık ceza sahasında şut iştahı düşer (ME 15.2 pres katsayısının
@@ -272,10 +333,10 @@ namespace TheBadge.Sim.Match
                     int presN = Math.Min(2, NearOpponents(ref st, a.X, a.Y, a.TeamIdx, 1500));
                     // Mesafe üssü [KALİBRE]: 2.0 iken yalnız 6-8 m'den şut çıkıyor (dönüşüm gerçek
                     // dışı yüksek); düşük üs uzaktan şutu da aday yapar → mesafe dağılımı gerçekçileşir
-                    double proxy = Math.Pow(closeness, u.sutMesafeUs) * (0.4 + 0.6 * central)
+                    double proxy = closeness * (0.4 + 0.6 * central)
                                    * (0.5 + 0.5 * fin) * (1.0 - u.sutBaskiCezasi * presN);
-                    double s3 = u.wThreat * u.sutTehditCarpan * proxy
-                                + u.wRisk * proxy + u.wVar * Noise(14);
+                    double s3 = wThreat * u.sutTehditCarpan * proxy
+                                + wRisk * proxy + u.wVar * Noise(14);
                     if (s3 > best) { best = s3; bestKind = 3; bestTarget = -1; }
                 }
             }
@@ -295,10 +356,20 @@ namespace TheBadge.Sim.Match
                 if (runner >= 0 && bestAdv * dirF >= 0)
                 {
                     int tgtX = ClampX(st.Agents[runner].X + dirF * (int)(u.araPasIleriM * 1000));
-                    double dXt = XtAt(tgtX, st.Agents[runner].Y, a.TeamIdx) - curXt;
-                    double pLoss = u.kayipTaban + u.araPasRisk
-                                   + u.kayipKoridorRakip * CorridorOpponents(ref st, a.X, a.Y, tgtX, st.Agents[runner].Y, a.TeamIdx);
-                    double s4 = u.wThreat * dXt + u.wRisk * (1.0 - Math.Min(0.95, pLoss)) + u.wVar * Noise(13);
+                    int tgtY = st.Agents[runner].Y;
+                    // ULAŞIM YARIŞI — ME 7.6 alan kontrolü: boşluğa pas BEDAVA DEĞİLDİR. O noktaya
+                    // koşucu mu, en yakın savunan mı (KALECİ dahil) önce varır? Bu terim olmadan
+                    // hat arkası bedava alan sayılıyor, motor maç başına 60-90 ara pas atıyordu.
+                    double dRunM = Math.Sqrt((double)Dist2(st.Agents[runner].X, st.Agents[runner].Y, tgtX, tgtY)) / 1000.0;
+                    double dDefM = NearestOpponentDistMm(ref st, tgtX, tgtY, a.TeamIdx) / 1000.0;
+                    double pVar = 0.5 + (dDefM - dRunM) / (2.0 * u.araPasUlasimBandiM);
+                    if (pVar < 0.05) pVar = 0.05; else if (pVar > 0.95) pVar = 0.95;
+                    // Ulaşılamayan topun tehdidi yoktur; 50/50 yarışta risk araPasRisk'e eşitlenir
+                    // (katsayının eski anlamı korunur — kalibrasyon sürekliliği).
+                    double dXt = (XtAt(tgtX, tgtY, a.TeamIdx) - curXt) * pVar;
+                    double pLoss = u.kayipTaban + u.araPasRisk * 2.0 * (1.0 - pVar)
+                                   + u.kayipKoridorRakip * CorridorOpponents(ref st, a.X, a.Y, tgtX, tgtY, a.TeamIdx);
+                    double s4 = wThreat * dXt + wRisk * (1.0 - Math.Min(0.95, pLoss)) + u.wVar * Noise(13);
                     if (s4 > best) { best = s4; bestKind = 4; bestTarget = runner; }
                 }
             }
@@ -364,14 +435,29 @@ namespace TheBadge.Sim.Match
         void ExecutePass(ref MatchState st, int i, int j, int aheadMm = 0)
         {
             ref var a = ref st.Agents[i];
-            double dxM = (st.Agents[j].X + aheadMm - a.X) / 1000.0, dyM = (st.Agents[j].Y - a.Y) / 1000.0;
+            // BULUŞMA NOKTASI (ME 6.5 geometrik çözüm): top uçarken alıcı yerinde durmaz.
+            // Alıcının O ANKİ yerine pas atmak pas isabetini %55'te kilitliyordu (mükemmel nişanla
+            // bile: kanıt, sigma=0 koşusu da %55 verdi) — top alıcının ESKİ yerine gidiyordu.
+            int tgtX = st.Agents[j].X + aheadMm, tgtY = st.Agents[j].Y;
+            for (int it = 0; it < 2; it++)
+            {
+                double ddx = (tgtX - a.X) / 1000.0, ddy = (tgtY - a.Y) / 1000.0;
+                double dd = Math.Sqrt(ddx * ddx + ddy * ddy);
+                if (dd < 0.5) break;
+                double vv = PassSpeed(dd);
+                double disc = vv * vv - 2.0 * bal.physics.aRollKuru * dd;
+                double tFly = disc <= 0 ? dd / vv : (vv - Math.Sqrt(disc)) / bal.physics.aRollKuru;
+                tgtX = st.Agents[j].X + aheadMm + (int)(st.Agents[j].Vx * tFly);
+                tgtY = st.Agents[j].Y + (int)(st.Agents[j].Vy * tFly);
+            }
+            tgtX = ClampX(tgtX); tgtY = ClampY(tgtY);
+
+            double dxM = (tgtX - a.X) / 1000.0, dyM = (tgtY - a.Y) / 1000.0;
             double dM = Math.Sqrt(dxM * dxM + dyM * dyM);
             if (dM < 0.5) return;
 
             var p = bal.pass;
-            double v0 = Math.Sqrt(2.0 * bal.physics.aRollKuru * dM); // d = v²/2a tersi (ME 8.2)
-            if (v0 < p.groundSpeedMin) v0 = p.groundSpeedMin;
-            if (v0 > p.groundSpeedMax) v0 = p.groundSpeedMax;
+            double v0 = PassSpeed(dM);
 
             int passingEff = Eff(i, attrs[i].Passing);
             double sigmaDeg = p.sigma0Deg * (1.0 - passingEff / 125.0)
@@ -394,9 +480,8 @@ namespace TheBadge.Sim.Match
             int oline = OffsideLineX(ref st, a.TeamIdx);
             bool beyond = a.TeamIdx == 0 ? st.Agents[j].X > oline : st.Agents[j].X < oline;
             pendingOffsidePlayer = beyond ? (short)j : (short)-1;
-            // Alıcı topu karşılamaya koşar
-            st.Agents[j].TargetX = ClampX(st.Ball.X + (int)(dxM * 400));
-            st.Agents[j].TargetY = ClampY(st.Ball.Y + (int)(dyM * 400));
+            // Alıcı topu KARŞILAR: hedefi her tick buluşma noktasına göre tazelenir (OffBallTarget)
+            pendingReceiver = (short)j;
         }
 
         /// <summary>Şut — ME 6.4/8.3 + kurtarış ANALİTİK ön-çözümü (9.2): sonuç topun gerçek
@@ -562,6 +647,9 @@ namespace TheBadge.Sim.Match
                        + g.bPres * pres + (header ? g.bHeader : 0.0);
             double xg = 1.0 / (1.0 + Math.Exp(-z));
             if (a.TeamIdx == 0) XgHome += xg; else XgAway += xg;
+            // Şut kalitesi teşhisi (ME 15.4 maç sonu paketinin çekirdeği; hash'e GİRMEZ):
+            // "kaç metreden ve ne kadar baskı altında şut çıkıyor" kalibrasyonun asıl sorusu.
+            ShotDistSumM += dGoal; ShotPresSum += pres; ShotsRecorded++;
         }
 
         /// <summary>Topsuz hedef — ME 7.4 alt kümesi: Anchor OMURGA; hücumda ileri itme,
@@ -620,10 +708,52 @@ namespace TheBadge.Sim.Match
             // Tam tetik seti (geri pas, tuzak bölgesi, pres şiddeti talimatı) M-taktik diliminde.
             int owner = st.Ball.OwnerId;
             bool oppOrFree = owner < 0 || st.Agents[owner].TeamIdx != a.TeamIdx;
-            if (oppOrFree && NearestRankToBall(ref st, i) < 2)
+            // Pres şiddeti talimatı (ME 7.6/14.2): kaç ajanın prese çıkacağını ölçekler
+            var rtP = a.TeamIdx == 0 ? st.HomeRt : st.AwayRt;
+            int presSayi = 2 + rtP.Pres;
+            if (presSayi < 1) presSayi = 1; else if (presSayi > 4) presSayi = 4;
+            // PASIN ALICISI: top serbestken buluşma noktasına koşar (ME 6.5). Pas anında tek
+            // sefer hedef vermek yetmiyordu — top alıcının yanından geçip gidiyor, pas isabeti
+            // %45'te kalıyordu (ME 17.2 bandı %78-86). Alıcı pres sırasından ÖNCE gelir.
+            if (i == pendingReceiver && owner < 0 && st.Ball.Flight == 0)
             {
-                a.TargetX = ClampX(st.Ball.X);
-                a.TargetY = ClampY(st.Ball.Y);
+                BallInterceptPoint(ref st, i, out int rpx, out int rpy);
+                a.TargetX = rpx; a.TargetY = rpy;
+                return;
+            }
+
+            int presRank = NearestRankToBall(ref st, i);
+            if (oppOrFree && presRank < presSayi)
+            {
+                if (presRank == 0)
+                {
+                    if (owner < 0)
+                    {
+                        // SERBEST TOP: buluşma noktasına koş (ME 6.5/8.2) — topun ŞU ANKİ yerine
+                        // koşmak hep geriden gelmektir. Pas alıcısı topu karşılayamadığı için
+                        // pas isabeti %45'te kalıyordu (ME 17.2 bandı %78-86).
+                        BallInterceptPoint(ref st, i, out int ipx, out int ipy);
+                        a.TargetX = ipx; a.TargetY = ipy;
+                    }
+                    else
+                    {
+                        // KESME (ME 7.4-B): saf kovalama hep geriden gelir — taşıyıcının hız
+                        // vektörü boyunca öngörülü nokta hedeflenir.
+                        a.TargetX = ClampX(st.Ball.X + (int)(st.Agents[owner].Vx * o.presKesmeSn));
+                        a.TargetY = ClampY(st.Ball.Y + (int)(st.Agents[owner].Vy * o.presKesmeSn));
+                    }
+                }
+                else
+                {
+                    // KANAL KAPAMA (ME 7.4-B): ikinci savunan topun KENDİ KALESİ tarafına iner.
+                    // Taşıyıcı ileri sürerse bir gövdeye çarpar; ceza sahasına yürüyerek girmek
+                    // artık bedava değildir (ortalama şut mesafesi 9,7 m'ydi — gerçek ~17 m).
+                    int ogX = a.TeamIdx == 0 ? -PitchHalfXmm : PitchHalfXmm;
+                    double vX = ogX - st.Ball.X, vY = 0 - st.Ball.Y;
+                    double vn = Math.Max(1.0, Math.Sqrt(vX * vX + vY * vY));
+                    a.TargetX = ClampX(st.Ball.X + (int)(vX / vn * o.kanalKapamaM * 1000.0));
+                    a.TargetY = ClampY(st.Ball.Y + (int)(vY / vn * o.kanalKapamaM * 1000.0));
+                }
                 return;
             }
 
@@ -631,26 +761,42 @@ namespace TheBadge.Sim.Match
             bool attacking = ownerTeam == a.TeamIdx;
             int dir = a.TeamIdx == 0 ? 1 : -1;
 
+            // Mentalitenin TOPSUZ karşılığı (ME 7.4/14.2): ofansif kurulum takımı yukarı taşır.
+            // Bedeli burada doğar — hücumda daha ileri duran takım savunmada daha yüksek hatla
+            // yakalanır, arkasındaki alan büyür. Bu terim olmadan "hep tam hücum" bedava üstünlük.
+            var rtT = a.TeamIdx == 0 ? st.HomeRt : st.AwayRt;
+
             double bx, by;
             if (attacking)
             {
                 // Hücum: anchor omurgası + ileri itme (ME 7.4-A) + GENİŞLİK: kanat rolleri
                 // touchline'a açılır. Bu vektör olmadan oyun merkeze sıkışıyor ve taç üretimi
                 // sıfıra iniyordu (M4 borcu).
-                bx = a.AnchorX + dir * o.fazIleriM * 1000.0;
+                bx = a.AnchorX + dir * (o.fazIleriM + rtT.Mentalite * o.mentaliteIleriItmeM) * 1000.0;
                 by = a.AnchorY;
                 if (Math.Abs(a.AnchorY) > o.kanatAnchorEsikMm)
                     by += Math.Sign(a.AnchorY) * o.kanatGenislikM * 1000.0;
             }
             else
             {
-                // SAVUNMA BLOKU — ME 7.4-B/7.6: görev vektörü = top-kendi kalesi çizgisine iniş
-                // (kanal kapama) + hat hizalama; role göre derinlik. Bu vektör olmadan savunma
-                // alanı kapatmıyor, taşıyıcı ceza sahasına kadar yürüyordu.
+                // SAVUNMA BLOKU — ME 7.6 hat formülü BİREBİR:
+                //   hat_x = taban(talimat) + 0,35 × (top_x − saha_ortası),  kırpılmış.
+                // Eski "kaleye oran" biçimi (hat = kale + oran×(top−kale)) top geri gelince hattı
+                // kale çizgisine YAPIŞTIRIYORDU; ofsayt çizgisi de onunla çöküyor, rakip forvet
+                // altı pasa kadar kamp kurabiliyordu. Derin bloğun ödül vermemesinin kök nedeni buydu.
                 int ownGoalX = a.TeamIdx == 0 ? -PitchHalfXmm : PitchHalfXmm;
-                double depth = a.RoleId <= 2 ? o.hatDerinlikDf
-                             : a.RoleId == 3 ? o.hatDerinlikMf : o.hatDerinlikFw;
-                bx = ownGoalX + (st.Ball.X - ownGoalX) * depth;
+                double mentUp = rtT.Mentalite > 0 ? rtT.Mentalite : 0;   // ofansif mentalite hattı yukarı çeker
+                double hatTabanM = o.hatTabanM + rtT.Hat * o.hatTalimatM + mentUp * o.mentaliteHatM;
+                if (hatTabanM < o.hatMinM) hatTabanM = o.hatMinM;
+                else if (hatTabanM > o.hatMaxM) hatTabanM = o.hatMaxM;
+                // Kendi kalesinden hatTabanM metre ileri + topun orta sahaya göre kayması
+                double hatX = ownGoalX + dir * hatTabanM * 1000.0 + o.hatTopKatsayi * st.Ball.X;
+                // Rol derinliği: stoperler hatta, orta saha ve forvet hattın önünde
+                double roleIleriM = a.RoleId <= 2 ? 0.0 : a.RoleId == 3 ? o.hatIleriMfM : o.hatIleriFwM;
+                bx = hatX + dir * roleIleriM * 1000.0;
+                // Hat kendi kalesinin arkasına ya da rakip yarı sahanın dibine taşamaz
+                if (dir > 0) { if (bx < ownGoalX + 3000) bx = ownGoalX + 3000; }
+                else { if (bx > ownGoalX - 3000) bx = ownGoalX - 3000; }
                 by = a.AnchorY * o.hatYanAnchor + st.Ball.Y * (1.0 - o.hatYanAnchor);
 
                 // MARKAJ (ME 7.5): görevli savunucu, hedefinin gol tarafına iner — bölgesel
@@ -704,6 +850,10 @@ namespace TheBadge.Sim.Match
                     if (!st.Agents[i].Active) continue;
                     if (onlyGk >= 0 && i != onlyGk) continue;
                     if (deadBallTeam != 2 && st.Agents[i].TeamIdx != deadBallTeam) continue;
+                    // NOT (M7 bulgusu): burada nokta testi var — top tick başına 1,2-1,9 m yol
+                    // aldığı için tam pas çizgisindeki oyuncunun ÜZERİNDEN tünelleyebiliyor.
+                    // Süpürme testi + bağıl hız kontrolü denendi ve sahiplik çekirdeğini
+                    // dengesizleştirdi (bkz. DECISIONS.md M8 başlığı: alım/sahiplik modeli).
                     long dx = st.Agents[i].X - st.Ball.X, dy = st.Agents[i].Y - st.Ball.Y;
                     long dd = dx * dx + dy * dy;
                     if (dd > r2) continue;
@@ -793,6 +943,14 @@ namespace TheBadge.Sim.Match
             double fromBehind = (apx * c.Vx + apy * c.Vy) > 0 ? 1.0 : 0.0;
             double s = 0.4 * marginGap + 0.25 * speed + 0.2 * fromBehind;
             if (Eff(defender, attrs[defender].Aggression) > 70) s += 0.05;
+            // Motivasyon tonu kart riskine işler — ME 14.3: "Ateşle" agresif oyuncuda foul
+            // şiddetini +0,04 artırır, "Sakinleştir" düşürür
+            var rtF = d.TeamIdx == 0 ? st.HomeRt : st.AwayRt;
+            if (st.Tick < rtF.MotivationUntilTick)
+            {
+                if (rtF.MotivationTone == (byte)ToneType.Atesle && Eff(defender, attrs[defender].Aggression) > 70) s += 0.04;
+                else if (rtF.MotivationTone == (byte)ToneType.Sakinlestir) s -= 0.04;
+            }
             // Ceza sahasında savunucu AYAKTA kalır, dalmaz — şiddet skoru bu ihtiyatla ölçeklenir.
             // Model eki (spec dışı davranış gerçeği): bu çarpan olmadan penaltı sıklığı 1,2/maç
             // çıkıyordu (gerçek ~0,25). [KALİBRE referee.cezaSahasiIhtiyatCarpan]
@@ -925,8 +1083,11 @@ namespace TheBadge.Sim.Match
             {
                 v.Vx = 0; v.Vy = 0;
                 if (st.Ball.OwnerId == victim) { st.Ball.OwnerId = -1; st.Ball.Flight = 0; }
-                // Oyun durur: sakatlanan takıma duran top (oyuncu değişikliği M6 müdahale katmanında)
+                // Oyun durur: sakatlanan takıma duran top
                 AwardSetPiece(ref st, SetPieceType.FreeKick, v.TeamIdx, st.Ball.X, st.Ball.Y);
+                // Otomatik yönetim (M6): kullanıcı canlı değilse motor ZORUNLU değişikliği kendisi
+                // yapar — yoksa takım maç boyunca eksik oynardı (offline adaleti)
+                if (AutoManage) AutoSubstitute(ref st, v.TeamIdx, victim);
             }
         }
 
@@ -960,6 +1121,7 @@ namespace TheBadge.Sim.Match
             {
                 if (pendingPassTeam == a.TeamIdx) PassCompletions++;
                 pendingPassTeam = -1;
+                pendingReceiver = -1;
             }
             if (st.Ball.LastTouchTeam != 2 && st.Ball.LastTouchTeam != a.TeamIdx)
             {
@@ -1236,6 +1398,197 @@ namespace TheBadge.Sim.Match
                     st.Ball.Flight = 0;
                 }
             }
+        }
+
+        // ---------------------------------------------------------------- müdahale katmanı (ME 14)
+
+        public int TacticChanges, SubsMade, Motivations, RejectedCommands, AutoSubs;
+
+        /// <summary>Otomatik yönetim — canlı kullanıcı YOKKEN motor zorunlu kararları kendisi verir
+        /// (offline kariyer / izlenmeyen lig maçı). Canlı oyuncu bağlıysa host bunu kapatır ve
+        /// kararlar Tek Kapı'dan gelir. Kural seti bilinçli olarak DAR: sakatlıkta zorunlu değişiklik
+        /// (GDD "oto-koç" tartışması DECISIONS'ta bekleyen karar — burası yalnız adalet minimumu).</summary>
+        public bool AutoManage = true;
+
+        /// <summary>Sakatlanan oyuncunun yerine kulübeden en uygun (aynı mevki, en yüksek Finishing
+        /// yerine mevki uyumu + genel güç) yedeği alır. Deterministik: sabit tarama sırası.</summary>
+        void AutoSubstitute(ref MatchState st, byte team, int outId)
+        {
+            if (SubsLeft(in st, team) <= 0) return;
+            var b = bench[team];
+            int pick = -1, pickScore = -1;
+            byte needRole = st.Agents[outId].RoleId;
+            for (int k = 0; k < b.Length; k++)
+            {
+                if (benchUsed[team, k]) continue;
+                var e = b[k];
+                int score = (e.RoleId == needRole ? 1000 : 0)
+                            + (e.Attributes.Passing + e.Attributes.Tackling + e.Attributes.Pace) / 3;
+                if (score > pickScore) { pickScore = score; pick = k; }
+            }
+            if (pick < 0) return;
+            if (TryQueueSub(ref st, team, (short)outId, (short)pick)) AutoSubs++;
+        }
+
+        /// <summary>Komut uygulaması — ME Spec 14.2 UYGULAMA ANLARI:
+        /// taktik deltası sonraki karar tick'inde (≤250 ms → doğrudan runtime'a yazılır),
+        /// oyuncu değişikliği sonraki DEAD_BALL fazında (kuyruğa alınır),
+        /// motivasyon konuşması anında + 10 dk bekleme (14.3).
+        /// Bant/hak doğrulaması burada yapılır; reddedilen komut sayaca yazılır (CB Spec 11.1
+        /// red kodlarının motor tarafı — zarf düzeyi doğrulama Command Bus'ın işidir).</summary>
+        public void ApplyCommand(MatchCommand cmd, ref MatchState st)
+        {
+            ref var rt = ref cmd.TeamIdx == 0 ? ref st.HomeRt : ref st.AwayRt;
+            switch (cmd)
+            {
+                case TacticChangeCmd tc:
+                {
+                    var d = tc.Delta;
+                    if (!InBand(d.Mentalite) || !InBand(d.Tempo) || !InBand(d.Pres) || !InBand(d.Hat))
+                    { RejectedCommands++; return; }
+                    rt.Mentalite = d.Mentalite; rt.Tempo = d.Tempo; rt.Pres = d.Pres; rt.Hat = d.Hat;
+                    TacticChanges++;
+                    break;
+                }
+                case SubstitutionCmd sc:
+                {
+                    // Kuyruğa al: uygulama SONRAKİ DEAD_BALL fazında (ME 14.2).
+                    // Hak/bant/tekrar doğrulaması KABUL anında yapılır (CB Spec 11.1).
+                    if (!TryQueueSub(ref st, cmd.TeamIdx, sc.OutId, sc.InId)) { RejectedCommands++; return; }
+                    break;
+                }
+                case MotivationCmd mc:
+                {
+                    if (st.Tick < rt.MotivationReadyTick) { RejectedCommands++; return; } // 10 dk bekleme
+                    ApplyMotivation(ref st, cmd.TeamIdx, mc.Tone);
+                    break;
+                }
+                case InstructionCmd _:
+                    // Bireysel talimat kataloğu (markaj kilidi, riskli pas vb.) FAZ 04 borcu
+                    RejectedCommands++;
+                    break;
+            }
+        }
+
+        static bool InBand(sbyte v) => v >= -2 && v <= 2;
+
+        /// <summary>KABUL doğrulaması (ME 14.2 + CB 11.1 NoChargesLeft): hak (bekleyenler dahil),
+        /// kendi oyuncusu, geçerli kulübe indeksi ve aynı formanın/yedeğin kuyrukta tekrarlanmaması.</summary>
+        bool CanQueueSub(in MatchState st, byte team, short outId, short inId)
+        {
+            if (SubsLeft(in st, team) <= 0) return false;                        // hak bitti (bekleyen dahil)
+            if (!CanExecuteSub(in st, team, outId, inId)) return false;
+            for (int s = 0; s < MaxSubs; s++)                                    // aynı forma/yedek iki kez olmaz
+            {
+                int i = (team * MaxSubs + s) * 2;
+                if (st.PendingSubs[i] == outId || st.PendingSubs[i + 1] == inId) return false;
+            }
+            return true;
+        }
+
+        /// <summary>UYGULAMA doğrulaması: kabul ile ölü top arasında durum bozulmuş olabilir
+        /// (kırmızı kart, hakkın dolması). Bekleyen sayısı burada DÜŞÜLMEZ — sıradaki kendisidir.</summary>
+        bool CanExecuteSub(in MatchState st, byte team, short outId, short inId)
+        {
+            if ((team == 0 ? st.HomeRt.SubsUsed : st.AwayRt.SubsUsed) >= MaxSubs) return false;
+            int lo = team == 0 ? 0 : 11;
+            if (outId < lo || outId >= lo + 11) return false;                    // kendi oyuncusu değil
+            if (st.Agents[outId].SentOff) return false;                          // atılanın yeri doldurulamaz
+            var b = bench[team];
+            if (inId < 0 || inId >= b.Length) return false;                      // kulübe indeksi bandı
+            if (benchUsed[team, inId]) return false;                             // aynı yedek iki kez giremez
+            return true;
+        }
+
+        /// <summary>Değişikliği bekleme kuyruğuna alır; yer/hak yoksa false (çağıran reddi sayar).</summary>
+        bool TryQueueSub(ref MatchState st, byte team, short outId, short inId)
+        {
+            if (!CanQueueSub(in st, team, outId, inId)) return false;
+            for (int s = 0; s < MaxSubs; s++)
+            {
+                int i = (team * MaxSubs + s) * 2;
+                if (st.PendingSubs[i] >= 0) continue;
+                st.PendingSubs[i] = outId; st.PendingSubs[i + 1] = inId;
+                return true;
+            }
+            return false;   // SubsLeft zaten yakalar — emniyet kilidi
+        }
+
+        /// <summary>Bekleyen değişiklikleri ölü topta uygular — ME 14.2 (22 hedefin tutarlı
+        /// yeniden hesabı için oyun durmuş olmalı). Giren oyuncu TAM enerjiyle gelir.
+        /// Tarama sırası (takım, slot) SABİT — çoklu değişiklik tek durakta deterministik uygulanır.</summary>
+        void ApplyPendingSubs(ref MatchState st)
+        {
+            for (byte team = 0; team < 2; team++)
+            for (int ps = 0; ps < MaxSubs; ps++)
+            {
+                int pi = (team * MaxSubs + ps) * 2;
+                short outId = st.PendingSubs[pi], inId = st.PendingSubs[pi + 1];
+                if (outId < 0) continue;
+                st.PendingSubs[pi] = -1; st.PendingSubs[pi + 1] = -1;
+                if (!CanExecuteSub(in st, team, outId, inId))
+                {
+                    // Kabul edilmişti ama UYGULAMA anında geçersizleşti (oyuncu kırmızı gördü vb.)
+                    // → red sayacına yazılır: sessizce yutulmaz
+                    RejectedCommands++;
+                    continue;
+                }
+
+                var e = bench[team][inId];
+                ref var slot = ref st.Agents[outId];
+                attrs[outId] = e.Attributes;
+                slot.RoleId = e.RoleId;
+                slot.AnchorX = e.AnchorXmm; slot.AnchorY = e.AnchorYmm;
+                slot.Energy = 1000;                 // taze bacak (ME 12.1 tavanı)
+                slot.Injury = InjuryState.None;
+                slot.YellowCards = 0;               // yeni oyuncu, yeni sicil
+                slot.SentOff = false;
+                slot.Sprints = 0;
+                slot.MarkTarget = -1;
+                slot.BenchSlot = (byte)(inId + 1);
+                slot.ActionUntilTick = st.Tick;
+                energyAccum[outId] = 0;
+                benchUsed[team, inId] = true;
+
+                if (team == 0) st.HomeRt.SubsUsed++; else st.AwayRt.SubsUsed++;
+                SubsMade++;
+                st.StoppageTicks += (uint)bal.setpiece.hazirlikTicks; // değişiklik maç saatinden düşer
+            }
+        }
+
+        /// <summary>Motivasyon konuşması — ME Spec 14.3. Etki çarpanı kaptan Leadership'i
+        /// (greybox: takımın en yüksek Composure'ı vekil) × yerindelik (skor bağlamı).
+        /// Tonlar: Sakinleştir (momentum −'yi söndürür, kart riskini düşürür), Ateşle (+2 momentum,
+        /// agresif oyuncularda foul şiddeti +0,04), Uyar (karar sigması 10 dk %10 düşer).</summary>
+        void ApplyMotivation(ref MatchState st, byte team, ToneType tone)
+        {
+            ref var rt = ref team == 0 ? ref st.HomeRt : ref st.AwayRt;
+            int lo = team == 0 ? 0 : 11;
+            int lead = 0;
+            for (int i = lo; i < lo + 11; i++)
+                if (st.Agents[i].Active) lead = Math.Max(lead, Eff(i, attrs[i].Composure));
+            double etki = lead / 100.0;
+
+            int diff = (team == 0 ? st.HomeGoals - st.AwayGoals : st.AwayGoals - st.HomeGoals);
+            // Yerindelik: geride "ateşle", öndeyken "sakinleştir" daha etkili (14.3)
+            double yerinde = tone == ToneType.Atesle ? (diff < 0 ? 1.0 : 0.6)
+                           : tone == ToneType.Sakinlestir ? (diff > 0 ? 1.0 : 0.7) : 0.85;
+
+            switch (tone)
+            {
+                case ToneType.Atesle:
+                    AddMomentum(ref st, team, (int)Math.Round(2 * etki * yerinde));
+                    break;
+                case ToneType.Sakinlestir:
+                    if (rt.Momentum < 0) AddMomentum(ref st, team, (int)Math.Round((1 + etki) * yerinde));
+                    break;
+                case ToneType.Uyar:
+                    break; // etkisi süre boyunca karar sigmasında (MotivationTone ile okunur)
+            }
+            rt.MotivationTone = (byte)tone;
+            rt.MotivationUntilTick = st.Tick + 10 * 60 * (uint)TicksPerSecond;
+            rt.MotivationReadyTick = st.Tick + 10 * 60 * (uint)TicksPerSecond; // 10 dk bekleme
+            Motivations++;
         }
 
         // ---------------------------------------------------------------- duran toplar (ME 10)
@@ -1537,6 +1890,44 @@ namespace TheBadge.Sim.Match
             return attackingTeam == 0 ? lineSigned : -lineSigned;
         }
 
+        /// <summary>Serbest topun BULUŞMA noktası — ME 6.5/8.2: yuvarlanma yavaşlaması altında
+        /// topun t saniye sonraki yeri; t = ajanın oraya varış süresi (tek adımlı yaklaşım, yeterli:
+        /// hedef her tick tazelenir). Rasyonel/karekök aritmetik — determinizm güvenli.</summary>
+        void BallInterceptPoint(ref MatchState st, int i, out int px, out int py)
+        {
+            double bvx = st.Ball.Vx / 1000.0, bvy = st.Ball.Vy / 1000.0;
+            double bs = Math.Sqrt(bvx * bvx + bvy * bvy);
+            if (bs < 0.5) { px = ClampX(st.Ball.X); py = ClampY(st.Ball.Y); return; }
+            double aRoll = Math.Max(0.1, bal.physics.aRollKuru);
+            double tStop = bs / aRoll;
+            double dxM = (st.Ball.X - st.Agents[i].X) / 1000.0, dyM = (st.Ball.Y - st.Agents[i].Y) / 1000.0;
+            double d = Math.Sqrt(dxM * dxM + dyM * dyM);
+            double vMax = bal.move.vMaxBase + bal.move.vMaxPaceSpan * Eff(i, attrs[i].Pace) / 100.0;
+            double t = d / Math.Max(1.0, vMax);
+            if (t > tStop) t = tStop;
+            double s = bs * t - 0.5 * aRoll * t * t;
+            if (s < 0) s = 0;
+            px = ClampX(st.Ball.X + Units.QuantizeMm(bvx / bs * s));
+            py = ClampY(st.Ball.Y + Units.QuantizeMm(bvy / bs * s));
+        }
+
+        static long Dist2(int x1, int y1, int x2, int y2)
+        { long dx = x2 - x1, dy = y2 - y1; return dx * dx + dy * dy; }
+
+        /// <summary>Verilen noktaya en yakın RAKİP mesafesi (mm) — kaleci dahil. Alan kontrolü
+        /// tahmininin çekirdeği (ME 7.6): "o boşluğa kim önce varır" sorusunun girdisi.</summary>
+        int NearestOpponentDistMm(ref MatchState st, int x, int y, byte team)
+        {
+            long best = long.MaxValue;
+            for (int i = 0; i < 22; i++)
+            {
+                if (st.Agents[i].TeamIdx == team || !st.Agents[i].Active) continue;
+                long d2 = Dist2(st.Agents[i].X, st.Agents[i].Y, x, y);
+                if (d2 < best) best = d2;
+            }
+            return best == long.MaxValue ? 100000 : (int)Math.Sqrt((double)best);
+        }
+
         int NearOpponents(ref MatchState st, int x, int y, byte team) =>
             NearOpponents(ref st, x, y, team, (int)(bal.pass.presYaricapM * 1000));
 
@@ -1573,6 +1964,43 @@ namespace TheBadge.Sim.Match
                 if (t < bt) { bt = t; best = i; }
             }
             return best;
+        }
+
+        /// <summary>Pas KESME riski (0-1) — ME 6.5/7.6: koridordaki her rakip için "top o noktaya
+        /// varana kadar çizgiye yetişebilir mi" yarışı; en kötü marj riski belirler.
+        /// Rakip SAYMAK (eski biçim) lane kalitesini göremiyordu — 2 m yanındaki rakiple 6 m
+        /// yanındaki aynı cezayı alıyordu, pas isabeti %55'te takılıyordu (ME 17.2 bandı %78-86).</summary>
+        double PassInterceptRisk(ref MatchState st, int x1, int y1, int x2, int y2, byte team, double ballSpeed)
+        {
+            double dx = x2 - x1, dy = y2 - y1;
+            double len = Math.Sqrt(dx * dx + dy * dy);
+            if (len < 1) return 0;
+            double lenM = len / 1000.0, worst = 0;
+            double band = Math.Max(0.05, bal.utility.pasKesmeBandiSn);
+            for (int k = 0; k < 22; k++)
+            {
+                if (st.Agents[k].TeamIdx == team || !st.Agents[k].Active) continue;
+                double px = st.Agents[k].X - x1, py = st.Agents[k].Y - y1;
+                double t = (px * dx + py * dy) / (len * len);
+                if (t < 0.02 || t > 0.98) continue;            // arkada kalan ya da hedefteki kesmez
+                double ex = px - t * dx, ey = py - t * dy;
+                double perpM = Math.Sqrt(ex * ex + ey * ey) / 1000.0;
+                double tBall = lenM * t / Math.Max(1.0, ballSpeed);
+                double vOpp = bal.move.vMaxBase + bal.move.vMaxPaceSpan * Eff(k, attrs[k].Pace) / 100.0;
+                double tOpp = perpM / Math.Max(1.0, vOpp);
+                double p = 0.5 + (tBall - tOpp) / (2.0 * band);   // top geç kalıyorsa risk artar
+                if (p > worst) worst = p;
+            }
+            return worst < 0 ? 0 : (worst > 1 ? 1 : worst);
+        }
+
+        /// <summary>Pasın yer hızı — ExecutePass ile AYNI formül (karar ve yürütme tutarlı olmalı).</summary>
+        double PassSpeed(double dM)
+        {
+            double v0 = Math.Sqrt(2.0 * bal.physics.aRollKuru * dM);
+            if (v0 < bal.pass.groundSpeedMin) v0 = bal.pass.groundSpeedMin;
+            if (v0 > bal.pass.groundSpeedMax) v0 = bal.pass.groundSpeedMax;
+            return v0;
         }
 
         int CorridorOpponents(ref MatchState st, int x1, int y1, int x2, int y2, byte team)
@@ -1648,16 +2076,29 @@ namespace TheBadge.Sim.Match
                 buf[o++] = (byte)a.Injury;
                 buf[o++] = a.CurrentAction;
                 W32(buf, ref o, a.ActionUntilTick);
+                W16(buf, ref o, a.Sprints);
+                W16(buf, ref o, (ushort)a.MarkTarget);
+                buf[o++] = a.BenchSlot;
             }
 
-            W32(buf, ref o, (uint)st.HomeRt.LineHeightMm);
-            buf[o++] = st.HomeRt.PressMode;
-            buf[o++] = (byte)st.HomeRt.Momentum;
-            W32(buf, ref o, (uint)st.AwayRt.LineHeightMm);
-            buf[o++] = st.AwayRt.PressMode;
-            buf[o++] = (byte)st.AwayRt.Momentum;
+            WriteTeamRt(buf, ref o, in st.HomeRt);
+            WriteTeamRt(buf, ref o, in st.AwayRt);
+            for (int i = 0; i < st.PendingSubs.Length; i++) W16(buf, ref o, (ushort)st.PendingSubs[i]);
 
             return XxHash64.Hash(buf.Slice(0, o));
+        }
+
+        static void WriteTeamRt(Span<byte> buf, ref int o, in TeamRuntime rt)
+        {
+            W32(buf, ref o, (uint)rt.LineHeightMm);
+            buf[o++] = rt.PressMode;
+            buf[o++] = (byte)rt.Momentum;
+            buf[o++] = (byte)rt.Mentalite; buf[o++] = (byte)rt.Tempo;
+            buf[o++] = (byte)rt.Pres; buf[o++] = (byte)rt.Hat;
+            buf[o++] = rt.SubsUsed;
+            W32(buf, ref o, rt.MotivationReadyTick);
+            W32(buf, ref o, rt.MotivationUntilTick);
+            buf[o++] = rt.MotivationTone;
         }
 
         static void W16(Span<byte> b, ref int o, ushort v)

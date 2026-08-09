@@ -135,7 +135,7 @@ if (runA.finalHash != runB.finalHash || runA.at600 != runB.at600)
 else Pass("MatchSkeletonDeterminism");
 
 // 7b) Golden: durum hash'i sabitlendi — alan/sıra değişikliği bilinçli golden güncellemesi ister
-const ulong MATCH_GOLDEN = 0x7A75814C73F26298UL; // M5'te yeniden sabitlendi (durum modeli — bilinçli)
+const ulong MATCH_GOLDEN = 0x30FC46FA771CA055UL; // M7'de yeniden sabitlendi (ME 7.6 hat formülü + pas/şut modeli — bilinçli)
 if (MATCH_GOLDEN != 0 && runA.finalHash != MATCH_GOLDEN)
     failures += Fail("MatchSkeletonGolden", $"0x{runA.finalHash:X} != 0x{MATCH_GOLDEN:X}");
 else Pass("MatchSkeletonGolden");
@@ -206,8 +206,9 @@ else Pass("AeffFullEnergy");
 // 8e) TeamSheet → kurulum determinizmi: aynı kadro = aynı durum hash'i; rol/anchor yansır
 static TeamSheet BuildSheet(ulong seed, uint entity) => BuildSheetSide(seed, entity, home: true);
 
-static TeamSheet BuildSheetSide(ulong seed, uint entity, bool home)
+static TeamSheet BuildSheetSide(ulong seed, uint entity, bool home, uint idEntity = 0)
 {
+    if (idEntity == 0) idEntity = entity;   // ayna kadro: nitelikler aynı, PlayerId farklı
     // Test kadrosu: gerçekçi 4-4-2 çapaları (ev −x yarı sahada, deplasman aynalı);
     // nitelikler deterministik türetilir (üretim kadroları FAZ 04 veri katmanından gelir)
     var sheet = new TeamSheet { Starters = new PlayerEntry[11], Bench = new PlayerEntry[5] };
@@ -222,8 +223,8 @@ static TeamSheet BuildSheetSide(ulong seed, uint entity, bool home)
         else { ax = 3000; ay = i == 9 ? -8000 : 8000; }                       // FV ikilisi
         var e = new PlayerEntry
         {
-            PlayerId = (short)(entity * 100 + i),
-            Name = $"Test-{entity}-{i}",
+            PlayerId = (short)(idEntity * 100 + i),
+            Name = $"Test-{idEntity}-{i}",
             RoleId = (byte)(i == 0 ? 1 : i < 5 ? 2 : i < 9 ? 3 : 4),
             AnchorXmm = sign * ax,
             AnchorYmm = ay,
@@ -330,7 +331,7 @@ Console.WriteLine($"[info] M2 durum hash: 0x{mA2.h:X}");
 if (mA2.h != mB2.h) failures += Fail("M2Determinism", $"0x{mA2.h:X} != 0x{mB2.h:X}");
 else Pass("M2Determinism");
 
-const ulong M2_GOLDEN = 0x7488BB75CD66ED2BUL; // M5'te yeniden sabitlendi — davranış/şema değişikliği bilinçli güncelleme ister
+const ulong M2_GOLDEN = 0xC59BB500BE647BBFUL; // M7'de yeniden sabitlendi — davranış/şema değişikliği bilinçli güncelleme ister
 if (M2_GOLDEN != 0 && mA2.h != M2_GOLDEN) failures += Fail("M2Golden", $"0x{mA2.h:X}");
 else Pass("M2Golden");
 
@@ -398,7 +399,7 @@ if (f1.hash != f2.hash || f1.res.TotalTicks != f2.res.TotalTicks)
     failures += Fail("M4Determinism", $"0x{f1.hash:X} != 0x{f2.hash:X}");
 else Pass("M4Determinism");
 
-const ulong M4_GOLDEN = 0x0FB1FE442C8085FAUL; // M5'te yeniden sabitlendi
+const ulong M4_GOLDEN = 0x4B4DBD4833F329A5UL; // M7'de yeniden sabitlendi
 if (M4_GOLDEN != 0 && f1.hash != M4_GOLDEN) failures += Fail("M4Golden", $"0x{f1.hash:X}");
 else Pass("M4Golden");
 
@@ -548,6 +549,188 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     }
     if (marked == 0) failures += Fail("M5MarkingAssigned", "hiç markaj görevi atanmadı");
     else Pass($"M5MarkingAssigned({marked})");
+}
+
+// 13) FAZ 03 M6 — Müdahale katmanı (ME 14.1-14.3; BRIEF M6)
+
+(MatchEngine eng, MatchState st, CommandQueue q) NewMatch(ulong sd, bool autoManage = true)
+{
+    var q6 = new CommandQueue();
+    var cfg6 = new MatchConfig
+    {
+        Seed = sd, EngineVersion = "m6",
+        Home = BuildSheetSide(300, 7, home: true), Away = BuildSheetSide(300, 8, home: false),
+        Referee = RefereeProfile.Default
+    };
+    var e6 = new MatchEngine(sd, q6, cfg6, simBal) { AutoManage = autoManage };
+    return (e6, MatchEngine.CreateInitialState(cfg6), q6);
+}
+
+// 13a) Taktik deltası runtime'a İŞLER ve bant dışı komut REDDEDİLİR (ME 14.2)
+{
+    var (e, s, q) = NewMatch(0x6A01);
+    q.Enqueue(new TacticChangeCmd(5, 0, new TacticDelta(2, 1, -1, 2)));
+    q.Enqueue(new TacticChangeCmd(10, 1, new TacticDelta(9, 0, 0, 0))); // bant dışı → red
+    for (int t = 0; t < 20; t++) e.Tick(ref s);
+    bool ok = s.HomeRt.Mentalite == 2 && s.HomeRt.Tempo == 1 && s.HomeRt.Pres == -1 && s.HomeRt.Hat == 2
+              && s.AwayRt.Mentalite == 0 && e.RejectedCommands == 1 && e.TacticChanges == 1;
+    if (!ok) failures += Fail("M6TacticApplied", $"m{s.HomeRt.Mentalite} red{e.RejectedCommands} ch{e.TacticChanges}");
+    else Pass("M6TacticApplied");
+}
+
+// 13b) Taktik ETKİ ediyor: ofansif kurulum ileri üretimi ARTIRIR ama PATLATMAZ.
+// Tek maç varyansı bu farkı yutuyor → 6 tohumda ortalama. Üst sınır bilinçli: sabit "ileri
+// bonusu" modeli maç başına 73 şut üretmişti (DECISIONS.md M6 kalibrasyon kaydı); kapı
+// yalnız "etki var mı"yı değil, "etki makul mü"yü de denetler.
+{
+    double shN = 0, shO = 0, thN = 0, thO = 0;
+    const int NT = 6;
+    for (ulong k = 0; k < NT; k++)
+    {
+        var (eN, sN, _) = NewMatch(0x6A02 + k * 5171);
+        var (eO, sO, qO) = NewMatch(0x6A02 + k * 5171);
+        qO.Enqueue(new TacticChangeCmd(1, 0, new TacticDelta(2, 1, 1, 1)));
+        eN.Run(ref sN); eO.Run(ref sO);
+        shN += eN.Shots; shO += eO.Shots; thN += eN.ThroughPasses; thO += eO.ThroughPasses;
+    }
+    double ileriN = (shN + thN) / NT, ileriO = (shO + thO) / NT;
+    if (ileriO <= ileriN * 1.05 || ileriO > ileriN * 2.5)
+        failures += Fail("M6TacticEffect", $"nötr {ileriN:0.0} vs ofansif {ileriO:0.0}");
+    else Pass($"M6TacticEffect({ileriN:0.0}→{ileriO:0.0})");
+}
+
+// 13c) Oyuncu değişikliği: yalnız ÖLÜ TOPTA uygulanır, taze bacak gelir, hak azalır (ME 14.2)
+{
+    var (e, s, q) = NewMatch(0x6A03, autoManage: false);
+    // Önce oyuncuları yor: 30 dk oyna
+    for (int t = 0; t < 18000 && !MatchEngine.IsFinished(in s); t++) e.Tick(ref s);
+    // Çıkacak oyuncu O ANDA aktif olanlardan seçilir: sabit slot, kırmızı kart/sakatlık
+    // düştüğünde testi kırıyordu (kapı davranışı değil tohum şansını ölçmemeli)
+    int outId = -1;
+    for (int k = 1; k < 11; k++) if (s.Agents[k].Active) { outId = k; break; }
+    ushort eskiEnerji = s.Agents[outId].Energy;
+    q.Enqueue(new SubstitutionCmd(s.Tick + 1, 0, (short)outId, 0));
+    // Ölü top NE ZAMAN gelirse: pencereyi maç sonuna kadar açık tutuyoruz. Sabit 10 dakikalık
+    // pencere tohum şansını ölçüyordu (bir koşuda 6000 tick boyunca hiç duraklama olmadı).
+    bool appliedInOpenPlay = false;
+    for (int t = 0; t < 40000 && s.HomeRt.SubsUsed == 0 && !MatchEngine.IsFinished(in s); t++)
+    {
+        var phaseBefore = s.Phase;
+        e.Tick(ref s);
+        if (s.HomeRt.SubsUsed > 0 && phaseBefore == MatchPhase.OpenPlay) appliedInOpenPlay = true;
+    }
+    bool ok = s.HomeRt.SubsUsed == 1 && s.Agents[outId].BenchSlot == 1
+              && s.Agents[outId].Energy > eskiEnerji && !appliedInOpenPlay && e.SubsMade == 1;
+    if (!ok) failures += Fail("M6Substitution",
+        $"used{s.HomeRt.SubsUsed} bench{s.Agents[outId].BenchSlot} enerji {eskiEnerji}→{s.Agents[outId].Energy} openPlay{appliedInOpenPlay}");
+    else Pass($"M6Substitution({eskiEnerji}→{s.Agents[outId].Energy})");
+}
+
+// 13d) Değişiklik hakkı: 3'ten fazlası REDDEDİLİR (CB Spec 11.1 NoChargesLeft'in motor tarafı)
+{
+    var (e, s, q) = NewMatch(0x6A04, autoManage: false);
+    // Komutlar 5'er dakika arayla: her biri bir ölü top penceresi bulsun (ME 14.2);
+    // 4. ve 5. hak dolduğu için REDDEDİLİR (CB Spec 11.1 NoChargesLeft)
+    for (short k = 0; k < 5; k++) q.Enqueue(new SubstitutionCmd((uint)(600 + k * 3000), 0, (short)(2 + k), k));
+    for (int t = 0; t < 20000 && !MatchEngine.IsFinished(in s); t++) e.Tick(ref s);
+    if (s.HomeRt.SubsUsed != MatchEngine.MaxSubs || e.RejectedCommands < 2)
+        failures += Fail("M6SubLimit", $"kullanılan {s.HomeRt.SubsUsed}, red {e.RejectedCommands}");
+    else Pass($"M6SubLimit({s.HomeRt.SubsUsed}/{MatchEngine.MaxSubs}, red {e.RejectedCommands})");
+}
+
+// 13e) Motivasyon: momentumu oynatır + 10 dk bekleme ikinci komutu reddeder (ME 14.3)
+{
+    var (e, s, q) = NewMatch(0x6A05);
+    q.Enqueue(new MotivationCmd(50, 0, ToneType.Atesle));
+    q.Enqueue(new MotivationCmd(80, 0, ToneType.Atesle)); // bekleme içinde → red
+    for (int t = 0; t < 200; t++) e.Tick(ref s);
+    if (s.HomeRt.Momentum <= 0 || e.Motivations != 1 || e.RejectedCommands != 1)
+        failures += Fail("M6Motivation", $"momentum {s.HomeRt.Momentum} adet {e.Motivations} red {e.RejectedCommands}");
+    else Pass($"M6Motivation(+{s.HomeRt.Momentum})");
+}
+
+// 13f) Otomatik yönetim: sakatlanan oyuncunun yeri offline maçta DOLAR (adalet)
+{
+    int autoSubs = 0, injuriesOff = 0;
+    for (ulong n = 0; n < 8; n++)
+    {
+        var (e, s, _) = NewMatch(0x6A06 + n * 977);
+        e.Run(ref s);
+        autoSubs += e.AutoSubs; injuriesOff += e.Injuries;
+    }
+    if (injuriesOff > 0 && autoSubs == 0)
+        failures += Fail("M6AutoManage", $"{injuriesOff} sakatlık, 0 otomatik değişiklik");
+    else Pass($"M6AutoManage({autoSubs} oto-değişiklik / {injuriesOff} sakatlık)");
+}
+
+// 13g) Determinizm + golden: komut zaman çizelgeli tam maç
+{
+    ulong RunCmd()
+    {
+        var (e, s, q) = NewMatch(0x6A07);
+        q.Enqueue(new TacticChangeCmd(300, 0, new TacticDelta(1, 1, 1, 0)));
+        q.Enqueue(new SubstitutionCmd(20000, 0, 7, 1));
+        q.Enqueue(new MotivationCmd(30000, 1, ToneType.Sakinlestir));
+        e.Run(ref s);
+        return MatchEngine.StateHash(in s);
+    }
+    ulong hA = RunCmd(), hB = RunCmd();
+    Console.WriteLine($"[info] M6 komutlu maç hash: 0x{hA:X}");
+    if (hA != hB) failures += Fail("M6Determinism", $"0x{hA:X} != 0x{hB:X}");
+    else Pass("M6Determinism");
+    const ulong M6_GOLDEN = 0x629CB9992907D201UL; // M7'de yeniden sabitlendi (taktik+değişiklik+motivasyon zaman çizelgesi)
+    if (M6_GOLDEN != 0 && hA != M6_GOLDEN) failures += Fail("M6Golden", $"0x{hA:X}");
+    else Pass("M6Golden");
+}
+
+// 14) FAZ 03 M7 — Taktik DENGESİ: baskın strateji olmamalı (ME 7.4/7.6 + 17.2 ruhu)
+// Ayna kadro (nitelikler birebir aynı, yalnız PlayerId farklı) → taraf farkı SIFIR; tek değişken
+// taktik. Ofansif kurulum daha çok üretir AMA daha çok yer; defansif kurulum daha az yer.
+// Bu kapı olmadan "hep tam hücum" bedava üstünlük olur — M6'da ölçülüp M7 borcuna yazılmıştı.
+{
+    const int NT7 = 10;
+    (double own, double conc) Kosu(sbyte ment)
+    {
+        double own = 0, conc = 0;
+        for (ulong k = 0; k < NT7; k++)
+        {
+            ulong sd = 0x7A01 + k * 6607;
+            var cfg7 = new MatchConfig
+            {
+                Seed = sd, EngineVersion = "m7",
+                Home = BuildSheetSide(700, 7, home: true),
+                Away = BuildSheetSide(700, 7, home: false, idEntity: 8),   // AYNA kadro
+                Referee = RefereeProfile.Default
+            };
+            var q7 = new CommandQueue();
+            var e7 = new MatchEngine(sd, q7, cfg7, simBal);
+            var s7 = MatchEngine.CreateInitialState(cfg7);
+            if (ment != 0) q7.Enqueue(new TacticChangeCmd(1, 0, new TacticDelta(ment, 0, 0, 0)));
+            e7.Run(ref s7);
+            own += e7.XgHome; conc += e7.XgAway;
+        }
+        return (own / NT7, conc / NT7);
+    }
+    var nt = Kosu(0); var of = Kosu(2); var df = Kosu(-2);
+    Console.WriteLine($"[info] M7 taktik dengesi (ayna kadro, {NT7} maç) — " +
+                      $"nötr {nt.own:0.00}/{nt.conc:0.00} · ofansif {of.own:0.00}/{of.conc:0.00} · defansif {df.own:0.00}/{df.conc:0.00}");
+    // Ayna kadroda taraf yanlılığı olmamalı (nötr koşuda kendi/yediği xG birbirine yakın)
+    double simetri = Math.Abs(nt.own - nt.conc) / Math.Max(0.01, (nt.own + nt.conc) / 2);
+    if (simetri > 0.35) failures += Fail("M7MirrorSymmetry", $"nötr ayna sapması %{simetri * 100:0}");
+    else Pass($"M7MirrorSymmetry(%{simetri * 100:0})");
+    // Ofansif: üretim ARTAR ve bedeli VARDIR (yediği de artar) — ikisi birden şart
+    if (of.own <= nt.own * 1.05 || of.conc <= nt.conc * 1.02)
+        failures += Fail("M7AttackTradeoff", $"ofansif {of.own:0.00}/{of.conc:0.00} vs nötr {nt.own:0.00}/{nt.conc:0.00}");
+    else Pass($"M7AttackTradeoff(+%{(of.own / nt.own - 1) * 100:0} üretim / +%{(of.conc / nt.conc - 1) * 100:0} risk)");
+    // BORÇ (M8) — defansif kurulum ŞU AN yediği xG'yi AZALTMIYOR, artırıyor. Kök neden ölçüldü:
+    // pas isabeti %55 (ME 17.2 bandı %78-86) → kendi yarı sahanda güvenli oynamak "top kaybı =
+    // net şans" demek. Asıl düzeltme alım/sahiplik modeli dilimidir (süpürme testi + bağıl hız
+    // kontrolü denendi, çekirdeği dengesizleştirdi — DECISIONS.md M8). Kapı bugünkü gerçeği
+    // KİLİTLER (daha kötüye gidemez) ve hedefi açıkça yazar; sessizce "yeşil" göstermez.
+    double defOran = df.conc / Math.Max(0.01, nt.conc);
+    if (defOran > 2.4)
+        failures += Fail("M7DefendRegresyon", $"defansif yediği ×{defOran:0.00} (nötr {nt.conc:0.00} → {df.conc:0.00})");
+    else Pass($"M7DefendRegresyon(yediği ×{defOran:0.00} — HEDEF <1,00; M8 borcu, pas isabeti kökü)");
 }
 
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");
