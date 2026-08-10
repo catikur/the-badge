@@ -204,6 +204,44 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   gerçek ~17 m — aynı kök: ceza sahasında yoğunluk yok); sprint sayacı ~6200/maç; taç üretimi 0;
   VAR (11.4), hava/zemin (12.4), LOD (16.1), maç sonu veri paketi (15.4) başlamadı.
 
+- M8 (alım/sahiplik modeli) DENENDİ ve **GÖNDERİLMEDİ** (2026-08-09, "M8'i tam yap" onayı Atilla):
+  Model yazıldı, ölçüldü, motoru M7'den belirgin KÖTÜ yaptığı için anayasa gereği reddedildi
+  ("Test geçmeyen kod reddedilir"). Yama saklandı; bu kayıt işin ÜRÜNÜDÜR — bir sonraki denemenin
+  aynı duvarlara tekrar çarpmaması için ölçümler tam yazılıyor.
+  **Yazılan model:** (a) SÜPÜRME çarpışması — sahiplik testi topun tick içinde süpürdüğü YOLA bakar
+  (top tick başına 1,2-1,9 m gider; nokta testi çizgideki oyuncunun üzerinden tünelliyordu);
+  (b) ÜÇ SONUÇLU alım (ME 6.4) — temiz kontrol / ÇELME / temas yok; çelme sahiplik vermez, topu
+  serbest bırakır (kesilen pas ve rebound'un doğal kaynağı); (c) temas menzili topun bağıl hızıyla
+  daralır (hızlı topa tepki süresi yok); (d) temas için NİYET şartı (topa koşan ilk iki oyuncu,
+  pasın alıcısı, kaleci ya da yavaş top); (e) geri alma kilidi; (f) **dürüst pas metriği** — pasçının
+  kendi pasını geri alması "tamamlanmış" sayılmaz; (g) ME 7.4-A **boşluk vektörü** (8 yön × 2 yarıçap
+  sabit arama: xT × açıklık).
+  **Sonuç:** pas isabeti dürüst ölçümde **%26-43** aralığında TAVAN yaptı ve maç kalitesi çöktü
+  (gol 10-22, faul 33-61, şut 26-48). M7 tabanı: gol 3,75 · şut 29,6 · korner 9,7 · faul 12,7.
+- **M8'de ELENEN hipotezler (her biri ölçüldü — bir daha denenmesin):**
+  1. *Nişan hatası* — pas sapması SIFIRA çekildi, isabet değişmedi (%55→%55). Sorun nişan değil.
+  2. *Koridor risk ağırlığı* — 0,22 → 1,6 denendi; isabet artmadı, yalnız pas SAYISI düştü
+     (900→460): oyuncu pas yerine dribling seçiyor, gol daha da artıyor.
+  3. *Pas hızı* — groundSpeedMin 12 → 4-9; çelme azaldı ama uçuş uzadığı için kesme arttı, isabet düştü.
+  4. *Kontrol eşiği / temas menzili / niyet kapısı* — çelme 752 → 210'a indi, isabet %10 → %43 ile sınırlı.
+  5. *Takım yayılımı (wTop 0,25 → 0)* — isabet %33-34, hiç oynamadı.
+  6. *Boşluk vektörü (ME 7.4-A)* — isabet +3 puan (%33 → %36). Eksikti, eklendi, yetmedi.
+  7. *Top kapma oranı* — pTabanTackle/pTabanDriblin ile başarılı top kapma 550 → 199'a indirildi
+     (gerçek ~55); sahiplik değişimi 680 → 364; **isabet yine %26-35**. Ana değişken bu da değil.
+- **M8 teşhisi (bir sonraki dilimin girdisi):** dürüst pas isabeti motorun HİÇBİR tekil katsayısına
+  duyarlı değil. Bu, sorunun bir katsayıda değil MİMARİDE olduğunu söylüyor: 22 ajan sürekli topun
+  çevresinde toplanıyor, taşıyıcı 1,2 sn karar kilidiyle baskı altında oynuyor, top taşıyıcıya
+  YAPIŞIK ilerliyor ve sahiplik ortalama 1,3 pasta el değiştiriyor (gerçek ~4). Öneri: bir sonraki
+  denemenin adı "alım modeli" değil **"sahiplik süresi ve oyun ritmi"** olmalı — sırasıyla
+  (i) taşıyıcı-top ayrımı (ilk dokunuş mesafesi, top gövdenin önünde), (ii) karar kadansının
+  duruma bağlanması (baskı altında hızlı, boşta yavaş), (iii) pas ALTERNATİFLERİNİN topsuz
+  koşularla üretilmesi, ancak sonra (iv) alım modeli. Sıra bu değilse alım modeli tek başına
+  motoru bozuyor — bu tur bunun kanıtı.
+- **M8'den ÇIKAN ve BEKLEYEN karar:** `PassCompletions` bugün pasçının kendi pasını geri almasını
+  "tamamlanmış pas" sayıyor; dürüst ölçüm %21-25. Metriği düzeltmek `M2PassBand` kapısını kırar ve
+  kapı gevşetmek karar gerektirir (CLAUDE.md). Öneri: metrik düzeltilsin, bant gerçeğe göre
+  yeniden yazılsın ve ME 17.2 hedefi (%78-86) AÇIK BORÇ olarak kapıda görünsün.
+
 ## Bekleyen kararlar
 - Premium etkilerin public ligde şeffaf rozeti (panel M-bulgusu) → tasarım kararı, FAZ 02 öncesi.
 - ~~3G Greybox Fun Gate GO/NO-GO~~ → **KAPANDI (2026-08-08): NO-GO %40** — uygulama yukarıdaki kapanış bölümünde; sunum revizyonu + mülakatlı doğrulama turu Dikey Dilim öncesi BORÇ.
