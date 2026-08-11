@@ -28,6 +28,9 @@
   "possession": {
     "kontrolYaricapM": 1.0,
     "tackleYaricapM": 1.2,
+    "kontrolHizEsigiMS": 12.0,
+    "kaleciElCarpani": 2.5,
+    "yenidenAlmaTicks": 4,
     "tackleCooldownTicks": 40,
     "tackleLooseHizMS": 5.0,
     "driblinYaricapM": 3.0
@@ -44,7 +47,7 @@
     "kayipKoridorRakip": 0.22,
     "pasKesmeBandiSn": 0.7,
     "kayipMesafePerM": 0.006,
-    "sutTehditCarpan": 0.15,
+    "sutTehditCarpan": 0.6,
     "sutBaskiCezasi": 0.35,
     "araPasIleriM": 12.0,
     "araPasRisk": 0.28,
@@ -67,11 +70,13 @@
     "hatYanAnchor": 0.55,
     "kanatGenislikM": 6.0,
     "kanatAnchorEsikMm": 15000,
-    "markajGolTarafi": 0.18,
+    "markajGolTarafi": 0.5,
     "markajSayisi": 3,
     "presKesmeSn": 0.6,
     "kanalKapamaM": 4.0,
     "hatTalimatM": 4.0,
+    "gecisSnTaban": 3.0,
+    "gecisSnPerMentalite": 2.8,
     "mentaliteIleriItmeM": 1.5,
     "mentaliteHatM": 3.0
   },
@@ -115,9 +120,9 @@
   "gk": {
     "tReactBase": 0.16,
     "tReactPerReflexEksik": 0.0016,
-    "reachBase": 1.9,
+    "reachBase": 2.4,
     "reachAgilityFactor": 2.2,
-    "logisticSlope": 6.5,
+    "logisticSlope": 5.0,
     "saveClampMin": 0.04,
     "saveClampMax": 0.96,
     "dalisSureCarpan": 0.22,
@@ -125,8 +130,10 @@
     "derinlikTaban": 0.9,
     "derinlikPerM": 0.08,
     "derinlikMax": 5.5,
+    "cikisMesafeM": 18.0,
+    "cikisGenislikM": 22.0,
     "yakinMesafeM": 15.0,
-    "yakinKapatmaKatsayi": 1.6
+    "yakinKapatmaKatsayi": 3.2
   },
   "shotExec": {
     "sutMaxMesafeM": 30.0,
@@ -157,10 +164,10 @@
     "hazirlikTicks": 25
   },
   "referee": {
-    "foulEsikTaban": 0.38,
+    "foulEsikTaban": 0.47,
     "strictnessCarpan": 0.002,
     "griBantOrta": 0.06,
-    "sariEsik": 0.48,
+    "sariEsik": 0.59,
     "kirmiziEsik": 0.8,
     "cezaSahasiIhtiyatCarpan": 0.6
   },
@@ -192,7 +199,7 @@
       0.6
     ],
     "sertMudahaleEsik": 0.45,
-    "pTabanMudahale": 0.005,
+    "pTabanMudahale": 0.02,
     "pTabanSprint": 0.0001
   },
   "momentum": {

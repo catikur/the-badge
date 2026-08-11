@@ -242,6 +242,44 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   kapı gevşetmek karar gerektirir (CLAUDE.md). Öneri: metrik düzeltilsin, bant gerçeğe göre
   yeniden yazılsın ve ME 17.2 hedefi (%78-86) AÇIK BORÇ olarak kapıda görünsün.
 
+- M8-B (pas/alım kök hataları) uygulandı (2026-08-10, "önerini uygula, gerekirse daha temel sorunu
+  çöz" onayı Atilla): **Dürüst metrik üç kök hatayı ortaya çıkardı.** Önce `PassCompletions`
+  pasçının kendi pasını saymayacak şekilde düzeltildi ve pas SONUCU sınıflandırıldı. İlk ölçüm:
+  maç başına 1214 pasın **hedefe ulaşanı 0**, takım arkadaşına ulaşanı 0; 669'unu pasçı GERİ ALIYOR,
+  543'ünü rakip topluyor. Yıllardır raporlanan "%55 isabet" tümüyle bu geri almaydı.
+  1. **Pas atıldığı tick'te iptal oluyordu.** Tick sırası Karar → Aksiyon → Fizik; `ExecutePass`
+     topa hız verir ama top hâlâ pasçının ayağındadır, aynı tick'teki serbest top taraması onu
+     0 metrede bulup geri verir. Düzeltme: topu oynayanın GERİ ALMA KİLİDİ (ME 4.3).
+     Sonuç: paslar gerçekten yol almaya başladı, gol 8,3 → 2,5, isabet %17 (gerçek taban).
+  2. **Herkes 15 m/sn giden topu "kontrol ediyordu".** Vuruş noktasının 1-2 m ötesindeki presçi,
+     topun ilk tick'te girdiği 1 m yarıçapta onu sahipleniyordu. Düzeltme: ME 6.4 İLK DOKUNUŞ —
+     bağıl hız eşiği (FirstTouch açar); hızlı top kontrol edilemez, geçer. Pasın hedefinde top
+     zaten yavaşladığı için alıcı alır. **Pas isabeti %17 → %76-82**, sahiplik değişimi
+     1070 → ~350 (gerçek bant). Eşik EĞRİSİ tek tepeli: 6 → %62, 12 → %76, 20 → %25.
+  3. **Golün %94'ü şut değildi.** Gol kaynağı sınıflandırıldı: 6,6 golün 6,2'si serbest yuvarlanan
+     topun çizgiyi geçmesiydi — kaleci hiç şans bulmuyordu (nokta testi topun üzerinden atlıyor,
+     kaleci serbest topa çıkmıyor). Düzeltme: kaleci için SÜPÜRME testi (son savunma hattı
+     tünellenemez) + ME 9.3 ÇIKIŞ KARARI (kendi bölgesindeki serbest topu karşılar) + kalecinin
+     Handling ile açılan kontrol eşiği (ME 9.4: eller). **Gol 6,6 → 1,3; serbest top golü 6,2 → 1,1.**
+  Ayrıca **GEÇİŞ penceresi** eklendi: topu kaptıran takım savunma şekline ışınlanamaz, ileride
+  kalanlar geri dönmek için zamana ihtiyaç duyar (mentalite ileri gittikçe uzar) — kontra atağın
+  doğduğu yer ve hücuma çıkmanın bedeli.
+- **M8-B kalibrasyon (12 maç ort.) — ME 17.2 bantları İLK KEZ toplu tutuyor:**
+  **pas isabeti %80 (bant 78-86 ✓, ilk kez)** · şut 23,2 (20-28 ✓) · faul 27,7 (18-28 ✓) ·
+  kart 2,9-3,6 (3,0-5,0 ✓) · ofsayt 4,0 (2-5 ✓) · sakatlık 0,42 (0,35-0,60 ✓) ·
+  bitiş enerji 424 (350-550 ✓) · gol 3,3-3,7 (hedef 2,4-3,0 — hafif üstünde) ·
+  korner 7,0-8,3 (hedef 8-12 — hafif altında) · sahiplik değişimi ~350 (gerçekçi).
+- **M9 borçları (kapıda görünür halde):** (a) `M7AttackRiskRegresyon` — ofansif kurulum atak
+  başına DAHA AZ yiyor (×0,80; hedef >1,00): hat arkasına hızlı KONTRA modeli yok, geçiş penceresi
+  tek başına yetmiyor; (b) `M7DefendRegresyon` — defansif kurulum hâlâ daha çok yiyor (×1,51);
+  (c) gol hedef bandın hafif üstünde, korner hafif altında; (d) sprint sayacı ~7300/maç;
+  (e) VAR (11.4), hava/zemin (12.4), LOD (16.1), maç sonu veri paketi (15.4) başlamadı.
+- **Kapı değişikliği (bilinçli, rapor edilmiştir):** `M7AttackTradeoff` ikiye ayrıldı —
+  `M7AttackEffect` (taktik kolu işliyor mu; KAPI) + `M7AttackRiskRegresyon` (hücumun bedeli;
+  bugünkü gerçeği kilitleyen BORÇ MUHAFIZI, hedefi ekrana yazar). Gerekçe: kapı, motor
+  düzelmeden önceki bir varsayıma dayanıyordu; hücumun bedeli kontra modeli gelmeden doğmuyor.
+  Sessizce gevşetilmedi; hedef her koşuda basılıyor.
+
 ## Bekleyen kararlar
 - Premium etkilerin public ligde şeffaf rozeti (panel M-bulgusu) → tasarım kararı, FAZ 02 öncesi.
 - ~~3G Greybox Fun Gate GO/NO-GO~~ → **KAPANDI (2026-08-08): NO-GO %40** — uygulama yukarıdaki kapanış bölümünde; sunum revizyonu + mülakatlı doğrulama turu Dikey Dilim öncesi BORÇ.

@@ -115,6 +115,8 @@ namespace TheBadge.Sim.Config
             public double dalisSureCarpan;                    // t_traverse = mesafe/(erişim/bu)
             public double cildirmaAcisiDeg;                   // çeldide sapma açısı
             public double derinlikTaban, derinlikPerM, derinlikMax; // 9.1 pozisyon derinliği
+            public double cikisMesafeM;         // kalecinin serbest topa çıktığı derinlik (m, ME 9.3)
+            public double cikisGenislikM;       // çıkış bölgesinin yarı genişliği (m)
             public double yakinMesafeM;         // 1v1 kapatma etkisinin başladığı mesafe (ME 9.3)
             public double yakinKapatmaKatsayi;  // OneOnOne'ın marja katkısı (sn)
         }
@@ -208,8 +210,10 @@ namespace TheBadge.Sim.Config
             public double kontrolYaricapM;     // serbest topu kontrol alma yarıçapı
             public double tackleYaricapM;      // taşıyıcıya müdahale yarıçapı
             public double driblinYaricapM;     // dribling düellosunu tetikleyen ön mesafe
-            public int tackleCooldownTicks;
-            public int yenidenAlmaTicks;     // topu oynayanın geri alma kilidi (tick, ME 4.3)    // müdahale sonrası aksiyon kilidi
+            public double kontrolHizEsigiMS;   // temiz kontrol için bağıl hız eşiği (m/sn, ME 6.4)
+            public double kaleciElCarpani;     // kalecinin Handling ile açtığı eşik çarpanı (ME 9.4)   // temiz kontrol için bağıl hız eşiği (m/sn, ME 6.4)
+            public int yenidenAlmaTicks;       // topu oynayanın geri alma kilidi (tick, ME 4.3)
+            public int tackleCooldownTicks;    // müdahale sonrası aksiyon kilidi
             public double tackleLooseHizMS;    // kazanılan top bu hızla açığa çıkar
         }
 
@@ -256,6 +260,8 @@ namespace TheBadge.Sim.Config
             public double presKesmeSn;       // pres öngörü süresi — kesme noktası (sn, ME 7.4-B)
             public double kanalKapamaM;      // ikinci savunanın topun gol tarafına iniş mesafesi (m)
             public double hatTalimatM;       // hat talimatı başına hat kayması (m, ME 7.6/14.2)
+            public double gecisSnTaban;      // topu kaptıran takımın toparlanma süresi (sn)
+            public double gecisSnPerMentalite; // ofansif mentalite başına ek toparlanma süresi (sn)
             public double mentaliteIleriItmeM; // mentalite başına hücumda ileri itme (m, ME 7.4/14.2)
             public double mentaliteHatM;     // ofansif mentalite başına hat yükselmesi (m)
         }
