@@ -135,7 +135,7 @@ if (runA.finalHash != runB.finalHash || runA.at600 != runB.at600)
 else Pass("MatchSkeletonDeterminism");
 
 // 7b) Golden: durum hash'i sabitlendi — alan/sıra değişikliği bilinçli golden güncellemesi ister
-const ulong MATCH_GOLDEN = 0xBD0C63ED4B2CF0A0UL; // M9'da yeniden sabitlendi (kontra/geçiş modeli — bilinçli)
+const ulong MATCH_GOLDEN = 0xA3BFFF6E8178A782UL; // M11'de yeniden sabitlendi (geri pas + blok sekmesi — bilinçli)
 if (MATCH_GOLDEN != 0 && runA.finalHash != MATCH_GOLDEN)
     failures += Fail("MatchSkeletonGolden", $"0x{runA.finalHash:X} != 0x{MATCH_GOLDEN:X}");
 else Pass("MatchSkeletonGolden");
@@ -331,7 +331,7 @@ Console.WriteLine($"[info] M2 durum hash: 0x{mA2.h:X}");
 if (mA2.h != mB2.h) failures += Fail("M2Determinism", $"0x{mA2.h:X} != 0x{mB2.h:X}");
 else Pass("M2Determinism");
 
-const ulong M2_GOLDEN = 0x2F1C693DFA8BDF61UL; // M11'de yeniden sabitlendi (çelme geometrisi) — davranış/şema değişikliği bilinçli güncelleme ister
+const ulong M2_GOLDEN = 0xCA3076DF73A0878AUL; // M11'de yeniden sabitlendi (çelme + geri pas + blok sekmesi) — davranış/şema değişikliği bilinçli güncelleme ister
 if (M2_GOLDEN != 0 && mA2.h != M2_GOLDEN) failures += Fail("M2Golden", $"0x{mA2.h:X}");
 else Pass("M2Golden");
 
@@ -363,10 +363,19 @@ else Pass($"M3SavesHappen({m3.saves})");
 if (Math.Abs(golT - m3.xg) > Math.Max(4.0, m3.xg * 1.2))
     failures += Fail("M3XgConsistency", $"gol {golT} vs ΣxG {m3.xg:0.00}");
 else Pass($"M3XgConsistency({m3.xg:0.00})");
-// Kaleci İŞARET testi: deplasman GK Reflexes/Agility tavana → ev golü ARTMAMALI
-var m3gk = RunM2(0xC0AC11UL, ticks: 54000, gkBoost: 60);
-if (m3gk.gh > m3.gh) failures += Fail("M3GkMatters", $"iyi GK'ya rağmen ev golü {m3.gh}→{m3gk.gh}");
-else Pass($"M3GkMatters({m3.gh}→{m3gk.gh})");
+// Kaleci İŞARET testi: deplasman GK Reflexes/Agility tavana → ev golü ARTMAMALI.
+// TEK maçta bakmak tohum şansını ölçüyordu (gol sayısı banda inince 1→2 farkı gürültü);
+// 6 tohumda TOPLAM karşılaştırılır — aynı özellik, daha güvenilir ölçüm.
+{
+    int golNormal = 0, golBoost = 0;
+    for (ulong k = 0; k < 6; k++)
+    {
+        golNormal += RunM2(0xC0AC11UL + k * 4133, ticks: 54000).gh;
+        golBoost += RunM2(0xC0AC11UL + k * 4133, ticks: 54000, gkBoost: 60).gh;
+    }
+    if (golBoost > golNormal) failures += Fail("M3GkMatters", $"iyi GK'ya rağmen ev golü {golNormal}→{golBoost} (6 tohum)");
+    else Pass($"M3GkMatters({golNormal}→{golBoost}, 6 tohum)");
+}
 
 // 11) FAZ 03 M4 — Duran toplar + hakem/kart + maç saati (ME 10, 11.2, 3.4; BRIEF M4)
 
@@ -399,7 +408,7 @@ if (f1.hash != f2.hash || f1.res.TotalTicks != f2.res.TotalTicks)
     failures += Fail("M4Determinism", $"0x{f1.hash:X} != 0x{f2.hash:X}");
 else Pass("M4Determinism");
 
-const ulong M4_GOLDEN = 0x86C4ACC4F6CA105BUL; // M11'de yeniden sabitlendi
+const ulong M4_GOLDEN = 0x943FD70DD015A3CEUL; // M11'de yeniden sabitlendi
 if (M4_GOLDEN != 0 && f1.hash != M4_GOLDEN) failures += Fail("M4Golden", $"0x{f1.hash:X}");
 else Pass("M4Golden");
 
@@ -678,7 +687,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     Console.WriteLine($"[info] M6 komutlu maç hash: 0x{hA:X}");
     if (hA != hB) failures += Fail("M6Determinism", $"0x{hA:X} != 0x{hB:X}");
     else Pass("M6Determinism");
-    const ulong M6_GOLDEN = 0xF1F436D578A5CBBDUL; // M11'de yeniden sabitlendi (taktik+değişiklik+motivasyon zaman çizelgesi)
+    const ulong M6_GOLDEN = 0x9F82C61168357EE9UL; // M11'de yeniden sabitlendi (taktik+değişiklik+motivasyon zaman çizelgesi)
     if (M6_GOLDEN != 0 && hA != M6_GOLDEN) failures += Fail("M6Golden", $"0x{hA:X}");
     else Pass("M6Golden");
 }

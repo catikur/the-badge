@@ -176,6 +176,7 @@ namespace TheBadge.Sim.Config
             public double aRollKuru;          // yerde sürtünme yavaşlaması (m/sn²)
             public double sekmeEKuru;         // dikey sekme katsayısı
             public double sekmeYatayCarpan;   // sekmede yatay hız çarpanı (ME 8.3)
+            public double blokSacilmaDeg;     // bloklanan şutun geri sekme açısı sigması (ME 8.3)
             public double dragK;              // hava direnci k_d
             public double magnusK;            // falso k_m (M3+ orta/frikik kullanır)
         }

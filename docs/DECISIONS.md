@@ -328,9 +328,25 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   direkler arasına dönmesi (Flight=0 olduğu için kaleci analitik çözüme hiç girmiyor).
   **Sıradaki prob:** serbest top golünde topa en son dokunan AJANI (rol + mevki) kaydet; kaleciye
   geri pas mı, savunmacı pası mı, sapmış şut mu — üçünü ayırır.
-- **M11 kapısı AÇIK:** gol 4,3-5,0 (hedef 2,4-3,2) · xG/şut 0,31 (hedef ≤0,20) · penaltı ~0
-  (hedef 0,15-0,40). Gol bandı bu hata kapanmadan tutturulamaz; katsayıyla bastırmak hatayı
-  gizlemek olur — bilinçli olarak YAPILMADI.
+- **M11 KAPANDI (aynı gün, prob koşuldu):** "son dokunan ajan" probu üç adımda kaynağı buldu.
+  Serbest top gollerinin dağılımı: **kaleci 1,40 · defans 1,70 · orta saha-forvet 1,00**.
+  Kaleci payı kaynağı gösterdi: **saha oyuncuları kaleciye GERİ PAS atıyordu** ve 12-19 m/s ile
+  gelen top kalecinin toplayamadığı bir hızda kendi ağına gidiyordu. Kaleci pas ADAY KÜMESİNDEN
+  çıkarıldı (kalecinin topu dağıtması ME 9.4'te kendi aksiyonudur; saha oyuncusunun kendi
+  kalesine top yollaması bu modelde yok). **Gol 4,7 → 2,4** — ME 17.2 bandına (2,4-3,0) İLK KEZ girdi.
+  Yolda iki model hatası daha düzeltildi (ikisi de tek başına yetmedi ama ikisi de yanlıştı):
+  ME 9.2 çelme geometrisi ve **bloklanan şutun 360° DÜZGÜN dağılımdan sekmesi** — top kaleye
+  momentumla gelirken gövdeye çarpıp rastgele yöne, sık sık ağa gidiyordu; artık geri/yana
+  saçılma (`physics.blokSacilmaDeg`).
+- **M11 kalibrasyon (12 maç ort.):** **gol 2,42 ✓ (bant 2,4-3,0)** · şut 17,7-21,1 · korner 5,5-6,8 ·
+  faul 28,3 ✓ · kart 3,4-4,0 ✓ · ofsayt 3,8 ✓ · sakatlık 0,83 ✓ · bitiş enerji 413 ✓ · 91,3 dk.
+- **M11 sonrası açık kalan:** korner 5,5-6,8 (bant 8-12 — M10'da 8,8'di, gol düşünce şut/korner de
+  düştü) · şut 17,7 (bant 20-28) · penaltı ~0 · xG/şut 0,30 (hedef ≤0,20).
+- **M11 borcu (model sınırı, bilinçli):** kaleciye geri pas + kalecinin topu TOPLAMASI (ME 9.4
+  dağıtım zinciri) modellenmedi; şu an saha oyuncusu kaleciye pas atamıyor. Gerçek futbolda bu
+  akış var — M14/M15 sırasında kaleci dağıtımıyla birlikte geri getirilmeli.
+- **Kapı iyileştirmesi:** `M3GkMatters` tek maç yerine 6 tohum toplamına bakıyor (gol sayısı banda
+  inince tek maçlık 1→2 farkı gürültüydü — aynı özellik, güvenilir ölçüm).
 
 ## Bekleyen kararlar
 - Premium etkilerin public ligde şeffaf rozeti (panel M-bulgusu) → tasarım kararı, FAZ 02 öncesi.

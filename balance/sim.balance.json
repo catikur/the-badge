@@ -210,7 +210,7 @@
       0.6
     ],
     "sertMudahaleEsik": 0.45,
-    "pTabanMudahale": 0.02,
+    "pTabanMudahale": 0.013,
     "pTabanSprint": 0.0001
   },
   "momentum": {
@@ -261,6 +261,7 @@
     "aRollKuru": 3.3,
     "sekmeEKuru": 0.62,
     "sekmeYatayCarpan": 0.78,
+    "blokSacilmaDeg": 55.0,
     "dragK": 0.0045,
     "magnusK": 0.0032
   },

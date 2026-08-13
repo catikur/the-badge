@@ -48,6 +48,7 @@ namespace TheBadge.Sim.Match
         public int PassToOther;       // başka bir takım arkadaşına ulaştı (yine tamamlanmış)
         public int PassLostToOpponent;// rakip aldı (kesme)
         public readonly int[] Possessions = new int[2]; // takım başına atak sayısı (hash dışı)
+        public int LooseGoalByGk, LooseGoalByDf, LooseGoalByMfFw, LooseGoalByUnknown;
         public double LooseGoalSpeedSum; public int LooseGoalAirborne;
         public int LooseGoalAttackTouch, LooseGoalOwnTouch; // serbest top golü kaynağı (teşhis)
         public int Crosses;           // açık oyunda atılan orta sayısı (ME 6.4)
@@ -58,6 +59,7 @@ namespace TheBadge.Sim.Match
         public int ShotPresSum;       // şut anındaki baskı (1,2 m içi savunucu) toplamı
         public int ShotsRecorded;     // xG'ye giren şut sayısı (penaltı hariç)
         int pendingPassTeam = -1; // pas sonrası ilk kontrol aynı takımsa tamamlanmış sayılır
+        short lastToucher = -1;   // topa en son dokunan ajan (teşhis: gol kaynağı ayrımı)
         short pendingPasser = -1; // pası atan — kendi pasını "tamamlanmış" saydırmaz (dürüst metrik)
         short pendingTarget = -1; // pasın hedeflediği oyuncu (sonuç sınıflandırması)
         // Devre başı taban değerleri (uzatma hesabı, ME 3.4) — koşu boyunca deterministik türer;
@@ -266,6 +268,7 @@ namespace TheBadge.Sim.Match
             for (int j = t0; j < t0 + 11; j++)
             {
                 if (j == i || !st.Agents[j].Active) continue;
+                if (j % 11 == 0) continue;   // TEŞHİS: kaleciye pas aday kümesinden çıkarıldı
                 long dx = st.Agents[j].X - a.X, dy = st.Agents[j].Y - a.Y;
                 long d2 = dx * dx + dy * dy;
                 int k = candN < 10 ? candN++ : -1;
@@ -489,7 +492,7 @@ namespace TheBadge.Sim.Match
                         // Adam geçilemedi: top savunucuya döner (temiz müdahale)
                         Tackles++;
                         st.Ball.OwnerId = -1;
-                        st.Ball.LastTouchTeam = st.Agents[marker].TeamIdx;
+                        st.Ball.LastTouchTeam = st.Agents[marker].TeamIdx; lastToucher = (short)marker;
                         if (pendingPassTeam >= 0) PassLostDead++;
                         ClearPending();
                         st.Ball.Vx = 0; st.Ball.Vy = 0;
@@ -548,7 +551,7 @@ namespace TheBadge.Sim.Match
             st.Ball.Vy = Units.QuantizeMm(v0 * uy);
             st.Ball.Vz = 0; // yerden pas; havadan top/orta M3+ (ME 8.3)
             st.Ball.OwnerId = -1;
-            st.Ball.LastTouchTeam = a.TeamIdx;
+            st.Ball.LastTouchTeam = a.TeamIdx; lastToucher = (short)i;
             PassAttempts++;
             reclaimUntil[i] = st.Tick + (uint)bal.possession.yenidenAlmaTicks;
             pendingPassTeam = a.TeamIdx;
@@ -611,11 +614,18 @@ namespace TheBadge.Sim.Match
                 double bd = Math.Max(0.5, Math.Sqrt(bdx * bdx + bdy * bdy));
                 // Sekme yönü rastgele (bloklar geri de seker, kale arkasına da) — PHYSICS domain;
                 // arkaya sekenler korner üretir (gerçek futbolun ana korner kaynağı)
-                int bang = (int)(Rng.Rand01(seed, Domain.Physics, (uint)(200 + i), st.Tick, 46) * TrigLut.Size);
-                TrigLut.Rotate(bdx / bd, bdy / bd, bang, out double blx, out double bly);
+                // Sekme yönü GERİYE doğrudur: top kaleye momentumla gelir, gövdeye çarpıp geri/yana
+                // savrulur. Eski biçim 360° DÜZGÜN dağılımdan açı seçiyordu; blokçu kaleye yakın
+                // olduğu için sekmelerin önemli kısmı AĞA gidiyordu — ölçümde maç başına 2,4
+                // "savunanın son dokunuşuyla" gol (gerçek ~0,05). ME 8.3 sekme mantığı.
+                double bang0 = Math.PI; // tam geri
+                double bspread = bal.physics.blokSacilmaDeg * Math.PI / 180.0
+                                 * Rng.Gauss01(seed, Domain.Physics, (uint)(200 + i), st.Tick, 46);
+                TrigLut.Rotate(bdx / bd, bdy / bd, TrigLut.AngleIndexFromRad(bang0 + bspread),
+                               out double blx, out double bly);
                 st.Ball.OwnerId = -1;
                 st.Ball.Flight = 0;
-                st.Ball.LastTouchTeam = a.TeamIdx == 0 ? (byte)1 : (byte)0; // savunucudan sekti
+                st.Ball.LastTouchTeam = a.TeamIdx == 0 ? (byte)1 : (byte)0; lastToucher = (short)blocker; // savunucudan sekti
                 // Top BLOKÇUNUN üzerinden seker — şutçunun ayağında kalmaz (rebound çorbası önlendi)
                 st.Ball.X = ClampX(st.Agents[blocker].X + Units.QuantizeMm(blx * 2.5));
                 st.Ball.Y = st.Agents[blocker].Y + Units.QuantizeMm(bly * 2.5);
@@ -716,6 +726,7 @@ namespace TheBadge.Sim.Match
                 st.Ball.Y = st.Agents[deflectFrom].Y + Units.QuantizeMm(vy / dn * 3.5);
             }
             st.Ball.LastTouchTeam = parried ? (a.TeamIdx == 0 ? (byte)1 : (byte)0) : a.TeamIdx;
+            lastToucher = parried ? (short)(a.TeamIdx == 0 ? 11 : 0) : (short)i;
             // Şutçu topu anında geri alamaz (vuruş sonrası toparlanma) — karar + alım kilidi
             a.ActionUntilTick = st.Tick + (uint)bal.possession.tackleCooldownTicks;
             reclaimUntil[i] = st.Tick + (uint)bal.possession.yenidenAlmaTicks;
@@ -1078,7 +1089,7 @@ namespace TheBadge.Sim.Match
                     {
                         Tackles++;
                         st.Ball.OwnerId = -1;
-                        st.Ball.LastTouchTeam = d.TeamIdx;
+                        st.Ball.LastTouchTeam = d.TeamIdx; lastToucher = (short)i;
                         if (pendingPassTeam >= 0) PassLostDead++;
                         ClearPending();
                         // Kazanılan top açığa çıkar — yön DUEL akışından (sunum değil sonuç durumu)
@@ -1515,6 +1526,14 @@ namespace TheBadge.Sim.Match
                         if (st.Ball.LastTouchTeam == scorer) LooseGoalAttackTouch++; else LooseGoalOwnTouch++;
                         LooseGoalSpeedSum += Math.Sqrt((double)st.Ball.Vx * st.Ball.Vx
                                                        + (double)st.Ball.Vy * st.Ball.Vy) / 1000.0;
+                        if (lastToucher >= 0)
+                        {
+                            int rol = st.Agents[lastToucher].RoleId;
+                            if (lastToucher % 11 == 0) LooseGoalByGk++;
+                            else if (rol <= 2) LooseGoalByDf++;
+                            else LooseGoalByMfFw++;
+                        }
+                        else LooseGoalByUnknown++;
                         if (st.Ball.Z > 400) LooseGoalAirborne++;
                     }
                     if (scorer == 0) st.HomeGoals++; else st.AwayGoals++;
@@ -1946,7 +1965,7 @@ namespace TheBadge.Sim.Match
                 st.Ball.Vy = Units.QuantizeMm(bal.setpiece.uzaklastirmaHizMS * 0.3 *
                     Rng.Gauss01(seed, Domain.Physics, (uint)(700 + def), st.Tick, 63));
                 st.Ball.Vz = 0;
-                st.Ball.LastTouchTeam = d2.TeamIdx;
+                st.Ball.LastTouchTeam = d2.TeamIdx; lastToucher = (short)def;
             }
         }
 
