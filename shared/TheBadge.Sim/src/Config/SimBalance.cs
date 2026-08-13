@@ -32,6 +32,35 @@ namespace TheBadge.Sim.Config
         /// olduğu için @ ile yazılır (ad JSON'da birebir "var" kalır).</summary>
         public VarCfg @var = new VarCfg();
 
+        /// <summary>Hava ve zemin — ME Spec 12.4 [KALİBRE]. Tüm çarpanlar burada; kodda sabit yok.</summary>
+        public HavaCfg hava = new HavaCfg();
+
+        [System.Serializable]
+        public sealed class HavaCfg
+        {
+            public KosulCfg yagmur = new KosulCfg();
+            public KosulCfg kar = new KosulCfg();
+            public KosulCfg sicak = new KosulCfg();
+            /// <summary>Rüzgar sapma katsayısı — ME 12.4: sapma = rüzgar_hızı × k_w × uçuş_süresi.
+            /// Spec sayı vermez [KALİBRE]. 0,15 aerodinamikten türetildi: top (0,43 kg, A≈0,038 m²,
+            /// Cd≈0,25) 16 m/sn yan rüzgarda ≈3,4 m/sn² yanal ivme görür → 1,6 sn'lik bir kornerde
+            /// ≈4 m sapma; doğrusal modelde bunun karşılığı k≈0,15'tir (M13 ölçümü: 16 m/sn → 3,9 m).</summary>
+            public double ruzgarK;
+            public ZeminKotuCfg zeminKotu = new ZeminKotuCfg();
+            public ZeminIyiCfg zeminIyi = new ZeminIyiCfg();
+
+            [System.Serializable]
+            public sealed class KosulCfg
+            {
+                public double passingDelta, firstTouchDelta, visionDelta;
+                public double aRoll, sekmeE, topHiziCarpan, vMaxCarpan, sakatlikCarpan, staminaCarpan;
+            }
+            [System.Serializable]
+            public sealed class ZeminKotuCfg { public double firstTouchDelta, sekmePertDeg, sakatlikCarpan; }
+            [System.Serializable]
+            public sealed class ZeminIyiCfg { public double passingDelta; }
+        }
+
         [System.Serializable]
         public sealed class VarCfg
         {

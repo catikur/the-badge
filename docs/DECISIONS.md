@@ -407,6 +407,50 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
 - **Kapı düzeltmesi:** `M5MomentumSwing` tek tohuma bağlıydı ve golsüz maçta ölçülemiyordu;
   artık gol görülene kadar 8 tohum deniyor (aynı özellik, tohum şansına bağlı değil).
 
+- M13 (hava ve zemin) uygulandı (2026-08-13): **ME 12.4 tablosu birebir.** `MatchConfig`'e
+  `Weather` (Kuru/Yağmur/Kar/Sıcak), `PitchTier` (1-5), `WindMS` + `WindDir` girdi; tüm çarpanlar
+  `balance/sim.balance.json` → `hava.*` altında. Motor bunları maç başında BİR KEZ türetir
+  (koşul maç boyunca sabit, sıcak yolda dallanma yok): nitelik deltaları (Passing/FirstTouch/
+  Vision) motorun nitelik kopyasına işlenir — kulübeden gelen oyuncuya değişiklik anında da; a_roll,
+  sekme e, top hızı, v_max, sakatlık ve stamina çarpanları kendi kullanım yerlerine bağlanır.
+  Kötü zeminde (Tier 1-2) sekme yönüne ±2° pertürbasyon eklenir (PHYSICS domain, LUT ile).
+- **Nötrlük kanıtı:** Kuru + Tier 3 + rüzgarsız kurulumda TÜM çarpanlar tam 1,0 ve deltalar 0'dır →
+  M0-M12 golden hash'lerinin hepsi BİT DÜZEYİNDE korundu. `M13NotrAynilik` kapısı bunu ayrıca
+  niyet olarak yazıyor: hava alanına hiç dokunulmamış kurulum ile kuru kurulum aynı hash'i verir.
+- **KÖK NEDEN (M13'te bulundu ve düzeltildi) — pas gücünde çift sayım:** `PassSpeed` pasın hızını
+  "hedefte DURACAK şekilde" çözer, yani zeminin etkisi zaten `a_roll`'dedir. ME 12.4'ün "top hızı
+  −%10" satırı bunun ÜSTÜNE uygulanınca her pas sistematik olarak %19 kısa kalıyordu — pasçı
+  oynadığı zemini bilmiyormuş gibi. Ölçüm (kar, 12 maç): gol 2,25→**1,17**, taç 15,4→**1,3**,
+  sahiplik değişimi 360→431. Düzeltmeden sonra kar: gol 1,92 · taç 5,0. Çarpan artık yalnız hızını
+  MESAFEDEN değil VURUŞTAN alan toplara uygulanıyor: şut, orta, korner, uzaklaştırma.
+- **Rüzgar doğrulaması (istatistik değil doğrudan geometri):** elle kurulmuş kornerde topun düşüş
+  noktası — 8 m/sn → 1,88 m · 16 m/sn → 3,78 m · ters yön → −1,86 m. ME 12.4 formülüne
+  (rüzgar × k_w × uçuş_süresi) tam doğrusal ve işaretli.
+- **`ruzgarK` [KALİBRE] 0,045 → 0,15:** ilk değer tahmindi. Yeni değer aerodinamikten türetildi —
+  top (0,43 kg, A≈0,038 m², Cd≈0,25) 16 m/sn yan rüzgarda ≈3,4 m/sn² yanal ivme görür; 1,6 sn'lik
+  bir korner uçuşunda ≈4 m sapma eder. 0,045 aynı kornerde yalnız 1,2 m veriyordu (fırtınada bile
+  ölçülemez etki). Rüzgar varsayılanı 0'dır; koşula atama FAZ 04 lig takvimi katmanında.
+- **M13 ölçüm (12 maç, koşul başına — gol/şut/faul · pas isabeti · taç · bitiş enerjisi · sakatlık):**
+  kuru 2,25/19,6/27,5 · %82,9 · 15,4 · 413 · 0,67 — yağmur 2,75/23,0/26,6 · %80,5 · **36,1** · 474 ·
+  0,83 — kar 1,92/20,1/21,0 · %83,4 · **5,0** · 398 · 1,08 — sıcak 3,50/22,8/27,3 · %81,2 · 17,5 ·
+  **351** · 1,25 — zeminKötü 2,25/22,1/33,4 · %82,5 · 20,4 · 427 · 0,67.
+- **Kapının duruşu (bilinçli):** ME 17.2 kalibrasyon bandı REFERANS koşul (kuru + Tier 3) içindir.
+  "Kar da 2,4-3,0 gol atsın" demek 12.4'ü silmek olurdu. Kapı bu yüzden iki şey denetler: (1) referans
+  koşul bit düzeyinde değişmedi, (2) her koşul spec'in söylediği YÖNDE ölçülebilir fark üretiyor ve
+  hâlâ FUTBOL kalıyor (`M13FutbolZarfi`: gol 1,0-4,5 · şut 12-32 · faul 15-40 · pas isabeti %70-90 —
+  bu zarf 17.2 bandı DEĞİLDİR ve gate mesajında böyle yazılıdır).
+- **M16 BORCU (ölçüldü, kapatılmadı):** yağmurda korner 8,2→**14,7** (bant 8-12 üstü), karda
+  8,2→**3,9** (bant altı); yağmurda taç ×2,2. Mekanizma anlaşıldı ve tek: `pass.groundSpeedMin`
+  (12 m/sn) kısa pasları zorunlu olarak sert vurdurur, topun aşım mesafesi 1/a_roll ile ölçeklenir —
+  KURU koşulda da 10 m'lik bir pas 11,8 m aşıyor. Yani bu bir hava hatası değil, pas modelinin
+  zaten var olan zayıflığının hava tarafından BÜYÜTÜLMESİ. Düzeltmesi pas gücü modeline dokunur
+  (tüm M4-M12 kalibrasyonunu ve golden'ları hareket ettirir) → 10.000 maçlık M16 sprintine.
+- **M17 BORCU:** `Weather`/`PitchTier`/`Wind*` replay dörtlüsünün config_hash'ine GİRMELİDİR
+  (ME 3.3). ConfigHash şu an host tarafından set ediliyor; arayüz dondurmada (M17) hava alanları
+  kanonik özete dahil edilecek — aksi halde aynı seed farklı havada farklı maç verir ve replay kırılır.
+- **Bilinçli sınır:** rüzgar yalnız HAVA topuna (orta + korner) uygulanır; ME 12.4 satırı da
+  "uzun top/orta sapması, frikik-korner nişanına eklenir" der. Şut ve yerden pas kapsam dışıdır.
+
 ## Bekleyen kararlar
 - Premium etkilerin public ligde şeffaf rozeti (panel M-bulgusu) → tasarım kararı, FAZ 02 öncesi.
 - ~~3G Greybox Fun Gate GO/NO-GO~~ → **KAPANDI (2026-08-08): NO-GO %40** — uygulama yukarıdaki kapanış bölümünde; sunum revizyonu + mülakatlı doğrulama turu Dikey Dilim öncesi BORÇ.

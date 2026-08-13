@@ -55,9 +55,20 @@ Gol 3,3-3,7 → 2,4-3,0; xG/şut gerçek ~0,10-0,13'e yaklaşmalı.
 Saha kararı kalır oranı chaos seviyesine bağlı, 20-90 sn bekleme, karar iptali.
 - **Kapı:** VAR olayı üretimi + geri alınan karar oranı bandı + determinizm.
 
-### M13 — Hava ve zemin (ME 12.4)
+### M13 — Hava ve zemin (ME 12.4) — ✅ TAMAM (2026-08-13)
 Yağış/zemin → sürtünme, sekme, pas hatası, sakatlık çarpanları.
-- **Kapı:** kuru/ıslak koşuda ölçülebilir ve BANTTA kalan fark.
+- ~~**Kapı:** kuru/ıslak koşuda ölçülebilir ve BANTTA kalan fark.~~
+- **Uygulanan kapı (plandan SAPMA — gerekçe aşağıda):** (1) referans koşul (kuru + Tier 3 +
+  rüzgarsız) BİT DÜZEYİNDE değişmedi — `M13NotrAynilik` + M0-M12 golden'ları; (2) her koşul
+  kendi içinde tekrarlanabilir ve kurudan farklı (`M13Determinizm`, `M13KosulEtkisi`);
+  (3) rüzgar sapması doğrudan geometriyle ölçülüyor ve hıza doğrusal (`M13Ruzgar`);
+  (4) a_roll'ün imzası ölçülebilir (`M13IslakMenzil`, `M13KarMenzil`); (5) sıcakta kondisyon
+  düşüyor (`M13SicakKondisyon`); (6) her koşul FUTBOL ZARFI içinde (`M13FutbolZarfi`).
+- **Sapmanın gerekçesi:** "her koşul ME 17.2 bandında kalsın" şartı 12.4'ün kendisini silerdi —
+  17.2 bandı REFERANS koşul içindir, havanın maçı kaydırması özelliğin ta kendisidir. Ölçülen
+  bant dışı sapmalar (yağmurda korner 14,7 · karda 3,9) silinmedi: mekanizmasıyla birlikte
+  DECISIONS.md'ye M16 borcu olarak yazıldı (kök: `pass.groundSpeedMin` × 1/a_roll aşım etkisi,
+  kuru koşulda da var).
 
 ### M14 — Maç sonu veri paketi + event log + highlight (ME 15.1/15.3/15.4)
 LLM ve Panorama'nın girdisi; FAZ 04'ün beslendiği yer.

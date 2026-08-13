@@ -190,6 +190,14 @@
     "kirmiziEsik": 0.8,
     "cezaSahasiIhtiyatCarpan": 0.72
   },
+  "hava": {
+    "yagmur": { "passingDelta": -8, "firstTouchDelta": -10, "visionDelta": 0, "aRoll": 2.6, "sekmeE": 0.5, "topHiziCarpan": 1.0, "vMaxCarpan": 1.0, "sakatlikCarpan": 1.1, "staminaCarpan": 1.0 },
+    "kar":    { "passingDelta": 0,  "firstTouchDelta": 0,   "visionDelta": -10, "aRoll": 4.6, "sekmeE": 0.38, "topHiziCarpan": 0.9, "vMaxCarpan": 0.94, "sakatlikCarpan": 1.15, "staminaCarpan": 1.0 },
+    "sicak":  { "passingDelta": 0,  "firstTouchDelta": 0,   "visionDelta": 0,  "aRoll": 3.3, "sekmeE": 0.62, "topHiziCarpan": 1.0, "vMaxCarpan": 1.0, "sakatlikCarpan": 1.0, "staminaCarpan": 1.2 },
+    "ruzgarK": 0.15,
+    "zeminKotu": { "firstTouchDelta": -6, "sekmePertDeg": 2.0, "sakatlikCarpan": 1.2 },
+    "zeminIyi": { "passingDelta": 2 }
+  },
   "var": {
     "sahaKarariKalirOran": {
       "dusuk": 0.0,
