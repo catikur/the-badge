@@ -35,11 +35,17 @@ FAZ 04 arayüz dondurması.
 - **Kapı:** `M7AttackRiskRegresyon` ×0,80 → **>1,00** (hücumun bedeli doğar) ve
   `M7DefendRegresyon` ×1,51 → **<1,00** (savunmak ödül verir). İkisi de sert kapıya döner.
 
-### M10 — Duran top ve ceza sahası üretimi
+### ~~M10 — Duran top ve ceza sahası üretimi~~ *(kısmen kapandı 2026-08-13)*
+Orta aksiyonu eklendi; korner ve taç bantta. **Penaltı borcu M11'e taşındı.**
+
+<details><summary>özgün madde</summary>
+
+#### M10 — Duran top ve ceza sahası üretimi
 Korner 7-8 (hedef 8-12), penaltı ~0 (hedef 0,20-0,35), taç düşük.
 - Kanat/orta akışı: ceza sahasına ORTA (ME 10.2 zinciri var, besleme yok).
 - Ceza sahası içi ihlal → penaltı üretimi (ME 11.2 + `cezaSahasiIhtiyatCarpan` dengesi).
-- **Kapı:** korner 8-12, penaltı 0,15-0,40, taç > 8/maç.
+- **Kapı:** korner 8-12 ✓ (7,9-8,8) · taç > 8/maç ✓ (43-48) · penaltı 0,15-0,40 ✗ (~0 → M11)
+</details>
 
 ### M11 — Gol bandı ve şut kalitesi ince ayarı
 Gol 3,3-3,7 → 2,4-3,0; xG/şut gerçek ~0,10-0,13'e yaklaşmalı.

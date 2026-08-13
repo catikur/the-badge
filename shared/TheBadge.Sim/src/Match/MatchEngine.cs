@@ -48,6 +48,7 @@ namespace TheBadge.Sim.Match
         public int PassToOther;       // başka bir takım arkadaşına ulaştı (yine tamamlanmış)
         public int PassLostToOpponent;// rakip aldı (kesme)
         public readonly int[] Possessions = new int[2]; // takım başına atak sayısı (hash dışı)
+        public int Crosses;           // açık oyunda atılan orta sayısı (ME 6.4)
         public int GoalsFromShot, GoalsFromLoose; // gol kaynağı teşhisi (hash dışı)
         public int PassLostDead;      // pas oyun durarak bitti (taç/aut/duran top/ofsayt)
         public double PassLostRecvDistM; // kayıpta HEDEF oyuncunun topa uzaklığı toplamı (m) — teşhis
@@ -408,6 +409,44 @@ namespace TheBadge.Sim.Match
                 }
             }
 
+            // ORTA (ME 6.4 aksiyon tablosu + 8.3 balistik): kanattan ceza sahasına HAVADAN besleme.
+            // Bu aksiyon hiç yoktu; ceza sahasına top girmediği için taç ~4 (gerçek ~40),
+            // penaltı ~0 (bant 0,20-0,35) ve kafa golü sıfırdı. Havadaki top 10.2 zinciriyle çözülür.
+            {
+                int gxO = a.TeamIdx == 0 ? PitchHalfXmm : -PitchHalfXmm;
+                double odx = (gxO - a.X) / 1000.0, ody = (0 - a.Y) / 1000.0;
+                double dGoalO = Math.Sqrt(odx * odx + ody * ody);
+                bool genis = Math.Abs(a.Y) > bal.offball.ortaGenislikEsikMm;
+                if (genis && dGoalO >= u.ortaMinMesafeM && dGoalO <= u.ortaMaxMesafeM)
+                {
+                    int dirO = a.TeamIdx == 0 ? 1 : -1;
+                    // Hedef derinliği SABİT değil: ofsayt çizgisiyle kale arasına nişan alınır —
+                    // hücumcunun YASAL olarak varabileceği en derin bölge. Sabit 9 m hedefi
+                    // ofsayt kısıtı yüzünden hep boş kalıyordu (orta aksiyonu ölü doğuyordu).
+                    int ofsX = OffsideLineX(ref st, a.TeamIdx);
+                    int sabitX = gxO - dirO * (int)(bal.setpiece.ortaHedefDerinlikM * 1000);
+                    int tgtXO = dirO > 0 ? Math.Min(sabitX, ofsX) : Math.Max(sabitX, ofsX);
+                    // Ofsayt kısıtı hücumcunun kutuda BEKLEMESİNİ engeller; orta KOŞUYLA karşılanır.
+                    // Bu yüzden hedefte duran değil, uçuş süresinde ORAYA VARABİLECEK arkadaş sayılır.
+                    int kosuCap = (int)(bal.setpiece.ortaKosuYaricapM * 1000);
+                    int yariCap = (int)(bal.setpiece.havaTopuYaricapM * 2000);
+                    int bizim = NearTeammates(ref st, tgtXO, 0, a.TeamIdx, kosuCap, i);
+                    int onlar = NearOpponents(ref st, tgtXO, 0, a.TeamIdx, yariCap);
+                    if (bizim > 0)
+                    {
+                        // Kutuda sayısal üstünlük ortanın değerini belirler (hava topu 6.4 kompoziti
+                        // ayrıca ResolveAerial'da çözülür — burası yalnız KARAR vekili)
+                        double pKazan = bizim / (double)(bizim + onlar + 1);
+                        double dXtO = XtAt(tgtXO, 0, a.TeamIdx) - curXt;
+                        double s5 = wThreat * dXtO * pKazan * u.ortaTehditCarpan
+                                    + wRisk * pKazan + u.wVar * Noise(15);
+                        if (s5 > best) { best = s5; bestKind = 5; bestTarget = -1; }
+                    }
+                }
+            }
+
+            if (bestKind == 5) { ExecuteOpenCross(ref st, i); return; }
+
             if (bestKind == 4)
             {
                 // Boşluğa pas + koşu: alıcı ileri fırlar (ofsayt riski gerçek)
@@ -676,6 +715,46 @@ namespace TheBadge.Sim.Match
             ClearPending();
         }
 
+        /// <summary>ORTA yürütme — korner ortasıyla AYNI balistik (ME 8.3): hedefte yere inen yay,
+        /// Flight=4 → hava topu düellosu (10.2). SetPieces niteliği sapmayı daraltır.</summary>
+        void ExecuteOpenCross(ref MatchState st, int i)
+        {
+            ref var a = ref st.Agents[i];
+            int gx = a.TeamIdx == 0 ? PitchHalfXmm : -PitchHalfXmm;
+            int dir = a.TeamIdx == 0 ? 1 : -1;
+            double tx = gx - dir * bal.setpiece.ortaHedefDerinlikM * 1000.0;
+            // Zar gerekçesi: orta sapması fiziksel yürütme hatasıdır — PHYSICS domain (ME 3.1)
+            double ty = 4000.0 * Rng.Gauss01(seed, Domain.Physics, (uint)(700 + i), st.Tick, 63)
+                        * (1.0 - Eff(i, attrs[i].SetPieces) / 150.0);
+            double dxM = (tx - a.X) / 1000.0, dyM = (ty - a.Y) / 1000.0;
+            double dM = Math.Max(1.0, Math.Sqrt(dxM * dxM + dyM * dyM));
+            double tF = dM / bal.setpiece.ortaHiziMS;
+            st.Ball.Vx = Units.QuantizeMm(dxM / tF);
+            st.Ball.Vy = Units.QuantizeMm(dyM / tF);
+            st.Ball.Vz = Units.QuantizeMm(0.5 * G * tF);
+            st.Ball.Z = 100;
+            st.Ball.OwnerId = -1;
+            st.Ball.LastTouchTeam = a.TeamIdx;
+            st.Ball.Flight = 4;
+            reclaimUntil[i] = st.Tick + (uint)bal.possession.yenidenAlmaTicks;
+            Crosses++;
+            if (pendingPassTeam >= 0) { PassLostDead++; ClearPending(); }
+        }
+
+        /// <summary>Verilen noktanın yarıçapındaki TAKIM ARKADAŞI sayısı (kendisi hariç).</summary>
+        int NearTeammates(ref MatchState st, int x, int y, byte team, int radiusMm, int hariç)
+        {
+            long r2 = (long)radiusMm * radiusMm;
+            int n = 0;
+            for (int k = 0; k < 22; k++)
+            {
+                if (k == hariç || k % 11 == 0) continue;             // kaleci sayılmaz
+                if (st.Agents[k].TeamIdx != team || !st.Agents[k].Active) continue;
+                if (Dist2(st.Agents[k].X, st.Agents[k].Y, x, y) <= r2) n++;
+            }
+            return n;
+        }
+
         /// <summary>xG KAYIT gerçeği — ME 15.2 birebir (ln/atan burada serbest: sonuca girmez).</summary>
         void RecordXg(ref MatchState st, int i, double dGoal, bool header = false)
         {
@@ -766,6 +845,17 @@ namespace TheBadge.Sim.Match
             var rtP = a.TeamIdx == 0 ? st.HomeRt : st.AwayRt;
             int presSayi = 2 + rtP.Pres;
             if (presSayi < 1) presSayi = 1; else if (presSayi > 4) presSayi = 4;
+            // HAVADAKİ ORTAYI KARŞILA (ME 10.2): top havada (Flight=4) ve hücum bizdeyse,
+            // ileri roller iniş noktasına koşar. Bu koşu olmadan orta kimseye ulaşmaz —
+            // hava topu düellosu yarıçapında kimse bulunmadığı için orta aksiyonu ölü doğuyordu.
+            if (st.Ball.Flight == 4 && st.Ball.LastTouchTeam == a.TeamIdx && a.RoleId >= 3)
+            {
+                double tKal = st.Ball.Vz > 0 ? (st.Ball.Vz / 1000.0) / G * 2.0 : 0.4;
+                a.TargetX = ClampX(st.Ball.X + (int)(st.Ball.Vx * tKal));
+                a.TargetY = ClampY(st.Ball.Y + (int)(st.Ball.Vy * tKal));
+                return;
+            }
+
             // PASIN ALICISI: top serbestken buluşma noktasına koşar (ME 6.5). Pas anında tek
             // sefer hedef vermek yetmiyordu — top alıcının yanından geçip gidiyor, pas isabeti
             // %45'te kalıyordu (ME 17.2 bandı %78-86). Alıcı pres sırasından ÖNCE gelir.

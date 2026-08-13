@@ -82,6 +82,9 @@ namespace TheBadge.Sim.Config
             public PenaltyCfg penalty = new PenaltyCfg();
             public double[] cornerGolBandi = new double[0]; // kalibrasyon bandı (doğrulama, ME 17.2)
             public double frikikDirektEsikM;
+            public double ortaKosuYaricapM;      // ortayı KARŞILAYABİLECEK arkadaşın hedefe uzaklığı (m)
+            public double ortaHiziMS;            // açık oyun ortasının ilk hızı
+            public double ortaHedefDerinlikM;    // ortanın kale çizgisine uzaklığı (hedef bölge)
             public double kornerOrtaHiziMS;      // korner ortası ilk hızı (M4 ekleme)
             public double kornerHedefDerinlikM;  // ortanın kaleye uzaklığı (hedef bölge)
             public double havaTopuYaricapM;      // hava topu düellosu yarıçapı
@@ -233,6 +236,9 @@ namespace TheBadge.Sim.Config
             public double araPasRisk;             // ara pasın ek kayıp riski
             public double araPasUlasimBandiM;     // ulaşım yarışında %50→%100'e taşıyan mesafe farkı (m)
             public double araPasKotuZamanlama;// koşu zamanlama hatası → ofsayt (ME 10.5)
+            public double ortaTehditCarpan;       // orta aksiyonunun tehdit ağırlığı (ME 6.4)
+            public double ortaMinMesafeM;         // bu mesafeden yakınsa orta yerine şut/pas
+            public double ortaMaxMesafeM;         // bu mesafeden uzaksa orta aday olmaz
             public double kontraTehditCarpan;     // kontra penceresinde wThreat kayması (M9)
             public double kontraRiskTolerans;     // kontra penceresinde wRisk kayması (M9)
             public double mentaliteTehditCarpan;  // mentalite ucunda wThreat kayması (±oran, ME 7.2/14.2)
@@ -262,6 +268,7 @@ namespace TheBadge.Sim.Config
             public double presKesmeSn;       // pres öngörü süresi — kesme noktası (sn, ME 7.4-B)
             public double kanalKapamaM;      // ikinci savunanın topun gol tarafına iniş mesafesi (m)
             public double hatTalimatM;       // hat talimatı başına hat kayması (m, ME 7.6/14.2)
+            public double ortaGenislikEsikMm;// bu |Y| üstü "kanatta" sayılır (orta koşulu)
             public double kontraIleriM;      // kontra penceresinde hücumcunun ek derinliği (m)
             public double gecisSnTaban;      // topu kaptıran takımın toparlanma süresi (sn)
             public double gecisSnPerMentalite; // ofansif mentalite başına ek toparlanma süresi (sn)
