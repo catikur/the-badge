@@ -233,6 +233,8 @@ namespace TheBadge.Sim.Config
             public double araPasRisk;             // ara pasın ek kayıp riski
             public double araPasUlasimBandiM;     // ulaşım yarışında %50→%100'e taşıyan mesafe farkı (m)
             public double araPasKotuZamanlama;// koşu zamanlama hatası → ofsayt (ME 10.5)
+            public double kontraTehditCarpan;     // kontra penceresinde wThreat kayması (M9)
+            public double kontraRiskTolerans;     // kontra penceresinde wRisk kayması (M9)
             public double mentaliteTehditCarpan;  // mentalite ucunda wThreat kayması (±oran, ME 7.2/14.2)
             public double mentaliteRiskTolerans;  // mentalite ucunda wRisk kayması (±oran — kayıp korkusu)
             public double tempoTutCezasi;         // tempo başına "topu tut" cezası
@@ -260,6 +262,7 @@ namespace TheBadge.Sim.Config
             public double presKesmeSn;       // pres öngörü süresi — kesme noktası (sn, ME 7.4-B)
             public double kanalKapamaM;      // ikinci savunanın topun gol tarafına iniş mesafesi (m)
             public double hatTalimatM;       // hat talimatı başına hat kayması (m, ME 7.6/14.2)
+            public double kontraIleriM;      // kontra penceresinde hücumcunun ek derinliği (m)
             public double gecisSnTaban;      // topu kaptıran takımın toparlanma süresi (sn)
             public double gecisSnPerMentalite; // ofansif mentalite başına ek toparlanma süresi (sn)
             public double mentaliteIleriItmeM; // mentalite başına hücumda ileri itme (m, ME 7.4/14.2)
