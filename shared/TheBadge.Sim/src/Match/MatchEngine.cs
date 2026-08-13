@@ -51,6 +51,9 @@ namespace TheBadge.Sim.Match
         public int LooseGoalByGk, LooseGoalByDf, LooseGoalByMfFw, LooseGoalByUnknown;
         public double LooseGoalSpeedSum; public int LooseGoalAirborne;
         public int LooseGoalAttackTouch, LooseGoalOwnTouch; // serbest top golü kaynağı (teşhis)
+        public int InjuriesOffPitch;  // oyuncuyu sahadan çıkaran sakatlık (oto-değişikliği ZORUNLU kılar)
+        public int GkClaims;          // kalecinin havadan topladığı top (ME 9.3)
+        public int CrossOpportunities, CrossOppWithTarget; // orta koşulu / hedefli koşul (teşhis)
         public int Aerials, AerialsContested;  // hava topu olayı / ikili mücadeleli olan (teşhis)
         public int Crosses;           // açık oyunda atılan orta sayısı (ME 6.4)
         public int GoalsFromShot, GoalsFromLoose; // gol kaynağı teşhisi (hash dışı)
@@ -438,8 +441,10 @@ namespace TheBadge.Sim.Match
                     int yariCap = (int)(bal.setpiece.havaTopuYaricapM * 2000);
                     int bizim = NearTeammates(ref st, tgtXO, 0, a.TeamIdx, kosuCap, i);
                     int onlar = NearOpponents(ref st, tgtXO, 0, a.TeamIdx, yariCap);
+                    CrossOpportunities++;                 // koşullar oluştu (geniş + menzil + alıcı?)
                     if (bizim > 0)
                     {
+                        CrossOppWithTarget++;             // hedefe koşabilecek arkadaş da var
                         // Kutuda sayısal üstünlük ortanın değerini belirler (hava topu 6.4 kompoziti
                         // ayrıca ResolveAerial'da çözülür — burası yalnız KARAR vekili)
                         double pKazan = bizim / (double)(bizim + onlar + 1);
@@ -590,7 +595,11 @@ namespace TheBadge.Sim.Match
             // Kritik dakika baskısı — ME 12.3: dk>80 ve fark ≤1 iken nişan sapmasına eklenir;
             // Composure yüksek oyuncu etkinin %60'ını söndürür ("büyük maç oyuncusu")
             double baski = CriticalPressure(in st, i);
-            double sigmaRad = bal.shotExec.sutSigmaTabanDeg * (1.0 + baski) * Math.PI / 180.0 * (1.0 - fin / 125.0);
+            // Kafa vuruşu ayakla aynı isabette olamaz (ME 6.4 aksiyon tablosu): nişan sapması
+            // kafa çarpanıyla büyür. Kutuya giriş davranışı geldikten sonra kafa şutu hacmi
+            // arttı; aynı isabetle bırakmak gol bandını şişiriyordu.
+            double sigmaRad = bal.shotExec.sutSigmaTabanDeg * (header ? bal.shotExec.kafaSigmaCarpani : 1.0)
+                              * (1.0 + baski) * Math.PI / 180.0 * (1.0 - fin / 125.0);
             double sigmaPlaneM = dGoal * Math.Tan(sigmaRad);
             // Nişan noktası: kaleciyi geçmek için direk dibi (merkez değil) — taraf DECISION akışından
             double side = Rng.Rand01(seed, Domain.Decision, (uint)(200 + i), st.Tick, 44) < 0.5 ? -1.0 : 1.0;
@@ -966,6 +975,24 @@ namespace TheBadge.Sim.Match
                 by = a.AnchorY;
                 if (Math.Abs(a.AnchorY) > o.kanatAnchorEsikMm)
                     by += Math.Sign(a.AnchorY) * o.kanatGenislikM * 1000.0;
+
+                // KUTUYA GİRİŞ (ME 7.4-A): topu taşıyan KANATTA ve ileri konumdaysa ileri roller
+                // ceza sahasına koşar. Bu davranış YOKTU: maç başına 175 orta FIRSATI oluşuyor ama
+                // yalnız 11'inde kutuda karşılayacak arkadaş bulunuyordu — orta 5,9'da, korner
+                // 5-6'da kalıyordu. Ofsayt kısıtı hedefi zaten yasal bölgeye kırpar (aşağıda).
+                int sahip = st.Ball.OwnerId;
+                if (sahip >= 0 && sahip != i && st.Agents[sahip].TeamIdx == a.TeamIdx && a.RoleId >= 3)
+                {
+                    int gxK = a.TeamIdx == 0 ? PitchHalfXmm : -PitchHalfXmm;
+                    double dTasiyici = Math.Abs(gxK - st.Agents[sahip].X) / 1000.0;
+                    if (Math.Abs(st.Agents[sahip].Y) > o.ortaGenislikEsikMm
+                        && dTasiyici <= bal.utility.ortaMaxMesafeM)
+                    {
+                        bx = gxK - dir * o.kutuDerinlikM * 1000.0;
+                        // Yakın/uzak direk paylaşımı: oyuncu kendi anchor tarafına koşar
+                        by = (a.AnchorY >= 0 ? 1 : -1) * o.kutuYanM * 1000.0;
+                    }
+                }
             }
             else
             {
@@ -1055,10 +1082,24 @@ namespace TheBadge.Sim.Match
                     // KALECİ süpürme testiyle ölçülür (ME 9.4): son savunma hattı tünellenemez.
                     // Saha oyuncusunda nokta testi kalır — süpürmeyi HERKESE açmak sahiplik
                     // çekirdeğini dengesizleştiriyor (M8 ölçümü, DECISIONS).
+                    // KALECİ ALTI PASINDA TOPUN ÜSTÜNE KAPANIR (ME 9.4): kendi gol sahasındaki
+                    // serbest topta kontrol yarıçapı büyür. Bu olmadan kutudaki her ikinci top
+                    // kargaşası gole dönüyordu (gollerin %70+'ı şut değil serbest toptu).
+                    long kendiR2 = r2;
+                    if (i % 11 == 0)
+                    {
+                        int ogY = a2GoalX(i);
+                        if (Math.Abs(st.Ball.X - ogY) < bal.gk.altiPasDerinlikM * 1000
+                            && Math.Abs(st.Ball.Y) < bal.gk.altiPasYariGenislikM * 1000)
+                        {
+                            long rr = (long)(bal.gk.altiPasYaricapM * 1000);
+                            kendiR2 = rr * rr;
+                        }
+                    }
                     long dd = i % 11 == 0
                         ? SegDist2(st.Agents[i].X, st.Agents[i].Y, ballPrevX, ballPrevY, st.Ball.X, st.Ball.Y)
                         : Dist2(st.Agents[i].X, st.Agents[i].Y, st.Ball.X, st.Ball.Y);
-                    if (dd > r2) continue;
+                    if (dd > kendiR2) continue;
                     // İLK DOKUNUŞ (ME 6.4): topun oyuncuya göre BAĞIL hızı eşiği aşıyorsa temiz
                     // kontrol YOKTUR — top geçip gider. Bu olmadan pas, vuruş noktasında 1-2 m
                     // ötedeki presçiye teslim oluyordu: top ilk tick'te 1,2 m gidip onun kontrol
@@ -1113,6 +1154,24 @@ namespace TheBadge.Sim.Match
                         Tackles++;
                         st.Ball.OwnerId = -1;
                         st.Ball.LastTouchTeam = d.TeamIdx; lastToucher = (short)i;
+                        // Kendi kutusunda kazanılan top: savunan çoğu zaman TEMİZLER, gerekirse
+                        // korneri göze alır (hava topundaki davranışın yer karşılığı). Bu kol
+                        // olmadan korner yalnız hava/blok artığından doğuyor ve bandın altında kalıyor.
+                        if (InPenaltyBox(st.Ball.X, st.Ball.Y, d.TeamIdx) &&
+                            Rng.Rand01(seed, Domain.Physics, (uint)(760 + i), st.Tick, 66) < bal.setpiece.korneriGozeAlmaOran)
+                        {
+                            int ogT = d.TeamIdx == 0 ? -PitchHalfXmm : PitchHalfXmm;
+                            int hedefYT = st.Ball.Y >= 0 ? PitchHalfYmm : -PitchHalfYmm;
+                            double tx2 = (ogT - d.X) / 1000.0, ty2 = (hedefYT - d.Y) / 1000.0;
+                            double tn2 = Math.Max(0.5, Math.Sqrt(tx2 * tx2 + ty2 * ty2));
+                            st.Ball.Vx = Units.QuantizeMm(tx2 / tn2 * bal.setpiece.uzaklastirmaHizMS);
+                            st.Ball.Vy = Units.QuantizeMm(ty2 / tn2 * bal.setpiece.uzaklastirmaHizMS);
+                            st.Ball.Vz = 0; st.Ball.Flight = 0;
+                            if (pendingPassTeam >= 0) PassLostDead++;
+                            ClearPending();
+                            d.ActionUntilTick = st.Tick + (uint)bal.possession.tackleCooldownTicks;
+                            break;
+                        }
                         if (pendingPassTeam >= 0) PassLostDead++;
                         ClearPending();
                         // Kazanılan top açığa çıkar — yön DUEL akışından (sunum değil sonuç durumu)
@@ -1287,6 +1346,7 @@ namespace TheBadge.Sim.Match
             for (int k = 0; k < dist.Length; k++) { acc += dist[k]; if (r < acc) { sev = k + 1; break; } }
             v.Injury = (InjuryState)Math.Min(4, sev);
             Injuries++;
+            if (v.Injury > InjuryState.Hafif) InjuriesOffPitch++;   // sahayı terk ettiren sakatlık
             if (v.Injury > InjuryState.Hafif)
             {
                 v.Vx = 0; v.Vy = 0;
@@ -1973,6 +2033,32 @@ namespace TheBadge.Sim.Match
                 attackerWins = DuelWin(ae, de, (uint)(700 + atk), st.Tick, 62);
             }
 
+            // KALECİ ÇIKIŞI (ME 9.3/9.4): kendi ceza sahasına inen havadaki topta kaleci
+            // AerialCommand ile öne çıkar ve topu TOPLAR. Bu olmadan kutuya inen her orta
+            // ikinci-top kargaşasına dönüyor ve gollerin %74'ü şut değil serbest top oluyordu.
+            {
+                int gkD = crossTeam == 0 ? 11 : 0;
+                if (st.Agents[gkD].Active && InPenaltyBox(st.Ball.X, st.Ball.Y, st.Agents[gkD].TeamIdx))
+                {
+                    long gkr = (long)(bal.setpiece.havaTopuYaricapM * bal.gk.havaHakimiyetCarpani * 1000);
+                    if (Dist2(st.Agents[gkD].X, st.Agents[gkD].Y, st.Ball.X, st.Ball.Y) <= gkr * gkr)
+                    {
+                        double gkE = Composite(gkD, 0.6, attrs[gkD].AerialCommand, 0.25, attrs[gkD].JumpReach, 0.15, attrs[gkD].Handling);
+                        double rakipE = atk >= 0
+                            ? Composite(atk, 0.4, attrs[atk].Heading, 0.35, attrs[atk].JumpReach, 0.25, attrs[atk].Strength)
+                            : 0.0;
+                        // Zar gerekçesi: hava hakimiyeti ikili mücadelesi — DUEL domain (ME 6.3)
+                        if (atk < 0 || DuelWin(gkE, rakipE, (uint)(750 + gkD), st.Tick, 65))
+                        {
+                            st.Ball.Flight = 0; st.Ball.Z = 0;
+                            ClaimBall(ref st, gkD);
+                            GkClaims++;
+                            return;
+                        }
+                    }
+                }
+            }
+
             // HAVA TOPU İHLALİ (ME 11.2): ikili mücadelede itme/tırmanma. Ceza sahasındaki
             // penaltıların gerçek futbolda en yaygın kaynağı budur ve motorda HİÇ yoktu — faul
             // yalnız topu TAŞIYANA yapılan müdahaleden doğuyor, hava mücadelesi hakem makinesine
@@ -2238,6 +2324,9 @@ namespace TheBadge.Sim.Match
             double ex = px - (ax + t * dx), ey = py - (ay + t * dy);
             return (long)(ex * ex + ey * ey);
         }
+
+        /// <summary>Ajanın KENDİ kalesinin x'i (mm).</summary>
+        static int a2GoalX(int i) => i < 11 ? -PitchHalfXmm : PitchHalfXmm;
 
         static long Dist2(int x1, int y1, int x2, int y2)
         { long dx = x2 - x1, dy = y2 - y1; return dx * dx + dy * dy; }

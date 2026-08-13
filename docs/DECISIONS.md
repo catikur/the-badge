@@ -366,6 +366,27 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   üretimi DEĞİL, ceza sahasına giren top sayısı: orta 5,9/maç (gerçek 15-25) ve şut 15-22
   (bant 20-28). Korner bunların türevi — orta sıklığı M10 borcu olarak açık, önce o kapanmalı.
 
+- M11-C (kutuya giriş + kaleci hakimiyeti) uygulandı (2026-08-13, "orta sıklığını aç, korner ve
+  şutu banda sok" isteği): **orta 5,9 → 21,2/maç (gerçek 15-25).** Ölçüm önce yanlış kaldıracı
+  eledi: maç başına **175 orta FIRSATI** oluşuyordu ama yalnız **11'inde** kutuda karşılayacak
+  arkadaş vardı — yani sorun ortanın fayda ağırlığı değil, **kutuya kimsenin girmemesiydi.**
+  Eklenen davranışlar: (a) **kutuya giriş** (ME 7.4-A) — topu taşıyan kanatta ve ileri konumdaysa
+  ileri roller ceza sahasına koşar, yakın/uzak direği paylaşır; (b) **kaleci hava hakimiyeti**
+  (ME 9.3) — kendi kutusuna inen havadaki topta AerialCommand ile öne çıkar ve topu TOPLAR;
+  (c) **kaleci altı pasında topun üstüne kapanır** (ME 9.4) — gol sahasındaki serbest topta
+  kontrol yarıçapı büyür; (d) **kafa vuruşu nişanı** ayakla aynı isabette değil (ME 6.4);
+  (e) yer müdahalesinde de savunan kendi kutusunda korneri göze alabiliyor.
+- **M11-C kalibrasyon (12 maç, iki tohum kümesi):** **gol 2,50-2,75 ✓ (bant 2,4-3,0)** ·
+  **şut 20,3-22,8 ✓ (bant 20-28)** · korner 5,3-8,8 (bant 8-12 — bir küme içinde, biri değil) ·
+  faul 29,4 ✓ · kart 4,3-5,1 ✓ · penaltı 0,30 ✓ · pas isabeti %80 ✓.
+- **Korner borcu (kalan):** iki tohum kümesi arasında 5,3 ↔ 8,8 salınıyor; ortalama ~7, bant 8-12.
+  Kaleci hakimiyeti ile korner üretimi doğrudan ters çalışıyor (kaleci topladıkça korner düşüyor) —
+  ikisinin dengesi 10.000 maçlık kümede (M16) sabitlenmeli; tek tohum kümesinde ince ayar,
+  aşırı uydurma riski taşır.
+- **Kapı düzeltmesi:** `M6AutoManage` artık TÜM sakatlıkları değil, oyuncuyu SAHADAN ÇIKARAN
+  sakatlıkları sayıyor (`InjuriesOffPitch`) — hafif sakatlık zaten değişiklik gerektirmiyordu,
+  kapı yanlış şeyi ölçüyordu.
+
 ## Bekleyen kararlar
 - Premium etkilerin public ligde şeffaf rozeti (panel M-bulgusu) → tasarım kararı, FAZ 02 öncesi.
 - ~~3G Greybox Fun Gate GO/NO-GO~~ → **KAPANDI (2026-08-08): NO-GO %40** — uygulama yukarıdaki kapanış bölümünde; sunum revizyonu + mülakatlı doğrulama turu Dikey Dilim öncesi BORÇ.

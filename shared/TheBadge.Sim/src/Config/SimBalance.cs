@@ -120,6 +120,10 @@ namespace TheBadge.Sim.Config
             public double celmeDirekPayiMm;     // çelmenin direk dışına taşma payı (mm, ME 9.2)
             public double cildirmaAcisiDeg;                   // çeldide sapma açısı
             public double derinlikTaban, derinlikPerM, derinlikMax; // 9.1 pozisyon derinliği
+            public double altiPasYaricapM;      // kalecinin gol sahasında topa kapanma yarıçapı (ME 9.4)
+            public double altiPasDerinlikM;     // gol sahası derinliği (m)
+            public double altiPasYariGenislikM; // gol sahası yarı genişliği (m)
+            public double havaHakimiyetCarpani; // kalecinin hava topu yarıçapı çarpanı (ME 9.3)
             public double cikisMesafeM;         // kalecinin serbest topa çıktığı derinlik (m, ME 9.3)
             public double cikisGenislikM;       // çıkış bölgesinin yarı genişliği (m)
             public double yakinMesafeM;         // 1v1 kapatma etkisinin başladığı mesafe (ME 9.3)
@@ -134,6 +138,7 @@ namespace TheBadge.Sim.Config
             public double sutYariMesafeM;      // mesafe tehdidinin yarıya düştüğü mesafe (m, rasyonel çekirdek)
             public double sutHiziMS;
             public double sutSigmaTabanDeg;    // nişan sapması AÇISAL (derece) — mesafeyle büyür
+            public double kafaSigmaCarpani;    // kafa vuruşunda nişan sapması çarpanı (ME 6.4)
             public double nisanDirekOrani;     // nişan noktası: direk yarı genişliğinin bu oranı
             public double blokOlasilik;        // koridorda savunucu varsa blok olasılığı (ME 15.1)
         }
@@ -273,6 +278,8 @@ namespace TheBadge.Sim.Config
             public double presKesmeSn;       // pres öngörü süresi — kesme noktası (sn, ME 7.4-B)
             public double kanalKapamaM;      // ikinci savunanın topun gol tarafına iniş mesafesi (m)
             public double hatTalimatM;       // hat talimatı başına hat kayması (m, ME 7.6/14.2)
+            public double kutuDerinlikM;     // kutuya girişte kale çizgisine mesafe (m, ME 7.4-A)
+            public double kutuYanM;          // kutuya girişte direk hizası yanal mesafe (m)
             public double ortaGenislikEsikMm;// bu |Y| üstü "kanatta" sayılır (orta koşulu)
             public double kontraIleriM;      // kontra penceresinde hücumcunun ek derinliği (m)
             public double gecisSnTaban;      // topu kaptıran takımın toparlanma süresi (sn)

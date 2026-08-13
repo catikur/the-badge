@@ -331,7 +331,7 @@ Console.WriteLine($"[info] M2 durum hash: 0x{mA2.h:X}");
 if (mA2.h != mB2.h) failures += Fail("M2Determinism", $"0x{mA2.h:X} != 0x{mB2.h:X}");
 else Pass("M2Determinism");
 
-const ulong M2_GOLDEN = 0xAD19C3CDBEC535AAUL; // M11-B'de yeniden sabitlendi (hava topu ihlali + korner davranışı) — davranış/şema değişikliği bilinçli güncelleme ister
+const ulong M2_GOLDEN = 0xB87F1CEA2C4D3F29UL; // M11-C'de yeniden sabitlendi (kutuya giriş + kaleci hakimiyeti) — davranış/şema değişikliği bilinçli güncelleme ister
 if (M2_GOLDEN != 0 && mA2.h != M2_GOLDEN) failures += Fail("M2Golden", $"0x{mA2.h:X}");
 else Pass("M2Golden");
 
@@ -408,7 +408,7 @@ if (f1.hash != f2.hash || f1.res.TotalTicks != f2.res.TotalTicks)
     failures += Fail("M4Determinism", $"0x{f1.hash:X} != 0x{f2.hash:X}");
 else Pass("M4Determinism");
 
-const ulong M4_GOLDEN = 0xA882CC170E83368EUL; // M11-B'de yeniden sabitlendi
+const ulong M4_GOLDEN = 0x920F172D7A392805UL; // M11-C'de yeniden sabitlendi
 if (M4_GOLDEN != 0 && f1.hash != M4_GOLDEN) failures += Fail("M4Golden", $"0x{f1.hash:X}");
 else Pass("M4Golden");
 
@@ -665,10 +665,10 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     {
         var (e, s, _) = NewMatch(0x6A06 + n * 977);
         e.Run(ref s);
-        autoSubs += e.AutoSubs; injuriesOff += e.Injuries;
+        autoSubs += e.AutoSubs; injuriesOff += e.InjuriesOffPitch;   // yalnız SAHAYI TERK ETTİREN sakatlık
     }
     if (injuriesOff > 0 && autoSubs == 0)
-        failures += Fail("M6AutoManage", $"{injuriesOff} sakatlık, 0 otomatik değişiklik");
+        failures += Fail("M6AutoManage", $"{injuriesOff} sahayı terk ettiren sakatlık, 0 otomatik değişiklik");
     else Pass($"M6AutoManage({autoSubs} oto-değişiklik / {injuriesOff} sakatlık)");
 }
 
@@ -687,7 +687,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     Console.WriteLine($"[info] M6 komutlu maç hash: 0x{hA:X}");
     if (hA != hB) failures += Fail("M6Determinism", $"0x{hA:X} != 0x{hB:X}");
     else Pass("M6Determinism");
-    const ulong M6_GOLDEN = 0x28AAE26C1CA3BE6EUL; // M11-B'de yeniden sabitlendi (taktik+değişiklik+motivasyon zaman çizelgesi)
+    const ulong M6_GOLDEN = 0x7441C74FDC394E1AUL; // M11-C'de yeniden sabitlendi (taktik+değişiklik+motivasyon zaman çizelgesi)
     if (M6_GOLDEN != 0 && hA != M6_GOLDEN) failures += Fail("M6Golden", $"0x{hA:X}");
     else Pass("M6Golden");
 }
