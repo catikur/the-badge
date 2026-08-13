@@ -280,6 +280,22 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   düzelmeden önceki bir varsayıma dayanıyordu; hücumun bedeli kontra modeli gelmeden doğmuyor.
   Sessizce gevşetilmedi; hedef her koşuda basılıyor.
 
+- M9 (kontra atak / geçiş modeli) uygulandı (2026-08-10, "açık işleri planlayıp kapatalım" onayı):
+  M8-B'de eklenen GEÇİŞ penceresi artık KULLANILIYOR. (a) Karar tarafı: rakip topu yeni
+  kaptırdıysa (henüz şekline dönmedi) kazanan takımın fayda ağırlıkları kısa süre ileri kayar —
+  doğrudan/dikey oyun ödüllenir; (b) topsuz taraf: kontra penceresinde forvet/orta saha derinliğe
+  koşar. Hücuma ne kadar yığıldıysan pencere o kadar uzun (mentalite ile ölçekli) — hücumun
+  bedelinin doğduğu yer burası.
+- **M9 sonucu (ayna kadro, 20 maç):** `M7DefendRegresyon` **×1,51 → ×0,97** — savunmak ARTIK ÖDÜL
+  VERİYOR (hedef <1,00 tutuldu). Hücumun bedeli (`M7AttackRiskRegresyon`) 10 maçlık örneklemde
+  ×1,11-1,15 ölçüldü, 20 maçta ×0,83-0,90'a döndü: **etki gürültü sınırında, KANITLANMADI.**
+  Kapı bu yüzden sertleştirilmedi (CLAUDE.md: kanıtlanmamış etkiyle kapı sertleştirilmez);
+  örneklem 10 → 20 maça çıkarıldı ve hedef her koşuda basılıyor.
+- **M9 kalibrasyon (12 maç ort.):** gol 3,2-3,7 · şut 19,8-21,2 · korner 8,0-8,6 (bant 8-12 ✓) ·
+  faul 25,8 (18-28 ✓) · kart 3,6-4,6 (3,0-5,0 ✓) · süre 92,4 dk.
+- **FAZ 03 kapanış planı yazıldı:** `docs/briefs/BRIEF_FAZ03_KAPANIS.md` — M9'dan M17'ye kadar
+  kalan her iş, sırası ve KABUL KAPISI ile birlikte; ayrıca FAZ 03 dışı karar bekleyen 4 madde.
+
 ## Bekleyen kararlar
 - Premium etkilerin public ligde şeffaf rozeti (panel M-bulgusu) → tasarım kararı, FAZ 02 öncesi.
 - ~~3G Greybox Fun Gate GO/NO-GO~~ → **KAPANDI (2026-08-08): NO-GO %40** — uygulama yukarıdaki kapanış bölümünde; sunum revizyonu + mülakatlı doğrulama turu Dikey Dilim öncesi BORÇ.

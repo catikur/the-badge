@@ -307,6 +307,16 @@ namespace TheBadge.Sim.Match
             double wThreat = u.wThreat * (1.0 + mentK * u.mentaliteTehditCarpan);
             double wRisk = u.wRisk * (1.0 - mentK * u.mentaliteRiskTolerans);
 
+            // KONTRA (M9): rakip topu YENİ kaptırdıysa henüz şekline dönmemiştir (geçiş penceresi).
+            // O pencerede doğrudan/dikey oyun ödüllenir — kontra atağın karar tarafı budur.
+            // Hücuma çıkmanın BEDELİ buradan doğar: ne kadar ileri yığıldıysan pencere o kadar uzun.
+            bool kontra = st.Tick < gecisUntil[1 - a.TeamIdx];
+            if (kontra)
+            {
+                wThreat *= 1.0 + u.kontraTehditCarpan;
+                wRisk *= 1.0 - u.kontraRiskTolerans;
+            }
+
             // Tut (HoldShield) — P_kayıp düşük ama tehdit üretmez; yüksek tempo tutmayı cezalandırır
             {
                 double s0 = wRisk * (1.0 - 0.15) - rtA.Tempo * u.tempoTutCezasi + u.wVar * Noise(1);
@@ -817,6 +827,9 @@ namespace TheBadge.Sim.Match
                 // touchline'a açılır. Bu vektör olmadan oyun merkeze sıkışıyor ve taç üretimi
                 // sıfıra iniyordu (M4 borcu).
                 bx = a.AnchorX + dir * (o.fazIleriM + rtT.Mentalite * o.mentaliteIleriItmeM) * 1000.0;
+                // Kontra penceresinde hücumcular DERİNLİĞE koşar (ME 7.4-A ileri itme, M9)
+                if (st.Tick < gecisUntil[1 - a.TeamIdx] && a.RoleId >= 3)
+                    bx += dir * o.kontraIleriM * 1000.0;
                 by = a.AnchorY;
                 if (Math.Abs(a.AnchorY) > o.kanatAnchorEsikMm)
                     by += Math.Sign(a.AnchorY) * o.kanatGenislikM * 1000.0;
