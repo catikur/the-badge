@@ -331,7 +331,7 @@ Console.WriteLine($"[info] M2 durum hash: 0x{mA2.h:X}");
 if (mA2.h != mB2.h) failures += Fail("M2Determinism", $"0x{mA2.h:X} != 0x{mB2.h:X}");
 else Pass("M2Determinism");
 
-const ulong M2_GOLDEN = 0xB2C81D76BD5B6906UL; // M10'da yeniden sabitlendi (orta aksiyonu) — davranış/şema değişikliği bilinçli güncelleme ister
+const ulong M2_GOLDEN = 0x2F1C693DFA8BDF61UL; // M11'de yeniden sabitlendi (çelme geometrisi) — davranış/şema değişikliği bilinçli güncelleme ister
 if (M2_GOLDEN != 0 && mA2.h != M2_GOLDEN) failures += Fail("M2Golden", $"0x{mA2.h:X}");
 else Pass("M2Golden");
 
@@ -399,7 +399,7 @@ if (f1.hash != f2.hash || f1.res.TotalTicks != f2.res.TotalTicks)
     failures += Fail("M4Determinism", $"0x{f1.hash:X} != 0x{f2.hash:X}");
 else Pass("M4Determinism");
 
-const ulong M4_GOLDEN = 0x12892320E4973139UL; // M10'da yeniden sabitlendi
+const ulong M4_GOLDEN = 0x86C4ACC4F6CA105BUL; // M11'de yeniden sabitlendi
 if (M4_GOLDEN != 0 && f1.hash != M4_GOLDEN) failures += Fail("M4Golden", $"0x{f1.hash:X}");
 else Pass("M4Golden");
 
@@ -678,7 +678,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     Console.WriteLine($"[info] M6 komutlu maç hash: 0x{hA:X}");
     if (hA != hB) failures += Fail("M6Determinism", $"0x{hA:X} != 0x{hB:X}");
     else Pass("M6Determinism");
-    const ulong M6_GOLDEN = 0x4D7C89F8FB0F805AUL; // M10'da yeniden sabitlendi (taktik+değişiklik+motivasyon zaman çizelgesi)
+    const ulong M6_GOLDEN = 0xF1F436D578A5CBBDUL; // M11'de yeniden sabitlendi (taktik+değişiklik+motivasyon zaman çizelgesi)
     if (M6_GOLDEN != 0 && hA != M6_GOLDEN) failures += Fail("M6Golden", $"0x{hA:X}");
     else Pass("M6Golden");
 }

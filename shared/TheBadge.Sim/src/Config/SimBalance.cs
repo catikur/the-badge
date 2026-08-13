@@ -116,6 +116,7 @@ namespace TheBadge.Sim.Config
             public double logisticSlope;                      // P_save = lojistik(slope × marj)
             public double saveClampMin, saveClampMax;
             public double dalisSureCarpan;                    // t_traverse = mesafe/(erişim/bu)
+            public double celmeDirekPayiMm;     // çelmenin direk dışına taşma payı (mm, ME 9.2)
             public double cildirmaAcisiDeg;                   // çeldide sapma açısı
             public double derinlikTaban, derinlikPerM, derinlikMax; // 9.1 pozisyon derinliği
             public double cikisMesafeM;         // kalecinin serbest topa çıktığı derinlik (m, ME 9.3)

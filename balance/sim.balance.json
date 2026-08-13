@@ -133,6 +133,7 @@
     "saveClampMin": 0.04,
     "saveClampMax": 0.96,
     "dalisSureCarpan": 0.22,
+    "celmeDirekPayiMm": 1800,
     "cildirmaAcisiDeg": 50.0,
     "derinlikTaban": 0.9,
     "derinlikPerM": 0.08,

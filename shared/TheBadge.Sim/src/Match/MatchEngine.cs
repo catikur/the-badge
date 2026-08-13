@@ -48,6 +48,8 @@ namespace TheBadge.Sim.Match
         public int PassToOther;       // başka bir takım arkadaşına ulaştı (yine tamamlanmış)
         public int PassLostToOpponent;// rakip aldı (kesme)
         public readonly int[] Possessions = new int[2]; // takım başına atak sayısı (hash dışı)
+        public double LooseGoalSpeedSum; public int LooseGoalAirborne;
+        public int LooseGoalAttackTouch, LooseGoalOwnTouch; // serbest top golü kaynağı (teşhis)
         public int Crosses;           // açık oyunda atılan orta sayısı (ME 6.4)
         public int GoalsFromShot, GoalsFromLoose; // gol kaynağı teşhisi (hash dışı)
         public int PassLostDead;      // pas oyun durarak bitti (taç/aut/duran top/ofsayt)
@@ -678,10 +680,17 @@ namespace TheBadge.Sim.Match
                         // Çeldi: kaleci topu KUTUDAN UZAĞA, direk dışına çeler — çoğu zaman
                         // korner çıkar (gerçek futbol; içeri düşen çelme rebound çorbası yapıyordu).
                         // Son dokunan KALECİ olduğu için çizgiyi geçerse KORNER verilir.
+                        // Hedef GEOMETRİYLE seçilir: kale çizgisinde DİREK DIŞI bir nokta.
+                        // Eski biçim sabit açıyla "umut ediyordu" ve çelinen topun bir kısmı ağa
+                        // giriyordu — maç başına 2,4 "savunanın son dokunuşuyla" gol (gerçek ~0,05).
                         int sgn = interY >= 0 ? 1 : -1;
-                        double outAng = bal.gk.cildirmaAcisiDeg * Math.PI / 180.0;
-                        vx = Math.Sign(planeDx) * bal.shotExec.sutHiziMS * Math.Cos(outAng) * 0.7;
-                        vy = sgn * bal.shotExec.sutHiziMS * Math.Sin(outAng);
+                        double hedefXm = (a.TeamIdx == 0 ? PitchHalfXmm : -PitchHalfXmm) / 1000.0;
+                        double hedefYm = sgn * (GoalHalfWidthMm + bal.gk.celmeDirekPayiMm) / 1000.0;
+                        double cdx = hedefXm - st.Agents[gk].X / 1000.0;
+                        double cdy = hedefYm - st.Agents[gk].Y / 1000.0;
+                        double cn = Math.Max(0.5, Math.Sqrt(cdx * cdx + cdy * cdy));
+                        vx = cdx / cn * bal.shotExec.sutHiziMS * 0.8;
+                        vy = cdy / cn * bal.shotExec.sutHiziMS * 0.8;
                         flight = 0;
                         parried = true;
                         // Top KALECİDE çelinir — şutçunun ayağının dibinde DEĞİL. Bu konum
@@ -1497,7 +1506,17 @@ namespace TheBadge.Sim.Match
                     byte scorer = st.Ball.X > 0 ? (byte)0 : (byte)1; // +x çizgisi = ev hücum yönü
                     // Teşhis: gol ŞUT uçuşundan mı geldi (Flight==1: 9.2 analitik çözümü sahneleniyor)
                     // yoksa serbest yuvarlanan toptan mı? İkincisi kaleciye şans tanımaz.
-                    if (st.Ball.Flight == 1) GoalsFromShot++; else GoalsFromLoose++;
+                    if (st.Ball.Flight == 1) GoalsFromShot++;
+                    else
+                    {
+                        GoalsFromLoose++;
+                        // Serbest top golünün KAYNAĞI: topa en son dokunan gol atan takım mı
+                        // (sekme/ikinci top) yoksa savunan mı (kendi kalesine)? Teşhis ayrımı.
+                        if (st.Ball.LastTouchTeam == scorer) LooseGoalAttackTouch++; else LooseGoalOwnTouch++;
+                        LooseGoalSpeedSum += Math.Sqrt((double)st.Ball.Vx * st.Ball.Vx
+                                                       + (double)st.Ball.Vy * st.Ball.Vy) / 1000.0;
+                        if (st.Ball.Z > 400) LooseGoalAirborne++;
+                    }
                     if (scorer == 0) st.HomeGoals++; else st.AwayGoals++;
                     AddMomentum(ref st, scorer, bal.momentum.golDelta);       // ME 12.3: gol +4
                     AddMomentum(ref st, scorer == 0 ? (byte)1 : (byte)0, -bal.momentum.golDelta);
