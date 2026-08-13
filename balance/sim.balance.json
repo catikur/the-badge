@@ -171,6 +171,7 @@
     "kornerHedefDerinlikM": 10.5,
     "havaTopuYaricapM": 4.0,
     "havaTopuYukseklikM": 1.6,
+    "korneriGozeAlmaOran": 0.5,
     "uzaklastirmaHizMS": 14.0,
     "hazirlikTicks": 25
   },
@@ -180,7 +181,7 @@
     "griBantOrta": 0.06,
     "sariEsik": 0.58,
     "kirmiziEsik": 0.8,
-    "cezaSahasiIhtiyatCarpan": 0.6
+    "cezaSahasiIhtiyatCarpan": 0.95
   },
   "var": {
     "sahaKarariKalirOran": {
@@ -261,6 +262,8 @@
     "aRollKuru": 3.3,
     "sekmeEKuru": 0.62,
     "sekmeYatayCarpan": 0.78,
+    "blokIleriOran": 0.45,
+    "blokIleriAcisiDeg": 70.0,
     "blokSacilmaDeg": 55.0,
     "dragK": 0.0045,
     "magnusK": 0.0032

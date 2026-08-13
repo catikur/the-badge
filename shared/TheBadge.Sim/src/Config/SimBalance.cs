@@ -89,6 +89,7 @@ namespace TheBadge.Sim.Config
             public double kornerHedefDerinlikM;  // ortanın kaleye uzaklığı (hedef bölge)
             public double havaTopuYaricapM;      // hava topu düellosu yarıçapı
             public double havaTopuYukseklikM;    // bu yüksekliğin altına inince düello çözülür (ME 8.3)
+            public double korneriGozeAlmaOran;   // baskı altında kendi kutusunda topu dışarı atma oranı
             public double uzaklastirmaHizMS;     // savunmanın uzaklaştırma hızı
             public int hazirlikTicks;            // duran top hazırlığı (sıkıştırılmış çözüm, ME 3.4)
 
@@ -176,6 +177,8 @@ namespace TheBadge.Sim.Config
             public double aRollKuru;          // yerde sürtünme yavaşlaması (m/sn²)
             public double sekmeEKuru;         // dikey sekme katsayısı
             public double sekmeYatayCarpan;   // sekmede yatay hız çarpanı (ME 8.3)
+            public double blokIleriOran;      // bloğun topu ileri sıyırma oranı (kalanı geri döner)
+            public double blokIleriAcisiDeg;  // ileri sıyırmada yana açılma açısı
             public double blokSacilmaDeg;     // bloklanan şutun geri sekme açısı sigması (ME 8.3)
             public double dragK;              // hava direnci k_d
             public double magnusK;            // falso k_m (M3+ orta/frikik kullanır)

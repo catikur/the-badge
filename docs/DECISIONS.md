@@ -348,6 +348,24 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
 - **Kapı iyileştirmesi:** `M3GkMatters` tek maç yerine 6 tohum toplamına bakıyor (gol sayısı banda
   inince tek maçlık 1→2 farkı gürültüydü — aynı özellik, güvenilir ölçüm).
 
+- M11-B (ceza sahası akışı) uygulandı (2026-08-13): **penaltı üretimi açıldı.**
+  Kök neden ölçüldü: faul YALNIZ topu taşıyana yapılan müdahaleden doğuyordu; hava topu
+  mücadelesi hakem makinesine hiç sunulmuyordu — oysa gerçek futbolda ceza sahası penaltılarının
+  en yaygın kaynağı odur. Üç değişiklik birlikte gerekti:
+  (a) **hava topu ihlali** ME 11.2'ye sunuldu (kaybeden tutunur/iter; şiddet skorunu hakem hesaplar,
+  düdük çalarsa mücadelenin sonucu uygulanmaz); (b) **savunan da ortayı karşılıyor** — hücumcuyu
+  M10'da koşturmuştuk, savunanı değil: hava toplarının yalnız %15'i ikili mücadeleliydi
+  (10,7 olayın 1,6'sı), şimdi 2,6; (c) `cezaSahasiIhtiyatCarpan` 0,6 → 0,95 — bu çarpan M4'te
+  penaltı 1,2/maç iken konmuştu, yeni modelde kutuda ihlali imkânsız kılıyordu.
+  **Penaltı 0,00 → 0,30 (bant 0,20-0,35 ✓).**
+  Ayrıca: bloklanan şut artık iki modlu (geri dönüş / yandan sıyırma) ve baskı altındaki savunan
+  kendi kutusunda **korneri göze alıp** topu dışarı atabiliyor.
+- **M11-B kalibrasyon (12 maç ort.):** gol 2,42-3,42 · şut 15,1-22,2 · **penaltı 0,30 ✓** ·
+  faul 27,2 ✓ · kart 3,6-3,8 ✓ · korner 4,9-6,2 ✗ (bant 8-12).
+- **Korner borcu (ölçülerek):** korner 4,3 → 6,2'ye çıktı ama banda girmedi. Kök neden korner
+  üretimi DEĞİL, ceza sahasına giren top sayısı: orta 5,9/maç (gerçek 15-25) ve şut 15-22
+  (bant 20-28). Korner bunların türevi — orta sıklığı M10 borcu olarak açık, önce o kapanmalı.
+
 ## Bekleyen kararlar
 - Premium etkilerin public ligde şeffaf rozeti (panel M-bulgusu) → tasarım kararı, FAZ 02 öncesi.
 - ~~3G Greybox Fun Gate GO/NO-GO~~ → **KAPANDI (2026-08-08): NO-GO %40** — uygulama yukarıdaki kapanış bölümünde; sunum revizyonu + mülakatlı doğrulama turu Dikey Dilim öncesi BORÇ.
