@@ -331,7 +331,7 @@ Console.WriteLine($"[info] M2 durum hash: 0x{mA2.h:X}");
 if (mA2.h != mB2.h) failures += Fail("M2Determinism", $"0x{mA2.h:X} != 0x{mB2.h:X}");
 else Pass("M2Determinism");
 
-const ulong M2_GOLDEN = 0xB87F1CEA2C4D3F29UL; // M11-C'de yeniden sabitlendi (kutuya giriş + kaleci hakimiyeti) — davranış/şema değişikliği bilinçli güncelleme ister
+const ulong M2_GOLDEN = 0x09ECE94D76724C1AUL; // M12'de yeniden sabitlendi (VAR + kalibrasyon) — davranış/şema değişikliği bilinçli güncelleme ister
 if (M2_GOLDEN != 0 && mA2.h != M2_GOLDEN) failures += Fail("M2Golden", $"0x{mA2.h:X}");
 else Pass("M2Golden");
 
@@ -408,7 +408,7 @@ if (f1.hash != f2.hash || f1.res.TotalTicks != f2.res.TotalTicks)
     failures += Fail("M4Determinism", $"0x{f1.hash:X} != 0x{f2.hash:X}");
 else Pass("M4Determinism");
 
-const ulong M4_GOLDEN = 0x920F172D7A392805UL; // M11-C'de yeniden sabitlendi
+const ulong M4_GOLDEN = 0xE21A1650E09D5464UL; // M12'de yeniden sabitlendi
 if (M4_GOLDEN != 0 && f1.hash != M4_GOLDEN) failures += Fail("M4Golden", $"0x{f1.hash:X}");
 else Pass("M4Golden");
 
@@ -527,18 +527,26 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
 
 // 12a) Momentum mekaniği — ME 12.3: gol atan +, yiyen −; sönüm 0'a doğru
 {
-    var q6 = new CommandQueue();
-    var cfg6 = new MatchConfig { Seed = 5150, EngineVersion = "m5", Home = BuildSheetSide(300, 7, true), Away = BuildSheetSide(300, 8, false) };
-    var e6 = new MatchEngine(5150, q6, cfg6, simBal);
-    var s6 = MatchEngine.CreateInitialState(cfg6);
-    int prevH = 0, prevA = 0; bool sawSwing = false;
-    while (!MatchEngine.IsFinished(in s6) && !sawSwing)
+    // Golsüz maç bu kapıyı ölçemez: tek tohuma bağlamak tohum şansını ölçmekti.
+    // Gol GÖRÜLENE kadar tohum denenir; ölçülen özellik aynı (golde momentum salınımı).
+    bool sawSwing = false; bool sawGoal = false;
+    for (ulong k = 0; k < 8 && !sawSwing; k++)
     {
-        e6.Tick(ref s6);
-        if (s6.HomeGoals != prevH) sawSwing = s6.HomeRt.Momentum > 0 && s6.AwayRt.Momentum < 0;
-        else if (s6.AwayGoals != prevA) sawSwing = s6.AwayRt.Momentum > 0 && s6.HomeRt.Momentum < 0;
-        prevH = s6.HomeGoals; prevA = s6.AwayGoals;
+        ulong sd6 = 5150 + k * 911;
+        var q6 = new CommandQueue();
+        var cfg6 = new MatchConfig { Seed = sd6, EngineVersion = "m5", Home = BuildSheetSide(300, 7, true), Away = BuildSheetSide(300, 8, false) };
+        var e6 = new MatchEngine(sd6, q6, cfg6, simBal);
+        var s6 = MatchEngine.CreateInitialState(cfg6);
+        int prevH = 0, prevA = 0;
+        while (!MatchEngine.IsFinished(in s6) && !sawSwing)
+        {
+            e6.Tick(ref s6);
+            if (s6.HomeGoals != prevH) { sawGoal = true; sawSwing = s6.HomeRt.Momentum > 0 && s6.AwayRt.Momentum < 0; }
+            else if (s6.AwayGoals != prevA) { sawGoal = true; sawSwing = s6.AwayRt.Momentum > 0 && s6.HomeRt.Momentum < 0; }
+            prevH = s6.HomeGoals; prevA = s6.AwayGoals;
+        }
     }
+    if (!sawGoal) failures += Fail("M5MomentumSwing", "8 tohumda hiç gol yok — ölçülemedi");
     if (!sawSwing) failures += Fail("M5MomentumSwing", "golde momentum salınımı yok");
     else Pass("M5MomentumSwing");
 }
@@ -687,7 +695,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     Console.WriteLine($"[info] M6 komutlu maç hash: 0x{hA:X}");
     if (hA != hB) failures += Fail("M6Determinism", $"0x{hA:X} != 0x{hB:X}");
     else Pass("M6Determinism");
-    const ulong M6_GOLDEN = 0x7441C74FDC394E1AUL; // M11-C'de yeniden sabitlendi (taktik+değişiklik+motivasyon zaman çizelgesi)
+    const ulong M6_GOLDEN = 0xA13012E728B45B90UL; // M12'de yeniden sabitlendi (taktik+değişiklik+motivasyon zaman çizelgesi)
     if (M6_GOLDEN != 0 && hA != M6_GOLDEN) failures += Fail("M6Golden", $"0x{hA:X}");
     else Pass("M6Golden");
 }
@@ -752,6 +760,38 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     if (defOran > 2.4)
         failures += Fail("M7DefendRegresyon", $"defansif yediği ×{defOran:0.00} (nötr {nt.conc:0.00} → {df.conc:0.00})");
     else Pass($"M7DefendRegresyon(yediği ×{defOran:0.00} — HEDEF <1,00; M8 borcu, pas isabeti kökü)");
+}
+
+// 15) FAZ 03 M12 — VAR dram sistemi (ME 11.4)
+{
+    const int NV = 40;   // VAR olayı seyrek (yalnız gri bant): oran ölçümü için büyük örneklem
+    double incelemeT = 0, geriAlmaT = 0; uint durakT = 0;
+    ulong hA12 = 0, hB12 = 0;
+    for (ulong k = 0; k < NV; k++)
+    {
+        ulong sd = 0xA12 + k * 3571;
+        var (e12, s12, _) = NewMatch(sd);
+        e12.Run(ref s12);
+        incelemeT += e12.VarReviews; geriAlmaT += e12.VarOverturned; durakT += s12.StoppageTicks;
+        if (k == 0) hA12 = MatchEngine.StateHash(in s12);
+    }
+    { var (e12b, s12b, _) = NewMatch(0xA12); e12b.Run(ref s12b); hB12 = MatchEngine.StateHash(in s12b); }
+
+    Console.WriteLine($"[info] M12 VAR ({NV} maç): inceleme {incelemeT / NV:0.00}/maç · geri alma {geriAlmaT / NV:0.00}");
+    // İnceleme ÜRETİLİYOR mu (kapsam yalnız gri bant: ceza sahası + kırmızı kart)
+    if (incelemeT < 3) failures += Fail("M12VarProduced", $"yalnız {incelemeT:0} inceleme ({NV} maç)");
+    else if (incelemeT / NV > 4.0) failures += Fail("M12VarProduced", $"{incelemeT / NV:0.00}/maç — aşırı");
+    else Pass($"M12VarProduced({incelemeT / NV:0.00}/maç)");
+    // Geri alma OLUYOR ama her kararı devirmiyor (VAR gerçeği bilir, chaos payı 11.4)
+    double geriOran = geriAlmaT / Math.Max(1, incelemeT);
+    if (geriOran <= 0.0 || geriOran > 0.7) failures += Fail("M12VarOverturn", $"geri alma oranı %{geriOran * 100:0} ({incelemeT:0} inceleme)");
+    else Pass($"M12VarOverturn(%{geriOran * 100:0})");
+    // Determinizm: aynı tohum = aynı sonuç (VAR çekilişleri REFEREE domain)
+    if (hA12 != hB12) failures += Fail("M12VarDeterminism", $"0x{hA12:X} != 0x{hB12:X}");
+    else Pass("M12VarDeterminism");
+    // İnceleme SAATİ durdurur: duraklama birikimi olmalı (ME 3.4 uzatmaya akar)
+    if (durakT == 0) failures += Fail("M12VarStoppage", "duraklama birikmedi");
+    else Pass($"M12VarStoppage({durakT / NV / 600.0:0.0} dk/maç)");
 }
 
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");

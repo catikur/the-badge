@@ -28,6 +28,19 @@ namespace TheBadge.Sim.Config
         public StaminaCfg stamina = new StaminaCfg();
         public InjuryCfg injury = new InjuryCfg();
         public MomentumCfg momentum = new MomentumCfg();
+        /// <summary>VAR — ME Spec 11.4 [KALİBRE]. JSON anahtarı "var"; C# anahtar sözcüğü
+        /// olduğu için @ ile yazılır (ad JSON'da birebir "var" kalır).</summary>
+        public VarCfg @var = new VarCfg();
+
+        [System.Serializable]
+        public sealed class VarCfg
+        {
+            public KalirCfg sahaKarariKalirOran = new KalirCfg();
+            public double beklemeSnMin, beklemeSnMax;
+
+            [System.Serializable]
+            public sealed class KalirCfg { public double dusuk, orta, yuksek; }
+        }
 
         /// <summary>Stamina — ME Spec 12.1 [KALİBRE].</summary>
         [System.Serializable]

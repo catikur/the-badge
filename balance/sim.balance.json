@@ -140,7 +140,7 @@
     "derinlikTaban": 0.9,
     "derinlikPerM": 0.08,
     "derinlikMax": 5.5,
-    "altiPasYaricapM": 2.6,
+    "altiPasYaricapM": 1.9,
     "altiPasDerinlikM": 9.0,
     "altiPasYariGenislikM": 12.0,
     "havaHakimiyetCarpani": 2.2,
@@ -188,7 +188,7 @@
     "griBantOrta": 0.06,
     "sariEsik": 0.58,
     "kirmiziEsik": 0.8,
-    "cezaSahasiIhtiyatCarpan": 0.95
+    "cezaSahasiIhtiyatCarpan": 0.72
   },
   "var": {
     "sahaKarariKalirOran": {

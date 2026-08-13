@@ -228,6 +228,16 @@ namespace TheBadge.Sim.Match
         public void Tick(ref MatchState st)
         {
             if (st.Phase == MatchPhase.FullTime) return; // maç bitti — durum donar
+
+            // VAR İNCELEMESİ (ME 11.4): oyun durur, saat işlemez (duraklama birikir → uzatma).
+            // Süre dolunca karar uygulanır. Sunum tarafı bu fazı "gerilim" olarak yaşar.
+            if (st.Phase == MatchPhase.VarReview)
+            {
+                st.Tick++;
+                st.StoppageTicks++;
+                if (st.Tick >= st.VarUntilTick) ResolveVar(ref st);
+                return;
+            }
             RefreshStateCache(ref st);         // 0) A_eff bağlam önbelleği (enerji/momentum/sakatlık)
             queue.ApplyDue(st.Tick, ref st);   // 1) müdahaleler (Bölüm 14)
             // Ölü topta bekleyen değişiklikler uygulanır (ME 14.2 uygulama anı)
@@ -1191,6 +1201,65 @@ namespace TheBadge.Sim.Match
             }
         }
 
+        public int VarReviews, VarOverturned;   // ME 11.4 sayaçları (hash dışı teşhis)
+
+        /// <summary>VAR incelemesi başlatır — ME 11.4. Bekleme süresi 20 + 70×zorluk sn
+        /// (REFEREE çekilişi; sunumda dramatik bekleme). Gerçek durumu motor bilir; yanılma payı
+        /// YALNIZ chaos seviyesine bağlıdır ("saha kararı kalır" oranı).</summary>
+        void StartVar(ref MatchState st, byte kind, byte forTeam, short subject, bool onFieldFoul, bool truthFoul)
+        {
+            double zorluk = Rng.Rand01(seed, Domain.Referee, (uint)(900 + subject), st.Tick, 80);
+            double sn = bal.@var.beklemeSnMin + (bal.@var.beklemeSnMax - bal.@var.beklemeSnMin) * zorluk;
+            st.VarUntilTick = st.Tick + (uint)(sn * TicksPerSecond);
+            st.VarKind = kind;
+            st.VarTeam = forTeam;
+            st.VarSubject = subject;
+            st.VarOnFieldFoul = onFieldFoul ? (byte)1 : (byte)0;
+            st.VarTruthFoul = truthFoul ? (byte)1 : (byte)0;
+            st.Phase = MatchPhase.VarReview;
+            st.Ball.OwnerId = -1;
+            st.Ball.Vx = st.Ball.Vy = st.Ball.Vz = 0;
+            st.Ball.Flight = 3;                       // ölü top kilidi: kimse oynamaz
+            VarReviews++;
+        }
+
+        /// <summary>VAR kararı — ME 11.4: doğru karar uygulanır; chaos seviyesine bağlı bir oranda
+        /// "saha kararı kalır" (VAR hatası). Determinizm: REFEREE domain.</summary>
+        void ResolveVar(ref MatchState st)
+        {
+            bool sahaKarari = st.VarOnFieldFoul == 1;
+            bool gercek = st.VarTruthFoul == 1;
+            double kalirOran = bal.@var.sahaKarariKalirOran.orta;   // chaos seviyesi orta (13.2)
+            bool varYanildi = Rng.Rand01(seed, Domain.Referee, (uint)(950 + st.VarSubject), st.Tick, 81) < kalirOran;
+            bool sonuc = varYanildi ? sahaKarari : gercek;
+
+            byte kind = st.VarKind, forTeam = st.VarTeam;
+            short subject = st.VarSubject;
+            st.VarKind = 0; st.VarUntilTick = 0; st.VarSubject = -1;
+            if (sonuc != sahaKarari) VarOverturned++;
+
+            if (kind == 1)   // PENALTI incelemesi — karar burada VERİLİR (saha kararı uygulanmamıştı)
+            {
+                if (sonuc) { Fouls++; AwardPenalty(ref st, forTeam); return; }
+                byte def = forTeam == 0 ? (byte)1 : (byte)0;
+                int gx = def == 0 ? -PitchHalfXmm : PitchHalfXmm;
+                int inward = def == 0 ? 5500 : -5500;
+                AwardSetPiece(ref st, SetPieceType.GoalKick, def, gx + inward, 0);
+                return;
+            }
+            // KIRMIZI KART incelemesi
+            if (subject >= 0)
+            {
+                ref var oyuncu = ref st.Agents[subject];
+                if (!sonuc && oyuncu.SentOff)
+                {
+                    oyuncu.SentOff = false; Reds--;      // kırmızı sarıya iner
+                    oyuncu.YellowCards++; Yellows++;
+                }
+            }
+            AwardSetPiece(ref st, SetPieceType.FreeKick, forTeam, st.Ball.X, st.Ball.Y);
+        }
+
         /// <summary>Foul tespiti + kart — ME Spec 11.2 birebir.
         /// s = 0,4×margin_açığı + 0,25×hız + 0,2×arkadan_mı + 0,15×ayak_yüksekliği (0-1);
         /// ayak yüksekliği motorda modellenmediğinden (Z sadece topta) payı 0 geçilir — bilinçli
@@ -1235,6 +1304,17 @@ namespace TheBadge.Sim.Match
                 double pull = 0.5 + (lean - 0.5) * (0.5 + referee.Consistency / 200.0);
                 foul = Rng.Rand01(seed, Domain.Referee, (uint)(500 + defender), st.Tick, 51) < pull;
             }
+            // VAR TETİKLERİ (ME 11.4) — inceleme kapsamı yalnız GRİ BANT kararlarıdır.
+            // Sınıf 3: ceza sahası içi foul gri bandı. Karar VERİLMEDEN incelemeye gider;
+            // saha kararı da gerçek durum da kaydedilir (VAR gerçeği bilir, 11.4).
+            bool griBantta = Math.Abs(s - esik) <= band;
+            if (griBantta && InPenaltyBox(st.Ball.X, st.Ball.Y, d.TeamIdx))
+            {
+                StartVar(ref st, kind: 1, forTeam: c.TeamIdx, subject: (short)defender,
+                         onFieldFoul: foul, truthFoul: s > esik);
+                return;
+            }
+
             if (!foul) return;
 
             // Avantaj (11.2): mağdur topa sahipse ve hakem eğilimi tutarsa oyun devam eder
@@ -1245,6 +1325,7 @@ namespace TheBadge.Sim.Match
             Fouls++;
             // Sert müdahale sakatlık riski doğurur — ME 11.3 → 12.2 bağlantısı
             if (s > bal.injury.sertMudahaleEsik) TryInjure(ref st, victim, bal.injury.pTabanMudahale);
+            bool kirmiziGri = Math.Abs(s - bal.referee.kirmiziEsik) <= band;
             if (s > bal.referee.kirmiziEsik)
             {
                 d.SentOff = true; Reds++;
@@ -1255,6 +1336,14 @@ namespace TheBadge.Sim.Match
                 if (d.YellowCards >= 2) { d.SentOff = true; Reds++; } // ikinci sarı otomatiği
             }
             if (d.SentOff) { d.Vx = 0; d.Vy = 0; }
+
+            // VAR sınıf 4: kırmızı kart gri bandı — kart GÖSTERİLİR, sonra incelenir (gerçek akış)
+            if (kirmiziGri && d.SentOff)
+            {
+                StartVar(ref st, kind: 2, forTeam: c.TeamIdx, subject: (short)defender,
+                         onFieldFoul: true, truthFoul: s > bal.referee.kirmiziEsik);
+                return;
+            }
 
             // Duran top: ceza sahası içinde penaltı, dışında frikik (10.3/10.4)
             byte forTeam = c.TeamIdx;

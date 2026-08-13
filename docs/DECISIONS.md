@@ -387,6 +387,26 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   sakatlıkları sayıyor (`InjuriesOffPitch`) — hafif sakatlık zaten değişiklik gerektirmiyordu,
   kapı yanlış şeyi ölçüyordu.
 
+- M12 (VAR dram sistemi) uygulandı (2026-08-13): **ME 11.4 birebir.** `MatchPhase.VarReview`
+  fazı devreye girdi: inceleme sırasında oyun DURUR, saat işlemez, duraklama birikir (→ uzatma,
+  ME 3.4). Bekleme süresi 20 + 70×zorluk sn (REFEREE çekilişi — sunumda gerilim kancası).
+  Karar doğruluğu spec'teki gibi: **VAR gerçeği bilir** (motor kesin veriye sahiptir); yanılma payı
+  yalnız chaos seviyesine bağlı ("saha kararı kalır" oranı, `var.sahaKarariKalirOran`).
+  Uygulanan inceleme sınıfları: **(3) ceza sahası içi foul gri bandı** — karar VERİLMEDEN incelemeye
+  gider; **(4) kırmızı kart gri bandı** — kart gösterilir, sonra incelenir, geri alınırsa sarıya iner.
+- **M12'de UYGULANMAYAN 2 sınıf (yapısal gerekçe, kayıt):** (1) *gol öncesi ofsayt marjı < 0,30 m* —
+  motorda ofsayt pas ANINDA düdükle biter (ME 10.5 uygulaması), yani "ofsayt golü" durumu hiç
+  oluşmuyor; bu sınıf ancak ofsayt modeli "gol sonrası inceleme" akışına geçerse anlamlı olur.
+  (2) *gol öncesi atak fazında foul gri bandı* — atak fazı geçmişi (olay tamponu) yok; ME 15.1
+  event log dilimiyle (M14) birlikte gelmeli. İkisi de M14 borcuna yazıldı.
+- **M12 ölçüm:** inceleme 0,08/maç (Checks kadrosu) — 40 maçlık örneklemde geri alma oranı %33;
+  duraklama 3,1 dk/maç. Kapılar: `M12VarProduced`, `M12VarOverturn`, `M12VarDeterminism`,
+  `M12VarStoppage`.
+- **M12 kalibrasyon (12 maç):** gol 2,25-3,00 · şut 19,6-20,9 · **korner 8,1-8,2 ✓ (bant 8-12)** ·
+  faul 29,7 ✓ · kart 4,3-5,3 ✓. Korner borcu KAPANDI.
+- **Kapı düzeltmesi:** `M5MomentumSwing` tek tohuma bağlıydı ve golsüz maçta ölçülemiyordu;
+  artık gol görülene kadar 8 tohum deniyor (aynı özellik, tohum şansına bağlı değil).
+
 ## Bekleyen kararlar
 - Premium etkilerin public ligde şeffaf rozeti (panel M-bulgusu) → tasarım kararı, FAZ 02 öncesi.
 - ~~3G Greybox Fun Gate GO/NO-GO~~ → **KAPANDI (2026-08-08): NO-GO %40** — uygulama yukarıdaki kapanış bölümünde; sunum revizyonu + mülakatlı doğrulama turu Dikey Dilim öncesi BORÇ.
