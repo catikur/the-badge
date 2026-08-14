@@ -95,6 +95,15 @@ namespace TheBadge.Sim.Match
         public byte Half;                   // 1 ilk devre, 2 ikinci devre
         public uint HalfEndTick;            // bu devrenin bitiş tick'i (uzatma dahil hesaplanır)
 
+        // M12 — VAR incelemesi (ME 11.4). İnceleme sırasında oyun DURUR, saat işlemez
+        // (duraklama birikir → uzatma). Karar süre dolunca uygulanır.
+        public uint VarUntilTick;   // incelemenin biteceği tick (0 = inceleme yok)
+        public byte VarKind;        // 0 yok · 1 penaltı · 2 kırmızı kart
+        public byte VarTeam;        // saha kararının LEHİNE olduğu takım
+        public short VarSubject;    // ilgili oyuncu slotu (kırmızı kart)
+        public byte VarOnFieldFoul; // saha kararı "ihlal var" mıydı (1/0)
+        public byte VarTruthFoul;   // gerçek durum (motor kesin veriye sahiptir, 11.4)
+
         // M6 — bekleyen oyuncu değişiklikleri (ME 14.2: sonraki DEAD_BALL fazında uygulanır).
         // Takım başına MaxSubs kadar bekleyebilir: gerçek maçtaki çoklu değişiklik TEK durakta
         // yapılır. Yer/hak kalmadıysa komut KABUL anında reddedilir — kabul edilmiş bir komut

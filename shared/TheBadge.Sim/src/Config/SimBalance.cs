@@ -28,6 +28,48 @@ namespace TheBadge.Sim.Config
         public StaminaCfg stamina = new StaminaCfg();
         public InjuryCfg injury = new InjuryCfg();
         public MomentumCfg momentum = new MomentumCfg();
+        /// <summary>VAR — ME Spec 11.4 [KALİBRE]. JSON anahtarı "var"; C# anahtar sözcüğü
+        /// olduğu için @ ile yazılır (ad JSON'da birebir "var" kalır).</summary>
+        public VarCfg @var = new VarCfg();
+
+        /// <summary>Hava ve zemin — ME Spec 12.4 [KALİBRE]. Tüm çarpanlar burada; kodda sabit yok.</summary>
+        public HavaCfg hava = new HavaCfg();
+
+        [System.Serializable]
+        public sealed class HavaCfg
+        {
+            public KosulCfg yagmur = new KosulCfg();
+            public KosulCfg kar = new KosulCfg();
+            public KosulCfg sicak = new KosulCfg();
+            /// <summary>Rüzgar sapma katsayısı — ME 12.4: sapma = rüzgar_hızı × k_w × uçuş_süresi.
+            /// Spec sayı vermez [KALİBRE]. 0,15 aerodinamikten türetildi: top (0,43 kg, A≈0,038 m²,
+            /// Cd≈0,25) 16 m/sn yan rüzgarda ≈3,4 m/sn² yanal ivme görür → 1,6 sn'lik bir kornerde
+            /// ≈4 m sapma; doğrusal modelde bunun karşılığı k≈0,15'tir (M13 ölçümü: 16 m/sn → 3,9 m).</summary>
+            public double ruzgarK;
+            public ZeminKotuCfg zeminKotu = new ZeminKotuCfg();
+            public ZeminIyiCfg zeminIyi = new ZeminIyiCfg();
+
+            [System.Serializable]
+            public sealed class KosulCfg
+            {
+                public double passingDelta, firstTouchDelta, visionDelta;
+                public double aRoll, sekmeE, topHiziCarpan, vMaxCarpan, sakatlikCarpan, staminaCarpan;
+            }
+            [System.Serializable]
+            public sealed class ZeminKotuCfg { public double firstTouchDelta, sekmePertDeg, sakatlikCarpan; }
+            [System.Serializable]
+            public sealed class ZeminIyiCfg { public double passingDelta; }
+        }
+
+        [System.Serializable]
+        public sealed class VarCfg
+        {
+            public KalirCfg sahaKarariKalirOran = new KalirCfg();
+            public double beklemeSnMin, beklemeSnMax;
+
+            [System.Serializable]
+            public sealed class KalirCfg { public double dusuk, orta, yuksek; }
+        }
 
         /// <summary>Stamina — ME Spec 12.1 [KALİBRE].</summary>
         [System.Serializable]
@@ -82,10 +124,14 @@ namespace TheBadge.Sim.Config
             public PenaltyCfg penalty = new PenaltyCfg();
             public double[] cornerGolBandi = new double[0]; // kalibrasyon bandı (doğrulama, ME 17.2)
             public double frikikDirektEsikM;
+            public double ortaKosuYaricapM;      // ortayı KARŞILAYABİLECEK arkadaşın hedefe uzaklığı (m)
+            public double ortaHiziMS;            // açık oyun ortasının ilk hızı
+            public double ortaHedefDerinlikM;    // ortanın kale çizgisine uzaklığı (hedef bölge)
             public double kornerOrtaHiziMS;      // korner ortası ilk hızı (M4 ekleme)
             public double kornerHedefDerinlikM;  // ortanın kaleye uzaklığı (hedef bölge)
             public double havaTopuYaricapM;      // hava topu düellosu yarıçapı
             public double havaTopuYukseklikM;    // bu yüksekliğin altına inince düello çözülür (ME 8.3)
+            public double korneriGozeAlmaOran;   // baskı altında kendi kutusunda topu dışarı atma oranı
             public double uzaklastirmaHizMS;     // savunmanın uzaklaştırma hızı
             public int hazirlikTicks;            // duran top hazırlığı (sıkıştırılmış çözüm, ME 3.4)
 
@@ -113,8 +159,13 @@ namespace TheBadge.Sim.Config
             public double logisticSlope;                      // P_save = lojistik(slope × marj)
             public double saveClampMin, saveClampMax;
             public double dalisSureCarpan;                    // t_traverse = mesafe/(erişim/bu)
+            public double celmeDirekPayiMm;     // çelmenin direk dışına taşma payı (mm, ME 9.2)
             public double cildirmaAcisiDeg;                   // çeldide sapma açısı
             public double derinlikTaban, derinlikPerM, derinlikMax; // 9.1 pozisyon derinliği
+            public double altiPasYaricapM;      // kalecinin gol sahasında topa kapanma yarıçapı (ME 9.4)
+            public double altiPasDerinlikM;     // gol sahası derinliği (m)
+            public double altiPasYariGenislikM; // gol sahası yarı genişliği (m)
+            public double havaHakimiyetCarpani; // kalecinin hava topu yarıçapı çarpanı (ME 9.3)
             public double cikisMesafeM;         // kalecinin serbest topa çıktığı derinlik (m, ME 9.3)
             public double cikisGenislikM;       // çıkış bölgesinin yarı genişliği (m)
             public double yakinMesafeM;         // 1v1 kapatma etkisinin başladığı mesafe (ME 9.3)
@@ -129,6 +180,7 @@ namespace TheBadge.Sim.Config
             public double sutYariMesafeM;      // mesafe tehdidinin yarıya düştüğü mesafe (m, rasyonel çekirdek)
             public double sutHiziMS;
             public double sutSigmaTabanDeg;    // nişan sapması AÇISAL (derece) — mesafeyle büyür
+            public double kafaSigmaCarpani;    // kafa vuruşunda nişan sapması çarpanı (ME 6.4)
             public double nisanDirekOrani;     // nişan noktası: direk yarı genişliğinin bu oranı
             public double blokOlasilik;        // koridorda savunucu varsa blok olasılığı (ME 15.1)
         }
@@ -172,6 +224,9 @@ namespace TheBadge.Sim.Config
             public double aRollKuru;          // yerde sürtünme yavaşlaması (m/sn²)
             public double sekmeEKuru;         // dikey sekme katsayısı
             public double sekmeYatayCarpan;   // sekmede yatay hız çarpanı (ME 8.3)
+            public double blokIleriOran;      // bloğun topu ileri sıyırma oranı (kalanı geri döner)
+            public double blokIleriAcisiDeg;  // ileri sıyırmada yana açılma açısı
+            public double blokSacilmaDeg;     // bloklanan şutun geri sekme açısı sigması (ME 8.3)
             public double dragK;              // hava direnci k_d
             public double magnusK;            // falso k_m (M3+ orta/frikik kullanır)
         }
@@ -233,6 +288,9 @@ namespace TheBadge.Sim.Config
             public double araPasRisk;             // ara pasın ek kayıp riski
             public double araPasUlasimBandiM;     // ulaşım yarışında %50→%100'e taşıyan mesafe farkı (m)
             public double araPasKotuZamanlama;// koşu zamanlama hatası → ofsayt (ME 10.5)
+            public double ortaTehditCarpan;       // orta aksiyonunun tehdit ağırlığı (ME 6.4)
+            public double ortaMinMesafeM;         // bu mesafeden yakınsa orta yerine şut/pas
+            public double ortaMaxMesafeM;         // bu mesafeden uzaksa orta aday olmaz
             public double kontraTehditCarpan;     // kontra penceresinde wThreat kayması (M9)
             public double kontraRiskTolerans;     // kontra penceresinde wRisk kayması (M9)
             public double mentaliteTehditCarpan;  // mentalite ucunda wThreat kayması (±oran, ME 7.2/14.2)
@@ -262,6 +320,9 @@ namespace TheBadge.Sim.Config
             public double presKesmeSn;       // pres öngörü süresi — kesme noktası (sn, ME 7.4-B)
             public double kanalKapamaM;      // ikinci savunanın topun gol tarafına iniş mesafesi (m)
             public double hatTalimatM;       // hat talimatı başına hat kayması (m, ME 7.6/14.2)
+            public double kutuDerinlikM;     // kutuya girişte kale çizgisine mesafe (m, ME 7.4-A)
+            public double kutuYanM;          // kutuya girişte direk hizası yanal mesafe (m)
+            public double ortaGenislikEsikMm;// bu |Y| üstü "kanatta" sayılır (orta koşulu)
             public double kontraIleriM;      // kontra penceresinde hücumcunun ek derinliği (m)
             public double gecisSnTaban;      // topu kaptıran takımın toparlanma süresi (sn)
             public double gecisSnPerMentalite; // ofansif mentalite başına ek toparlanma süresi (sn)

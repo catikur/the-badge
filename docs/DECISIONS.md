@@ -296,6 +296,161 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
 - **FAZ 03 kapanış planı yazıldı:** `docs/briefs/BRIEF_FAZ03_KAPANIS.md` — M9'dan M17'ye kadar
   kalan her iş, sırası ve KABUL KAPISI ile birlikte; ayrıca FAZ 03 dışı karar bekleyen 4 madde.
 
+- M10 (duran top + ceza sahası üretimi) uygulandı (2026-08-13): **ORTA aksiyonu** eklendi —
+  ME 6.4 aksiyon tablosunda vardı, motorda YOKTU. Kanattan ceza sahasına havadan besleme
+  (8.3 balistiği + 10.2 hava topu zinciri). İki ek model gerekti: (a) ortanın hedefi SABİT
+  derinlik değil, **ofsayt çizgisiyle kale arasına** nişan alınır — sabit hedef, ofsayt kısıtı
+  yüzünden hep boş kalıyordu (aksiyon ölü doğuyordu); (b) top havadayken ileri roller **iniş
+  noktasına koşar** — bu koşu olmadan hava topu yarıçapında kimse bulunmuyordu.
+  Ölçüm: orta 0,0 → 0,6 → 1,9 → **5,1/maç** (gerçek 15-25 — mekanizma çalışıyor, sıklık düşük).
+- **M10 durumu (hedeflere karşı):** korner 7,9-8,8 (bant 8-12 ✓) · **taç 43-48/maç** (gerçek ~40 ✓
+  — M5'ten beri açık duran "taç üretimi ~0" borcu KAPANDI) · **penaltı hâlâ ~0** (bant 0,20-0,35 ✗).
+  Penaltı borcu M11'e taşındı: kök neden ceza sahası içinde ihlal doğuracak kadar top girmemesi
+  (orta sıklığı düşük + hücumcu kutuda kalamıyor).
+- **M9 ölçümünün DÜZELTMESİ (dürüstlük kaydı):** M9 PR'ında `M7DefendRegresyon` ×0,97 ölçümüne
+  dayanarak "savunmak artık ödül veriyor" dedim. M10 sonrası aynı kapı ×1,57 okuyor. Aradaki fark
+  yalnız orta aksiyonu değil; metrik 20 maçta bile ×0,97-1,57 arasında SALINIYOR. Doğru ifade:
+  **taktik denge metrikleri henüz kararlı değil**; iki hedef de (hücumun bedeli >1,00, savunmanın
+  ödülü <1,00) AÇIK. Bu metrikler ancak M16'daki 10.000 maçlık koşuyla güvenilir hale gelir —
+  kapı sertleştirme kararı oraya ertelendi.
+
+- M11 (gol bandı + şut kalitesi) **KISMİ** (2026-08-13): kapı TUTULMADI, çalışma teşhisle kapandı.
+  Yapılan: **ME 9.2 çelme geometrisi düzeltildi** — kaleci çeldiği topu "direk dışına" göndermeli;
+  eski kod bunu sabit açıyla UMUT EDİYORDU, artık kale çizgisinde direk dışı bir noktaya
+  geometriyle nişan alınıyor. Ayrıca gol kaynağı teşhis sayaçları eklendi (hash dışı).
+- **M11 teşhisi (asıl bulgu):** maç başına ~4,4 golün yalnız **0,4'ü şut**; **4,0'ı serbest top**.
+  Serbest top gollerinin **2,4'ünde topa en son SAVUNAN takım dokunmuş**, giriş hızı **13,8 m/s**,
+  neredeyse hiçbiri havada değil. Bu, gerçek futbolun kendi kalesine gol oranının (~0,05/maç)
+  ~50 katı. Elenen kaynak: kaleci çelmesi (geometri düzeltildi, sayı DEĞİŞMEDİ). Kalan şüpheliler,
+  hız imzasına göre sıralı: (1) **kendi yarı sahasındaki pas** — pas yer hızı bandı 12-19 m/s,
+  ölçülen 13,8 m/s ile birebir örtüşüyor; pas aday kümesi KALECİYİ de içeriyor (geri pas);
+  (2) uzaklaştırma (12,6 m/s — yön mantığı kodda doğrulandı); (3) isabetsiz şutun fizik sonrası
+  direkler arasına dönmesi (Flight=0 olduğu için kaleci analitik çözüme hiç girmiyor).
+  **Sıradaki prob:** serbest top golünde topa en son dokunan AJANI (rol + mevki) kaydet; kaleciye
+  geri pas mı, savunmacı pası mı, sapmış şut mu — üçünü ayırır.
+- **M11 KAPANDI (aynı gün, prob koşuldu):** "son dokunan ajan" probu üç adımda kaynağı buldu.
+  Serbest top gollerinin dağılımı: **kaleci 1,40 · defans 1,70 · orta saha-forvet 1,00**.
+  Kaleci payı kaynağı gösterdi: **saha oyuncuları kaleciye GERİ PAS atıyordu** ve 12-19 m/s ile
+  gelen top kalecinin toplayamadığı bir hızda kendi ağına gidiyordu. Kaleci pas ADAY KÜMESİNDEN
+  çıkarıldı (kalecinin topu dağıtması ME 9.4'te kendi aksiyonudur; saha oyuncusunun kendi
+  kalesine top yollaması bu modelde yok). **Gol 4,7 → 2,4** — ME 17.2 bandına (2,4-3,0) İLK KEZ girdi.
+  Yolda iki model hatası daha düzeltildi (ikisi de tek başına yetmedi ama ikisi de yanlıştı):
+  ME 9.2 çelme geometrisi ve **bloklanan şutun 360° DÜZGÜN dağılımdan sekmesi** — top kaleye
+  momentumla gelirken gövdeye çarpıp rastgele yöne, sık sık ağa gidiyordu; artık geri/yana
+  saçılma (`physics.blokSacilmaDeg`).
+- **M11 kalibrasyon (12 maç ort.):** **gol 2,42 ✓ (bant 2,4-3,0)** · şut 17,7-21,1 · korner 5,5-6,8 ·
+  faul 28,3 ✓ · kart 3,4-4,0 ✓ · ofsayt 3,8 ✓ · sakatlık 0,83 ✓ · bitiş enerji 413 ✓ · 91,3 dk.
+- **M11 sonrası açık kalan:** korner 5,5-6,8 (bant 8-12 — M10'da 8,8'di, gol düşünce şut/korner de
+  düştü) · şut 17,7 (bant 20-28) · penaltı ~0 · xG/şut 0,30 (hedef ≤0,20).
+- **M11 borcu (model sınırı, bilinçli):** kaleciye geri pas + kalecinin topu TOPLAMASI (ME 9.4
+  dağıtım zinciri) modellenmedi; şu an saha oyuncusu kaleciye pas atamıyor. Gerçek futbolda bu
+  akış var — M14/M15 sırasında kaleci dağıtımıyla birlikte geri getirilmeli.
+- **Kapı iyileştirmesi:** `M3GkMatters` tek maç yerine 6 tohum toplamına bakıyor (gol sayısı banda
+  inince tek maçlık 1→2 farkı gürültüydü — aynı özellik, güvenilir ölçüm).
+
+- M11-B (ceza sahası akışı) uygulandı (2026-08-13): **penaltı üretimi açıldı.**
+  Kök neden ölçüldü: faul YALNIZ topu taşıyana yapılan müdahaleden doğuyordu; hava topu
+  mücadelesi hakem makinesine hiç sunulmuyordu — oysa gerçek futbolda ceza sahası penaltılarının
+  en yaygın kaynağı odur. Üç değişiklik birlikte gerekti:
+  (a) **hava topu ihlali** ME 11.2'ye sunuldu (kaybeden tutunur/iter; şiddet skorunu hakem hesaplar,
+  düdük çalarsa mücadelenin sonucu uygulanmaz); (b) **savunan da ortayı karşılıyor** — hücumcuyu
+  M10'da koşturmuştuk, savunanı değil: hava toplarının yalnız %15'i ikili mücadeleliydi
+  (10,7 olayın 1,6'sı), şimdi 2,6; (c) `cezaSahasiIhtiyatCarpan` 0,6 → 0,95 — bu çarpan M4'te
+  penaltı 1,2/maç iken konmuştu, yeni modelde kutuda ihlali imkânsız kılıyordu.
+  **Penaltı 0,00 → 0,30 (bant 0,20-0,35 ✓).**
+  Ayrıca: bloklanan şut artık iki modlu (geri dönüş / yandan sıyırma) ve baskı altındaki savunan
+  kendi kutusunda **korneri göze alıp** topu dışarı atabiliyor.
+- **M11-B kalibrasyon (12 maç ort.):** gol 2,42-3,42 · şut 15,1-22,2 · **penaltı 0,30 ✓** ·
+  faul 27,2 ✓ · kart 3,6-3,8 ✓ · korner 4,9-6,2 ✗ (bant 8-12).
+- **Korner borcu (ölçülerek):** korner 4,3 → 6,2'ye çıktı ama banda girmedi. Kök neden korner
+  üretimi DEĞİL, ceza sahasına giren top sayısı: orta 5,9/maç (gerçek 15-25) ve şut 15-22
+  (bant 20-28). Korner bunların türevi — orta sıklığı M10 borcu olarak açık, önce o kapanmalı.
+
+- M11-C (kutuya giriş + kaleci hakimiyeti) uygulandı (2026-08-13, "orta sıklığını aç, korner ve
+  şutu banda sok" isteği): **orta 5,9 → 21,2/maç (gerçek 15-25).** Ölçüm önce yanlış kaldıracı
+  eledi: maç başına **175 orta FIRSATI** oluşuyordu ama yalnız **11'inde** kutuda karşılayacak
+  arkadaş vardı — yani sorun ortanın fayda ağırlığı değil, **kutuya kimsenin girmemesiydi.**
+  Eklenen davranışlar: (a) **kutuya giriş** (ME 7.4-A) — topu taşıyan kanatta ve ileri konumdaysa
+  ileri roller ceza sahasına koşar, yakın/uzak direği paylaşır; (b) **kaleci hava hakimiyeti**
+  (ME 9.3) — kendi kutusuna inen havadaki topta AerialCommand ile öne çıkar ve topu TOPLAR;
+  (c) **kaleci altı pasında topun üstüne kapanır** (ME 9.4) — gol sahasındaki serbest topta
+  kontrol yarıçapı büyür; (d) **kafa vuruşu nişanı** ayakla aynı isabette değil (ME 6.4);
+  (e) yer müdahalesinde de savunan kendi kutusunda korneri göze alabiliyor.
+- **M11-C kalibrasyon (12 maç, iki tohum kümesi):** **gol 2,50-2,75 ✓ (bant 2,4-3,0)** ·
+  **şut 20,3-22,8 ✓ (bant 20-28)** · korner 5,3-8,8 (bant 8-12 — bir küme içinde, biri değil) ·
+  faul 29,4 ✓ · kart 4,3-5,1 ✓ · penaltı 0,30 ✓ · pas isabeti %80 ✓.
+- **Korner borcu (kalan):** iki tohum kümesi arasında 5,3 ↔ 8,8 salınıyor; ortalama ~7, bant 8-12.
+  Kaleci hakimiyeti ile korner üretimi doğrudan ters çalışıyor (kaleci topladıkça korner düşüyor) —
+  ikisinin dengesi 10.000 maçlık kümede (M16) sabitlenmeli; tek tohum kümesinde ince ayar,
+  aşırı uydurma riski taşır.
+- **Kapı düzeltmesi:** `M6AutoManage` artık TÜM sakatlıkları değil, oyuncuyu SAHADAN ÇIKARAN
+  sakatlıkları sayıyor (`InjuriesOffPitch`) — hafif sakatlık zaten değişiklik gerektirmiyordu,
+  kapı yanlış şeyi ölçüyordu.
+
+- M12 (VAR dram sistemi) uygulandı (2026-08-13): **ME 11.4 birebir.** `MatchPhase.VarReview`
+  fazı devreye girdi: inceleme sırasında oyun DURUR, saat işlemez, duraklama birikir (→ uzatma,
+  ME 3.4). Bekleme süresi 20 + 70×zorluk sn (REFEREE çekilişi — sunumda gerilim kancası).
+  Karar doğruluğu spec'teki gibi: **VAR gerçeği bilir** (motor kesin veriye sahiptir); yanılma payı
+  yalnız chaos seviyesine bağlı ("saha kararı kalır" oranı, `var.sahaKarariKalirOran`).
+  Uygulanan inceleme sınıfları: **(3) ceza sahası içi foul gri bandı** — karar VERİLMEDEN incelemeye
+  gider; **(4) kırmızı kart gri bandı** — kart gösterilir, sonra incelenir, geri alınırsa sarıya iner.
+- **M12'de UYGULANMAYAN 2 sınıf (yapısal gerekçe, kayıt):** (1) *gol öncesi ofsayt marjı < 0,30 m* —
+  motorda ofsayt pas ANINDA düdükle biter (ME 10.5 uygulaması), yani "ofsayt golü" durumu hiç
+  oluşmuyor; bu sınıf ancak ofsayt modeli "gol sonrası inceleme" akışına geçerse anlamlı olur.
+  (2) *gol öncesi atak fazında foul gri bandı* — atak fazı geçmişi (olay tamponu) yok; ME 15.1
+  event log dilimiyle (M14) birlikte gelmeli. İkisi de M14 borcuna yazıldı.
+- **M12 ölçüm:** inceleme 0,08/maç (Checks kadrosu) — 40 maçlık örneklemde geri alma oranı %33;
+  duraklama 3,1 dk/maç. Kapılar: `M12VarProduced`, `M12VarOverturn`, `M12VarDeterminism`,
+  `M12VarStoppage`.
+- **M12 kalibrasyon (12 maç):** gol 2,25-3,00 · şut 19,6-20,9 · **korner 8,1-8,2 ✓ (bant 8-12)** ·
+  faul 29,7 ✓ · kart 4,3-5,3 ✓. Korner borcu KAPANDI.
+- **Kapı düzeltmesi:** `M5MomentumSwing` tek tohuma bağlıydı ve golsüz maçta ölçülemiyordu;
+  artık gol görülene kadar 8 tohum deniyor (aynı özellik, tohum şansına bağlı değil).
+
+- M13 (hava ve zemin) uygulandı (2026-08-13): **ME 12.4 tablosu birebir.** `MatchConfig`'e
+  `Weather` (Kuru/Yağmur/Kar/Sıcak), `PitchTier` (1-5), `WindMS` + `WindDir` girdi; tüm çarpanlar
+  `balance/sim.balance.json` → `hava.*` altında. Motor bunları maç başında BİR KEZ türetir
+  (koşul maç boyunca sabit, sıcak yolda dallanma yok): nitelik deltaları (Passing/FirstTouch/
+  Vision) motorun nitelik kopyasına işlenir — kulübeden gelen oyuncuya değişiklik anında da; a_roll,
+  sekme e, top hızı, v_max, sakatlık ve stamina çarpanları kendi kullanım yerlerine bağlanır.
+  Kötü zeminde (Tier 1-2) sekme yönüne ±2° pertürbasyon eklenir (PHYSICS domain, LUT ile).
+- **Nötrlük kanıtı:** Kuru + Tier 3 + rüzgarsız kurulumda TÜM çarpanlar tam 1,0 ve deltalar 0'dır →
+  M0-M12 golden hash'lerinin hepsi BİT DÜZEYİNDE korundu. `M13NotrAynilik` kapısı bunu ayrıca
+  niyet olarak yazıyor: hava alanına hiç dokunulmamış kurulum ile kuru kurulum aynı hash'i verir.
+- **KÖK NEDEN (M13'te bulundu ve düzeltildi) — pas gücünde çift sayım:** `PassSpeed` pasın hızını
+  "hedefte DURACAK şekilde" çözer, yani zeminin etkisi zaten `a_roll`'dedir. ME 12.4'ün "top hızı
+  −%10" satırı bunun ÜSTÜNE uygulanınca her pas sistematik olarak %19 kısa kalıyordu — pasçı
+  oynadığı zemini bilmiyormuş gibi. Ölçüm (kar, 12 maç): gol 2,25→**1,17**, taç 15,4→**1,3**,
+  sahiplik değişimi 360→431. Düzeltmeden sonra kar: gol 1,92 · taç 5,0. Çarpan artık yalnız hızını
+  MESAFEDEN değil VURUŞTAN alan toplara uygulanıyor: şut, orta, korner, uzaklaştırma.
+- **Rüzgar doğrulaması (istatistik değil doğrudan geometri):** elle kurulmuş kornerde topun düşüş
+  noktası — 8 m/sn → 1,88 m · 16 m/sn → 3,78 m · ters yön → −1,86 m. ME 12.4 formülüne
+  (rüzgar × k_w × uçuş_süresi) tam doğrusal ve işaretli.
+- **`ruzgarK` [KALİBRE] 0,045 → 0,15:** ilk değer tahmindi. Yeni değer aerodinamikten türetildi —
+  top (0,43 kg, A≈0,038 m², Cd≈0,25) 16 m/sn yan rüzgarda ≈3,4 m/sn² yanal ivme görür; 1,6 sn'lik
+  bir korner uçuşunda ≈4 m sapma eder. 0,045 aynı kornerde yalnız 1,2 m veriyordu (fırtınada bile
+  ölçülemez etki). Rüzgar varsayılanı 0'dır; koşula atama FAZ 04 lig takvimi katmanında.
+- **M13 ölçüm (12 maç, koşul başına — gol/şut/faul · pas isabeti · taç · bitiş enerjisi · sakatlık):**
+  kuru 2,25/19,6/27,5 · %82,9 · 15,4 · 413 · 0,67 — yağmur 2,75/23,0/26,6 · %80,5 · **36,1** · 474 ·
+  0,83 — kar 1,92/20,1/21,0 · %83,4 · **5,0** · 398 · 1,08 — sıcak 3,50/22,8/27,3 · %81,2 · 17,5 ·
+  **351** · 1,25 — zeminKötü 2,25/22,1/33,4 · %82,5 · 20,4 · 427 · 0,67.
+- **Kapının duruşu (bilinçli):** ME 17.2 kalibrasyon bandı REFERANS koşul (kuru + Tier 3) içindir.
+  "Kar da 2,4-3,0 gol atsın" demek 12.4'ü silmek olurdu. Kapı bu yüzden iki şey denetler: (1) referans
+  koşul bit düzeyinde değişmedi, (2) her koşul spec'in söylediği YÖNDE ölçülebilir fark üretiyor ve
+  hâlâ FUTBOL kalıyor (`M13FutbolZarfi`: gol 1,0-4,5 · şut 12-32 · faul 15-40 · pas isabeti %70-90 —
+  bu zarf 17.2 bandı DEĞİLDİR ve gate mesajında böyle yazılıdır).
+- **M16 BORCU (ölçüldü, kapatılmadı):** yağmurda korner 8,2→**14,7** (bant 8-12 üstü), karda
+  8,2→**3,9** (bant altı); yağmurda taç ×2,2. Mekanizma anlaşıldı ve tek: `pass.groundSpeedMin`
+  (12 m/sn) kısa pasları zorunlu olarak sert vurdurur, topun aşım mesafesi 1/a_roll ile ölçeklenir —
+  KURU koşulda da 10 m'lik bir pas 11,8 m aşıyor. Yani bu bir hava hatası değil, pas modelinin
+  zaten var olan zayıflığının hava tarafından BÜYÜTÜLMESİ. Düzeltmesi pas gücü modeline dokunur
+  (tüm M4-M12 kalibrasyonunu ve golden'ları hareket ettirir) → 10.000 maçlık M16 sprintine.
+- **M17 BORCU:** `Weather`/`PitchTier`/`Wind*` replay dörtlüsünün config_hash'ine GİRMELİDİR
+  (ME 3.3). ConfigHash şu an host tarafından set ediliyor; arayüz dondurmada (M17) hava alanları
+  kanonik özete dahil edilecek — aksi halde aynı seed farklı havada farklı maç verir ve replay kırılır.
+- **Bilinçli sınır:** rüzgar yalnız HAVA topuna (orta + korner) uygulanır; ME 12.4 satırı da
+  "uzun top/orta sapması, frikik-korner nişanına eklenir" der. Şut ve yerden pas kapsam dışıdır.
+
 ## Bekleyen kararlar
 - Premium etkilerin public ligde şeffaf rozeti (panel M-bulgusu) → tasarım kararı, FAZ 02 öncesi.
 - ~~3G Greybox Fun Gate GO/NO-GO~~ → **KAPANDI (2026-08-08): NO-GO %40** — uygulama yukarıdaki kapanış bölümünde; sunum revizyonu + mülakatlı doğrulama turu Dikey Dilim öncesi BORÇ.

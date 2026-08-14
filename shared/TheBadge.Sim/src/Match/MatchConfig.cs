@@ -12,6 +12,10 @@ namespace TheBadge.Sim.Match
         { Strictness = 50, AdvantageTendency = 50, Consistency = 60 };
     }
 
+    /// <summary>Hava koşulu — ME Spec 12.4. Lig takvim seed'inden DETERMİNİSTİK atanır (FAZ 04);
+    /// tüm çarpanlar balance JSON'dadır (hava.*), kodda sabit yoktur.</summary>
+    public enum WeatherKind : byte { Kuru = 0, Yagmur = 1, Kar = 2, Sicak = 3 }
+
     /// <summary>Maç kurulum girdisi — ME Spec 5.2'nin M1-M4 alt kümesi.
     /// Pitch/Weather/Lod/Chaos alanları kendi dilimlerinde eklenir (ME 12.4, 13, 16.1).
     /// ConfigHash: balance + motor sürümü + kurulumun kanonik özeti (ME 3.3) — replay dörtlüsü üyesi.</summary>
@@ -22,6 +26,13 @@ namespace TheBadge.Sim.Match
         public string EngineVersion;
         public TeamSheet Home, Away;
         public RefereeProfile Referee = RefereeProfile.Default;
+
+        // M13 — hava ve zemin (ME 12.4). Zemin tier'ı Tycoon bakım yatırımının sahaya yansımasıdır
+        // (GDD 4.3); rüzgar uzun top/orta sapmasına vektör olarak girer.
+        public WeatherKind Weather = WeatherKind.Kuru;
+        public byte PitchTier = 3;        // 1-2 kötü · 3 nötr · 4-5 iyi
+        public double WindMS;             // rüzgar hızı (m/sn)
+        public double WindDirX = 1, WindDirY;  // rüzgar yön birim vektörü
     }
 
     /// <summary>Maç sonucu — headless koşunun çıktısı (ME Spec 5.1 IMatchEngine.Run).

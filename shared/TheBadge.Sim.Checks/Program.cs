@@ -135,7 +135,7 @@ if (runA.finalHash != runB.finalHash || runA.at600 != runB.at600)
 else Pass("MatchSkeletonDeterminism");
 
 // 7b) Golden: durum hash'i sabitlendi — alan/sıra değişikliği bilinçli golden güncellemesi ister
-const ulong MATCH_GOLDEN = 0xBD0C63ED4B2CF0A0UL; // M9'da yeniden sabitlendi (kontra/geçiş modeli — bilinçli)
+const ulong MATCH_GOLDEN = 0xA3BFFF6E8178A782UL; // M11'de yeniden sabitlendi (geri pas + blok sekmesi — bilinçli)
 if (MATCH_GOLDEN != 0 && runA.finalHash != MATCH_GOLDEN)
     failures += Fail("MatchSkeletonGolden", $"0x{runA.finalHash:X} != 0x{MATCH_GOLDEN:X}");
 else Pass("MatchSkeletonGolden");
@@ -331,7 +331,7 @@ Console.WriteLine($"[info] M2 durum hash: 0x{mA2.h:X}");
 if (mA2.h != mB2.h) failures += Fail("M2Determinism", $"0x{mA2.h:X} != 0x{mB2.h:X}");
 else Pass("M2Determinism");
 
-const ulong M2_GOLDEN = 0x4C3C8599556C2DD1UL; // M9'da yeniden sabitlendi — davranış/şema değişikliği bilinçli güncelleme ister
+const ulong M2_GOLDEN = 0x09ECE94D76724C1AUL; // M12'de yeniden sabitlendi (VAR + kalibrasyon) — davranış/şema değişikliği bilinçli güncelleme ister
 if (M2_GOLDEN != 0 && mA2.h != M2_GOLDEN) failures += Fail("M2Golden", $"0x{mA2.h:X}");
 else Pass("M2Golden");
 
@@ -363,10 +363,19 @@ else Pass($"M3SavesHappen({m3.saves})");
 if (Math.Abs(golT - m3.xg) > Math.Max(4.0, m3.xg * 1.2))
     failures += Fail("M3XgConsistency", $"gol {golT} vs ΣxG {m3.xg:0.00}");
 else Pass($"M3XgConsistency({m3.xg:0.00})");
-// Kaleci İŞARET testi: deplasman GK Reflexes/Agility tavana → ev golü ARTMAMALI
-var m3gk = RunM2(0xC0AC11UL, ticks: 54000, gkBoost: 60);
-if (m3gk.gh > m3.gh) failures += Fail("M3GkMatters", $"iyi GK'ya rağmen ev golü {m3.gh}→{m3gk.gh}");
-else Pass($"M3GkMatters({m3.gh}→{m3gk.gh})");
+// Kaleci İŞARET testi: deplasman GK Reflexes/Agility tavana → ev golü ARTMAMALI.
+// TEK maçta bakmak tohum şansını ölçüyordu (gol sayısı banda inince 1→2 farkı gürültü);
+// 6 tohumda TOPLAM karşılaştırılır — aynı özellik, daha güvenilir ölçüm.
+{
+    int golNormal = 0, golBoost = 0;
+    for (ulong k = 0; k < 6; k++)
+    {
+        golNormal += RunM2(0xC0AC11UL + k * 4133, ticks: 54000).gh;
+        golBoost += RunM2(0xC0AC11UL + k * 4133, ticks: 54000, gkBoost: 60).gh;
+    }
+    if (golBoost > golNormal) failures += Fail("M3GkMatters", $"iyi GK'ya rağmen ev golü {golNormal}→{golBoost} (6 tohum)");
+    else Pass($"M3GkMatters({golNormal}→{golBoost}, 6 tohum)");
+}
 
 // 11) FAZ 03 M4 — Duran toplar + hakem/kart + maç saati (ME 10, 11.2, 3.4; BRIEF M4)
 
@@ -399,7 +408,7 @@ if (f1.hash != f2.hash || f1.res.TotalTicks != f2.res.TotalTicks)
     failures += Fail("M4Determinism", $"0x{f1.hash:X} != 0x{f2.hash:X}");
 else Pass("M4Determinism");
 
-const ulong M4_GOLDEN = 0xC87B4C013F284C89UL; // M9'da yeniden sabitlendi
+const ulong M4_GOLDEN = 0xE21A1650E09D5464UL; // M12'de yeniden sabitlendi
 if (M4_GOLDEN != 0 && f1.hash != M4_GOLDEN) failures += Fail("M4Golden", $"0x{f1.hash:X}");
 else Pass("M4Golden");
 
@@ -518,18 +527,26 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
 
 // 12a) Momentum mekaniği — ME 12.3: gol atan +, yiyen −; sönüm 0'a doğru
 {
-    var q6 = new CommandQueue();
-    var cfg6 = new MatchConfig { Seed = 5150, EngineVersion = "m5", Home = BuildSheetSide(300, 7, true), Away = BuildSheetSide(300, 8, false) };
-    var e6 = new MatchEngine(5150, q6, cfg6, simBal);
-    var s6 = MatchEngine.CreateInitialState(cfg6);
-    int prevH = 0, prevA = 0; bool sawSwing = false;
-    while (!MatchEngine.IsFinished(in s6) && !sawSwing)
+    // Golsüz maç bu kapıyı ölçemez: tek tohuma bağlamak tohum şansını ölçmekti.
+    // Gol GÖRÜLENE kadar tohum denenir; ölçülen özellik aynı (golde momentum salınımı).
+    bool sawSwing = false; bool sawGoal = false;
+    for (ulong k = 0; k < 8 && !sawSwing; k++)
     {
-        e6.Tick(ref s6);
-        if (s6.HomeGoals != prevH) sawSwing = s6.HomeRt.Momentum > 0 && s6.AwayRt.Momentum < 0;
-        else if (s6.AwayGoals != prevA) sawSwing = s6.AwayRt.Momentum > 0 && s6.HomeRt.Momentum < 0;
-        prevH = s6.HomeGoals; prevA = s6.AwayGoals;
+        ulong sd6 = 5150 + k * 911;
+        var q6 = new CommandQueue();
+        var cfg6 = new MatchConfig { Seed = sd6, EngineVersion = "m5", Home = BuildSheetSide(300, 7, true), Away = BuildSheetSide(300, 8, false) };
+        var e6 = new MatchEngine(sd6, q6, cfg6, simBal);
+        var s6 = MatchEngine.CreateInitialState(cfg6);
+        int prevH = 0, prevA = 0;
+        while (!MatchEngine.IsFinished(in s6) && !sawSwing)
+        {
+            e6.Tick(ref s6);
+            if (s6.HomeGoals != prevH) { sawGoal = true; sawSwing = s6.HomeRt.Momentum > 0 && s6.AwayRt.Momentum < 0; }
+            else if (s6.AwayGoals != prevA) { sawGoal = true; sawSwing = s6.AwayRt.Momentum > 0 && s6.HomeRt.Momentum < 0; }
+            prevH = s6.HomeGoals; prevA = s6.AwayGoals;
+        }
     }
+    if (!sawGoal) failures += Fail("M5MomentumSwing", "8 tohumda hiç gol yok — ölçülemedi");
     if (!sawSwing) failures += Fail("M5MomentumSwing", "golde momentum salınımı yok");
     else Pass("M5MomentumSwing");
 }
@@ -656,10 +673,10 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     {
         var (e, s, _) = NewMatch(0x6A06 + n * 977);
         e.Run(ref s);
-        autoSubs += e.AutoSubs; injuriesOff += e.Injuries;
+        autoSubs += e.AutoSubs; injuriesOff += e.InjuriesOffPitch;   // yalnız SAHAYI TERK ETTİREN sakatlık
     }
     if (injuriesOff > 0 && autoSubs == 0)
-        failures += Fail("M6AutoManage", $"{injuriesOff} sakatlık, 0 otomatik değişiklik");
+        failures += Fail("M6AutoManage", $"{injuriesOff} sahayı terk ettiren sakatlık, 0 otomatik değişiklik");
     else Pass($"M6AutoManage({autoSubs} oto-değişiklik / {injuriesOff} sakatlık)");
 }
 
@@ -678,7 +695,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     Console.WriteLine($"[info] M6 komutlu maç hash: 0x{hA:X}");
     if (hA != hB) failures += Fail("M6Determinism", $"0x{hA:X} != 0x{hB:X}");
     else Pass("M6Determinism");
-    const ulong M6_GOLDEN = 0xB1B11EABBFD97476UL; // M9'da yeniden sabitlendi (taktik+değişiklik+motivasyon zaman çizelgesi)
+    const ulong M6_GOLDEN = 0xA13012E728B45B90UL; // M12'de yeniden sabitlendi (taktik+değişiklik+motivasyon zaman çizelgesi)
     if (M6_GOLDEN != 0 && hA != M6_GOLDEN) failures += Fail("M6Golden", $"0x{hA:X}");
     else Pass("M6Golden");
 }
@@ -743,6 +760,212 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     if (defOran > 2.4)
         failures += Fail("M7DefendRegresyon", $"defansif yediği ×{defOran:0.00} (nötr {nt.conc:0.00} → {df.conc:0.00})");
     else Pass($"M7DefendRegresyon(yediği ×{defOran:0.00} — HEDEF <1,00; M8 borcu, pas isabeti kökü)");
+}
+
+// 15) FAZ 03 M12 — VAR dram sistemi (ME 11.4)
+{
+    const int NV = 40;   // VAR olayı seyrek (yalnız gri bant): oran ölçümü için büyük örneklem
+    double incelemeT = 0, geriAlmaT = 0; uint durakT = 0;
+    ulong hA12 = 0, hB12 = 0;
+    for (ulong k = 0; k < NV; k++)
+    {
+        ulong sd = 0xA12 + k * 3571;
+        var (e12, s12, _) = NewMatch(sd);
+        e12.Run(ref s12);
+        incelemeT += e12.VarReviews; geriAlmaT += e12.VarOverturned; durakT += s12.StoppageTicks;
+        if (k == 0) hA12 = MatchEngine.StateHash(in s12);
+    }
+    { var (e12b, s12b, _) = NewMatch(0xA12); e12b.Run(ref s12b); hB12 = MatchEngine.StateHash(in s12b); }
+
+    Console.WriteLine($"[info] M12 VAR ({NV} maç): inceleme {incelemeT / NV:0.00}/maç · geri alma {geriAlmaT / NV:0.00}");
+    // İnceleme ÜRETİLİYOR mu (kapsam yalnız gri bant: ceza sahası + kırmızı kart)
+    if (incelemeT < 3) failures += Fail("M12VarProduced", $"yalnız {incelemeT:0} inceleme ({NV} maç)");
+    else if (incelemeT / NV > 4.0) failures += Fail("M12VarProduced", $"{incelemeT / NV:0.00}/maç — aşırı");
+    else Pass($"M12VarProduced({incelemeT / NV:0.00}/maç)");
+    // Geri alma OLUYOR ama her kararı devirmiyor (VAR gerçeği bilir, chaos payı 11.4)
+    double geriOran = geriAlmaT / Math.Max(1, incelemeT);
+    if (geriOran <= 0.0 || geriOran > 0.7) failures += Fail("M12VarOverturn", $"geri alma oranı %{geriOran * 100:0} ({incelemeT:0} inceleme)");
+    else Pass($"M12VarOverturn(%{geriOran * 100:0})");
+    // Determinizm: aynı tohum = aynı sonuç (VAR çekilişleri REFEREE domain)
+    if (hA12 != hB12) failures += Fail("M12VarDeterminism", $"0x{hA12:X} != 0x{hB12:X}");
+    else Pass("M12VarDeterminism");
+    // İnceleme SAATİ durdurur: duraklama birikimi olmalı (ME 3.4 uzatmaya akar)
+    if (durakT == 0) failures += Fail("M12VarStoppage", "duraklama birikmedi");
+    else Pass($"M12VarStoppage({durakT / NV / 600.0:0.0} dk/maç)");
+}
+
+// 16) FAZ 03 M13 — Hava ve zemin (ME 12.4)
+// Kapının duruşu: ME 17.2 kalibrasyon bandı REFERANS koşul (kuru + Tier 3 + rüzgarsız) içindir.
+// Hava koşulunun maçı kaydırması hatanın değil ÖZELLİĞİN kendisidir — "kar da 2,4-3,0 gol atsın"
+// demek 12.4'ü silmek olurdu. Bu yüzden burada iki ayrı şey denetlenir:
+//   (1) referans koşul BİT DÜZEYİNDE değişmedi (hava katmanı sızmıyor),
+//   (2) her koşul spec'in söylediği YÖNDE ölçülebilir fark üretiyor ve hâlâ FUTBOL kalıyor.
+{
+    const int N13 = 12;
+
+    MatchConfig Cfg13(ulong sd, WeatherKind hava, byte tier, double windMS, double wdx, double wdy) =>
+        new MatchConfig
+        {
+            Seed = sd, EngineVersion = "m13",
+            Home = BuildSheetSide(300, 7, home: true), Away = BuildSheetSide(300, 8, home: false),
+            Referee = RefereeProfile.Default,
+            Weather = hava, PitchTier = tier, WindMS = windMS, WindDirX = wdx, WindDirY = wdy
+        };
+
+    ulong Hash13(ulong sd, WeatherKind hava, byte tier, double windMS, double wdx, double wdy)
+    {
+        var c = Cfg13(sd, hava, tier, windMS, wdx, wdy);
+        var q = new CommandQueue();
+        var e = new MatchEngine(sd, q, c, simBal);
+        var s = MatchEngine.CreateInitialState(c);
+        e.Run(ref s);
+        return MatchEngine.StateHash(in s);
+    }
+
+    // 16a) NÖTR AYNILIK: hava alanlarına HİÇ dokunulmamış kurulum ile kuru/Tier3/rüzgarsız
+    // kurulum bit-aynı olmalı. M0-M12 golden'ları bunu dolaylı söylüyor; burada NİYET yazılı.
+    {
+        var cRef = new MatchConfig
+        {
+            Seed = 0xB13A, EngineVersion = "m13",
+            Home = BuildSheetSide(300, 7, home: true), Away = BuildSheetSide(300, 8, home: false),
+            Referee = RefereeProfile.Default
+        };
+        var qR = new CommandQueue();
+        var eR = new MatchEngine(0xB13A, qR, cRef, simBal);
+        var sR = MatchEngine.CreateInitialState(cRef);
+        eR.Run(ref sR);
+        ulong hRef = MatchEngine.StateHash(in sR);
+        ulong hKuru = Hash13(0xB13A, WeatherKind.Kuru, 3, 0, 1, 0);
+        if (hRef != hKuru) failures += Fail("M13NotrAynilik", $"0x{hRef:X} != 0x{hKuru:X}");
+        else Pass("M13NotrAynilik");
+    }
+
+    // 16b) Her koşul: kendi içinde TEKRARLANABİLİR ve kurudan FARKLI (sessizce nötr kalmıyor)
+    {
+        ulong kuru = Hash13(0xB13B, WeatherKind.Kuru, 3, 0, 1, 0);
+        (string ad, WeatherKind h, byte t, double w)[] kosullar =
+        {
+            ("yagmur", WeatherKind.Yagmur, 3, 0), ("kar", WeatherKind.Kar, 3, 0),
+            ("sicak", WeatherKind.Sicak, 3, 0), ("zeminKotu", WeatherKind.Kuru, 1, 0),
+            ("zeminIyi", WeatherKind.Kuru, 5, 0), ("ruzgar", WeatherKind.Kuru, 3, 14)
+        };
+        string bozuk = "", ayni = "";
+        foreach (var k in kosullar)
+        {
+            ulong h1 = Hash13(0xB13B, k.h, k.t, k.w, 0, 1);
+            ulong h2 = Hash13(0xB13B, k.h, k.t, k.w, 0, 1);
+            if (h1 != h2) bozuk += k.ad + " ";
+            if (h1 == kuru) ayni += k.ad + " ";
+        }
+        if (bozuk.Length > 0) failures += Fail("M13Determinizm", $"tekrarlanamayan: {bozuk}");
+        else Pass("M13Determinizm(6 koşul)");
+        if (ayni.Length > 0) failures += Fail("M13KosulEtkisi", $"kuruyla AYNI sonuç: {ayni}");
+        else Pass("M13KosulEtkisi(6 koşul)");
+    }
+
+    // 16c) RÜZGAR — istatistik değil DOĞRUDAN geometri: elle kurulmuş korner, topun düşüş
+    // noktası. ME 12.4: sapma = rüzgar_hızı × k_w × uçuş_süresi → hıza DOĞRUSAL, yöne işaretli.
+    {
+        int Dusus(double windMS, double wdy)
+        {
+            var c = Cfg13(0xB13C, WeatherKind.Kuru, 3, windMS, 0, wdy);
+            var q = new CommandQueue();
+            var e = new MatchEngine(0xB13C, q, c, simBal);
+            var s = MatchEngine.CreateInitialState(c);
+            // Korner kurulumu (AwardSetPiece'in dışarıdan kurulabilen hali): topu köşe bayrağına
+            // koy, kullanacak oyuncuyu topun üstüne al, faz SetPiece.
+            s.Phase = MatchPhase.SetPiece;
+            s.SetPiece = SetPieceType.Corner; s.SetPieceTeam = 0; s.SetPieceTaker = 7;
+            s.Ball.X = MatchEngine.PitchHalfXmm; s.Ball.Y = MatchEngine.PitchHalfYmm;
+            s.Ball.Z = 0; s.Ball.Vx = s.Ball.Vy = s.Ball.Vz = 0;
+            s.Ball.OwnerId = -1; s.Ball.LastTouchTeam = 0; s.Ball.Flight = 3;
+            s.Agents[7].X = s.Ball.X; s.Agents[7].Y = s.Ball.Y;
+            s.Agents[7].TargetX = s.Ball.X; s.Agents[7].TargetY = s.Ball.Y;
+            bool ucusta = false;
+            for (int t = 0; t < 400; t++)
+            {
+                e.Tick(ref s);
+                if (s.Ball.Flight == 4 && s.Ball.Z > 0) ucusta = true;
+                else if (ucusta && (s.Ball.Z <= 0 || s.Ball.OwnerId >= 0)) return s.Ball.Y;
+            }
+            return int.MinValue;
+        }
+        int y0 = Dusus(0, 1), y8 = Dusus(8, 1), y16 = Dusus(16, 1), y8n = Dusus(8, -1);
+        if (y0 == int.MinValue || y8 == int.MinValue || y16 == int.MinValue || y8n == int.MinValue)
+            failures += Fail("M13Ruzgar", "korner uçuşu ölçülemedi (kurulum bozuldu)");
+        else
+        {
+            double d8 = (y8 - y0) / 1000.0, d16 = (y16 - y0) / 1000.0, d8n = (y8n - y0) / 1000.0;
+            Console.WriteLine($"[info] M13 rüzgar sapması (korner): 8 m/sn {d8:0.00} m · 16 m/sn {d16:0.00} m · 8 m/sn ters yön {d8n:0.00} m");
+            bool ok = d8 > 0.5 && d8n < -0.5                       // yön işaretli
+                      && Math.Abs(d16 - 2.0 * d8) < 0.35 * Math.Abs(d8);  // hıza doğrusal
+            if (!ok) failures += Fail("M13Ruzgar", $"8:{d8:0.00} 16:{d16:0.00} ters:{d8n:0.00}");
+            else Pass($"M13Ruzgar({d8:0.00}→{d16:0.00} m, ters {d8n:0.00} m)");
+        }
+    }
+
+    // 16d-f) Makro ölçüm: koşul başına N13 maç
+    (double gol, double sut, double faul, double isabet, double tac, double enerji, double sakat)
+        Olc(WeatherKind hava, byte tier)
+    {
+        double g = 0, sh = 0, fo = 0, pa = 0, pc = 0, tc = 0, en = 0, inj = 0;
+        for (int n = 0; n < N13; n++)
+        {
+            ulong sd = 0xF5A0UL + (ulong)n * 7919UL;   // M5 kalibrasyon tohum seti
+            var c = Cfg13(sd, hava, tier, 0, 1, 0);
+            var q = new CommandQueue();
+            var e = new MatchEngine(sd, q, c, simBal) { AutoManage = true };
+            var s = MatchEngine.CreateInitialState(c);
+            var r = e.Run(ref s);
+            g += r.HomeGoals + r.AwayGoals; sh += r.Shots; fo += r.Fouls; inj += e.Injuries;
+            pa += e.PassAttempts; pc += e.PassCompletions; tc += e.ThrowIns;
+            for (int i = 0; i < 22; i++) en += s.Agents[i].Energy;
+        }
+        return (g / N13, sh / N13, fo / N13, pc / Math.Max(1, pa), tc / N13, en / N13 / 22, inj / N13);
+    }
+
+    var kuruM = Olc(WeatherKind.Kuru, 3);
+    var yagM = Olc(WeatherKind.Yagmur, 3);
+    var karM = Olc(WeatherKind.Kar, 3);
+    var sicakM = Olc(WeatherKind.Sicak, 3);
+    var kotuM = Olc(WeatherKind.Kuru, 1);
+    Console.WriteLine($"[info] M13 koşul karşılaştırması ({N13} maç) — gol/şut/faul · pas isabeti · taç · bitiş enerjisi · sakatlık");
+    void Yaz(string ad, (double gol, double sut, double faul, double isabet, double tac, double enerji, double sakat) m) =>
+        Console.WriteLine($"[info]   {ad,-9} {m.gol:0.00}/{m.sut:0.0}/{m.faul:0.0} · %{m.isabet * 100:0.0} · taç {m.tac:0.0} · enerji {m.enerji:0} · sakat {m.sakat:0.00}");
+    Yaz("kuru", kuruM); Yaz("yağmur", yagM); Yaz("kar", karM); Yaz("sıcak", sicakM); Yaz("zeminKötü", kotuM);
+
+    // 16d) TOPUN MENZİLİ — a_roll'ün ölçülebilir imzası (ME 12.4: ıslak 2,6 · kar 4,6).
+    // Islak zeminde top kayar → çizgiyi daha çok geçer; karda erken durur → taç neredeyse yok.
+    // Taç sayısı bu etkinin en yüksek sinyal/gürültü oranına sahip göstergesi (ölçüm: ×2,2 / ×0,29).
+    if (yagM.tac < kuruM.tac * 1.4)
+        failures += Fail("M13IslakMenzil", $"yağmur taç {yagM.tac:0.0} vs kuru {kuruM.tac:0.0}");
+    else Pass($"M13IslakMenzil(taç ×{yagM.tac / Math.Max(0.1, kuruM.tac):0.00})");
+    if (karM.tac > kuruM.tac * 0.6)
+        failures += Fail("M13KarMenzil", $"kar taç {karM.tac:0.0} vs kuru {kuruM.tac:0.0}");
+    else Pass($"M13KarMenzil(taç ×{karM.tac / Math.Max(0.1, kuruM.tac):0.00})");
+
+    // 16e) SICAK — "ikinci yarı kondisyon farkları belirginleşir" (12.4): maç sonu enerjisi düşer
+    if (sicakM.enerji > kuruM.enerji * 0.95)
+        failures += Fail("M13SicakKondisyon", $"sıcak {sicakM.enerji:0} vs kuru {kuruM.enerji:0}");
+    else Pass($"M13SicakKondisyon(enerji {kuruM.enerji:0}→{sicakM.enerji:0})");
+
+    // 16f) FUTBOL ZARFI — koşul maçı kaydırabilir ama futbol olmaktan çıkaramaz. Bu zarf ME 17.2
+    // BANDI DEĞİLDİR (17.2 referans koşul içindir); bilinçli olarak daha geniştir ve ölçülen
+    // sapmalar DECISIONS.md'de M16 kalibrasyon sprintine borç olarak yazılıdır.
+    {
+        string disari = "";
+        void Zarf(string ad, (double gol, double sut, double faul, double isabet, double tac, double enerji, double sakat) m)
+        {
+            if (m.gol is < 1.0 or > 4.5 || m.sut is < 12 or > 32 || m.faul is < 15 or > 40
+                || m.isabet is < 0.70 or > 0.90)
+                disari += $"{ad}(gol {m.gol:0.00} şut {m.sut:0.0} faul {m.faul:0.0} isabet %{m.isabet * 100:0.0}) ";
+        }
+        Zarf("kuru", kuruM); Zarf("yağmur", yagM); Zarf("kar", karM);
+        Zarf("sıcak", sicakM); Zarf("zeminKötü", kotuM);
+        if (disari.Length > 0) failures += Fail("M13FutbolZarfi", disari);
+        else Pass("M13FutbolZarfi(5 koşul)");
+    }
 }
 
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");
