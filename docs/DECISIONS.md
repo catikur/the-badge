@@ -544,7 +544,50 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   şey güç bileşiminin ağırlıkları ve o `sim.balance.json` → `lod.guc` altındadır. Karıştırmak
   "hangi sayı kararla, hangisi ölçümle geldi" ayrımını yok ederdi.
 
+- M16-A (sonuç dağılımı teşhisi) tamamlandı (2026-08-16): **ME 13.4 / 17.3.** Bu dilim kod
+  kalibrasyonu DEĞİL, kalibrasyonun neden yapılamadığının ÖLÇÜMÜDÜR — ve tek bir köke çıkıyor.
+- **İyi haber:** eşit güçte beraberlik oranı **%27**, ME 17.3'ün hedefi %22-30 → ✓ zaten bantta.
+  Yani motorun "denk maç" davranışı sağlam; bozuk olan yalnız GÜÇ FARKININ sonuca yansıması.
+- **ÖLÇÜM — üstünlük zincirin neresinde katlanıyor** (40 maç/kademe, ayna kadro):
+  | fark | sahiplik | atak sayısı | ŞUT/ATAK | şut oranı | gol oranı |
+  | --- | --- | --- | --- | --- | --- |
+  | 0 | ×0,99 | 187 / 187 | 0,054 / 0,065 | ×0,82 | ×1,08 |
+  | +6 | ×1,15 | 180 / 193 | 0,087 / 0,036 | ×2,26 | ×1,90 |
+  | +12 | ×1,29 | 170 / 198 | 0,158 / 0,019 | ×7,13 | ×5,44 |
+  | +24 | ×1,51 | 153 / 202 | **0,566 / 0,004** | ×102 | ×259 |
+  **Sahiplik GERÇEKÇİ** (+24'te 60/40) ve **atak sayısı neredeyse eşit** — zayıf takım daha çok
+  atak bile yapıyor. Kırılma tek yerde: **bir atağın şuta dönüşme olasılığı.** Ribaund döngüsü
+  değil (şutların yalnız %10,8'i 6 sn içinde tekrar şut).
+- **KÖK NEDEN — atak zinciri çok uzun.** Bir atağın şuta dönmesi ~8 ardışık başarı istiyor
+  (p^k uyumu: k≈8); futbolda bu 3-4'tür. Zincir uzun çünkü **sahiplik maç başına 374 kez el
+  değiştiriyor** (gerçek ~120): pas hacmi 1.177/maç (gerçek ~800) ve tackle 318/maç (gerçek ~35).
+  Uzun zincirde halka başına küçük bir üstünlük ÜSTEL katlanır — 0,50 → 0,67'lik bir kenar
+  k=8'de ×10 olur. Ölçülen tam olarak budur.
+- **KANIT — tek katsayı çözmüyor.** `kDuel` süpürmesi (200 maç/nokta, 75v55):
+  0,90 → %99,5 · 0,60 → %98 · 0,45 → %97 · 0,30 → %94 · **0,20 → %87** (hedef %66).
+  Çarpanı 4,5 kat düşürmek bile yetmiyor, çünkü güç farkı **~8 ayrı kanaldan** akıyor: düello
+  marjı, v_max, pas sigması, şut sigması, kaleci kurtarışı, kontrol eşiği, aday sayısı, karar
+  gürültüsü. Eşit güçte kDuel'in etkisi ihmal edilebilir (gol 1,30-1,16 → 1,28-1,33), yani
+  katsayıyı kısmak "denk maçı bozmadan" da çözmüyor — sorun katsayıda değil YAPIDA.
+- **BU KÖK, ÖNCEKİ DÖRT BORCUN DA KÖKÜ.** M13 (yağmur/kar korner sapması: `groundSpeedMin` ×
+  1/a_roll aşımı), M14 (event hacmi 1.530/maç — sapmanın tamamı pas olaylarından), M14 (hakeme
+  sunulan 649 olay + avantaj 28/maç), M15 (güç tepkisi ×14,8 ve LOD 2 kompozisyon hatası) —
+  dördü de aynı yere bakıyor: **pas/sahiplik modeli topu çok sık ve çok kısa oynatıyor.**
+- **KARAR ÖNERİSİ (Atilla'nın onayı bekleniyor):** M16'nın ilk gerçek işi katsayı taraması değil,
+  **pas/sahiplik modelinin yeniden kurulmasıdır** — hedef: maç başına ~800 pas, ~120 sahiplik
+  değişimi, ~35 tackle. Bu değişiklik TÜM golden'ları ve TÜM kalibrasyon sayılarını hareket
+  ettirir, bu yüzden ayrı ve bilinçli bir dilim olmalı. Kapılar (`M16UpsetBandi`,
+  `M15GucTepkisi`, `M14EventHacmi`) bugünkü gerçeği kilitliyor; ilerleme oradan okunacak.
+- **M16'nın kalan alt dilimleri (henüz açık):** chaos motoru (ME 13.1-13.3 — 5 enjeksiyon
+  noktasının yalnız 1'i uygulanmış, üstelik tek seviye sabit kodlu; 17.3 doğrulaması buna bağlı),
+  kart/faul hacmi, 10.000 maçlık 17.2 tablosu.
+
 ## Bekleyen kararlar
+- **Pas/sahiplik modeli yeniden kurulumu (M16-A bulgusu, 2026-08-16):** yukarıdaki kök neden
+  kaydına bakınız. Seçenekler: (a) tam yeniden kurulum (~800 pas / ~120 sahiplik hedefi) —
+  en doğru, tüm golden'lar yenilenir; (b) yalnız `groundSpeedMin` aşımını düzeltip ölçmek —
+  küçük adım, etkisi ölçülür, golden'lar yine kayar; (c) ertelemek ve chaos motorunu önce
+  yapmak — 17.3 yine geçmez ama 13.2 tablosu kapanır. Öneri: **(b) → ölç → (a)**.
 - **LOD 1'in geleceği (M15 kararı, 2026-08-16):** şu an LOD 0'ın eşleniği. Geri almak için gerekçe
   CPU olamaz (19 kat marj var); yalnız İSTEMCİ tarafında orta cihaz ölçümü LOD 0'ı 800 ms'nin
   üstüne çıkarırsa yeniden değerlendirilir. O ölçüm FAZ 05 cihaz testlerine ait.

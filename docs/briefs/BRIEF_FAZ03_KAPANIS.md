@@ -105,6 +105,27 @@ Bugüne kadar 8-24 maçlık örneklerle çalıştık; spec 10k istiyor. 75v55 up
 beraberlik bandı (%22-30) doğrulaması burada.
 - **Kapı:** 17.2 tablosunun TAMAMI + 17.3 toleransları.
 
+#### M16-A — Sonuç dağılımı teşhisi — ✅ TAMAM (2026-08-16)
+Kalibrasyondan ÖNCE "neden kalibre edilemiyor" ölçüldü.
+- **Eşit güçte beraberlik %27** — ME 17.3 hedefi %22-30 → ✓ zaten bantta. Denk maç sağlam.
+- **75v55: %100 / %0 / %0** (hedef %66/%18/%16). Kök ölçüldü: sahiplik gerçekçi (60/40) ve
+  atak sayısı neredeyse eşit; kırılma tek yerde — **şut/atak 0,566 vs 0,004 (×100)**.
+- Bir atağın şuta dönmesi ~8 ardışık başarı istiyor (futbolda 3-4); zincir uzun çünkü sahiplik
+  maç başına 374 kez el değiştiriyor (gerçek ~120). Uzun zincirde halka başına küçük üstünlük
+  ÜSTEL katlanıyor.
+- **Tek katsayı çözmüyor:** `kDuel` 0,90 → 0,20 (×4,5 azaltma) 75v55'i yalnız %99,5 → %87
+  yapıyor; güç farkı ~8 ayrı kanaldan akıyor.
+- **Bu kök, M13/M14/M15'te ayrı ayrı yazılan dört borcun da kökü** — hepsi pas/sahiplik
+  modelinin topu çok sık ve çok kısa oynatmasına çıkıyor.
+- Kapılar: `M16BeraberlikBandi` (geçiyor) · `M16UpsetBandi` (borç muhafızı).
+
+#### M16-B..D — açık
+- **B:** pas/sahiplik modeli yeniden kurulumu (~800 pas / ~120 sahiplik / ~35 tackle hedefi).
+  Tüm golden'ları ve kalibrasyon sayılarını hareket ettirir → bilinçli, ayrı dilim. **Karar bekliyor.**
+- **C:** chaos motoru (ME 13.1-13.3) — 5 enjeksiyon noktasının yalnız 1'i uygulanmış ve tek
+  seviye sabit kodlu. 17.3 doğrulaması buna bağlı.
+- **D:** 10.000 maçlık 17.2 tablosu + kart/faul hacmi (kırmızı 1,0/maç, avantaj 28/maç).
+
 ### M17 — Golden replay seti (ME 17.4) + FAZ 04 arayüz dondurması (18.3)
 - **Kapı:** replay dörtlüsü (seed + config_hash + komut zaman çizelgesi + sürüm) ile
   bit-eşit yeniden üretim; sim ↔ sunucu/Unity sözleşmesi dondurulur.

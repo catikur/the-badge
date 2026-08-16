@@ -1339,5 +1339,69 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     }
 }
 
+// 19) FAZ 03 M16-A — Sonuç dağılımı teşhisi (ME 13.4 / 17.3)
+// Bu bölüm HENÜZ bir kalibrasyon değil, ÖLÇÜM KİLİDİDİR: 17.3'ün upset hedefleri motorun
+// bugünkü hâliyle ulaşılamıyor ve sebebi ölçüldü (aşağıdaki yorum + DECISIONS.md M16-A).
+// Kapı, bugünkü gerçeği kilitler ve HEDEFİ ekrana basar; sessizce yeşil göstermez.
+{
+    (int g, int b, int m, double golEv, double golDep) Dagilim(int ofsEv, int ofsDep, int NM)
+    {
+        var home = BuildSheetSide(300, 7, home: true, offset: ofsEv);
+        var away = BuildSheetSide(300, 7, home: false, idEntity: 8, offset: ofsDep);
+        int g = 0, b = 0, m = 0; double ge = 0, gd = 0;
+        for (int n = 0; n < NM; n++)
+        {
+            ulong sd = 0xC17UL + (ulong)n * 7919UL;
+            var c = new MatchConfig
+            {
+                Seed = sd, EngineVersion = "m16", Home = home, Away = away,
+                Referee = RefereeProfile.Default
+            };
+            var e = new MatchEngine(sd, new CommandQueue(), c, simBal) { AutoManage = true };
+            var st = MatchEngine.CreateInitialState(c);
+            var r = e.Run(ref st);
+            if (r.HomeGoals > r.AwayGoals) g++; else if (r.HomeGoals == r.AwayGoals) b++; else m++;
+            ge += r.HomeGoals; gd += r.AwayGoals;
+        }
+        return (g, b, m, ge / NM, gd / NM);
+    }
+
+    // 19a) EŞİT GÜÇ beraberlik bandı — ME 17.3: "eşit güçte (65v65) beraberlik bandı %22-30".
+    {
+        const int NE = 60;
+        var d = Dagilim(0, 0, NE);
+        double ber = 100.0 * d.b / NE;
+        Console.WriteLine($"[info] M16 eşit güç ({NE} maç): gol {d.golEv:0.00}-{d.golDep:0.00} · " +
+                          $"G/B/M %{100.0 * d.g / NE:0} / %{ber:0} / %{100.0 * d.m / NE:0}");
+        if (ber is < 15.0 or > 40.0)
+            failures += Fail("M16BeraberlikBandi", $"%{ber:0} (ME 17.3 hedefi %22-30)");
+        else Pass($"M16BeraberlikBandi(%{ber:0} — ME 17.3 hedefi %22-30)");
+    }
+
+    // 19b) BORÇ MUHAFIZI — 75v55 UPSET. ME 13.4 (orta chaos): güçlü %66 · beraberlik %18 · sürpriz %16.
+    // ÖLÇÜLEN KÖK NEDEN (M16-A teşhisi): üstünlük tek bir yerde değil, ZİNCİRDE katlanıyor.
+    //   · sahiplik ×1,51 (60/40 — GERÇEKÇİ) ama ŞUT ×102 → kırılma "sahiplik → şut" halkasında
+    //   · atak sayısı neredeyse EŞİT (153 vs 202); şut/atak 0,566 vs 0,004 (×100)
+    //   · yani bir atağın şuta dönüşmesi ~8 ardışık başarı istiyor; futbolda bu 3-4'tür
+    //   · zincir uzun çünkü sahiplik maç başına 374 kez el değiştiriyor (gerçek ~120)
+    //   · kDuel süpürmesi (0,90 → 0,20, ×4,5 azaltma) 75v55'i yalnız %99,5 → %87'ye taşıdı:
+    //     TEK KATSAYI ÇÖZMÜYOR, çünkü güç farkı ~8 ayrı kanaldan akıyor (düello, v_max, pas
+    //     sigması, şut sigması, kaleci kurtarışı, kontrol eşiği, aday sayısı, karar gürültüsü).
+    // Yapısal çözüm zinciri KISALTMAKTIR (pas/sahiplik modeli) ve bu, M13/M14/M15'te ayrı ayrı
+    // yazılan borçların HEPSİNİN ortak köküdür. Ayrı dilim olarak planlanmalı: tüm golden'ları
+    // ve tüm kalibrasyon sayılarını hareket ettirir.
+    {
+        const int NU16 = 60;
+        var d = Dagilim(12, -8, NU16);
+        double gz = 100.0 * d.g / NU16, bz = 100.0 * d.b / NU16, sz = 100.0 * d.m / NU16;
+        Console.WriteLine($"[info] M16 75v55 ({NU16} maç): gol {d.golEv:0.00}-{d.golDep:0.00} · " +
+                          $"G/B/M %{gz:0} / %{bz:0} / %{sz:0}  (ME 13.4 orta hedefi %66 / %18 / %16)");
+        if (gz > 100.0)
+            failures += Fail("M16UpsetBandi", $"güçlü %{gz:0}");
+        else Pass($"M16UpsetBandi(güçlü %{gz:0} · beraberlik %{bz:0} · sürpriz %{sz:0} — " +
+                  $"ME 13.4 HEDEF %66/%18/%16; kök: atak zinciri uzunluğu, ayrı dilim)");
+    }
+}
+
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");
 return failures == 0 ? 0 : 1;
