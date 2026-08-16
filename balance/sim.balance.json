@@ -32,6 +32,7 @@
     "kaleciElCarpani": 2.5,
     "yenidenAlmaTicks": 4,
     "tackleCooldownTicks": 40,
+    "tackleDenemeAralikTicks": 40,
     "tackleLooseHizMS": 5.0,
     "driblinYaricapM": 3.0
   },

@@ -60,6 +60,11 @@ namespace TheBadge.Sim.Match
         public int Fouls, Advantages, Yellows, Reds, Corners, GoalKicks, ThrowIns, Penalties, FreeKicks, Blocks, Offsides;
         public int Injuries, ThroughPasses;
         public int RedsDirect, RedsSecondYellow, FoulIncidents;  // teşhis (M14 bant denetimi)
+        public int TackleAttempts;    // yerdeki müdahale DENEMESİ (başarı + başarısızlık) — M16-C teşhisi
+        // Sahiplik değişimi AYRIŞIMI (hash dışı teşhis): değişim sayısı tek başına nedeni gizliyordu.
+        // Topu açığa çıkaran SON olay sınıflandırılır; rakip claim'inde ilgili sayaç artar.
+        public int PossChangeTackle, PossChangeIntercept, PossChangeLoose, PossChangeDead;
+        byte looseReason;             // 0 diğer · 1 tackle · 2 pas uçuşu · 3 şut/blok artığı
         public double XgHome, XgAway; // xG KAYIT gerçeği (ME 15.2) — sonuç üretimine girmez
         // Pas SONUÇ sınıflandırması (hash dışı teşhis): "isabet" tek sayı olarak nedeni gizliyordu.
         public int PassSelfReclaim;   // pasçı kendi pasını geri aldı — TAMAMLANMIŞ SAYILMAZ
@@ -137,6 +142,12 @@ namespace TheBadge.Sim.Match
         /// 1214 pasın 669'unu pasçı geri alıyor, 543'ünü rakip topluyor, takım arkadaşına
         /// ulaşan pas sayısı SIFIR. Raporlanan "%55 isabet" tümüyle bu geri almaydı.</summary>
         readonly uint[] reclaimUntil = new uint[22];
+        /// <summary>Tackle DENEME aralığı kapısı — karar kilidinden (ActionUntilTick) AYRI tutulur
+        /// (M16-C): aralığı tek başına ayarlayabilmek için. `tackleDenemeAralikTicks == 
+        /// tackleCooldownTicks` iken davranış eskisiyle BİREBİR aynıdır (iki kapı da aynı tick'te
+        /// açılır) — M0-M15 golden'ları bunu kanıtlar. Replay-resume serileştirmesi M-replay
+        /// borcunda (reclaimUntil/gecisUntil ile birlikte).</summary>
+        readonly uint[] tackleReadyUntil = new uint[22];
         /// <summary>GEÇİŞ penceresi (ME 7.4 ruhu): topu KAPTIRAN takım savunma şekline anında
         /// ışınlanamaz — ileride kalan oyuncular geri dönmek için zamana ihtiyaç duyar. Kontra
         /// atağın doğduğu yer burasıdır ve hücuma çıkmanın BEDELİ budur: ne kadar ileri
@@ -644,6 +655,7 @@ namespace TheBadge.Sim.Match
                         // Adam geçilemedi: top savunucuya döner (temiz müdahale)
                         Tackles++;
                         EmitAtBall(ref st, EventType.TackleWon, marker, i, st.Agents[marker].TeamIdx);
+                        looseReason = 1;   // sahiplik ayrışımı: müdahale kaynaklı
                         st.Ball.OwnerId = -1;
                         st.Ball.LastTouchTeam = st.Agents[marker].TeamIdx; lastToucher = (short)marker;
                         if (pendingPassTeam >= 0) PassLostDead++;
@@ -710,8 +722,7 @@ namespace TheBadge.Sim.Match
             pendingPassTeam = a.TeamIdx;
             pendingPasser = (short)i;
             pendingTarget = (short)j;
-            pendingPasser = (short)i;
-            pendingTarget = (short)j;
+            looseReason = 2;   // sahiplik ayrışımı: top pas uçuşunda
             // Ofsayt üretimi — ME 10.5: pas ANINDA alıcının konumu son savunucu çizgisiyle
             // karşılaştırılır; ihlal alıcı topa dokununca düdükle biter (VAR marjı 11.4'te)
             int oline = OffsideLineX(ref st, a.TeamIdx);
@@ -1316,6 +1327,7 @@ namespace TheBadge.Sim.Match
                 {
                     ref var d = ref st.Agents[i];
                     if (!d.Active || d.TeamIdx == c.TeamIdx || st.Tick < d.ActionUntilTick) continue;
+                    if (st.Tick < tackleReadyUntil[i]) continue;   // deneme aralığı kapısı (M16-C)
                     long dx = d.X - c.X, dy = d.Y - c.Y;
                     if (dx * dx + dy * dy > r2) continue;
                     // Yalnız EN YAKIN savunucu dalar; diğerleri jokeyler (ME 7.6 pres tetiği ruhu).
@@ -1325,6 +1337,8 @@ namespace TheBadge.Sim.Match
                     double atk = Composite(i, 0.6, attrs[i].Tackling, 0.25, attrs[i].Positioning, 0.15, attrs[i].Strength);
                     double def = Composite(st.Ball.OwnerId, 0.5, attrs[st.Ball.OwnerId].Dribbling, 0.3, attrs[st.Ball.OwnerId].Agility, 0.2, attrs[st.Ball.OwnerId].Strength);
                     d.ActionUntilTick = st.Tick + (uint)bal.possession.tackleCooldownTicks;
+                    tackleReadyUntil[i] = st.Tick + (uint)bal.possession.tackleDenemeAralikTicks;
+                    TackleAttempts++;
                     // Zar gerekçesi: top kapma düellosu — DUEL domain (ME 6.3-6.4).
                     // P_taban düello TİPİNE göre değişir (ME 6.3: 0,42-0,55 bandı "tipe göre");
                     // top kapma tabanı ayrı [KALİBRE] anahtardır — varsayılanla oynandığında
@@ -1332,6 +1346,8 @@ namespace TheBadge.Sim.Match
                     if (DuelWin(atk, def, (uint)(300 + i), st.Tick, 32, bal.duel.pTabanTackle))
                     {
                         Tackles++;
+                        EmitAtBall(ref st, EventType.TackleWon, i, st.Ball.OwnerId, d.TeamIdx);
+                        looseReason = 1;   // sahiplik ayrışımı: tackle kaynaklı açık top
                         st.Ball.OwnerId = -1;
                         st.Ball.LastTouchTeam = d.TeamIdx; lastToucher = (short)i;
                         // Kendi kutusunda kazanılan top: savunan çoğu zaman TEMİZLER, gerekirse
@@ -1965,7 +1981,11 @@ namespace TheBadge.Sim.Match
             if (st.Ball.LastTouchTeam != 2 && st.Ball.LastTouchTeam != a.TeamIdx)
             {
                 PossessionChanges++;
+                if (looseReason == 1) PossChangeTackle++;
+                else if (looseReason == 2) PossChangeIntercept++;
+                else PossChangeLoose++;
                 Possessions[a.TeamIdx]++;
+                looseReason = 0;   // ayrışım nedeni tüketildi (sıra: SINIFLANDIRMADAN sonra)
                 AssignMarking(ref st, defendingTeam: st.Ball.LastTouchTeam); // ME 7.5: geçiş anında
                 // Kaptıran takım için geçiş penceresi: mentalite ileri gittikçe uzar
                 {
@@ -2530,6 +2550,7 @@ namespace TheBadge.Sim.Match
                 ? MatchPhase.SetPiece : MatchPhase.DeadBall;
             if (pendingPassTeam >= 0) PassLostDead++;
             ClearPending();
+            looseReason = 0;
             st.StoppageTicks += (uint)bal.setpiece.hazirlikTicks;
 
             int taker = PickTaker(ref st, type, forTeam);

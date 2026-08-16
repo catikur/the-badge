@@ -130,12 +130,26 @@ Kalibrasyondan ÖNCE "neden kalibre edilemiyor" ölçüldü.
   var, bizde 260-415 — model **~10 kat fazla tetikleniyor.** Sıradaki deneme burasıdır.
 - Yama saklandı: `scratchpad/M16B_pas_varis_hizi.patch`. Ölçüm tablosu DECISIONS.md'de.
 
-#### M16-C..E — açık
-- **C (sıradaki):** tackle tetikleme modeli — yarıçap, soğuma, "yalnız en yakın savunucu dalar"
-  kuralının gerçek tetiklenme sıklığı. Hedef ~35 tackle / ~120 sahiplik değişimi.
-- **D:** chaos motoru (ME 13.1-13.3) — 5 enjeksiyon noktasının yalnız 1'i uygulanmış ve tek
+#### M16-C — Tackle tetikleme ölçümü — ✅ TAMAM (2026-08-16)
+Enstrüman (davranış-nötr: deneme aralığı karar kilidinden ayrıldı, ayrışım sayaçları, golden'lar
+korundu) + süpürme + karar.
+- **Ayrışım:** sahiplik değişimi 341 = tackle 165 + **pas kesme 167** + serbest 10. Zincir iki
+  eşit motorla dönüyor; M16-A'nın "sürücü tackle" okuması yarım doğruymuş.
+- **Süpürme:** deneme 873→431, tackle kaynaklı değişim 193→74 — AMA kesme kanalı sabit (~185
+  taban), toplam yalnız 379→278 ve **75v55 yerinden oynamadı (%99,2→%96,7)**. Varsayılanlar
+  değişmedi; katsayı ancak M16-E tam kalibrasyonuyla anlamlı.
+- **Asıl sonuç:** eksik mekanizmanın spec'te adı var — ME 7.2 **LongSwitch/ClearBall** + ME 9.4
+  kaleci **UzunDegaj/ElleAt** motorda YOK (M10'daki "orta" durumunun aynısı). Zayıf takımın
+  zinciri kısaltma yolu bunlar → M16-D uygular, upset ondan sonra yeniden ölçülür.
+
+#### M16-D..E — açık
+- **D (sıradaki):** ME 7.2/9.4 eksik aday aksiyonları — LongSwitch, ClearBall, kaleci dağıtım
+  seti (KısaAçıl/UzunDegaj/ElleAt). Kapı: uygulandıktan sonra 75v55 yeniden ölçülür; hedef
+  yönlü iyileşme + bantların korunması.
+- **D2:** chaos motoru (ME 13.1-13.3) — 5 enjeksiyon noktasının yalnız 1'i uygulanmış ve tek
   seviye sabit kodlu. 17.3 doğrulaması buna bağlı.
-- **E:** 10.000 maçlık 17.2 tablosu + kart/faul hacmi (kırmızı 1,0/maç, avantaj 28/maç).
+- **E:** 10.000 maçlık 17.2 tablosu + kart/faul hacmi (kırmızı 1,0/maç, avantaj 28/maç; kart
+  üretiminin kadro-farkı bağımlılığı → kalibrasyon setinin kadro dağılımı tanımlanmalı).
 
 ### M17 — Golden replay seti (ME 17.4) + FAZ 04 arayüz dondurması (18.3)
 - **Kapı:** replay dörtlüsü (seed + config_hash + komut zaman çizelgesi + sürüm) ile

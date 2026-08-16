@@ -335,6 +335,11 @@ namespace TheBadge.Sim.Config
             public double kaleciElCarpani;     // kalecinin Handling ile açtığı eşik çarpanı (ME 9.4)   // temiz kontrol için bağıl hız eşiği (m/sn, ME 6.4)
             public int yenidenAlmaTicks;       // topu oynayanın geri alma kilidi (tick, ME 4.3)
             public int tackleCooldownTicks;    // müdahale sonrası aksiyon kilidi
+            /// <summary>Aynı savunucunun iki tackle DENEMESİ arasındaki asgari süre (tick) —
+            /// M16-C enstrümanı. Karar kilidinden (tackleCooldownTicks → ActionUntilTick) ayrı
+            /// tutulur ki deneme SIKLIĞI tek başına ayarlanabilsin; iki değer eşitken davranış
+            /// eski modelle birebir aynıdır (M0-M15 golden'ları kanıt).</summary>
+            public int tackleDenemeAralikTicks;
             public double tackleLooseHizMS;    // kazanılan top bu hızla açığa çıkar
         }
 

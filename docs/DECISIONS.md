@@ -613,6 +613,33 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   yama saklandı ve bulgu kaydedildi; ikisinde de kod REDDEDİLDİ çünkü ölçüm hipotezi doğrulamadı.
   Negatif sonuç da sonuçtur — bir sonraki denemeyi doğru yere yönlendirir.
 
+- M16-C (tackle tetikleme ölçümü) tamamlandı (2026-08-16): **enstrüman + süpürme + karar.**
+- **Enstrüman (davranış-nötr, golden'lar korundu):** tackle DENEME aralığı karar kilidinden ayrıldı
+  (`possession.tackleDenemeAralikTicks` [KALİBRE], varsayılan 40 = eski davranışla birebir);
+  `TackleAttempts` sayacı; sahiplik değişimi AYRIŞIMI (`PossChangeTackle/Intercept/Loose` —
+  topu açığa çıkaran son olaya göre); `TackleWon` olayı artık iki müdahale yolunda da yazılıyor
+  (M14 kapsama boşluğuydu). `M16AyrisimMuhasebesi` kapısı iç tutarlılığı denetliyor.
+- **Ölçüm — ayrışım (varsayılan ayarlarla, Checks kadrosu):** sahiplik değişimi 341 =
+  **tackle 165 + pas kesme 167 + serbest 10**; deneme 904 → başarı 305. Yani zincir iki eşit
+  motorla dönüyor: müdahale VE kesme. M16-A'daki "374'ün sürücüsü tackle" okuması YARIM doğruymuş.
+- **Süpürme (aralık × taban, 120 maç/nokta, ayna kadro):** aralık 40→480 + p 0,30→0,18 denemeleri
+  873→431'e, tackle kaynaklı değişimi 193→74'e indirdi. AMA: (a) kesme kanalı sabit kaldı
+  (~173-190 — taban budur, tackle ayarına cevap vermez); (b) toplam değişim yalnız 379→278;
+  (c) **75v55 yerinden oynamadı: %99,2 → %96,7.** Faul 12,9→8,0'a düştü (bant dışına), sarı zaten
+  0,5-0,7 (ayna kadroda kart, marj farkı olmadığı için üretilmiyor — kart bandının kadro
+  dağılımına bağımlılığı ayrıca not edildi, M16-E kalibrasyon setinin tanımına girecek).
+- **KARAR: varsayılanlar DEĞİŞMEDİ.** Tackle ayarları kendi hedefini (hacim) taşıyor ama upset'i
+  taşımıyor ve bantları tek başına bozuyor; katsayı değişikliği ancak M16-E tam kalibrasyonuyla
+  birlikte anlam kazanır. Enstrüman repo'da kaldı — M16-D/E onunla yön bulacak.
+- **ASIL SONUÇ — eksik mekanizmanın spec'te ADI VAR.** İki teşhis üst üste bindi: zayıf takımın
+  atağı şuta dönemiyor (M16-A: şut/atak ×100) ve zincirin tabanı kesme kanalı (M16-C). Gerçek
+  futbolda zayıf takım bu zinciri KISALTARAK yaşar: uzun top, degaj, kontra — 1-2 halkada hücum
+  sahasına. ME 7.2'nin aday kümesinde **LongSwitch(r)** ve **ClearBall** var; ME 9.4'te kaleci
+  dağıtımı **KısaAçıl / UzunDegaj / ElleAt** var. ÜÇÜ DE MOTORDA YOK — M10'daki "orta spec'te
+  vardı, motorda yoktu" durumunun birebir aynısı. **M16-D bu adayları uygular**; upset yeniden
+  ondan sonra ölçülür. (Kaleci M11'de pas adaylarından çıkarılmıştı; 9.4 dağıtım seti gelince
+  kaleci "pas alan" değil "dağıtan" olarak geri döner — geri paslar sorunu geri gelmez.)
+
 ## Bekleyen kararlar
 - **LOD 1'in geleceği (M15 kararı, 2026-08-16):** şu an LOD 0'ın eşleniği. Geri almak için gerekçe
   CPU olamaz (19 kat marj var); yalnız İSTEMCİ tarafında orta cihaz ölçümü LOD 0'ı 800 ms'nin

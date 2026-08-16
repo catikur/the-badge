@@ -1403,5 +1403,32 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     }
 }
 
+// 20) FAZ 03 M16-C — Sahiplik ayrışımı muhasebesi + tackle enstrümanı
+// Enstrüman davranış-NÖTR olmalı (tackleDenemeAralikTicks == tackleCooldownTicks iken eski
+// modelle birebir aynı — M0-M15 golden'ları bunu zaten kanıtlıyor). Burada ayrışım SAYAÇLARININ
+// iç tutarlılığı denetlenir: toplam, parçaların toplamına eşit değilse teşhis aleti yalan söylüyor
+// demektir ve M16-D o aletle yön bulacak.
+{
+    double poch = 0, pTak = 0, pInt = 0, pLoose = 0, dnm = 0, tak = 0;
+    bool tutarli = true;
+    for (int n = 0; n < 4; n++)
+    {
+        ulong sd = 0xF5A0UL + (ulong)n * 7919UL;
+        var (e, s, _) = NewMatch(sd);
+        e.Run(ref s);
+        poch += e.PossessionChanges; pTak += e.PossChangeTackle;
+        pInt += e.PossChangeIntercept; pLoose += e.PossChangeLoose;
+        dnm += e.TackleAttempts; tak += e.Tackles;
+        if (e.PossChangeTackle + e.PossChangeIntercept + e.PossChangeLoose != e.PossessionChanges)
+            tutarli = false;
+        if (e.TackleAttempts < e.Tackles) tutarli = false;   // deneme ≥ başarı olmalı
+    }
+    Console.WriteLine($"[info] M16-C ayrışım (4 maç ort.): sahiplik değişimi {poch / 4:0} = " +
+                      $"tackle {pTak / 4:0} + pas kesme {pInt / 4:0} + serbest {pLoose / 4:0} · " +
+                      $"deneme {dnm / 4:0} → başarı {tak / 4:0}");
+    if (!tutarli) failures += Fail("M16AyrisimMuhasebesi", "parçalar toplamı tutmuyor");
+    else Pass("M16AyrisimMuhasebesi");
+}
+
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");
 return failures == 0 ? 0 : 1;
