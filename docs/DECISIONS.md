@@ -582,12 +582,38 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   noktasının yalnız 1'i uygulanmış, üstelik tek seviye sabit kodlu; 17.3 doğrulaması buna bağlı),
   kart/faul hacmi, 10.000 maçlık 17.2 tablosu.
 
+- M16-B (pas aşımı düzeltmesi) **DENENDİ ve GERİ ALINDI** (2026-08-16, Atilla'nın "önce küçük
+  adım" kararıyla). Yama saklandı: `scratchpad/M16B_pas_varis_hizi.patch`.
+- **Ne denendi:** `PassSpeed`'in "hedefte DUR" + `groundSpeedMin` (12 m/sn) taban kırpması yerine
+  fizikten türetilen varış hızı modeli: v0² = v_varış² + 2·a·d. Bu biçimde aşım mesafesi SABİT
+  olur (v_varış²/2a) ve 21,8 m'den kısa her pası 21,8 m'ye fırlatan taban ortadan kalkar.
+- **Ölçüm — `varisHiziMS` süpürmesi (120 maç/nokta, ayna kadro):**
+  | v_varış | gol (eşit) | şut | korner | pas isabeti | SAHİPLİK DEĞİŞİMİ | tackle | 75v55 G/B/M |
+  | --- | --- | --- | --- | --- | --- | --- | --- |
+  | 5 | 1,06 | 20,3 | 3,4 | %78,6 | 482 | 415 | %97,5 / %2,5 / %0 |
+  | 7 | 0,93 | 18,6 | 3,6 | %83,0 | 396 | 376 | %96,7 / %3,3 / %0 |
+  | 9 | 1,65 | 21,1 | 5,1 | %83,7 | 342 | 333 | %97,5 / %2,5 / %0 |
+  | 11 | 3,09 | 22,1 | 9,0 | %81,3 | 331 | 298 | %99,2 / %0,8 / %0 |
+  | 13 | 6,21 | 26,3 | 20,7 | %73,1 | 345 | 260 | %100 / %0 / %0 |
+  (eski model: gol 2,25 · şut 19,6 · korner 8,2 · isabet %82,9 · sahiplik değişimi 360 · tackle 318)
+- **SONUÇ: hipotez YANLIŞ çıktı.** Aşımı tamamen kaldırmak sahiplik değişimini 360 → **331'in
+  altına indiremedi** (hedef ~120) ve **75v55 hiç kıpırdamadı** (%97-100, hedef %66). Yani pas
+  aşımı, zincir uzunluğunun ana sürücüsü DEĞİLMİŞ. Ayrıca hiçbir v_varış değeri ME 17.2 bandını
+  korumuyor: 11'de gol/korner tutuyor ama sahiplik kazancı ihmal edilebilir, 5-9'da gol çöküyor.
+  Ölçülebilir kazanç olmadan tüm golden'ları yeniden pinlemek bedelsiz değil → geri alındı.
+- **DÜZELTİLMİŞ KÖK NEDEN — tackle sıklığı.** Süpürme asıl sürücüyü gösterdi: her v_varış
+  değerinde **tackle sayısı ≈ sahiplik değişimi sayısı** (333 ≈ 342, 298 ≈ 331, 260 ≈ 345).
+  Yani sahiplik neredeyse HER SEFERİNDE bir tackle ile el değiştiriyor. Gerçek futbolda maç
+  başına ~35 tackle ve ~120 sahiplik değişimi vardır; bizde **tackle 260-415**, yani model ~10 kat
+  fazla tetikleniyor. Zincir uzunluğunu belirleyen budur — ve M14'ün "hakeme sunulan 649 olay"
+  bulgusu da aynı yere bakıyordu. **M16'nın bir sonraki denemesi tackle tetikleme modelidir**
+  (yarıçap, soğuma, "yalnız en yakın savunucu dalar" kuralının gerçekten ne sıklıkla tetiklendiği),
+  pas modeli değil.
+- **Yöntem notu:** bu, M8'den sonra ikinci "denendi, ölçüldü, reddedildi" dilimidir. İkisinde de
+  yama saklandı ve bulgu kaydedildi; ikisinde de kod REDDEDİLDİ çünkü ölçüm hipotezi doğrulamadı.
+  Negatif sonuç da sonuçtur — bir sonraki denemeyi doğru yere yönlendirir.
+
 ## Bekleyen kararlar
-- **Pas/sahiplik modeli yeniden kurulumu (M16-A bulgusu, 2026-08-16):** yukarıdaki kök neden
-  kaydına bakınız. Seçenekler: (a) tam yeniden kurulum (~800 pas / ~120 sahiplik hedefi) —
-  en doğru, tüm golden'lar yenilenir; (b) yalnız `groundSpeedMin` aşımını düzeltip ölçmek —
-  küçük adım, etkisi ölçülür, golden'lar yine kayar; (c) ertelemek ve chaos motorunu önce
-  yapmak — 17.3 yine geçmez ama 13.2 tablosu kapanır. Öneri: **(b) → ölç → (a)**.
 - **LOD 1'in geleceği (M15 kararı, 2026-08-16):** şu an LOD 0'ın eşleniği. Geri almak için gerekçe
   CPU olamaz (19 kat marj var); yalnız İSTEMCİ tarafında orta cihaz ölçümü LOD 0'ı 800 ms'nin
   üstüne çıkarırsa yeniden değerlendirilir. O ölçüm FAZ 05 cihaz testlerine ait.

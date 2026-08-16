@@ -119,12 +119,23 @@ Kalibrasyondan ÖNCE "neden kalibre edilemiyor" ölçüldü.
   modelinin topu çok sık ve çok kısa oynatmasına çıkıyor.
 - Kapılar: `M16BeraberlikBandi` (geçiyor) · `M16UpsetBandi` (borç muhafızı).
 
-#### M16-B..D — açık
-- **B:** pas/sahiplik modeli yeniden kurulumu (~800 pas / ~120 sahiplik / ~35 tackle hedefi).
-  Tüm golden'ları ve kalibrasyon sayılarını hareket ettirir → bilinçli, ayrı dilim. **Karar bekliyor.**
-- **C:** chaos motoru (ME 13.1-13.3) — 5 enjeksiyon noktasının yalnız 1'i uygulanmış ve tek
+#### M16-B — Pas aşımı düzeltmesi — ⛔ DENENDİ, ÖLÇÜLDÜ, GERİ ALINDI (2026-08-16)
+`groundSpeedMin` taban kırpması yerine fizikten türetilen varış hızı modeli denendi
+(v0² = v_varış² + 2·a·d → aşım mesafesi sabit).
+- **Hipotez yanlış çıktı:** aşımı tamamen kaldırmak sahiplik değişimini 360 → 331'in altına
+  indiremedi (hedef ~120) ve **75v55 hiç kıpırdamadı** (%97-100). Hiçbir v_varış değeri de
+  ME 17.2 bandını korumuyor. Ölçülebilir kazanç olmadan golden'lar yeniden pinlenmez → geri alındı.
+- **Düzeltilmiş kök:** her v_varış değerinde **tackle ≈ sahiplik değişimi** (333≈342, 298≈331).
+  Sahiplik neredeyse her seferinde bir tackle ile el değiştiriyor; gerçekte maç başına ~35 tackle
+  var, bizde 260-415 — model **~10 kat fazla tetikleniyor.** Sıradaki deneme burasıdır.
+- Yama saklandı: `scratchpad/M16B_pas_varis_hizi.patch`. Ölçüm tablosu DECISIONS.md'de.
+
+#### M16-C..E — açık
+- **C (sıradaki):** tackle tetikleme modeli — yarıçap, soğuma, "yalnız en yakın savunucu dalar"
+  kuralının gerçek tetiklenme sıklığı. Hedef ~35 tackle / ~120 sahiplik değişimi.
+- **D:** chaos motoru (ME 13.1-13.3) — 5 enjeksiyon noktasının yalnız 1'i uygulanmış ve tek
   seviye sabit kodlu. 17.3 doğrulaması buna bağlı.
-- **D:** 10.000 maçlık 17.2 tablosu + kart/faul hacmi (kırmızı 1,0/maç, avantaj 28/maç).
+- **E:** 10.000 maçlık 17.2 tablosu + kart/faul hacmi (kırmızı 1,0/maç, avantaj 28/maç).
 
 ### M17 — Golden replay seti (ME 17.4) + FAZ 04 arayüz dondurması (18.3)
 - **Kapı:** replay dörtlüsü (seed + config_hash + komut zaman çizelgesi + sürüm) ile
