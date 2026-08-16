@@ -292,6 +292,14 @@
       "lod0": 2.5,
       "lod1": 0.8,
       "lod2": 0.01
+    },
+    "guc": {
+      "kaleciPayi": 0.15,
+      "kaleci": { "reflexes": 0.35, "handling": 0.25, "oneOnOne": 0.2, "aerialCommand": 0.2 },
+      "sahaOyuncusu": {
+        "passing": 0.2, "finishing": 0.15, "tackling": 0.15, "pace": 0.1,
+        "positioning": 0.1, "decisions": 0.1, "firstTouch": 0.1, "strength": 0.1
+      }
     }
   },
   "highlight": {

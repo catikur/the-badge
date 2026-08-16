@@ -38,6 +38,36 @@ namespace TheBadge.Sim.Config
         /// <summary>Highlight puanlama — ME Spec 15.3 [KALİBRE].</summary>
         public HighlightCfg highlight = new HighlightCfg();
 
+        /// <summary>LOD bütçeleri + LOD 2 güç bileşimi — ME Spec 16.1 [KALİBRE].
+        /// Regresyon KATSAYILARI burada DEĞİL, üretilmiş `balance/sim.lod2.json` dosyasındadır.</summary>
+        public LodCfg lod = new LodCfg();
+
+        [System.Serializable]
+        public sealed class LodCfg
+        {
+            public BudgetCfg cpuBudgetSn = new BudgetCfg();
+            public GucCfg guc = new GucCfg();
+
+            [System.Serializable]
+            public sealed class BudgetCfg { public double lod0, lod1, lod2; }
+
+            /// <summary>Takım gücü bileşimi (LOD 2 girdisi). Kaleci ayrı bileşen: nitelik seti
+            /// saha oyuncusuyla ortak değildir.</summary>
+            [System.Serializable]
+            public sealed class GucCfg
+            {
+                public double kaleciPayi;
+                public KaleciCfg kaleci = new KaleciCfg();
+                public SahaCfg sahaOyuncusu = new SahaCfg();
+
+                [System.Serializable]
+                public sealed class KaleciCfg { public double reflexes, handling, oneOnOne, aerialCommand; }
+                [System.Serializable]
+                public sealed class SahaCfg
+                { public double passing, finishing, tackling, pace, positioning, decisions, firstTouch, strength; }
+            }
+        }
+
         [System.Serializable]
         public sealed class HighlightCfg
         {

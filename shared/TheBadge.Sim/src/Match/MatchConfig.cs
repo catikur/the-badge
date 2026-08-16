@@ -33,6 +33,10 @@ namespace TheBadge.Sim.Match
         public byte PitchTier = 3;        // 1-2 kötü · 3 nötr · 4-5 iyi
         public double WindMS;             // rüzgar hızı (m/sn)
         public double WindDirX = 1, WindDirY;  // rüzgar yön birim vektörü
+
+        // M15 — detay seviyesi (ME 16.1). Online maçlar ZORUNLU olarak Lod0'dır (16.3 replay
+        // + highlight sözleşmesi); Lod2 yalnız arka plan dünya simülasyonunda kullanılır.
+        public LodLevel Lod = LodLevel.Lod0;
     }
 
     /// <summary>Maç sonucu — headless koşunun çıktısı (ME Spec 5.1 IMatchEngine.Run).

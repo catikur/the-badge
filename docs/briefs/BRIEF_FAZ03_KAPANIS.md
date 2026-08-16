@@ -86,9 +86,19 @@ LLM ve Panorama'nın girdisi; FAZ 04'ün beslendiği yer.
 - **M12'nin 2 VAR sınıfı hâlâ açık:** engel event log değilmiş — ikisi de "gol verilir, sonra
   incelenir, geri alınır" akışını istiyor; motorda askıda gol durumu yok. Ayrı dilim önerilir.
 
-### M15 — LOD 1-2 türetme (ME 16.1) + sunucu throughput (16.3)
+### M15 — LOD 1-2 türetme (ME 16.1) + sunucu throughput (16.3) — ✅ TAMAM (2026-08-16)
 Ligdeki tüm maçların aynı anda koşabilmesi buna bağlı.
-- **Kapı:** LOD 1/2 sonuç dağılımı LOD 0 ile istatistiksel uyum + CPU bütçesi (16.4).
+- **Kapı:** ~~LOD 1/2~~ LOD 2 sonuç dağılımı LOD 0 ile istatistiksel uyum + CPU bütçesi (16.4). ✓
+- **Ölçüm önce:** LOD 0 **131 ms/maç** — 16.1 bütçesinin (2.500 ms) **19 katı altında**;
+  24 çekirdekli düğüm ~185 maç/sn (16.3 hedefi 16,7). 16.3'ün "2 düğüm zirvede" hesabı
+  2,5 sn/maç varsayımına dayanıyordu.
+- **LOD 1 → LOD 0'ın eşleniği yapıldı** (karar, DECISIONS.md): tek gerekçesi CPU'ydu ve o gerekçe
+  ölçümle düştü. `M15Lod1Esdeger` kapısı bit-aynılığı doğruluyor.
+- **LOD 2 ızgara tablosu** (kendi güç × rakip güç, iki doğrusal ara değerleme) — 3 µs/maç,
+  5 güç kademesinde LOD 0 ile ±%25 uyum. Üretici: `-- fit-lod2` (ME 16.1 CI adımı).
+- **Bu dilimin en ağır çıktısı bir BULGU:** motorun güç tepkisi aşırı dik — 75,6'lık takım
+  39,6'lık takımı 28-0,1 yeniyor (gerçek ~3-0). Köşegen (eşit güç) bantta. ME 17.3 chaos upset
+  doğrulaması bu eğrinin üstünde durur → **M16'nın asıl işi**, artık sayısıyla birlikte.
 
 ### M16 — 10.000 maç kalibrasyon + chaos upset (ME 17.2/17.3)
 Bugüne kadar 8-24 maçlık örneklerle çalıştık; spec 10k istiyor. 75v55 upset ve 65v65

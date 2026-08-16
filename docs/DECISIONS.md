@@ -495,7 +495,59 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
 - **M16 BORCU (yeni):** event hacmi 1.530/maç, ME 15.1 hedefi 900-1.400. Sapmanın tamamı pas
   olaylarından (1.145/maç) geliyor — M13'te yazılan `groundSpeedMin` aşımıyla AYNI kök.
 
+- M15 (LOD türetme + performans bütçeleri) uygulandı (2026-08-16): **ME 16.1/16.3/16.4.**
+- **ÖLÇÜM ÖNCE — LOD 0 maç başına 131 ms** (50 maç, tek çekirdek). ME 16.1'in bütçesi 2.500 ms:
+  **19 kat altında.** ME 16.3'ün throughput hesabı 2,5 sn/maç varsayımına dayanıyordu; gerçek
+  sayıyla 24 çekirdekli düğüm **~185 maç/sn** yapıyor, hedef 16,7 → 2 düğüm değil **tek düğümün
+  onda biri** yetiyor. Bellek: maç içi geçici tahsis ~9 KB (hedef <50 KB ✓); ölçülen 137 KB'ın
+  128'i event log halka tamponunun kendisi (motor NESNESİ başına, tick içinde değil).
+- **KARAR — LOD 1, LOD 0'ın eşleniği yapıldı.** 16.1'in LOD 1 satırı (5 Hz hareket / 2 Hz karar)
+  tek gerekçeyle vardı: CPU. LOD 0 zaten LOD 1 bütçesinin (800 ms) 6 katı altında. İkinci bir tick
+  oranı = ikinci bir fizik entegrasyonu = ikinci bir kalibrasyon; kazanç sıfırken bedeli "tek sim,
+  tek gerçek" ilkesi. `M15Lod1Esdeger` kapısı bunu yürütülebilir olgu yapıyor (bit-aynı hash).
+  Spec DEĞİŞTİRİLMEDİ; karar geri alınırsa `LodLevel.Lod1` ayrışır ve kapı bunu yakalar.
+- **LOD 2 gerçekten gerekli:** bütçenin sıkıştığı tek yer istemci. ME 16.4'ün sezon turu ~200 arka
+  plan maçı istiyor ve 12-18 sn'de bitmeli; 200 × LOD 0 orta cihazda dakikalara çıkar. LOD 2 ölçümü:
+  **3 µs/maç** (bütçe 10 ms) → sezon turu bu makinede ~1,3 sn.
+- **LOD 2 modeli — üç yanlış denemeden sonra ızgara.** (1) λ = exp(b0 + b1·d): dengeli maçta 40 şut
+  üretti, LOD 0 22,5. Sebep: şut sayısı güç farkının YÖNÜNE değil BÜYÜKLÜĞÜNE bağlı. (2) |d| terimi
+  eklendi: ±12 kademesi hâlâ %26-29 saptı. Sebep: aynı fark farklı SEVİYEDE aynı maçı vermiyor.
+  (3) seviye terimi eklendi: yine saptı — 0,07'lik seviye değişimi gol sayısını %80 oynatıyor,
+  global fonksiyon biçimi bu yüzeye oturmuyor. **Çözüm: (kendi güç × rakip güç) ızgarası + iki
+  doğrusal ara değerleme.** Doğal koordinat, döndürme yok, ek varsayım yok — spec'in kelimesi de
+  zaten "tablo". Sonuç: 5 güç kademesinde ortalama sapma ±%25 içinde (uçta 12,78 vs 13,05).
+- **BULGU (M15'in en ağır çıktısı) — güç tepkisi aşırı dik.** 3.920 LOD 0 maçından üretilen
+  7×7 gol ızgarası (satır = kendi gücü, sütun = rakip gücü, takım başına gol):
+  ```
+        39,6   45,6   51,6   57,6   63,6   69,6   75,6
+  39,6   1,95   0,76   0,60   0,21   0,23   0,01   0,09
+  51,6   4,11   2,13   1,45   0,86   0,46   0,29   0,14
+  63,6  12,56   6,24   3,03   1,74   1,28   0,74   0,48
+  75,6  27,98  21,89  11,71   5,59   2,81   1,90   1,06
+  ```
+  Köşegen (eşit güç) SAĞLAM: 57,6 vs 57,6 → 1,30 + 1,30 = 2,60 gol/maç, ME 17.2 bandında.
+  Bozuk olan MİSMATCH tepkisi: 75,6'lık takım 39,6'lık takımı **28-0,1** yeniyor; gerçek futbolda
+  aynı fark ~3-0'dır. ME 17.2'nin "güçlü takım possession bandı (75v55)" satırı ve ME 17.3'ün chaos
+  upset doğrulaması bu eğrinin üstünde durur — 75v55 bizde ~11,7-0,5, yani upset olasılığı ~0.
+  **M16'nın asıl işi budur** ve artık sayısı var.
+- **BULGU — kompozisyon tek skalerle temsil edilemiyor:** aynı toplam güce sahip FARKLI çekilişli
+  kadrolar aynı sonucu vermiyor (69,6 ev takımı, 60,1'lik AYNA rakibe 2,5 gol atarken aynı güçteki
+  FARKLI çekilişli rakibe 5,2 atıyor). Ölçülen LOD 2 kompozisyon hatası **%42**. Doğru çözüm
+  futbolun standart modeli: hücum ve savunma güçlerini AYRI eksene almak ("A'nın hücumu ×
+  B'nin savunması"); tablo 2 boyutlu kalır, üretici hücum/savunma niteliklerini bağımsız tarar.
+  M16 borcu; `M15KompozisyonHatasi` bugünkü hatayı kilitliyor.
+- **Üretici CI adımı (16.1):** `dotnet run --project shared/TheBadge.Sim.Checks -c Release -- fit-lod2 [hücreBaşınaMaç]`.
+  Kapı programının İÇİNDE çünkü ikisi de aynı test kadrosu üreticisini ve aynı balance yükleyicisini
+  kullanmak zorunda; ayrı proje ikinci bir "test kadrosu" tanımı doğururdu. Paralellik yalnız
+  MAÇLAR arası (CLAUDE.md). 3.920 maç ~2 dk 14 sn (8 çekirdek).
+- **Dosya ayrımı:** `balance/sim.lod2.json` ÜRETİLMİŞ veridir (elle düzenlenmez); elle ayarlanan tek
+  şey güç bileşiminin ağırlıkları ve o `sim.balance.json` → `lod.guc` altındadır. Karıştırmak
+  "hangi sayı kararla, hangisi ölçümle geldi" ayrımını yok ederdi.
+
 ## Bekleyen kararlar
+- **LOD 1'in geleceği (M15 kararı, 2026-08-16):** şu an LOD 0'ın eşleniği. Geri almak için gerekçe
+  CPU olamaz (19 kat marj var); yalnız İSTEMCİ tarafında orta cihaz ölçümü LOD 0'ı 800 ms'nin
+  üstüne çıkarırsa yeniden değerlendirilir. O ölçüm FAZ 05 cihaz testlerine ait.
 - **Highlight eşiği / zaman çizelgesi işareti (M14 bulgusu, 2026-08-14):** ME 15.3'ün H > 0,50 eşiği
   ölçümde 0,5-0,8 işaret/maç veriyor. Seçenekler: (a) eşiği spec'te 0,35-0,40'a çekmek → ~3-5
   işaret/maç, formül aynı kalır; (b) eşiği korumak ve zaman çizelgesini "en yüksek 6 an"la beslemek →

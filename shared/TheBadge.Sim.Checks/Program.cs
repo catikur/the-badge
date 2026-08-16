@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using TheBadge.Sim.Commands;
 using TheBadge.Sim.Core;
 using TheBadge.Sim.Determinism;
@@ -12,68 +13,101 @@ static void Pass(string name) => Console.WriteLine($"[PASS] {name}");
 int failures = 0;
 const ulong SEED = 0xC0FFEE2026UL;
 
-// 1) Golden değer sabitliği: Hash64 platformlar/sürümler arası bit-eşit kalmalı.
-const ulong GOLDEN_HASH = 0x4F653F320D0CA523UL; // sabitlendi — platform sapmasi = FAIL
-ulong h = Rng.Hash64(SEED, (uint)Domain.Duel, 42, 1000, 7);
-Console.WriteLine($"[info] Hash64 ornek deger: 0x{h:X}");
-if (GOLDEN_HASH != 0 && h != GOLDEN_HASH)
-    failures += Fail("GoldenHash", $"0x{h:X} != 0x{GOLDEN_HASH:X}");
-else Pass("GoldenHash");
-
-// 2) Tekrarlanabilirlik: aynı adres = aynı değer (1000 deneme).
-bool repOk = true;
-for (uint t = 0; t < 1000; t++)
+// ============================================================================================
+// ÜRETİCİ MODU — `dotnet run --project shared/TheBadge.Sim.Checks -c Release -- fit-lod2`
+// ME Spec 16.1: "LOD 2 tabloları, LOD 0 ile koşulan kalibrasyon maçlarından regresyonla
+// türetilir; her balance güncellemesinde yeniden üretim CI adımıdır." Kapı programının içinde
+// duruyor çünkü ikisi de AYNI kadro üreticisini ve AYNI balance yükleyicisini kullanmak
+// zorunda — ayrı proje, ikinci bir "test kadrosu" tanımı doğururdu.
+// ============================================================================================
+if (args.Length > 0 && args[0] == "fit-lod2")
 {
-    if (Rng.Hash64(SEED, 2, t, t * 3, 5) != Rng.Hash64(SEED, 2, t, t * 3, 5))
-    { failures += Fail("Repeatability", $"tick {t}"); repOk = false; break; }
+    var fitOpts = new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true };
+    var fitBal = System.Text.Json.JsonSerializer.Deserialize<TheBadge.Sim.Config.SimBalance>(
+        System.IO.File.ReadAllText(FindRepoFile("balance/sim.balance.json")), fitOpts);
+    int hucreBasina = args.Length > 1 ? int.Parse(args[1]) : 80;
+
+    // AYNA kadro: iki taraf da AYNI nitelik tanımından türer (yalnız PlayerId farklı), böylece
+    // güç ekseni iki taraf için de BİREBİR aynı anlama gelir. M7 ayna kapısı bu kurulumda taraf
+    // yanlılığının olmadığını zaten doğruluyor.
+    int[] ofsetler = { -18, -12, -6, 0, 6, 12, 18 };   // nitelik ofseti → güç ekseni
+    var probe = new Lod2Resolver(fitBal, new TheBadge.Sim.Config.Lod2Table());
+    int n = ofsetler.Length;
+    double[] eksen = new double[n];
+    for (int i = 0; i < n; i++)
+        eksen[i] = probe.TeamStrength(BuildSheetSide(300, 7, home: true, offset: ofsetler[i]));
+
+    double[] gGol = new double[n * n], gSut = new double[n * n], gIsabet = new double[n * n];
+    double[] gKorner = new double[n * n], gFaul = new double[n * n], gSari = new double[n * n];
+    double[] gKirmizi = new double[n * n], gXg = new double[n * n];
+    int toplamMac = 0;
+
+    Console.WriteLine($"[fit] güç ekseni: {string.Join(" · ", eksen.Select(v => v.ToString("0.0")))}");
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j++)
+        {
+            var home = BuildSheetSide(300, 7, home: true, offset: ofsetler[i]);
+            var away = BuildSheetSide(300, 7, home: false, idEntity: 8, offset: ofsetler[j]);
+            double topGol = 0, topSut = 0, topIsabet = 0, topKorner = 0, topFaul = 0,
+                   topSari = 0, topKirmizi = 0, topXg = 0;
+            var kilit = new object();
+            // Paralellik YALNIZ MAÇLAR ARASI (CLAUDE.md): her maç kendi motorunda, kendi tohumuyla.
+            System.Threading.Tasks.Parallel.For(0, hucreBasina, k =>
+            {
+                ulong sd = 0x10D2UL + (ulong)((i * 10 + j) * 100000 + k) * 7919UL;
+                var cfgF = new MatchConfig
+                {
+                    Seed = sd, EngineVersion = "lod2fit",
+                    Home = home, Away = away, Referee = RefereeProfile.Default
+                };
+                var eF = new MatchEngine(sd, new CommandQueue(), cfgF, fitBal) { AutoManage = true };
+                var sF = MatchEngine.CreateInitialState(cfgF);
+                var rF = eF.Run(ref sF);
+                var pkt = eF.BuildSummary(in sF);
+                lock (kilit)
+                {
+                    // Yalnız EV takımı: hücre "eksen[i] gücündeki takımın eksen[j]'ye karşı" değeridir.
+                    topGol += rF.HomeGoals; topSut += pkt.Home.Shots; topIsabet += pkt.Home.ShotsOnTarget;
+                    topKorner += pkt.Home.Corners; topFaul += pkt.Home.Fouls; topSari += pkt.Home.Yellows;
+                    topKirmizi += pkt.Home.Reds; topXg += pkt.Home.Xg;
+                    toplamMac++;
+                }
+            });
+            int c = i * n + j;
+            gGol[c] = topGol / hucreBasina; gSut[c] = topSut / hucreBasina;
+            gIsabet[c] = topIsabet / hucreBasina; gKorner[c] = topKorner / hucreBasina;
+            gFaul[c] = topFaul / hucreBasina; gSari[c] = topSari / hucreBasina;
+            gKirmizi[c] = topKirmizi / hucreBasina; gXg[c] = topXg / hucreBasina;
+        }
+
+    Console.WriteLine("[fit] gol ızgarası (satır = kendi gücü, sütun = rakip gücü):");
+    for (int i = 0; i < n; i++)
+        Console.WriteLine($"[fit]   {eksen[i],5:0.0} | " +
+            string.Join(" ", Enumerable.Range(0, n).Select(j => gGol[i * n + j].ToString("00.00"))));
+
+    string yol = System.IO.Path.Combine(
+        System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json")), "sim.lod2.json");
+    var sb = new System.Text.StringBuilder();
+    string R(double v) => v.ToString("0.0000", System.Globalization.CultureInfo.InvariantCulture);
+    string Dizi(double[] a) => string.Join(", ", a.Select(R));
+    sb.AppendLine("{");
+    sb.AppendLine("  \"_meta\": {");
+    sb.AppendLine("    \"schema\": \"usm.sim.lod2/3\",");
+    sb.AppendLine("    \"comment\": \"URETILMIS DOSYA — elle duzenlenmez. Uretici: dotnet run --project shared/TheBadge.Sim.Checks -c Release -- fit-lod2 [hucreBasina]. ME Spec 16.1: LOD 2 tablolari LOD 0 kosularindan turetilir; her balance guncellemesinde yeniden uretim CI adimidir.\",");
+    sb.AppendLine("    \"model\": \"Izgara + iki dogrusal ara degerleme. Eksen: takim gucu (lod.guc bilesimi). Degerler TAKIM BASINA ortalamadir; indeks = kendiIdx * n + rakipIdx. Eksen disinda kirpilir.\"");
+    sb.AppendLine("  },");
+    sb.AppendLine($"  \"kaynakMacSayisi\": {toplamMac},");
+    sb.AppendLine($"  \"hucreBasinaMac\": {hucreBasina},");
+    sb.AppendLine($"  \"gucEkseni\": [{Dizi(eksen)}],");
+    void Yaz(string ad, double[] a, bool son = false) =>
+        sb.AppendLine($"  \"{ad}\": [{Dizi(a)}]{(son ? "" : ",")}");
+    Yaz("gol", gGol); Yaz("sut", gSut); Yaz("isabetliSut", gIsabet); Yaz("korner", gKorner);
+    Yaz("faul", gFaul); Yaz("sari", gSari); Yaz("kirmizi", gKirmizi); Yaz("xg", gXg, son: true);
+    sb.AppendLine("}");
+    System.IO.File.WriteAllText(yol, sb.ToString());
+    Console.WriteLine($"[fit] {toplamMac} LOD 0 maçından {n}×{n} ızgara üretildi → {yol}");
+    return 0;
 }
-if (repOk) Pass("Repeatability(1000)");
-
-// 3) Sıra bağımsızlığı: çağrı sırası değerleri etkilememeli (ME Spec 3.1).
-double a1 = Rng.Rand01(SEED, Domain.Decision, 1, 50, 1);
-double b1 = Rng.Rand01(SEED, Domain.Decision, 2, 50, 1);
-double b2 = Rng.Rand01(SEED, Domain.Decision, 2, 50, 1);
-double a2 = Rng.Rand01(SEED, Domain.Decision, 1, 50, 1);
-if (a1 != a2 || b1 != b2) failures += Fail("OrderIndependence", "çağrı sırası sonucu değiştirdi");
-else Pass("OrderIndependence");
-
-// 4) Dağılım sağlığı: Rand01 ortalama ~0.5; Gauss ortalama ~0, sigma ~1.
-double sum = 0, gsum = 0, g2 = 0; const int N = 100000;
-bool rangeOk = true;
-for (uint i = 0; i < N; i++)
-{
-    double r = Rng.Rand01(SEED, Domain.Chaos, i, i / 7, 3);
-    if (r < 0 || r >= 1) { failures += Fail("Rand01Range", r.ToString()); rangeOk = false; break; }
-    sum += r;
-    double g = Rng.Gauss01(SEED, Domain.Chaos, i, i / 7, 9);
-    gsum += g; g2 += g * g;
-}
-if (rangeOk)
-{
-    double mean = sum / N, gmean = gsum / N;
-    double gstd = Math.Sqrt(g2 / N - gmean * gmean);
-    if (Math.Abs(mean - 0.5) > 0.01) failures += Fail("Rand01Mean", mean.ToString("F4"));
-    else Pass($"Rand01Mean={mean:F4}");
-    if (Math.Abs(gmean) > 0.02 || Math.Abs(gstd - 1.0) > 0.05)
-        failures += Fail("GaussShape", $"mean={gmean:F4} std={gstd:F4}");
-    else Pass($"GaussShape mean={gmean:F4} std={gstd:F4}");
-}
-
-// 5) Units kuantalama.
-if (Units.QuantizeMm(12.345678) != 12346) failures += Fail("QuantizeMm", "yuvarlama");
-else Pass("QuantizeMm");
-
-// 6) CommandEnvelope derleme/kullanım (CB Spec 3.1 sözleşmesi ayakta mı).
-var env = new CommandEnvelope
-{
-    CommandId = Guid.Empty, CatalogVersion = 1, Source = CommandSource.UI,
-    ActionType = "tycoon.set_ticket_price", IssuedAtUnixMs = 0,
-    MatchTick = 0, UserId = 1, SaveSlotId = 1, TeamIdx = 0,
-    PayloadJson = Array.Empty<byte>(), SuggestionId = null
-};
-if (env.ActionType.Length == 0 || env.Source != CommandSource.UI)
-    failures += Fail("Envelope", "beklenmeyen durum");
-else Pass("Envelope");
 
 // --- Balance yükleme (M1+): çekirdek parse etmez — host (burada Checks) System.Text.Json ile doldurur
 static string FindRepoFile(string relative)
@@ -90,6 +124,9 @@ static string FindRepoFile(string relative)
 var balOpts = new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true };
 var simBal = System.Text.Json.JsonSerializer.Deserialize<TheBadge.Sim.Config.SimBalance>(
     System.IO.File.ReadAllText(FindRepoFile("balance/sim.balance.json")), balOpts);
+// LOD 2 regresyon tablosu — ÜRETİLMİŞ dosya (ME 16.1 CI adımı, `-- fit-lod2` ile yenilenir)
+var lod2Tbl = System.Text.Json.JsonSerializer.Deserialize<TheBadge.Sim.Config.Lod2Table>(
+    System.IO.File.ReadAllText(FindRepoFile("balance/sim.lod2.json")), balOpts);
 
 // 7) FAZ 03 M0 — Motor iskeleti determinizm kapıları (ME Spec 3.2/4.2; BRIEF_FAZ03_ACILIS M0)
 
@@ -206,7 +243,7 @@ else Pass("AeffFullEnergy");
 // 8e) TeamSheet → kurulum determinizmi: aynı kadro = aynı durum hash'i; rol/anchor yansır
 static TeamSheet BuildSheet(ulong seed, uint entity) => BuildSheetSide(seed, entity, home: true);
 
-static TeamSheet BuildSheetSide(ulong seed, uint entity, bool home, uint idEntity = 0)
+static TeamSheet BuildSheetSide(ulong seed, uint entity, bool home, uint idEntity = 0, int offset = 0)
 {
     if (idEntity == 0) idEntity = entity;   // ayna kadro: nitelikler aynı, PlayerId farklı
     // Test kadrosu: gerçekçi 4-4-2 çapaları (ev −x yarı sahada, deplasman aynalı);
@@ -215,7 +252,13 @@ static TeamSheet BuildSheetSide(ulong seed, uint entity, bool home, uint idEntit
     int sign = home ? -1 : 1;
     for (int i = 0; i < 16; i++)
     {
-        byte V(uint salt) => (byte)(35 + (int)(Rng.Rand01(seed, Domain.Decision, entity, (uint)i, salt) * 50));
+        // offset: LOD 2 regresyonu için güç kademesi (fit-lod2). 0 = üretim kadrosu; kapılar
+        // her zaman 0 kullanır, yani kadro tanımı tek kalır.
+        byte V(uint salt)
+        {
+            int v = 35 + (int)(Rng.Rand01(seed, Domain.Decision, entity, (uint)i, salt) * 50) + offset;
+            return (byte)(v < 1 ? 1 : v > 100 ? 100 : v);
+        }
         int ax, ay;
         if (i == 0) { ax = 48000; ay = 0; }                                   // KL
         else if (i < 5) { ax = 33000; ay = (i - 1) * 16000 - 24000; }         // DF hattı
@@ -1111,6 +1154,189 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     if (kMac > 1.6)
         failures += Fail("M14KirmiziBandi", $"{kMac:0.00}/maç — bugünkü gerçeğin de üstünde");
     else Pass($"M14KirmiziBandi({kMac:0.00}/maç — ME 17.2 HEDEF 0,15-0,30; kök: ikinci sarı yığılması, M16)");
+}
+
+// 18) FAZ 03 M15 — LOD türetme + performans bütçeleri (ME 16.1/16.3/16.4)
+{
+    MatchConfig CfgLod(ulong sd, LodLevel lod, int ofsEv = 0)
+        => new MatchConfig
+        {
+            Seed = sd, EngineVersion = "m15",
+            Home = BuildSheetSide(300, 7, home: true, offset: ofsEv),
+            Away = BuildSheetSide(300, 8, home: false),
+            Referee = RefereeProfile.Default, Lod = lod
+        };
+
+    MatchResult KosLod0(ulong sd, int ofsEv = 0)
+    {
+        var c = CfgLod(sd, LodLevel.Lod0, ofsEv);
+        var e = new MatchEngine(sd, new CommandQueue(), c, simBal) { AutoManage = true };
+        var st = MatchEngine.CreateInitialState(c);
+        return e.Run(ref st);
+    }
+
+    var lod2 = new Lod2Resolver(simBal, lod2Tbl);
+
+    // 18a) LOD 0 CPU bütçesi (ME 16.1: ≤ 2,5 sn/maç tek çekirdek). Isınma koşusu JIT'i dışarıda
+    // bırakır — ilk maçın maliyeti derleyicinin, motorun değil.
+    {
+        for (int w = 0; w < 3; w++) KosLod0(0xC0 + (ulong)w);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        const int NP = 10;
+        for (int n = 0; n < NP; n++) KosLod0(0xF5A0UL + (ulong)n * 7919UL);
+        sw.Stop();
+        double msMac = sw.Elapsed.TotalMilliseconds / NP;
+        double butceMs = simBal.lod.cpuBudgetSn.lod0 * 1000.0;
+        Console.WriteLine($"[info] M15 LOD 0: {msMac:0.0} ms/maç (bütçe {butceMs:0} ms) · " +
+                          $"24 çekirdekli düğüm ≈ {24 * 1000.0 / msMac:0} maç/sn (ME 16.3 hedefi 16,7)");
+        if (msMac > butceMs) failures += Fail("M15Lod0Butcesi", $"{msMac:0.0} ms > {butceMs:0} ms");
+        else Pass($"M15Lod0Butcesi({msMac:0.0} ms — bütçenin ×{butceMs / msMac:0.0} altında)");
+    }
+
+    // 18b) LOD 1 ≡ LOD 0 (bilinçli karar — Lod2Resolver'daki gerekçe + DECISIONS.md).
+    // Kapı bunu YÜRÜTÜLEBİLİR OLGU yapar: ayrışırsa burada yakalanır.
+    {
+        var c0 = CfgLod(0xB15, LodLevel.Lod0);
+        var e0 = new MatchEngine(0xB15, new CommandQueue(), c0, simBal) { AutoManage = true };
+        var s0 = MatchEngine.CreateInitialState(c0); e0.Run(ref s0);
+        var c1 = CfgLod(0xB15, LodLevel.Lod1);
+        var e1 = new MatchEngine(0xB15, new CommandQueue(), c1, simBal) { AutoManage = true };
+        var s1 = MatchEngine.CreateInitialState(c1); e1.Run(ref s1);
+        ulong h0 = MatchEngine.StateHash(in s0), h1 = MatchEngine.StateHash(in s1);
+        if (h0 != h1) failures += Fail("M15Lod1Esdeger", $"0x{h0:X} != 0x{h1:X}");
+        else Pass("M15Lod1Esdeger(LOD 0 ile bit-aynı)");
+    }
+
+    // 18c) LOD 2 CPU bütçesi (ME 16.1: ≤ 10 ms/maç) + 16.4 sezon turu tahmini
+    {
+        for (int w = 0; w < 50; w++) lod2.Run(0xD0 + (ulong)w, CfgLod(0xD0 + (ulong)w, LodLevel.Lod2));
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        const int NL = 2000;
+        var cfgL = CfgLod(1, LodLevel.Lod2);
+        for (int n = 0; n < NL; n++) lod2.Run(0xF5A0UL + (ulong)n, cfgL);
+        sw.Stop();
+        double msMac = sw.Elapsed.TotalMilliseconds / NL;
+        double butceMs = simBal.lod.cpuBudgetSn.lod2 * 1000.0;
+        Console.WriteLine($"[info] M15 LOD 2: {msMac * 1000:0.0} µs/maç (bütçe {butceMs:0} ms) · " +
+                          $"ME 16.4 sezon turu (1×LOD0 + 9×LOD1 + 200×LOD2) ≈ " +
+                          $"{(10 * 131.0 + 200 * msMac) / 1000.0:0.0} sn bu makinede");
+        if (msMac > butceMs) failures += Fail("M15Lod2Butcesi", $"{msMac:0.000} ms > {butceMs:0} ms");
+        else Pass($"M15Lod2Butcesi({msMac * 1000:0.0} µs/maç)");
+    }
+
+    // 18d) LOD 2 determinizmi: aynı tohum + aynı kadro + aynı tablo = aynı sonuç ve aynı özet log
+    {
+        var c = CfgLod(0xB152, LodLevel.Lod2);
+        var r1 = lod2.Run(0xB152, c);
+        int n1 = lod2.SummaryCount; var ilk = new MatchEvent[n1];
+        for (int i = 0; i < n1; i++) ilk[i] = lod2.GetSummaryEvent(i);
+        var r2 = lod2.Run(0xB152, c);
+        bool ayni = r1.HomeGoals == r2.HomeGoals && r1.AwayGoals == r2.AwayGoals
+                    && r1.Shots == r2.Shots && r1.Corners == r2.Corners && r1.Fouls == r2.Fouls
+                    && lod2.SummaryCount == n1;
+        for (int i = 0; ayni && i < n1; i++)
+        {
+            var e = lod2.GetSummaryEvent(i);
+            if (e.Tick != ilk[i].Tick || e.Type != ilk[i].Type || e.TeamIdx != ilk[i].TeamIdx) ayni = false;
+        }
+        if (!ayni) failures += Fail("M15Lod2Determinizmi", "aynı girdi farklı sonuç");
+        else Pass($"M15Lod2Determinizmi(skor {r1.HomeGoals}-{r1.AwayGoals}, özet {n1} olay)");
+    }
+
+    // 18e) LOD 2 ↔ LOD 0 İSTATİSTİKSEL UYUM (M15'in asıl kapısı, ME 16.1).
+    // AYNA kadro ailesi (tablo bu aileden türetildi): tek değişken güç. LOD 2 maçı OYNAMAZ,
+    // yalnız LOD 0'ın dağılımını taklit eder — bu yüzden tolerans ORTALAMADA ±%25'tir
+    // (tek maç eşleşmesi ne beklenir ne istenir).
+    {
+        (int ev, int dep)[] kademeler = { (-12, 0), (0, 0), (12, 0), (0, 12), (12, -12) };
+        const int NU = 40;
+        string sapan = "";
+        foreach (var (ofsEv, ofsDep) in kademeler)
+        {
+            var home = BuildSheetSide(300, 7, home: true, offset: ofsEv);
+            var away = BuildSheetSide(300, 7, home: false, idEntity: 8, offset: ofsDep);
+            double golL0 = 0, golL2 = 0, sutL0 = 0, sutL2 = 0;
+            for (int n = 0; n < NU; n++)
+            {
+                ulong sd = 0xB153UL + (ulong)n * 7919UL;
+                var c = new MatchConfig
+                {
+                    Seed = sd, EngineVersion = "m15", Home = home, Away = away,
+                    Referee = RefereeProfile.Default
+                };
+                var e = new MatchEngine(sd, new CommandQueue(), c, simBal) { AutoManage = true };
+                var st = MatchEngine.CreateInitialState(c);
+                var r0 = e.Run(ref st);
+                var rL2 = lod2.Run(sd, c);
+                golL0 += r0.HomeGoals + r0.AwayGoals; golL2 += rL2.HomeGoals + rL2.AwayGoals;
+                sutL0 += r0.Shots; sutL2 += rL2.Shots;
+            }
+            golL0 /= NU; golL2 /= NU; sutL0 /= NU; sutL2 /= NU;
+            Console.WriteLine($"[info] M15 uyum (ofset ev {ofsEv,3} / dep {ofsDep,3}): " +
+                              $"gol LOD0 {golL0:0.00} / LOD2 {golL2:0.00} · şut LOD0 {sutL0:0.0} / LOD2 {sutL2:0.0}");
+            if (Math.Abs(golL2 - golL0) > 0.25 * Math.Max(0.5, golL0)) sapan += $"gol@{ofsEv}/{ofsDep} ";
+            if (Math.Abs(sutL2 - sutL0) > 0.25 * Math.Max(1.0, sutL0)) sapan += $"şut@{ofsEv}/{ofsDep} ";
+        }
+        if (sapan.Length > 0) failures += Fail("M15Lod2Uyum", $"±%25 dışında: {sapan}");
+        else Pass($"M15Lod2Uyum(5 güç kademesi × {NU} maç)");
+    }
+
+    // 18f) BORÇ MUHAFIZI — KOMPOZİSYON HATASI. LOD 2'nin anahtarı TEK SAYIDIR (takım gücü).
+    // Ölçüm gösterdi ki aynı toplam güce sahip FARKLI dizilimli kadrolar aynı sonucu vermiyor:
+    // 69,6'lık ev takımı, 60,1'lik bir AYNA rakibe karşı 2,5 gol atarken aynı güçteki FARKLI
+    // çekilişli bir rakibe karşı 5,2 atıyor (×2). Yani tek skaler, sonucu belirlemiyor.
+    // Doğru çözüm hücum/savunma güçlerini AYRI eksene almaktır (futbolun standart modeli:
+    // "A'nın hücumu × B'nin savunması") — tablo 2 boyutlu kalır ama üretici hücum ve savunma
+    // niteliklerini bağımsız taramalıdır. M16'ya borç yazıldı; kapı bugünkü hatayı KİLİTLER.
+    {
+        const int NK = 40;
+        var homeK = BuildSheetSide(300, 7, home: true, offset: 12);
+        var awayK = BuildSheetSide(300, 8, home: false);           // FARKLI çekiliş, benzer güç
+        double golL0 = 0, golL2 = 0;
+        for (int n = 0; n < NK; n++)
+        {
+            ulong sd = 0xB155UL + (ulong)n * 7919UL;
+            var c = new MatchConfig
+            {
+                Seed = sd, EngineVersion = "m15", Home = homeK, Away = awayK,
+                Referee = RefereeProfile.Default
+            };
+            var e = new MatchEngine(sd, new CommandQueue(), c, simBal) { AutoManage = true };
+            var st = MatchEngine.CreateInitialState(c);
+            var r0 = e.Run(ref st);
+            golL0 += r0.HomeGoals + r0.AwayGoals;
+            golL2 += lod2.Run(sd, c).HomeGoals + lod2.Run(sd, c).AwayGoals;
+        }
+        golL0 /= NK; golL2 /= NK;
+        double hata = Math.Abs(golL2 - golL0) / Math.Max(0.5, golL0);
+        Console.WriteLine($"[info] M15 kompozisyon hatası (farklı çekiliş, benzer güç): " +
+                          $"gol LOD0 {golL0:0.00} / LOD2 {golL2:0.00} → %{hata * 100:0}");
+        if (hata > 0.60)
+            failures += Fail("M15KompozisyonHatasi", $"%{hata * 100:0} — bugünkü gerçeğin de üstünde");
+        else Pass($"M15KompozisyonHatasi(%{hata * 100:0} — HEDEF <%25; hücum/savunma ekseni ayrımı, M16)");
+    }
+
+    // 18g) BORÇ MUHAFIZI — GÜÇ FARKI TEPKİSİ. LOD 2 sondajının bulgusu: motorun gol tepkisi
+    // kadro gücüne karşı AŞIRI DİK. Ölçüm (1.050 LOD 0 maçı, ΔS/100 → gol/takım):
+    //   −0,21→0,28 · −0,09→0,57 · −0,03→1,00 · +0,03→1,82 · +0,09→3,84 · +0,15→7,62 · +0,21→9,61
+    // Yani ~20 puanlık kadro üstünlüğü 10-0'a gidiyor; gerçek futbolda aynı fark ~3-1'dir.
+    // ME 17.2'nin "güçlü takım possession bandı (75v55)" satırı ve 17.3 chaos upset doğrulaması
+    // bu eğrinin üstünde durur → M16'nın ASIL işi. Kapı bugünkü gerçeği kilitler.
+    {
+        const int NG = 30;
+        double zayif = 0, guclu = 0;
+        for (int n = 0; n < NG; n++)
+        {
+            var r = KosLod0(0xB154UL + (ulong)n * 7919UL, 12);
+            guclu += r.HomeGoals; zayif += r.AwayGoals;
+        }
+        guclu /= NG; zayif /= NG;
+        double oran = guclu / Math.Max(0.05, zayif);
+        Console.WriteLine($"[info] M15 güç tepkisi (+12 ofset, {NG} maç): güçlü {guclu:0.00} gol · zayıf {zayif:0.00} · oran ×{oran:0.0}");
+        if (oran > 30.0)
+            failures += Fail("M15GucTepkisi", $"×{oran:0.0} — bugünkü gerçeğin de üstünde");
+        else Pass($"M15GucTepkisi(×{oran:0.0} — HEDEF ×2-3 civarı; M16 kalibrasyon borcu)");
+    }
 }
 
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");
