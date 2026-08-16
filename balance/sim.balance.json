@@ -302,7 +302,33 @@
       "nadirlik": 0.15,
       "hikayeIlgisi": 0.1
     },
-    "esik": 0.5
+    "esik": 0.5,
+    "winprob": {
+      "k": 0.85,
+      "minKalanDk": 1.0
+    },
+    "buyukSansXg": 0.35,
+    "uzakGolMesafeM": 25.0,
+    "nadirlik": {
+      "gol": 0.6,
+      "uzakGol": 0.9,
+      "kafaGol": 0.75,
+      "penaltiGol": 0.8,
+      "kacanBuyukSans": 0.7,
+      "penaltiKurtaris": 0.95,
+      "kurtaris": 0.4,
+      "celme": 0.3,
+      "isabetliSut": 0.25,
+      "blokluSut": 0.2,
+      "penaltiVerildi": 0.8,
+      "kirmiziKart": 0.85,
+      "sariKart": 0.2,
+      "varInceleme": 0.75,
+      "varKarari": 0.8,
+      "sakatlik": 0.4,
+      "asist": 0.5,
+      "diger": 0.05
+    }
   },
   "extraTime": {
     "durakCarpan": 0.55,

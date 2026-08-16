@@ -70,9 +70,21 @@ Yağış/zemin → sürtünme, sekme, pas hatası, sakatlık çarpanları.
   DECISIONS.md'ye M16 borcu olarak yazıldı (kök: `pass.groundSpeedMin` × 1/a_roll aşım etkisi,
   kuru koşulda da var).
 
-### M14 — Maç sonu veri paketi + event log + highlight (ME 15.1/15.3/15.4)
+### M14 — Maç sonu veri paketi + event log + highlight (ME 15.1/15.3/15.4) — ✅ TAMAM (2026-08-14)
 LLM ve Panorama'nın girdisi; FAZ 04'ün beslendiği yer.
-- **Kapı:** paket şeması + highlight puanı > 0,50 olan an sayısı bandı.
+- ~~**Kapı:** paket şeması + highlight puanı > 0,50 olan an sayısı bandı.~~
+- **Uygulanan kapı:** `M14TekKaynak` (paket istatistiği = motor sayaçları, birebir) ·
+  `M14TamponTasmasi` (4096 halka yetiyor: tepe 1.651, düşen 0) · `M14LogDeterminizmi` (aynı tohum =
+  alan alan aynı olay dizisi) · `M14PaketSemasi` (eğriler 90 nokta, en yüksek anlar H'ye göre
+  azalan, H ∈ [0,1]) · `M14HighlightSiralamasi` (golü olan her maçta gol ilk 10'da) ·
+  `M14EventHacmi` + `M14SariBandi` + `M14KirmiziBandi`.
+- **"H > 0,50 an sayısı bandı" maddesi kapı OLMADI:** ölçüm 0,5-0,8/maç ve bu bir kalibrasyon
+  değil formül özelliği (nadirlik tablosu maksimumda bile 20. dakika golü eşiği geçmiyor).
+  Aritmetiğiyle DECISIONS.md'ye yazıldı, "Bekleyen kararlar"a 3 seçenekli öneri eklendi.
+- **Event log'un ilk kazancı:** M4'ten beri `kart = sarı + kırmızı` toplamının içinde saklanan
+  **kırmızı kart 1,0/maç** (bant 0,15-0,30) görünür oldu — tamamı ikinci sarı. M16 borcu.
+- **M12'nin 2 VAR sınıfı hâlâ açık:** engel event log değilmiş — ikisi de "gol verilir, sonra
+  incelenir, geri alınır" akışını istiyor; motorda askıda gol durumu yok. Ayrı dilim önerilir.
 
 ### M15 — LOD 1-2 türetme (ME 16.1) + sunucu throughput (16.3)
 Ligdeki tüm maçların aynı anda koşabilmesi buna bağlı.

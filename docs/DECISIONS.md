@@ -451,7 +451,57 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
 - **Bilinçli sınır:** rüzgar yalnız HAVA topuna (orta + korner) uygulanır; ME 12.4 satırı da
   "uzun top/orta sapması, frikik-korner nişanına eklenir" der. Şut ve yerden pas kapsam dışıdır.
 
+- M14 (event log + highlight + maç sonu paketi) uygulandı (2026-08-14): **ME 15.1/15.3/15.4.**
+  `MatchEvent` şeması spec'teki alanlarla birebir; 6 kategori, 30 tip; 4096'lık halka tampon maç
+  başında tek tahsis (16.2). Log **TEK YÖNLÜ**: simülasyon ondan asla okumaz, `StateHash`'e girmez —
+  bu yüzden tampon taşması davranışı değiştiremez. M0-M13 golden'larının hepsi bit düzeyinde korundu.
+- **Tek kaynak ilkesi uygulandı (15.1):** `MatchSummaryPacket`'in istatistik satırı ayrı sayaçlardan
+  değil EVENT LOG'dan türetiliyor; `M14TekKaynak` kapısı bunu motorun kendi sayaçlarıyla birebir
+  karşılaştırıyor. İlk koşuda iki sapma yakalandı ve düzeltildi: (a) gol hem `ShotOnTarget` hem
+  `Goal` olayıyla iki kez şut sayılıyordu — gol artık şut SAYILMIYOR (girişim olayı zaten yazılı;
+  serbest top golü futbolda da şut değildir); (b) VAR'ın ONAYLADIĞI faul sayacı artırıyor ama olay
+  yazmıyordu.
+- **WinProb modeli [KALİBRE] — spec formül vermez:** ME 15.3 yalnız "kayan WinProb modeli" der.
+  p = lojistik(k × gol_farkı / √(kalan_dk/90)), k = 0,85. Gerekçe: aynı gol farkı kalan süre azaldıkça
+  daha kesin sonuç demektir. Gerçek futbolla ölçek denetimi: 1-0 / kalan 45 dk → %77 (gerçek ~%77) ·
+  1-0 / kalan 10 dk → %93 (~%92) · 2-0 / kalan 45 dk → %92 (~%93).
+- **hikaye_ilgisi terimi 0'dır (bilinçli):** aktif hikaye arkı Modül 6 (FAZ 04) ile gelir. Ağırlık
+  (0,10) tabloda DURUYOR — kanca bağlanınca puanlar kendiliğinden zenginleşir, formül değişmez.
+- **BULGU — highlight işaret yoğunluğu ince:** ME 15.3'ün H > 0,50 eşiği ölçümde **0,5-0,8 an/maç**
+  üretiyor; maçların yarısında zaman çizelgesinde HİÇ işaret yok. Aritmetik: 67. dakikada beraberliği
+  bozan gol H = 0,58 (geçer), 20. dakikada beraberliği bozan gol H = 0,45 (geçmez), 2-0'ı yapan gol
+  H = 0,32. Formülün ağırlıkları ve 0,50 eşiği SPEC SABİTİDİR; nadirlik tablosunu maksimuma çeksek
+  bile 20. dakika golü eşiği geçmiyor (0,15 × 1,0 = 0,15 tavan katkı). Yani bu bir kalibrasyon değil
+  FORMÜL özelliği. Spec değiştirilmedi; öneri "Bekleyen kararlar"a yazıldı. Not: "en yüksek 6 an klip
+  önerisi" akışı bundan BAĞIMSIZ çalışıyor (top-10 listesi her maçta dolu, `M14PaketSemasi` denetliyor).
+- **BULGU — kırmızı kart 1,0-1,2/maç (ME 17.2 bandı 0,15-0,30), tamamı İKİNCİ SARI.** Doğrudan
+  kırmızı 0,00: `kirmiziEsik 0,80` şiddet skorunun erişilebilir tavanının (≈0,90, ceza sahasında
+  ×0,72) üstünde kalıyor. Bu metrik M4'ten beri `kart = sarı + kırmızı` toplamının içinde SAKLIYDI —
+  event log'un ilk kazancı bunu görünür kılmak oldu. Ayrı ölçülmeyen metrik, ölçülmemiş metriktir:
+  `M14KirmiziBandi` ve `M14SariBandi` artık AYRI kapılar.
+- **BULGU — hakem makinesine sunulan olay 649/maç:** 27,7'si düdükle, 28,0'ı avantajla sonuçlanıyor,
+  593'ü sessiz geçiyor. Avantaj 28/maç gerçek futbolun (~2-5) çok üstünde; faul sayısı bantta
+  görünüyor çünkü avantaj kuralı fazlalığın yarısını yutuyor. Üçü de (kırmızı yığılması, avantaj
+  sıklığı, olay hacmi) aynı yere bakıyor: **`ResolveFoul` her temas denemesinde çağrılıyor.** Kök
+  düzeltme karar/temas modeline dokunur ve tüm golden'ları hareket ettirir → M16.
+- **M12'nin 2 VAR sınıfı hâlâ açık — gerekçe SADELEŞTİ:** engel event log'un yokluğu değilmiş.
+  İkisi de "gol VERİLİR, sonra incelenir, gerekirse GERİ ALINIR" akışını gerektiriyor; motorda
+  geçici/askıda gol durumu yok (gol anında momentum uygulanıyor ve santra kuruluyor). Bu bir faz
+  makinesi eklemesidir → M17 arayüz dondurmasından önce, ayrı dilim olarak önerilir.
+- **M14 ölçüm (12 maç):** event 1.530/maç (tepe 1.651 · kapasite 4.096 · düşen 0) · H>eşik 0,50/maç ·
+  sarı 4,25 ✓ · kırmızı 1,00 ✗. Tip dağılımı (/maç): PassCompleted 976 · PassIntercepted 169 ·
+  PhaseChange 141 · TackleWon 49 · FoulCommitted 27 · AdvantagePlayed 27 · CrossDelivered 17 ·
+  ThrowIn 15 · ShotOffTarget 9 · StaminaAlert 9 · CornerAwarded 8 · Goal 2,25.
+- **M16 BORCU (yeni):** event hacmi 1.530/maç, ME 15.1 hedefi 900-1.400. Sapmanın tamamı pas
+  olaylarından (1.145/maç) geliyor — M13'te yazılan `groundSpeedMin` aşımıyla AYNI kök.
+
 ## Bekleyen kararlar
+- **Highlight eşiği / zaman çizelgesi işareti (M14 bulgusu, 2026-08-14):** ME 15.3'ün H > 0,50 eşiği
+  ölçümde 0,5-0,8 işaret/maç veriyor. Seçenekler: (a) eşiği spec'te 0,35-0,40'a çekmek → ~3-5
+  işaret/maç, formül aynı kalır; (b) eşiği korumak ve zaman çizelgesini "en yüksek 6 an"la beslemek →
+  spec'e dokunulmaz, işaret sayısı sabit 6 olur; (c) `xG_salınımı` terimini 3 sonuçlu (galibiyet/
+  beraberlik/mağlubiyet) WinProb'a taşımak → gol sıçramaları büyür, eşik anlamlı kalır, en fazla iş.
+  Öneri: **(b)** — sunum kararı, motor mantığına dokunmaz (17.5 "ayar sahası" ilkesiyle uyumlu).
 - Premium etkilerin public ligde şeffaf rozeti (panel M-bulgusu) → tasarım kararı, FAZ 02 öncesi.
 - ~~3G Greybox Fun Gate GO/NO-GO~~ → **KAPANDI (2026-08-08): NO-GO %40** — uygulama yukarıdaki kapanış bölümünde; sunum revizyonu + mülakatlı doğrulama turu Dikey Dilim öncesi BORÇ.
 - BRIEF_3G_GREYBOX RA#1 metninin pivot sonrası revizyonu (GDD v4.2 turu).

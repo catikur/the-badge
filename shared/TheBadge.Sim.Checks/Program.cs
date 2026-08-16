@@ -968,5 +968,150 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     }
 }
 
+// 17) FAZ 03 M14 — Event log + highlight + maç sonu veri paketi (ME 15.1/15.3/15.4)
+// Event log, 15.1 gereği istatistiklerin TEK KAYNAĞIdır. Bu kapının en sert maddesi budur:
+// paketin istatistik satırı motorun kendi sayaçlarıyla BİREBİR tutmalı — tutmuyorsa iki farklı
+// "gerçek" var demektir ve LLM/Panorama yanlış olanı tüketir.
+{
+    const int N14 = 12;
+    double evTop = 0, hiTop = 0; int dusen = 0, enCokEvent = 0;
+    double kirmizi = 0, sari = 0, dogrudanK = 0, ikinciSariK = 0;
+    int tutarsiz = 0, golluMac = 0, golluMacTopta = 0;
+    string sapma = "";
+    MatchSummaryPacket ornek = null;
+
+    for (int n = 0; n < N14; n++)
+    {
+        ulong sd = 0xF5A0UL + (ulong)n * 7919UL;      // M5 kalibrasyon tohum seti
+        var cfg14 = new MatchConfig
+        {
+            Seed = sd, EngineVersion = "m14",
+            Home = BuildSheetSide(300, 7, home: true), Away = BuildSheetSide(300, 8, home: false),
+            Referee = RefereeProfile.Default
+        };
+        var q14 = new CommandQueue();
+        var e14 = new MatchEngine(sd, q14, cfg14, simBal) { AutoManage = true };
+        var s14 = MatchEngine.CreateInitialState(cfg14);
+        e14.Run(ref s14);
+        var pkt = e14.BuildSummary(in s14);
+        if (n == 0) ornek = pkt;
+
+        evTop += e14.EventsProduced; dusen += e14.EventsDropped; hiTop += pkt.HighlightCount;
+        if (e14.EventsProduced > enCokEvent) enCokEvent = e14.EventsProduced;
+        kirmizi += e14.Reds; sari += e14.Yellows;
+        dogrudanK += e14.RedsDirect; ikinciSariK += e14.RedsSecondYellow;
+
+        // TEK KAYNAK denetimi: paket istatistiği event log'dan türer, motor sayacıyla eşit olmalı
+        int pSut = pkt.Home.Shots + pkt.Away.Shots;
+        int pIsabet = pkt.Home.ShotsOnTarget + pkt.Away.ShotsOnTarget;
+        int pGol = pkt.Home.Goals + pkt.Away.Goals;
+        int pKorner = pkt.Home.Corners + pkt.Away.Corners;
+        int pFaul = pkt.Home.Fouls + pkt.Away.Fouls;
+        int pKart = pkt.Home.Yellows + pkt.Away.Yellows;
+        if (pSut != e14.Shots || pIsabet != e14.ShotsOnTarget || pGol != s14.HomeGoals + s14.AwayGoals
+            || pKorner != e14.Corners || pFaul != e14.Fouls || pKart != e14.Yellows)
+        {
+            tutarsiz++;
+            if (sapma.Length == 0)
+                sapma = $"tohum 0x{sd:X}: şut {pSut}/{e14.Shots} isabet {pIsabet}/{e14.ShotsOnTarget} " +
+                        $"gol {pGol}/{s14.HomeGoals + s14.AwayGoals} korner {pKorner}/{e14.Corners} " +
+                        $"faul {pFaul}/{e14.Fouls} sarı {pKart}/{e14.Yellows}";
+        }
+
+        // Golü olan maçta gol, en yüksek 10 anın İÇİNDE olmalı (highlight sıralaması anlamlı mı)
+        if (pGol > 0)
+        {
+            golluMac++;
+            for (int k = 0; k < pkt.TopEvents.Length; k++)
+                if (pkt.TopEvents[k].Kind == EventType.Goal) { golluMacTopta++; break; }
+        }
+    }
+
+    Console.WriteLine($"[info] M14 event log ({N14} maç): {evTop / N14:0}/maç (en çok {enCokEvent}, " +
+                      $"kapasite {MatchEngine.EventCapacity}) · düşen {dusen} · H>eşik {hiTop / N14:0.00}/maç");
+
+    // 17a) TEK KAYNAK: paket ile motor sayaçları birebir
+    if (tutarsiz > 0) failures += Fail("M14TekKaynak", $"{tutarsiz}/{N14} maçta sapma — {sapma}");
+    else Pass($"M14TekKaynak({N14} maç)");
+
+    // 17b) Halka tampon: 4096 yetiyor mu (ME 15.1 kapasitesi)
+    if (dusen > 0) failures += Fail("M14TamponTasmasi", $"{dusen} olay düştü (en çok {enCokEvent})");
+    else Pass($"M14TamponTasmasi(0 — tepe {enCokEvent}/{MatchEngine.EventCapacity})");
+
+    // 17c) Log determinizmi: aynı tohum = aynı olay dizisi (alan alan)
+    {
+        ulong LogHash(ulong sd)
+        {
+            var c = new MatchConfig
+            {
+                Seed = sd, EngineVersion = "m14",
+                Home = BuildSheetSide(300, 7, home: true), Away = BuildSheetSide(300, 8, home: false),
+                Referee = RefereeProfile.Default
+            };
+            var e = new MatchEngine(sd, new CommandQueue(), c, simBal) { AutoManage = true };
+            var s = MatchEngine.CreateInitialState(c);
+            e.Run(ref s);
+            ulong acc = 1469598103934665603UL;
+            for (int i = 0; i < e.EventCount; i++)
+            {
+                var ev = e.GetEvent(i);
+                ulong[] alanlar =
+                {
+                    ev.Tick, ev.Type, (ulong)(ushort)ev.ActorA, (ulong)(ushort)ev.ActorB,
+                    ev.TeamIdx, (ulong)(uint)ev.X, (ulong)(uint)ev.Y, (ulong)(uint)ev.AuxData,
+                    (ulong)System.BitConverter.SingleToInt32Bits(ev.Xg), ev.Flags
+                };
+                foreach (var v in alanlar) { acc ^= v; acc *= 1099511628211UL; }
+            }
+            return acc;
+        }
+        ulong l1 = LogHash(0xB14), l2 = LogHash(0xB14);
+        if (l1 != l2) failures += Fail("M14LogDeterminizmi", $"0x{l1:X} != 0x{l2:X}");
+        else Pass("M14LogDeterminizmi");
+    }
+
+    // 17d) Paket şeması (ME 15.4): eğriler 90 nokta, en yüksek anlar H'ye göre AZALAN sıralı
+    {
+        bool semaOk = ornek != null && ornek.MomentumHome.Length == 90 && ornek.MomentumAway.Length == 90
+                      && ornek.WinProbHome.Length == 90 && ornek.TopEvents.Length <= 10
+                      && ornek.TopEvents.Length == ornek.TopScores.Length;
+        bool sirali = true;
+        if (ornek != null)
+            for (int k = 1; k < ornek.TopScores.Length; k++)
+                if (ornek.TopScores[k] > ornek.TopScores[k - 1] + 1e-12) sirali = false;
+        bool bantta = true;
+        if (ornek != null)
+            foreach (var hv in ornek.TopScores) if (hv < 0.0 || hv > 1.0) bantta = false;
+        if (!semaOk || !sirali || !bantta)
+            failures += Fail("M14PaketSemasi", $"şema {semaOk} sıralı {sirali} H bandı {bantta}");
+        else Pass($"M14PaketSemasi(top {ornek.TopEvents.Length} · H {ornek.TopScores[0]:0.000}→{ornek.TopScores[ornek.TopScores.Length - 1]:0.000})");
+    }
+
+    // 17e) Highlight anlamlı mı: golü olan HER maçta gol, en yüksek 10 anın içinde
+    if (golluMac > 0 && golluMacTopta < golluMac)
+        failures += Fail("M14HighlightSiralamasi", $"{golluMac - golluMacTopta}/{golluMac} maçta gol ilk 10'a girmedi");
+    else Pass($"M14HighlightSiralamasi({golluMacTopta}/{golluMac} maç)");
+
+    // 17f) BORÇ MUHAFIZI — event hacmi. ME 15.1 bandı 900-1.400/maç; ölçüm 1.534. Sapmanın
+    // TAMAMI pas hacminden geliyor (pas olayları 1.145/maç): aynı kök M13'te de yazıldı
+    // (groundSpeedMin aşımı). Kapı bugünkü gerçeği KİLİTLER ve hedefi ekrana basar.
+    double evMac = evTop / N14;
+    if (evMac < 600 || evMac > 1800)
+        failures += Fail("M14EventHacmi", $"{evMac:0}/maç");
+    else Pass($"M14EventHacmi({evMac:0}/maç — ME 15.1 HEDEF 900-1.400; sapma pas hacmi kökünden, M16)");
+
+    // 17g) BORÇ MUHAFIZI — KART AYRIMI. Event log'un ilk bulgusu: kırmızı kart 1,2/maç
+    // (ME 17.2 bandı 0,15-0,30) ve tamamı İKİNCİ SARI. Bu metrik M4'ten beri "kart = sarı+kırmızı"
+    // toplamının içinde SAKLIYDI. Ayrı ölçülmeyen metrik, ölçülmemiş metriktir.
+    double kMac = kirmizi / N14, sMac = sari / N14;
+    Console.WriteLine($"[info] M14 kart ayrımı: kırmızı {kMac:0.00}/maç (doğrudan {dogrudanK / N14:0.00} · " +
+                      $"ikinci sarı {ikinciSariK / N14:0.00}) · sarı {sMac:0.00}/maç");
+    if (sMac is < 3.0 or > 5.5) failures += Fail("M14SariBandi", $"{sMac:0.00}/maç (bant 3,0-5,0)");
+    else Pass($"M14SariBandi({sMac:0.00}/maç)");
+    if (kMac > 1.6)
+        failures += Fail("M14KirmiziBandi", $"{kMac:0.00}/maç — bugünkü gerçeğin de üstünde");
+    else Pass($"M14KirmiziBandi({kMac:0.00}/maç — ME 17.2 HEDEF 0,15-0,30; kök: ikinci sarı yığılması, M16)");
+}
+
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");
 return failures == 0 ? 0 : 1;

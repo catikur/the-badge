@@ -35,6 +35,42 @@ namespace TheBadge.Sim.Config
         /// <summary>Hava ve zemin — ME Spec 12.4 [KALİBRE]. Tüm çarpanlar burada; kodda sabit yok.</summary>
         public HavaCfg hava = new HavaCfg();
 
+        /// <summary>Highlight puanlama — ME Spec 15.3 [KALİBRE].</summary>
+        public HighlightCfg highlight = new HighlightCfg();
+
+        [System.Serializable]
+        public sealed class HighlightCfg
+        {
+            public WCfg w = new WCfg();
+            public double esik;              // H > bu → zaman çizelgesi işareti (GDD 5.6)
+            public WinProbCfg winprob = new WinProbCfg();
+            public double buyukSansXg;       // bu xG üstü şut "büyük şans" sayılır (Flags.BigChance)
+            public double uzakGolMesafeM;    // bu mesafeden fazlası "uzak gol" nadirliğine girer
+            public NadirlikCfg nadirlik = new NadirlikCfg();
+
+            /// <summary>H = 0,35×xG salınımı + 0,20×geç dakika + 0,20×skor etkisi
+            /// + 0,15×nadirlik + 0,10×hikaye ilgisi (ME 15.3).</summary>
+            [System.Serializable]
+            public sealed class WCfg
+            { public double xgSalinim, gecDakika, skorEtkisi, nadirlik, hikayeIlgisi; }
+
+            /// <summary>Kayan WinProb modeli — spec formül vermez, ME 15.3 yalnız "kayan model" der.
+            /// p = lojistik(k × gol_farkı / √(kalan_dk / 90)).</summary>
+            [System.Serializable]
+            public sealed class WinProbCfg { public double k, minKalanDk; }
+
+            /// <summary>Nadirlik taban tablosu — ME 15.3 ("event tipi taban tablosu:
+            /// röveşata sınıfı vole, 30 m gol, penaltı kurtarışı yüksek"). 0-1 bandı.</summary>
+            [System.Serializable]
+            public sealed class NadirlikCfg
+            {
+                public double gol, uzakGol, kafaGol, penaltiGol, kacanBuyukSans;
+                public double penaltiKurtaris, kurtaris, celme, isabetliSut, blokluSut;
+                public double penaltiVerildi, kirmiziKart, sariKart, varInceleme, varKarari;
+                public double sakatlik, asist, diger;
+            }
+        }
+
         [System.Serializable]
         public sealed class HavaCfg
         {
