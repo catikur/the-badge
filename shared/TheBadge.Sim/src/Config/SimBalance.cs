@@ -38,6 +38,34 @@ namespace TheBadge.Sim.Config
         /// <summary>Highlight puanlama — ME Spec 15.3 [KALİBRE].</summary>
         public HighlightCfg highlight = new HighlightCfg();
 
+        /// <summary>Uzun top / temizleme / kaleci dağıtımı — ME 7.2 (LongSwitch, ClearBall) +
+        /// ME 9.4 (KısaAçıl/UzunDegaj/ElleAt) [KALİBRE] (M16-D).</summary>
+        public LongballCfg longball = new LongballCfg();
+
+        [System.Serializable]
+        public sealed class LongballCfg
+        {
+            public double minMesafeM;        // bu mesafenin altı kısa pastır, uzun top aday olmaz
+            public double hizMS;             // uçuş hızı (orta gibi balistik — ME 8.3)
+            public double sigmaTabanDeg;     // nişan sapması tabanı (Passing daraltır)
+            public double tehditCarpan;      // uzun topun tehdit ağırlığı (kesin kontrol yok → iskonto)
+            public double riskTaban;         // iniş rekabeti taban kaybı
+            public double havaRiskPerRakip;  // iniş noktasındaki rakip başına ek kayıp
+            public double clearBolgeM;       // kendi kaleye bu mesafeden yakınken TEMİZLE aday olur
+            public double clearIleriM;       // temizlemenin ileri menzili
+            public double clearYanM;         // taca doğru yanal itme
+            public double clearSigmaDeg;     // temizleme sapması (kontrollü vuruş değildir)
+            public double clearKayipTaban;   // temizlemenin kabul edilmiş kayıp oranı
+            public double clearPresBonus;    // baskı başına temizleme iştahı
+            public double gkElleAtMaxM;      // elle atışın menzili (ME 9.4 ElleAt)
+            public double gkElleSigmaCarpan; // elle atış isabet çarpanı (<1: elle atış isabetlidir)
+            public double gkKisaBias;        // Kicking düşük kalecinin kısa oynama eğilimi (9.4)
+            public double gkDegajSigmaDeg;   // degaj sapması (Kicking daraltır — 9.4)
+            public double gkPresDegajBias;   // pres altında degaj bias'ı (9.4: +0,25)
+            public double gkDegajRisk;       // degajın kabul edilmiş kayıp oranı
+            public int gkKisaN;              // kısa açılış aday sayısı
+        }
+
         /// <summary>LOD bütçeleri + LOD 2 güç bileşimi — ME Spec 16.1 [KALİBRE].
         /// Regresyon KATSAYILARI burada DEĞİL, üretilmiş `balance/sim.lod2.json` dosyasındadır.</summary>
         public LodCfg lod = new LodCfg();
@@ -410,11 +438,17 @@ namespace TheBadge.Sim.Config
             public double[] satir = new double[0];  // [8] alt taçtan üst taca (orta şerit yüksek)
         }
 
-        /// <summary>Chaos sigma seviyeleri — ME Spec 13.2 (M2: yalnız orta seviye tüketilir).</summary>
+        /// <summary>Chaos seviye tablosu — ME Spec 13.2 [KALİBRE]. 5 enjeksiyon noktasının tamamı
+        /// (M16-D2): düello marjı · karar skoru · nişan çarpanı · hakem gri bandı · sekme
+        /// pertürbasyonu. Seviye maç kurulumundan gelir (MatchConfig.Chaos); varsayılan Orta.</summary>
         [System.Serializable]
         public sealed class ChaosCfg
         {
-            public SigmaCfg decisionSigma = new SigmaCfg();
+            public SigmaCfg duelSigma = new SigmaCfg();      // düello marjı gürültüsü (100 ölçeği)
+            public SigmaCfg decisionSigma = new SigmaCfg();  // karar skoru gürültüsü
+            public SigmaCfg aimCarpan = new SigmaCfg();      // nişan sapması çarpanı (pas/şut/orta/uzun)
+            public SigmaCfg griBantEk = new SigmaCfg();      // hakem gri bandı (seviyenin TAM bandı)
+            public SigmaCfg sekmePertDerece = new SigmaCfg();// sekme yönü pertürbasyonu (yalnız Yüksek)
             [System.Serializable]
             public sealed class SigmaCfg { public double dusuk, orta, yuksek; }
         }

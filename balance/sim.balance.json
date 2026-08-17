@@ -199,6 +199,27 @@
     "zeminKotu": { "firstTouchDelta": -6, "sekmePertDeg": 2.0, "sakatlikCarpan": 1.2 },
     "zeminIyi": { "passingDelta": 2 }
   },
+  "longball": {
+    "minMesafeM": 24.0,
+    "hizMS": 20.0,
+    "sigmaTabanDeg": 6.0,
+    "tehditCarpan": 0.9,
+    "riskTaban": 0.42,
+    "havaRiskPerRakip": 0.18,
+    "clearBolgeM": 30.0,
+    "clearIleriM": 34.0,
+    "clearYanM": 8.0,
+    "clearSigmaDeg": 12.0,
+    "clearKayipTaban": 0.5,
+    "clearPresBonus": 0.16,
+    "gkElleAtMaxM": 22.0,
+    "gkElleSigmaCarpan": 0.3,
+    "gkKisaBias": 0.1,
+    "gkDegajSigmaDeg": 8.0,
+    "gkPresDegajBias": 0.25,
+    "gkDegajRisk": 0.3,
+    "gkKisaN": 3
+  },
   "var": {
     "sahaKarariKalirOran": {
       "dusuk": 0.0,

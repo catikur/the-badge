@@ -142,14 +142,22 @@ korundu) + süpürme + karar.
   kaleci **UzunDegaj/ElleAt** motorda YOK (M10'daki "orta" durumunun aynısı). Zayıf takımın
   zinciri kısaltma yolu bunlar → M16-D uygular, upset ondan sonra yeniden ölçülür.
 
-#### M16-D..E — açık
-- **D (sıradaki):** ME 7.2/9.4 eksik aday aksiyonları — LongSwitch, ClearBall, kaleci dağıtım
-  seti (KısaAçıl/UzunDegaj/ElleAt). Kapı: uygulandıktan sonra 75v55 yeniden ölçülür; hedef
-  yönlü iyileşme + bantların korunması.
-- **D2:** chaos motoru (ME 13.1-13.3) — 5 enjeksiyon noktasının yalnız 1'i uygulanmış ve tek
-  seviye sabit kodlu. 17.3 doğrulaması buna bağlı.
-- **E:** 10.000 maçlık 17.2 tablosu + kart/faul hacmi (kırmızı 1,0/maç, avantaj 28/maç; kart
-  üretiminin kadro-farkı bağımlılığı → kalibrasyon setinin kadro dağılımı tanımlanmalı).
+#### M16-D — Uzun top + kaleci dağıtımı + CHAOS motoru — ✅ TAMAM (2026-08-16)
+Üç spec borcu birden: ME 7.2 aday kümesi (LongSwitch/ClearBall), ME 9.4 kaleci dağıtımı
+(KısaAçıl/UzunDegaj/ElleAt — kale vuruşları dahil), ME 13.1-13.3 chaos motoru (5 enjeksiyon
+noktasının TAMAMI, 3 seviye, MatchConfig.Chaos).
+- **Kullanım (Orta):** uzun top 27/maç (%54 kazanma) · temizleme 26 · GK 11/32/6,5.
+  Uzun top kullanımı chaos seviyesiyle kendiliğinden artıyor (18→29→66).
+- **ME 13.4'e karşı:** Düşük %99,3 · Orta %98,7 · Yüksek %94,7 (hedef %76/%66/%54) — YÖN ilk
+  kez doğru, büyüklük M16-E tam kalibrasyonunun işi.
+- Golden'lar yeniden pinlendi; LOD 2 tablosu yeni motorla yeniden üretildi (7.840 maç);
+  ME 17.2 bantları korundu. Kapılar: `M16DKullanim` · `M16DChaosDeterminizm` ·
+  `M16DChaosSeviyeEtkisi` · `M16DUpsetYuksek` (borç muhafızı).
+
+#### M16-E — açık (sıradaki)
+10.000 maçlık 17.2 tablosu + 13.4/17.3 upset kalibrasyonu (çok katsayılı arama) + kart/faul
+hacmi (kırmızı 1,0/maç, avantaj 28/maç; kart üretiminin kadro-farkı bağımlılığı → kalibrasyon
+setinin kadro dağılımı tanımlanmalı).
 
 ### M17 — Golden replay seti (ME 17.4) + FAZ 04 arayüz dondurması (18.3)
 - **Kapı:** replay dörtlüsü (seed + config_hash + komut zaman çizelgesi + sürüm) ile

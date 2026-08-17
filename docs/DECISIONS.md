@@ -640,6 +640,44 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   ondan sonra ölçülür. (Kaleci M11'de pas adaylarından çıkarılmıştı; 9.4 dağıtım seti gelince
   kaleci "pas alan" değil "dağıtan" olarak geri döner — geri paslar sorunu geri gelmez.)
 
+- M16-D (uzun top + kaleci dağıtımı + chaos motoru) uygulandı (2026-08-16, Atilla'nın "hepsini
+  kapatacak şekilde devam" onayıyla): **üç spec borcu birden kapandı.**
+- **ME 7.2 aday kümesi tamamlandı:** `LongSwitch` (25-50 m havadan, koridor kesilemez, bedeli
+  inişteki hava rekabeti — Flight=4 → 10.2 zinciri) ve `ClearBall` (kendi savunma bölgesinde,
+  baskı arttıkça kısa pastan öne geçer; tehdit terimi bilinçli olarak YOK — iddiası üretim değil
+  tehlikeyi kutudan uzaklaştırmak). Tüm katsayılar `balance/sim.balance.json` → `longball.*`.
+- **ME 9.4 kaleci dağıtımı:** kaleci top sahibiyken saha oyuncusu aday seti yerine KALECİ seti
+  çalışır — KısaAçıl (Kicking düşükse bias) / UzunDegaj (Kicking, pres altında +0,25 bias — 9.4
+  sabiti) / ElleAt (hızlı-isabetli, `sigmaCarpan 0,3`). Kale vuruşları da buradan geçer (taker
+  zaten kaleci). Kaleci M11'de pas HEDEFLERİNDEN çıkarılmıştı; şimdi "dağıtan" olarak döndü —
+  geri pas sorunu geri gelmedi (gol bandı korundu).
+- **Hava topu bölge ayrımı (ResolveAerial):** kazanmak her yerde kafa ŞUTU demek değil artık —
+  kale menzili dışında kafayla İNDİRİP kontrol. 40 m'den kafa şutu hem saçmaydı hem uzun topu
+  kullanılmaz kılardı.
+- **ME 13.1-13.3 CHAOS MOTORU — 5 enjeksiyon noktasının TAMAMI, 3 seviyede:** (1) düello marjı
+  gürültüsü (DuelWin, DUEL domain — spec'in "yeteneği düşürmez, çözüme bant içi gürültü" ilkesi
+  birebir); (2) karar skoru (vardı, seviye tablosuna bağlandı); (3) nişan çarpanı (pas + şut +
+  orta + korner + uzun top, PHYSICS); (4) hakem gri bandı (seviyenin TAM bandı; Orta = eski
+  `griBantOrta` 0,06 — Orta'da hakem davranışı değişmedi) + VAR "saha kararı kalır" oranı;
+  (5) sekme pertürbasyonu (yalnız Yüksek; zemin pertürbasyonuyla sigma toplamı). Seviye
+  `MatchConfig.Chaos`'tan gelir (varsayılan Orta — 13.2 "Default"), xG kaydına asla dokunmaz (13.3).
+- **Ölçüm — mekanizmalar canlı (Checks kadrosu, Orta):** uzun top 27/maç (kazanma %54) ·
+  temizleme 26 · GK kısa 11 / elle 32 / degaj 6,5. Chaos seviyeleri ayrık ve determinist
+  (`M16DChaosSeviyeEtkisi`); uzun top kullanımı seviyeyle KENDİLİĞİNDEN artıyor (18→29→66/maç —
+  kısa pas riskleştikçe uzun top öne geçiyor, kodlanmış bir kural değil).
+- **ME 13.4 upset tablosuna karşı (150 maç/seviye, ayna 75v55):** Düşük %99,3 · Orta %98,7 ·
+  **Yüksek %94,7** (hedefler %76/%66/%54). YÖN ilk kez doğru — seviye arttıkça güçlünün oranı
+  düşüyor ve Yüksek'te sürpriz+beraberlik ilk kez %5'i geçti — ama büyüklük uzak. Dört ölçüm
+  (kDuel, varış hızı, tackle, şimdi yapı+chaos) aynı sonuca işaret ediyor: kalan fark tek
+  mekanizmada değil; **M16-E tam kalibrasyonunun işi** (10.000 maç, çok-katsayılı arama).
+- **Golden'lar yeniden pinlendi** (davranış değişikliği bilinçli): skeleton `0x300F0587...`,
+  M2 `0xD495175A...`, M4 `0xAF634A7C...`, M6 `0x4DFB0413...`. LOD 2 tablosu yeni motorla yeniden
+  üretildi (7.840 maç, hücre başına 160 — 80'lik örneklem 0/0 hücresinde gürültü sınırını aşıyordu).
+  ME 17.2 bantları korundu: M4 kalibrasyon gol 2,33 · şut 23,5 · korner 7,8 · faul 29,3 · kart 3,67.
+- **Yeni kapılar:** `M16DKullanim` (üç mekanizma da kullanılıyor; uzun top kazanma %30-90 bandında)
+  · `M16DChaosDeterminizm` · `M16DChaosSeviyeEtkisi` · `M16DUpsetYuksek` (bilinçli sert-eşiksiz:
+  40 maçta %5'lik oranın sıfır çıkması %11 tohum şansı — sert eşik M16-E'nin 10k örneklemine ait).
+
 ## Bekleyen kararlar
 - **LOD 1'in geleceği (M15 kararı, 2026-08-16):** şu an LOD 0'ın eşleniği. Geri almak için gerekçe
   CPU olamaz (19 kat marj var); yalnız İSTEMCİ tarafında orta cihaz ölçümü LOD 0'ı 800 ms'nin
