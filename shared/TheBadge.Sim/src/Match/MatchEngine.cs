@@ -2901,6 +2901,10 @@ namespace TheBadge.Sim.Match
             st.Ball.Vx = st.Ball.Vy = st.Ball.Vz = 0;
             st.Ball.OwnerId = -1;
             st.Ball.LastTouchTeam = forTeam;
+            // Duran top alımı sahiplik DEĞİŞİMİ sayılmaz (M16-F incelemesi): lastOwnerTeam
+            // senkronlanmazsa kale vuruşu gibi rutin restart'larda pencere/markaj/kontra
+            // "açık oyun çalması" gibi ateşleniyordu — santra zaten senkron, diğerleri buradan.
+            lastOwnerTeam = forTeam;
             st.Ball.Flight = 3;
             st.Phase = type == SetPieceType.Corner || type == SetPieceType.FreeKick
                 ? MatchPhase.SetPiece : MatchPhase.DeadBall;

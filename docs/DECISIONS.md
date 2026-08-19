@@ -775,7 +775,20 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   (`lastOwnerTeam`, motor-yerel) taşındı; `LastTouchTeam` taç/korner hakemliğinin sahibi olarak
   aynen kaldı; santra alımı değişim sayılmaz. İki düzeltme davranış değiştirir → golden'lar
   yeniden pinlendi, kalibrasyon yeniden doğrulandı (bir alt satır).
-- **İnceleme-sonrası FİNAL 10k — 17.2 tablosu 13/13 ✓ (bilinçli sapma da kapandı):** gol 2,41 ·
+- **İnceleme turu 2 — üçüncü bulgu (Bugbot, HIGH; doğrulanıp kapatıldı):** sahiplik değişimi
+  artık `lastOwnerTeam`'e bakıyordu ama `AwardSetPiece` yalnız `LastTouchTeam`'i sıfırlıyordu —
+  santra senkronluyken taç/kale vuruşu/frikik senkronlamıyordu, dolayısıyla RUTİN RESTART'lar
+  "açık oyunda top çalma" gibi işlem görüyordu (geçiş penceresi + markaj ataması + M16-F kontra
+  bonusu, özellikle kale vuruşlarında). Düzeltme: `AwardSetPiece` de `lastOwnerTeam = forTeam`
+  senkronunu yapar. Ölçüm: sahte değişimler sayaçtan temizlendi (sahiplik değişimi 396→347/maç);
+  bantlar korundu. **İki kapı bu değişimle bant kenarına düştü ve ÖRNEKLEM BÜYÜTÜLEREK çözüldü
+  (bant/tolerans DEĞİŞMEDİ — kapılar güçlendi):** `M3GoalsBand` tek maçta "en az 1 gol" şartı
+  0-0'ı hata sayıyordu → 8 tohum ortalaması (1,5-5,0 bandı, tek maç 1-12'den daha sıkı);
+  `M5NoRegression` 12→32 maç; `M14SariBandi` 12→32 maç (12'de 5,83 ölçen fikstürün gerçek
+  ortalaması 5,25 — küçük örneklem zarı). Kalibrasyon yeniden hizalandı: `sutTehditCarpan 0,57`
+  (eşit maç golü), `sutKoridorCeza 0,42` + `blokEkSavunucu 0,36` (pres01-ölçekli — yalnız fark
+  maçlarını kırpar), `kDuel 0,35→0,28` (upset kaldıracı; eşit maça duyarsız olduğu ölçülüydü).
+- **İnceleme turu 1 sonrası 10k (duran top senkronundan ÖNCEKİ konfigürasyon) — 13/13 ✓:** gol 2,41 ·
   şut 26,6 · isabetli 7,5 · korner 8,3 · faul 20,7 · sarı 3,18 · kırmızı 0,20 · penaltı 0,29 ·
   ofsayt 4,9 · sakatlık 0,51 · pas %81,2 · gol-xG sapması %0,0 · possession %59,2. 75v55
   (1.380 fark maçı): G/B/M **%84/%12/%4** — revize hedef %78/%12/%10; beraberlik tam hedefte,

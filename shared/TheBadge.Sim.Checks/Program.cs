@@ -464,7 +464,7 @@ Console.WriteLine($"[info] M2 durum hash: 0x{mA2.h:X}");
 if (mA2.h != mB2.h) failures += Fail("M2Determinism", $"0x{mA2.h:X} != 0x{mB2.h:X}");
 else Pass("M2Determinism");
 
-const ulong M2_GOLDEN = 0x78A20B875433E3CBUL; // M16-F incelemesinde yeniden sabitlendi (bilinçli)
+const ulong M2_GOLDEN = 0x420EF099DEE074BDUL; // M16-F duran top senkronu + kalibrasyonla yeniden sabitlendi (bilinçli)
 if (M2_GOLDEN != 0 && mA2.h != M2_GOLDEN) failures += Fail("M2Golden", $"0x{mA2.h:X}");
 else Pass("M2Golden");
 
@@ -488,8 +488,16 @@ Console.WriteLine($"[info] M3 90dk: skor {m3.gh}-{m3.ga} · şut {m3.shots} · k
 if (m3.shots < 5) failures += Fail("M3ShotsBand", $"şut {m3.shots}"); // tek tohum sağlık kontrolü; gerçek bant M4/M5 kalibrasyonunda
 else Pass($"M3ShotsBand({m3.shots})");
 int golT = m3.gh + m3.ga;
-if (golT < 1 || golT > 12) failures += Fail("M3GoalsBand", $"gol {golT}/90dk");
-else Pass($"M3GoalsBand({m3.gh}-{m3.ga})");
+// Gol bandı 8 TOHUMUN ORTALAMASINDA denetlenir (M16-F): tek maçta "en az 1 gol" şartı 0-0'ı
+// hata sayıyordu — gerçek futbolda 0-0 meşru sonuç, motorda da öyle olmalı. Ortalama bandı
+// hem daha bilgilendirici hem DAHA SIKI (tek maç 1-12 aralığı neredeyse her şeyi geçiriyordu).
+{
+    int golTop = golT;
+    for (ulong k = 1; k < 8; k++) { var mk = RunM2(0xC0AC11UL + k * 4133, ticks: 54000); golTop += mk.gh + mk.ga; }
+    double golOrtM3 = golTop / 8.0;
+    if (golOrtM3 is < 1.5 or > 5.0) failures += Fail("M3GoalsBand", $"gol ortalaması {golOrtM3:0.00}/maç (8 tohum)");
+    else Pass($"M3GoalsBand({golOrtM3:0.00}/maç, 8 tohum)");
+}
 if (m3.saves < 1) failures += Fail("M3SavesHappen", "hiç kurtarış yok");
 else Pass($"M3SavesHappen({m3.saves})");
 // xG tutarlılığı (17.2'nin gevşek M3 hali): |gol − ΣxG| makul bantta
@@ -541,7 +549,7 @@ if (f1.hash != f2.hash || f1.res.TotalTicks != f2.res.TotalTicks)
     failures += Fail("M4Determinism", $"0x{f1.hash:X} != 0x{f2.hash:X}");
 else Pass("M4Determinism");
 
-const ulong M4_GOLDEN = 0x11729A7F4256ECE3UL; // M16-F incelemesinde yeniden sabitlendi (bilinçli)
+const ulong M4_GOLDEN = 0xCA4BFE07BBFB2108UL; // M16-F duran top senkronu + kalibrasyonla yeniden sabitlendi (bilinçli)
 if (M4_GOLDEN != 0 && f1.hash != M4_GOLDEN) failures += Fail("M4Golden", $"0x{f1.hash:X}");
 else Pass("M4Golden");
 
@@ -608,7 +616,9 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
 {
     double g = 0, inj = 0, offs = 0, thr = 0, ene = 0, spr = 0, corner = 0, card = 0, shot = 0;
     double firstHalfEnergy = 0;
-    const int NM5 = 12;
+    const int NM5 = 32;   // M16-F: 12 maçlık örneklemde gol ortalamasının SE'si ~0,25 — bant
+                          // kenarında (2,0) zar atıyordu; örneklem büyütüldü, BANTLAR AYNI kaldı
+                          // (kapı güçlendi). 600 maçlık lig ölçümü aynı konfigürasyonda 2,41.
     for (int n = 0; n < NM5; n++)
     {
         ulong sd = 0xF5A0UL + (ulong)n * 7919UL;
@@ -828,7 +838,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     Console.WriteLine($"[info] M6 komutlu maç hash: 0x{hA:X}");
     if (hA != hB) failures += Fail("M6Determinism", $"0x{hA:X} != 0x{hB:X}");
     else Pass("M6Determinism");
-    const ulong M6_GOLDEN = 0x054B060AFDA0B564UL; // M16-F incelemesinde yeniden sabitlendi (bilinçli)
+    const ulong M6_GOLDEN = 0xD461A557C76524DDUL; // M16-F duran top senkronu + kalibrasyonla yeniden sabitlendi (bilinçli)
     if (M6_GOLDEN != 0 && hA != M6_GOLDEN) failures += Fail("M6Golden", $"0x{hA:X}");
     else Pass("M6Golden");
 }
@@ -1106,7 +1116,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
 // paketin istatistik satırı motorun kendi sayaçlarıyla BİREBİR tutmalı — tutmuyorsa iki farklı
 // "gerçek" var demektir ve LLM/Panorama yanlış olanı tüketir.
 {
-    const int N14 = 12;
+    const int N14 = 32;   // M16-F: 12 maçlık örneklemde sarı ortalamasının SE'si ~0,5 — bant
+                          // kenarında zar atıyordu; örneklem büyütüldü, BANTLAR AYNI kaldı.
     double evTop = 0, hiTop = 0; int dusen = 0, enCokEvent = 0;
     double kirmizi = 0, sari = 0, dogrudanK = 0, ikinciSariK = 0;
     int tutarsiz = 0, golluMac = 0, golluMacTopta = 0;
