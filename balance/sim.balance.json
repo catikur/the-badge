@@ -49,7 +49,7 @@
     "kayipKoridorRakip": 0.22,
     "pasKesmeBandiSn": 0.7,
     "kayipMesafePerM": 0.006,
-    "sutTehditCarpan": 0.55,
+    "sutTehditCarpan": 0.53,
     "sutBaskiCezasi": 0.35,
     "araPasIleriM": 12.0,
     "araPasRisk": 0.28,
@@ -127,7 +127,7 @@
   },
   "shot": {
     "xg": {
-      "b0": -2.6,
+      "b0": -2.48,
       "bLnDist": -1.05,
       "bAngle": 1.35,
       "bPres": -0.45,

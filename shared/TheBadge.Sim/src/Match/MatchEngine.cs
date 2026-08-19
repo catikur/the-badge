@@ -161,6 +161,11 @@ namespace TheBadge.Sim.Match
         /// diziliş toparlanır, rakip merkez dairesi dışına çekilir. Kurucuda maç başı santrası
         /// için, KickoffRestart'ta her santra için kurulur (motor-yerel, hash dışı).</summary>
         uint kickoffHoldUntil;
+        /// <summary>Son SAHİPLİK takımı (2 = henüz yok) — sahiplik değişimi algısı buna dayanır.
+        /// LastTouchTeam taç/korner hakemliği için dokunuşu izler; tackle gibi "dokundu ama
+        /// sahip olmadı" anları değişim algısını bozuyordu (M16-F incelemesi). Motor-yerel,
+        /// hash dışı; santrada restart takımına kurulur (santra alımı değişim sayılmaz).</summary>
+        byte lastOwnerTeam = 2;
         /// <summary>Tackle DENEME aralığı kapısı — karar kilidinden (ActionUntilTick) AYRI tutulur
         /// (M16-C): aralığı tek başına ayarlayabilmek için. `tackleDenemeAralikTicks == 
         /// tackleCooldownTicks` iken davranış eskisiyle BİREBİR aynıdır (iki kapı da aynı tick'te
@@ -591,7 +596,7 @@ namespace TheBadge.Sim.Match
                     // yerine pas arar — mevcut baskı terimi 1,5 m yarıçaplı (blok gövdeleri 2-4
                     // m'de, görünmüyorlar). pres01 ölçekli: blok yoksa ceza ~0, karar eski
                     // kalibrasyonla aynı. Taban 0,25'e kırpılır — şut asla tamamen ölmez.
-                    int korSavK = CorridorOpponents(ref st, a.X, a.Y, gx, 0, a.TeamIdx);
+                    int korSavK = CorridorOpponents(ref st, a.X, a.Y, gx, 0, a.TeamIdx, gkHaric: true);
                     double kalabalik = 1.0 - u.sutKoridorCeza * (korSavK > 4 ? 4 : korSavK)
                                              * (presQ16[1 - a.TeamIdx] / 65536.0);
                     if (kalabalik < 0.25) kalabalik = 0.25;
@@ -904,7 +909,7 @@ namespace TheBadge.Sim.Match
             // aynı 0,55'i veriyordu — daralan bloğun hiçbir ödülü yoktu. Ek savunucu başına artış
             // [KALİBRE blokEkSavunucu], tavan [blokOlasilikMax].
             int blocker = NearestCorridorOpponent(ref st, a.X, a.Y, gx, Units.QuantizeMm(interY / 1000.0), a.TeamIdx);
-            int korSav = CorridorOpponents(ref st, a.X, a.Y, gx, Units.QuantizeMm(interY / 1000.0), a.TeamIdx);
+            int korSav = CorridorOpponents(ref st, a.X, a.Y, gx, Units.QuantizeMm(interY / 1000.0), a.TeamIdx, gkHaric: true);
             double pBlok = bal.shotExec.blokOlasilik
                            + bal.shotExec.blokEkSavunucu * (korSav > 1 ? korSav - 1 : 0) * pres01Sav;
             if (pBlok > bal.shotExec.blokOlasilikMax) pBlok = bal.shotExec.blokOlasilikMax;
@@ -2304,7 +2309,13 @@ namespace TheBadge.Sim.Match
                 ClearPending();
                 pendingReceiver = -1;
             }
-            if (st.Ball.LastTouchTeam != 2 && st.Ball.LastTouchTeam != a.TeamIdx)
+            // Sahiplik değişimi SAHİPLİK takımıyla algılanır (lastOwnerTeam), dokunuş takımıyla
+            // (LastTouchTeam) DEĞİL — M16-F incelemesi: kazanılan tackle LastTouchTeam'i tackle
+            // yapana çeviriyor, topu takımı toplayınca "değişim" görünmüyordu → geçiş penceresi,
+            // markaj ataması ve kontra bonusu tackle-kazanımlı geçişlerde (derin bloğun ANA
+            // kazanım yolu) hiç işlemiyordu. LastTouchTeam taç/korner kararlarının sahibi olarak
+            // aynen kalır; değişim algısı sahiplik tarihçesine taşındı.
+            if (lastOwnerTeam != 2 && lastOwnerTeam != a.TeamIdx)
             {
                 PossessionChanges++;
                 if (looseReason == 1) PossChangeTackle++;
@@ -2312,7 +2323,7 @@ namespace TheBadge.Sim.Match
                 else PossChangeLoose++;
                 Possessions[a.TeamIdx]++;
                 looseReason = 0;   // ayrışım nedeni tüketildi (sıra: SINIFLANDIRMADAN sonra)
-                AssignMarking(ref st, defendingTeam: st.Ball.LastTouchTeam); // ME 7.5: geçiş anında
+                AssignMarking(ref st, defendingTeam: lastOwnerTeam); // ME 7.5: geçiş anında
                 // Kaptıran takım için geçiş penceresi: mentalite ileri gittikçe uzar. DERİN BLOKTAN
                 // çıkan kontra ek pencere alır (M16-F): kazanan takım baskı altındaysa (pres01)
                 // kaybeden o kadar İLERİ yığılmıştır — toparlanması uzun sürer. Blok yokken
@@ -2320,7 +2331,7 @@ namespace TheBadge.Sim.Match
                 // yoludur (ME 13.4 hibrit kararı): derin blok yalnız savunmayı sağlamlaştırıyordu,
                 // zayıfın golü 0,2/maçta kalıyordu — kazanamazsın.
                 {
-                    byte kayip = st.Ball.LastTouchTeam;
+                    byte kayip = lastOwnerTeam;
                     ref var rtK = ref kayip == 0 ? ref st.HomeRt : ref st.AwayRt;
                     double pres01Kazanan = presQ16[a.TeamIdx] / 65536.0;
                     double sn = bal.offball.gecisSnTaban + Math.Max(0, (int)rtK.Mentalite) * bal.offball.gecisSnPerMentalite
@@ -2329,6 +2340,7 @@ namespace TheBadge.Sim.Match
                 }
             }
             st.Ball.LastTouchTeam = a.TeamIdx;
+            lastOwnerTeam = a.TeamIdx;
 
             // Duran top kullanıldı: bayrak HER durumda temizlenir — topu atanan kullanıcı yerine
             // takım arkadaşı alırsa bayrak asılı kalıyor ve korner dizilişi sonsuza donuyordu
@@ -3179,6 +3191,7 @@ namespace TheBadge.Sim.Match
             st.SetPieceTeam = startTeam;
             st.Phase = MatchPhase.Kickoff;
             kickoffHoldUntil = st.Tick + (uint)bal.setpiece.santraHazirlikTicks;
+            lastOwnerTeam = startTeam;          // santra alımı sahiplik değişimi sayılmaz
             if (pendingPassTeam >= 0) PassLostDead++;
             ClearPending();
             int fw = startTeam == 0 ? 10 : 21;
@@ -3468,7 +3481,11 @@ namespace TheBadge.Sim.Match
             return v0;
         }
 
-        int CorridorOpponents(ref MatchState st, int x1, int y1, int x2, int y2, byte team)
+        /// <summary>Koridordaki rakip sayısı. gkHaric: ŞUT koridoru sayımlarında kaleci atlanır —
+        /// kaleci kurtarış zarında (9.2) zaten ayrıca ele alınır; yoğunluk bonusuna da girmesi
+        /// merkezi şutlarda çifte sayımdı (isabetli şut + kurtarış sistematik bastırılıyordu —
+        /// M16-F incelemesinde yakalandı). Pas kesme koridorunda kaleci SAYILIR (gkHaric=false).</summary>
+        int CorridorOpponents(ref MatchState st, int x1, int y1, int x2, int y2, byte team, bool gkHaric = false)
         {
             double dx = x2 - x1, dy = y2 - y1;
             double len = Math.Sqrt(dx * dx + dy * dy);
@@ -3477,6 +3494,7 @@ namespace TheBadge.Sim.Match
             for (int i = 0; i < 22; i++)
             {
                 if (st.Agents[i].TeamIdx == team || !st.Agents[i].Active) continue;
+                if (gkHaric && i % 11 == 0) continue;
                 double px = st.Agents[i].X - x1, py = st.Agents[i].Y - y1;
                 double t = (px * dx + py * dy) / (len * len);
                 if (t < 0.05 || t > 0.95) continue;

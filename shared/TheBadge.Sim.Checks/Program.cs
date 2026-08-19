@@ -262,7 +262,7 @@ if (runA.finalHash != runB.finalHash || runA.at600 != runB.at600)
 else Pass("MatchSkeletonDeterminism");
 
 // 7b) Golden: durum hash'i sabitlendi — alan/sıra değişikliği bilinçli golden güncellemesi ister
-const ulong MATCH_GOLDEN = 0x829EAF4C5B0B6964UL; // M16-F'te yeniden sabitlendi (derin blok + kontra penceresi + kDuel — bilinçli)
+const ulong MATCH_GOLDEN = 0x339F669C13A037ADUL; // M16-F incelemesinde yeniden sabitlendi (GK koridor + sahiplik-bazlı geçiş — bilinçli)
 if (MATCH_GOLDEN != 0 && runA.finalHash != MATCH_GOLDEN)
     failures += Fail("MatchSkeletonGolden", $"0x{runA.finalHash:X} != 0x{MATCH_GOLDEN:X}");
 else Pass("MatchSkeletonGolden");
@@ -464,7 +464,7 @@ Console.WriteLine($"[info] M2 durum hash: 0x{mA2.h:X}");
 if (mA2.h != mB2.h) failures += Fail("M2Determinism", $"0x{mA2.h:X} != 0x{mB2.h:X}");
 else Pass("M2Determinism");
 
-const ulong M2_GOLDEN = 0x20A689DEC9083179UL; // M16-F'te yeniden sabitlendi (derin blok + kontra — bilinçli)
+const ulong M2_GOLDEN = 0x78A20B875433E3CBUL; // M16-F incelemesinde yeniden sabitlendi (bilinçli)
 if (M2_GOLDEN != 0 && mA2.h != M2_GOLDEN) failures += Fail("M2Golden", $"0x{mA2.h:X}");
 else Pass("M2Golden");
 
@@ -541,7 +541,7 @@ if (f1.hash != f2.hash || f1.res.TotalTicks != f2.res.TotalTicks)
     failures += Fail("M4Determinism", $"0x{f1.hash:X} != 0x{f2.hash:X}");
 else Pass("M4Determinism");
 
-const ulong M4_GOLDEN = 0xF6080CEA27380307UL; // M16-F'te yeniden sabitlendi (derin blok + kontra — bilinçli)
+const ulong M4_GOLDEN = 0x11729A7F4256ECE3UL; // M16-F incelemesinde yeniden sabitlendi (bilinçli)
 if (M4_GOLDEN != 0 && f1.hash != M4_GOLDEN) failures += Fail("M4Golden", $"0x{f1.hash:X}");
 else Pass("M4Golden");
 
@@ -828,7 +828,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     Console.WriteLine($"[info] M6 komutlu maç hash: 0x{hA:X}");
     if (hA != hB) failures += Fail("M6Determinism", $"0x{hA:X} != 0x{hB:X}");
     else Pass("M6Determinism");
-    const ulong M6_GOLDEN = 0x617D87609710D9F1UL; // M16-F'te yeniden sabitlendi (derin blok + kontra — bilinçli)
+    const ulong M6_GOLDEN = 0x054B060AFDA0B564UL; // M16-F incelemesinde yeniden sabitlendi (bilinçli)
     if (M6_GOLDEN != 0 && hA != M6_GOLDEN) failures += Fail("M6Golden", $"0x{hA:X}");
     else Pass("M6Golden");
 }

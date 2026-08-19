@@ -761,6 +761,21 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
 - **Kapı değişimi:** `M16DUpsetYuksek` (eşiksiz muhafız) → `M16FUpsetOrta` (SERT eşik, 200 maç
   Orta: güçlü ≤ %91, sürpriz+beraberlik ≥ %9 — bugünkü gerçek + SE; hedef %78/%22 metinde).
 - Golden'lar yeniden pinlendi (bilinçli); LOD 2 tablosu M16-F motoruyla yeniden üretildi.
+- **PR incelemesinden iki gerçek bulgu (2026-08-19, Codex + Bugbot; ikisi de doğrulanıp kapatıldı):**
+  (1) **GK koridor çifte sayımı** — `CorridorOpponents` şut koridorunda KALECİYİ de sayıyordu;
+  kaleci kurtarış zarında (9.2) zaten ayrıca ele alınırken merkezi şutlarda blok yoğunluğuna
+  +1 gövde olarak giriyor, isabetli şutu ve kurtarışı sistematik bastırıyordu (M16-F'nin
+  "bilinçli sapma" dediği isabetli açığının gerçek kökü BUYMUŞ). Düzeltme: `gkHaric` parametresi
+  — ŞUT sayımlarında kaleci atlanır, PAS kesme koridorunda sayılmaya devam eder. Sonuç: gol ve
+  isabetli bantları KENDİLİĞİNDEN bant içine döndü; b0 −2,48 ve sutTehditCarpan 0,53 ile hizalandı.
+  (2) **Tackle-kazanımlı geçişlerde pencere atlanması** — kazanılan tackle `LastTouchTeam`'i
+  tackle yapana çeviriyor, topu takımı toplayınca "sahiplik değişimi" algılanmıyordu: geçiş
+  penceresi, MARKAJ ataması (M9'dan beri!) ve M16-F kontra bonusu derin bloğun ANA kazanım
+  yolunda hiç işlemiyordu. Düzeltme: değişim algısı dokunuş-takımından SAHİPLİK-takımına
+  (`lastOwnerTeam`, motor-yerel) taşındı; `LastTouchTeam` taç/korner hakemliğinin sahibi olarak
+  aynen kaldı; santra alımı değişim sayılmaz. İki düzeltme davranış değiştirir → golden'lar
+  yeniden pinlendi, kalibrasyon yeniden doğrulandı (bir alt satır).
+- **İnceleme-sonrası FİNAL 10k:** (koşu sürüyor; sayılar takip commit'iyle bu satıra işlenir)
 
 ## Bekleyen kararlar
 - ~~ME 13.4 upset büyüklüğü~~ → **KARAR (2026-08-19, Atilla): (d) HİBRİT.** Dört seçenek
