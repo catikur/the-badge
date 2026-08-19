@@ -184,10 +184,13 @@ Orta ~%78/%12/%10 · Yüksek ~%68/%16/%16 — DECISIONS kaydı bağlayıcı) + d
 - **Sonuç:** üssel katlanma kırıldı (şuta dönüşüm +24 farkta ×99→×8,8); FİNAL 10k lig ölçümünde
   75v55 G/B/M %93/%6/%1 → **%84/%12/%4** (revize hedef %78/%12/%10); **17.2 tablosu 13/13 ✓**
   (gol 2,41 · isabetli 7,5 · xG sapması %0,0).
-- **PR incelemesinden iki gerçek bulgu kapatıldı:** GK koridor çifte sayımı (Codex — isabetli
-  açığının gerçek köküymüş; `gkHaric` ile bantlar kendiliğinden döndü) + tackle-kazanımlı
+- **PR incelemesinden ÜÇ gerçek bulgu kapatıldı:** (1) GK koridor çifte sayımı (Codex — isabetli
+  açığının gerçek köküymüş; `gkHaric` ile bantlar kendiliğinden döndü); (2) tackle-kazanımlı
   geçişlerde pencere/markaj/kontra atlanması (Bugbot — değişim algısı sahiplik-takımına taşındı,
-  `lastOwnerTeam`). Detay DECISIONS'ta.
+  `lastOwnerTeam`); (3) duran top restart'larının senkronsuz kalması (Bugbot HIGH — kale
+  vuruşları "top çalma" gibi işleniyordu; `AwardSetPiece` senkronu). Üçüncü düzeltmenin yan
+  etkisiyle bant kenarına düşen üç kapı ÖRNEKLEM BÜYÜTÜLEREK çözüldü (bant/tolerans değişmedi).
+  **Nihai 10k: 13/13 ✓ · 75v55 %83/%12/%6.** Detay DECISIONS'ta.
 - Kapı: `M16FUpsetOrta` (sert eşik: güçlü ≤ %91, sürpriz+beraberlik ≥ %9; hedef metinde).
 
 ### M17 — Golden replay seti (ME 17.4) + FAZ 04 arayüz dondurması (18.3)

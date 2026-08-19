@@ -788,6 +788,11 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   ortalaması 5,25 — küçük örneklem zarı). Kalibrasyon yeniden hizalandı: `sutTehditCarpan 0,57`
   (eşit maç golü), `sutKoridorCeza 0,42` + `blokEkSavunucu 0,36` (pres01-ölçekli — yalnız fark
   maçlarını kırpar), `kDuel 0,35→0,28` (upset kaldıracı; eşit maça duyarsız olduğu ölçülüydü).
+- **NİHAİ 10k (push edilen konfigürasyon) — 17.2 tablosu 13/13 ✓:** gol 2,46 · şut 27,4 ·
+  isabetli 7,7 · korner 8,5 · faul 20,5 · sarı 3,14 · kırmızı 0,20 · penaltı 0,28 · ofsayt 4,8 ·
+  sakatlık 0,50 · pas %81,4 · gol-xG sapması %2,8 · possession %58,2. 75v55 (1.380 fark maçı):
+  G/B/M **%83/%12/%6** — revize hedef %78/%12/%10; beraberlik tam hedefte, kalan 5 puan
+  isabet/nişan dilimi + Yüksek chaos borcunda. LOD 2 tablosu bu motorla yeniden üretildi.
 - **İnceleme turu 1 sonrası 10k (duran top senkronundan ÖNCEKİ konfigürasyon) — 13/13 ✓:** gol 2,41 ·
   şut 26,6 · isabetli 7,5 · korner 8,3 · faul 20,7 · sarı 3,18 · kırmızı 0,20 · penaltı 0,29 ·
   ofsayt 4,9 · sakatlık 0,51 · pas %81,2 · gol-xG sapması %0,0 · possession %59,2. 75v55
