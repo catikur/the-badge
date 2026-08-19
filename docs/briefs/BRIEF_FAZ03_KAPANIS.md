@@ -182,9 +182,12 @@ Orta ~%78/%12/%10 · Yüksek ~%68/%16/%16 — DECISIONS kaydı bağlayıcı) + d
   kanalları (blok olasılığı, şut sigması, şut kararı cezası) + bloktan kontra (pencere +6 sn,
   bonus yalnız bloktaki tarafa) + kDuel 0,9→0,35 (denge mekanizmalarıyla ana kaldıraç oldu).
 - **Sonuç:** üssel katlanma kırıldı (şuta dönüşüm +24 farkta ×99→×8,8); FİNAL 10k lig ölçümünde
-  75v55 G/B/M %93/%6/%1 → **%84/%11/%6** (revize hedef %78/%12/%10); 17.2 tablosu 11/13 ✓.
-- **Bilinçli sapma:** gol 2,38 (bant 2,4-3; −0,02) ve isabetli 6,9 (bant 7-11; −0,1) — derin
-  bloğun şut kalitesi kırpması; isabet-özgü mekanizma dilimi borcu. CI kapısı (geniş bant) yeşil.
+  75v55 G/B/M %93/%6/%1 → **%84/%12/%4** (revize hedef %78/%12/%10); **17.2 tablosu 13/13 ✓**
+  (gol 2,41 · isabetli 7,5 · xG sapması %0,0).
+- **PR incelemesinden iki gerçek bulgu kapatıldı:** GK koridor çifte sayımı (Codex — isabetli
+  açığının gerçek köküymüş; `gkHaric` ile bantlar kendiliğinden döndü) + tackle-kazanımlı
+  geçişlerde pencere/markaj/kontra atlanması (Bugbot — değişim algısı sahiplik-takımına taşındı,
+  `lastOwnerTeam`). Detay DECISIONS'ta.
 - Kapı: `M16FUpsetOrta` (sert eşik: güçlü ≤ %91, sürpriz+beraberlik ≥ %9; hedef metinde).
 
 ### M17 — Golden replay seti (ME 17.4) + FAZ 04 arayüz dondurması (18.3)

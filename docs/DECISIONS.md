@@ -775,7 +775,11 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   (`lastOwnerTeam`, motor-yerel) taşındı; `LastTouchTeam` taç/korner hakemliğinin sahibi olarak
   aynen kaldı; santra alımı değişim sayılmaz. İki düzeltme davranış değiştirir → golden'lar
   yeniden pinlendi, kalibrasyon yeniden doğrulandı (bir alt satır).
-- **İnceleme-sonrası FİNAL 10k:** (koşu sürüyor; sayılar takip commit'iyle bu satıra işlenir)
+- **İnceleme-sonrası FİNAL 10k — 17.2 tablosu 13/13 ✓ (bilinçli sapma da kapandı):** gol 2,41 ·
+  şut 26,6 · isabetli 7,5 · korner 8,3 · faul 20,7 · sarı 3,18 · kırmızı 0,20 · penaltı 0,29 ·
+  ofsayt 4,9 · sakatlık 0,51 · pas %81,2 · gol-xG sapması %0,0 · possession %59,2. 75v55
+  (1.380 fark maçı): G/B/M **%84/%12/%4** — revize hedef %78/%12/%10; beraberlik tam hedefte,
+  kalan 6 puan isabet dilimi + Yüksek chaos borcunda.
 
 ## Bekleyen kararlar
 - ~~ME 13.4 upset büyüklüğü~~ → **KARAR (2026-08-19, Atilla): (d) HİBRİT.** Dört seçenek
