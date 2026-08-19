@@ -1427,6 +1427,81 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             failures += Fail("M15GucTepkisi", $"×{oran:0.0} — bugünkü gerçeğin de üstünde");
         else Pass($"M15GucTepkisi(×{oran:0.0} — HEDEF ×2-3 civarı; M16 kalibrasyon borcu)");
     }
+
+    // 18h) LOD 2 özet log sözleşmesi: boş okuma güvenli; kırmızı kart yazılır; gol AuxData
+    // kronolojik skor taşır (ME 16.1 özet + ME 15.1 AuxData kodlaması).
+    {
+        var taze = new Lod2Resolver(simBal, lod2Tbl);
+        var bos0 = taze.GetSummaryEvent(0);
+        var bos1 = taze.GetSummaryEvent(-1);
+        var bos2 = taze.GetSummaryEvent(99);
+        bool bosOk = taze.SummaryCount == 0 && bos0.Type == 0 && bos1.Type == 0 && bos2.Type == 0;
+
+        var c = CfgLod(0xB158, LodLevel.Lod2);
+        bool skorHata = false, bosMacOk = true;
+        int cokGol = 0, bosMac = 0;
+        for (int n = 0; n < 80; n++)
+        {
+            ulong sd = 0xB158UL + (ulong)n * 7919UL;
+            lod2.Run(sd, c);
+            int nOzet = lod2.SummaryCount;
+            if (nOzet == 0)
+            {
+                bosMac++;
+                var e0 = lod2.GetSummaryEvent(0);
+                var e1 = lod2.GetSummaryEvent(1);
+                if (e0.Type != 0 || e1.Type != 0) bosMacOk = false;
+            }
+            int ev = 0, dep = 0;
+            for (int i = 0; i < nOzet; i++)
+            {
+                var e = lod2.GetSummaryEvent(i);
+                if (e.Kind != EventType.Goal) continue;
+                if (e.TeamIdx == 0) ev++; else dep++;
+                int evS = e.AuxData / 1000, depS = (e.AuxData / 10) % 100;
+                if (evS != ev || depS != dep) skorHata = true;
+            }
+            if (ev + dep >= 2) cokGol++;
+        }
+
+        // Kırmızı ızgarada yalnız güç farkında dolu (zayıf vs güçlü hücreleri).
+        var cK = new MatchConfig
+        {
+            Seed = 0xB159, EngineVersion = "m15",
+            Home = BuildSheetSide(300, 7, home: true, offset: -18),
+            Away = BuildSheetSide(300, 7, home: false, idEntity: 8, offset: 18),
+            Referee = RefereeProfile.Default, Lod = LodLevel.Lod2
+        };
+        bool kirmiziEksik = false;
+        int kirmiziMac = 0, kirmiziOlay = 0;
+        for (int n = 0; n < 40; n++)
+        {
+            ulong sd = 0xB159UL + (ulong)n * 7919UL;
+            var r = lod2.Run(sd, cK);
+            int kirmizi = 0, nOzet = lod2.SummaryCount;
+            for (int i = 0; i < nOzet; i++)
+                if (lod2.GetSummaryEvent(i).Kind == EventType.RedCard) kirmizi++;
+            kirmiziOlay += kirmizi;
+            if (r.Reds > 0)
+            {
+                kirmiziMac++;
+                if (kirmizi == 0 && nOzet < Lod2Resolver.SummaryCapacity) kirmiziEksik = true;
+            }
+        }
+
+        if (!bosOk || !bosMacOk) failures += Fail("M15Lod2BosOzet", "boş özet IndexOutOfRange veya kirli kayıt");
+        else Pass($"M15Lod2BosOzet({bosMac} boş maç)");
+        if (kirmiziEksik || kirmiziOlay == 0)
+            failures += Fail("M15Lod2KirmiziOzet", kirmiziOlay == 0
+                ? "güç farkında kırmızı özet olayı yok"
+                : "Reds>0 iken özet log'da RedCard yok");
+        else Pass($"M15Lod2KirmiziOzet({kirmiziMac} maç / {kirmiziOlay} olay)");
+        if (skorHata || cokGol == 0)
+            failures += Fail("M15Lod2GolSkoru", skorHata
+                ? "gol AuxData kronolojik skoru taşımıyor"
+                : "örneklemde 2+ gol yok");
+        else Pass($"M15Lod2GolSkoru({cokGol} çok-gollü maç)");
+    }
 }
 
 // 19) FAZ 03 M16-A — Sonuç dağılımı teşhisi (ME 13.4 / 17.3)

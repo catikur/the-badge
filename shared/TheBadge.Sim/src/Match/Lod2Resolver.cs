@@ -38,7 +38,10 @@ namespace TheBadge.Sim.Match
         readonly MatchEvent[] summary = new MatchEvent[SummaryCapacity];
         int summaryCount;
         public int SummaryCount => summaryCount;
-        public MatchEvent GetSummaryEvent(int i) => summary[i < 0 ? 0 : i >= summaryCount ? summaryCount - 1 : i];
+        /// <summary>Özet olay. Dizin dolu önek içinde kırpılır; özet boşsa (0-0 kartsız —
+        /// LOD 2'de Poisson'un normal sonucu) varsayılan kayıt döner, -1 indisine düşülmez.</summary>
+        public MatchEvent GetSummaryEvent(int i)
+            => summaryCount <= 0 ? default : summary[i < 0 ? 0 : i >= summaryCount ? summaryCount - 1 : i];
 
         public Lod2Resolver(SimBalance balance, Lod2Table lod2Table)
         {
@@ -100,12 +103,24 @@ namespace TheBadge.Sim.Match
 
             // ÖZET LOG (16.1): yalnız goller ve kartlar. Dakikalar CHAOS akışından çekilir —
             // haber/hikaye katmanı "78'de kazandı" diyebilsin diye; sunum değeri buradadır.
-            for (int i = 0; i < golEv && summaryCount < SummaryCapacity; i++) OzetGol(seed, 0, i, i + 1, golDep);
-            for (int i = 0; i < golDep && summaryCount < SummaryCapacity; i++) OzetGol(seed, 1, i, golEv, i + 1);
+            // Gol AuxData'sı sıralamadan SONRA yazılır: LOD 0 ile aynı kodlama (ev×1000 + dep×10),
+            // gol anındaki skor — nihai skor değil (ME 15.1/15.3).
+            for (int i = 0; i < golEv && summaryCount < SummaryCapacity; i++) OzetGol(seed, 0, i);
+            for (int i = 0; i < golDep && summaryCount < SummaryCapacity; i++) OzetGol(seed, 1, i);
+            int kirmiziEv = Yuvarla(table.kirmizi, sEv, sDep, seed, 9), kirmiziDep = Yuvarla(table.kirmizi, sDep, sEv, seed, 10);
+            for (int i = 0; i < kirmiziEv && summaryCount < SummaryCapacity; i++) OzetKart(seed, 0, i, EventType.RedCard);
+            for (int i = 0; i < kirmiziDep && summaryCount < SummaryCapacity; i++) OzetKart(seed, 1, i, EventType.RedCard);
             int sariEv = Yuvarla(table.sari, sEv, sDep, seed, 7), sariDep = Yuvarla(table.sari, sDep, sEv, seed, 8);
             for (int i = 0; i < sariEv && summaryCount < SummaryCapacity; i++) OzetKart(seed, 0, i, EventType.YellowCard);
             for (int i = 0; i < sariDep && summaryCount < SummaryCapacity; i++) OzetKart(seed, 1, i, EventType.YellowCard);
             SirralaOzet();
+            int evSkor = 0, depSkor = 0;
+            for (int i = 0; i < summaryCount; i++)
+            {
+                if (summary[i].Type != (ushort)EventType.Goal) continue;
+                if (summary[i].TeamIdx == 0) evSkor++; else depSkor++;
+                summary[i].AuxData = evSkor * 1000 + depSkor * 10;
+            }
             return res;
         }
 
@@ -165,20 +180,22 @@ namespace TheBadge.Sim.Match
 
         static double Kuanta(double v) => (int)(v * 65536.0) / 65536.0;
 
-        void OzetGol(ulong seed, byte team, int idx, int evSkor, int depSkor)
+        void OzetGol(ulong seed, byte team, int idx)
         {
             uint dk = (uint)(Rng.Rand01(seed, Domain.Chaos, (uint)(7100 + team * 20 + idx), 0, 20) * 90);
             summary[summaryCount++] = new MatchEvent
             {
                 Tick = dk * 600, Type = (ushort)EventType.Goal, ActorA = -1, ActorB = -1,
                 TeamIdx = team, X = 0, Y = 0,
-                AuxData = evSkor * 1000 + depSkor * 10, Xg = 0f, Flags = 0
+                AuxData = 0, Xg = 0f, Flags = 0
             };
         }
 
         void OzetKart(ulong seed, byte team, int idx, EventType tip)
         {
-            uint dk = (uint)(Rng.Rand01(seed, Domain.Chaos, (uint)(7200 + team * 20 + idx), 0, 21) * 90);
+            // Kırmızı, sarı akışını kirletmesin diye ayrı salt (sarı 21 — bit-aynı kalsın).
+            uint salt = tip == EventType.RedCard ? 22u : 21u;
+            uint dk = (uint)(Rng.Rand01(seed, Domain.Chaos, (uint)(7200 + team * 20 + idx), 0, salt) * 90);
             summary[summaryCount++] = new MatchEvent
             {
                 Tick = dk * 600, Type = (ushort)tip, ActorA = -1, ActorB = -1,
