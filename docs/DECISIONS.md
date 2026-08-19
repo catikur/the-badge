@@ -746,9 +746,13 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   +12 farkta ×6,1 → ×3,1; +24 farkta ×99 → ×8,8. +24'te güçlünün şutu 57→32, zayıfın golü
   0,20→0,60; eşit maç tam simetrik (×1,01). 75v55 gol profili 4,4-0,18 → 2,8-0,45.
 - **ME 13.4 REVİZE hedefe karşı (lig dağılımlı ara-10k, 1.380 fark maçı):** G/B/M **%82/%12/%6**
-  (hedef %78/%12/%10) — beraberlik TAM hedefte; başlangıç %93/%6/%1'di. (Son mikro-kalibrasyon
-  paketi sonrası final 10k sayıları bir alt satırda.) Kaos fixture (200 maç, Orta): %88/%8/%4.
-  Düşük chaos %85 (hedef ~%85 ✓), Yüksek %81 (hedef ~%68 — chaos borcu sürer).
+  (hedef %78/%12/%10) — beraberlik TAM hedefte; başlangıç %93/%6/%1'di. Kaos fixture (200 maç,
+  Orta): %88/%8/%4. Düşük chaos %85 (hedef ~%85 ✓), Yüksek %81 (hedef ~%68 — chaos borcu sürer).
+- **FİNAL 10k (`-- calib10k 10000`, push edilen konfigürasyon):** 75v55 G/B/M **%84/%11/%6**
+  (sürpriz+beraberlik %17; hedef %22). 17.2 tablosu **11/13 ✓**: şut 24,9 · korner 8,4 ·
+  faul 20,9 · sarı 3,24 · kırmızı 0,20 · penaltı 0,30 · ofsayt 4,9 · sakatlık 0,56 · pas %80,8 ·
+  xG sapması %4,8 · possession %59,3. Bilinçli sapma İKİ bantta: **gol 2,38** (bant 2,4-3;
+  −0,02) ve **isabetli 6,9** (bant 7-11; −0,1) — isabet dilimi borcunun kapanışında düzelir.
 - **Bilinçli sapma (17.2 dar bantları):** gol 2,3-2,4 sınırında (bant 2,4-3) ve isabetli ~6,8
   (bant 7-11) — derin bloğun DOĞRU sonucu: fark maçlarında şut kalitesi kırpılıyor (isabetli
   14→9,4). Sigma/blok kaldıraçlarının iki yüzeyi (bant ↔ upset) ters oynattığı ping-pong
