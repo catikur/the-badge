@@ -35,6 +35,100 @@ namespace TheBadge.Sim.Config
         /// <summary>Hava ve zemin — ME Spec 12.4 [KALİBRE]. Tüm çarpanlar burada; kodda sabit yok.</summary>
         public HavaCfg hava = new HavaCfg();
 
+        /// <summary>Highlight puanlama — ME Spec 15.3 [KALİBRE].</summary>
+        public HighlightCfg highlight = new HighlightCfg();
+
+        /// <summary>Uzun top / temizleme / kaleci dağıtımı — ME 7.2 (LongSwitch, ClearBall) +
+        /// ME 9.4 (KısaAçıl/UzunDegaj/ElleAt) [KALİBRE] (M16-D).</summary>
+        public LongballCfg longball = new LongballCfg();
+
+        [System.Serializable]
+        public sealed class LongballCfg
+        {
+            public double minMesafeM;        // bu mesafenin altı kısa pastır, uzun top aday olmaz
+            public double hizMS;             // uçuş hızı (orta gibi balistik — ME 8.3)
+            public double sigmaTabanDeg;     // nişan sapması tabanı (Passing daraltır)
+            public double tehditCarpan;      // uzun topun tehdit ağırlığı (kesin kontrol yok → iskonto)
+            public double riskTaban;         // iniş rekabeti taban kaybı
+            public double havaRiskPerRakip;  // iniş noktasındaki rakip başına ek kayıp
+            public double clearBolgeM;       // kendi kaleye bu mesafeden yakınken TEMİZLE aday olur
+            public double clearIleriM;       // temizlemenin ileri menzili
+            public double clearYanM;         // taca doğru yanal itme
+            public double clearSigmaDeg;     // temizleme sapması (kontrollü vuruş değildir)
+            public double clearKayipTaban;   // temizlemenin kabul edilmiş kayıp oranı
+            public double clearPresBonus;    // baskı başına temizleme iştahı
+            public double gkElleAtMaxM;      // elle atışın menzili (ME 9.4 ElleAt)
+            public double gkElleSigmaCarpan; // elle atış isabet çarpanı (<1: elle atış isabetlidir)
+            public double gkKisaBias;        // Kicking düşük kalecinin kısa oynama eğilimi (9.4)
+            public double gkDegajSigmaDeg;   // degaj sapması (Kicking daraltır — 9.4)
+            public double gkPresDegajBias;   // pres altında degaj bias'ı (9.4: +0,25)
+            public double gkDegajRisk;       // degajın kabul edilmiş kayıp oranı
+            public int gkKisaN;              // kısa açılış aday sayısı
+        }
+
+        /// <summary>LOD bütçeleri + LOD 2 güç bileşimi — ME Spec 16.1 [KALİBRE].
+        /// Regresyon KATSAYILARI burada DEĞİL, üretilmiş `balance/sim.lod2.json` dosyasındadır.</summary>
+        public LodCfg lod = new LodCfg();
+
+        [System.Serializable]
+        public sealed class LodCfg
+        {
+            public BudgetCfg cpuBudgetSn = new BudgetCfg();
+            public GucCfg guc = new GucCfg();
+
+            [System.Serializable]
+            public sealed class BudgetCfg { public double lod0, lod1, lod2; }
+
+            /// <summary>Takım gücü bileşimi (LOD 2 girdisi). Kaleci ayrı bileşen: nitelik seti
+            /// saha oyuncusuyla ortak değildir.</summary>
+            [System.Serializable]
+            public sealed class GucCfg
+            {
+                public double kaleciPayi;
+                public KaleciCfg kaleci = new KaleciCfg();
+                public SahaCfg sahaOyuncusu = new SahaCfg();
+
+                [System.Serializable]
+                public sealed class KaleciCfg { public double reflexes, handling, oneOnOne, aerialCommand; }
+                [System.Serializable]
+                public sealed class SahaCfg
+                { public double passing, finishing, tackling, pace, positioning, decisions, firstTouch, strength; }
+            }
+        }
+
+        [System.Serializable]
+        public sealed class HighlightCfg
+        {
+            public WCfg w = new WCfg();
+            public double esik;              // H > bu → zaman çizelgesi işareti (GDD 5.6)
+            public WinProbCfg winprob = new WinProbCfg();
+            public double buyukSansXg;       // bu xG üstü şut "büyük şans" sayılır (Flags.BigChance)
+            public double uzakGolMesafeM;    // bu mesafeden fazlası "uzak gol" nadirliğine girer
+            public NadirlikCfg nadirlik = new NadirlikCfg();
+
+            /// <summary>H = 0,35×xG salınımı + 0,20×geç dakika + 0,20×skor etkisi
+            /// + 0,15×nadirlik + 0,10×hikaye ilgisi (ME 15.3).</summary>
+            [System.Serializable]
+            public sealed class WCfg
+            { public double xgSalinim, gecDakika, skorEtkisi, nadirlik, hikayeIlgisi; }
+
+            /// <summary>Kayan WinProb modeli — spec formül vermez, ME 15.3 yalnız "kayan model" der.
+            /// p = lojistik(k × gol_farkı / √(kalan_dk / 90)).</summary>
+            [System.Serializable]
+            public sealed class WinProbCfg { public double k, minKalanDk; }
+
+            /// <summary>Nadirlik taban tablosu — ME 15.3 ("event tipi taban tablosu:
+            /// röveşata sınıfı vole, 30 m gol, penaltı kurtarışı yüksek"). 0-1 bandı.</summary>
+            [System.Serializable]
+            public sealed class NadirlikCfg
+            {
+                public double gol, uzakGol, kafaGol, penaltiGol, kacanBuyukSans;
+                public double penaltiKurtaris, kurtaris, celme, isabetliSut, blokluSut;
+                public double penaltiVerildi, kirmiziKart, sariKart, varInceleme, varKarari;
+                public double sakatlik, asist, diger;
+            }
+        }
+
         [System.Serializable]
         public sealed class HavaCfg
         {
@@ -115,6 +209,8 @@ namespace TheBadge.Sim.Config
             public double griBantOrta;        // ± gri bant genişliği
             public double sariEsik, kirmiziEsik;
             public double cezaSahasiIhtiyatCarpan; // kendi ceza sahasında şiddet skoru çarpanı
+            public double avantajXtEsik;      // avantaj için mağdurun hücresinin asgari xT'si (ME 11.2 tehdit koşulu)
+            public double sariSonrasiIhtiyat; // sarı görmüş oyuncunun şiddet skoru iskontosu (M16-E)
         }
 
         /// <summary>Duran toplar — ME Spec 10 [KALİBRE].</summary>
@@ -134,6 +230,8 @@ namespace TheBadge.Sim.Config
             public double korneriGozeAlmaOran;   // baskı altında kendi kutusunda topu dışarı atma oranı
             public double uzaklastirmaHizMS;     // savunmanın uzaklaştırma hızı
             public int hazirlikTicks;            // duran top hazırlığı (sıkıştırılmış çözüm, ME 3.4)
+            public double santraDaireM;          // santrada rakibin çekilmek zorunda olduğu daire yarıçapı (ME 4.1 DEAD_BALL)
+            public int santraHazirlikTicks;      // santra beklemesi: diziliş toparlanana dek alım kilidi (ME 4.1)
 
             [System.Serializable]
             public sealed class PenaltyCfg
@@ -170,6 +268,7 @@ namespace TheBadge.Sim.Config
             public double cikisGenislikM;       // çıkış bölgesinin yarı genişliği (m)
             public double yakinMesafeM;         // 1v1 kapatma etkisinin başladığı mesafe (ME 9.3)
             public double yakinKapatmaKatsayi;  // OneOnOne'ın marja katkısı (sn)
+            public double tutmaBoleni;          // tutuş kontrolü: Handling/bu (çelme payının tersi, M16-E)
         }
 
         /// <summary>Şut yürütme — ME 6.4 kompoziti + 8.3 (M3 ekleme) [KALİBRE].</summary>
@@ -249,6 +348,7 @@ namespace TheBadge.Sim.Config
             public double presFactorPerRakip;  // M_pres = 1 + bu × yakın rakip
             public double groundSpeedMin, groundSpeedMax; // yerden pas hızı bandı (m/sn)
             public double presYaricapM;        // "yakın rakip" sayım yarıçapı (M2 ekleme)
+            public double kaleOnuTamponM;      // pas hedefi kendi kale çizgisine bundan fazla yaklaşamaz (M16-E)
         }
 
         /// <summary>Topsuz konumlanmada anchor ağırlığı — ME Spec 7.4 [KALİBRE].</summary>
@@ -269,6 +369,11 @@ namespace TheBadge.Sim.Config
             public double kaleciElCarpani;     // kalecinin Handling ile açtığı eşik çarpanı (ME 9.4)   // temiz kontrol için bağıl hız eşiği (m/sn, ME 6.4)
             public int yenidenAlmaTicks;       // topu oynayanın geri alma kilidi (tick, ME 4.3)
             public int tackleCooldownTicks;    // müdahale sonrası aksiyon kilidi
+            /// <summary>Aynı savunucunun iki tackle DENEMESİ arasındaki asgari süre (tick) —
+            /// M16-C enstrümanı. Karar kilidinden (tackleCooldownTicks → ActionUntilTick) ayrı
+            /// tutulur ki deneme SIKLIĞI tek başına ayarlanabilsin; iki değer eşitken davranış
+            /// eski modelle birebir aynıdır (M0-M15 golden'ları kanıt).</summary>
+            public int tackleDenemeAralikTicks;
             public double tackleLooseHizMS;    // kazanılan top bu hızla açığa çıkar
         }
 
@@ -339,11 +444,17 @@ namespace TheBadge.Sim.Config
             public double[] satir = new double[0];  // [8] alt taçtan üst taca (orta şerit yüksek)
         }
 
-        /// <summary>Chaos sigma seviyeleri — ME Spec 13.2 (M2: yalnız orta seviye tüketilir).</summary>
+        /// <summary>Chaos seviye tablosu — ME Spec 13.2 [KALİBRE]. 5 enjeksiyon noktasının tamamı
+        /// (M16-D2): düello marjı · karar skoru · nişan çarpanı · hakem gri bandı · sekme
+        /// pertürbasyonu. Seviye maç kurulumundan gelir (MatchConfig.Chaos); varsayılan Orta.</summary>
         [System.Serializable]
         public sealed class ChaosCfg
         {
-            public SigmaCfg decisionSigma = new SigmaCfg();
+            public SigmaCfg duelSigma = new SigmaCfg();      // düello marjı gürültüsü (100 ölçeği)
+            public SigmaCfg decisionSigma = new SigmaCfg();  // karar skoru gürültüsü
+            public SigmaCfg aimCarpan = new SigmaCfg();      // nişan sapması çarpanı (pas/şut/orta/uzun)
+            public SigmaCfg griBantEk = new SigmaCfg();      // hakem gri bandı (seviyenin TAM bandı)
+            public SigmaCfg sekmePertDerece = new SigmaCfg();// sekme yönü pertürbasyonu (yalnız Yüksek)
             [System.Serializable]
             public sealed class SigmaCfg { public double dusuk, orta, yuksek; }
         }

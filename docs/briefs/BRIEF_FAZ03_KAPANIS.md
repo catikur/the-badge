@@ -70,18 +70,110 @@ Yağış/zemin → sürtünme, sekme, pas hatası, sakatlık çarpanları.
   DECISIONS.md'ye M16 borcu olarak yazıldı (kök: `pass.groundSpeedMin` × 1/a_roll aşım etkisi,
   kuru koşulda da var).
 
-### M14 — Maç sonu veri paketi + event log + highlight (ME 15.1/15.3/15.4)
+### M14 — Maç sonu veri paketi + event log + highlight (ME 15.1/15.3/15.4) — ✅ TAMAM (2026-08-14)
 LLM ve Panorama'nın girdisi; FAZ 04'ün beslendiği yer.
-- **Kapı:** paket şeması + highlight puanı > 0,50 olan an sayısı bandı.
+- ~~**Kapı:** paket şeması + highlight puanı > 0,50 olan an sayısı bandı.~~
+- **Uygulanan kapı:** `M14TekKaynak` (paket istatistiği = motor sayaçları, birebir) ·
+  `M14TamponTasmasi` (4096 halka yetiyor: tepe 1.651, düşen 0) · `M14LogDeterminizmi` (aynı tohum =
+  alan alan aynı olay dizisi) · `M14PaketSemasi` (eğriler 90 nokta, en yüksek anlar H'ye göre
+  azalan, H ∈ [0,1]) · `M14HighlightSiralamasi` (golü olan her maçta gol ilk 10'da) ·
+  `M14EventHacmi` + `M14SariBandi` + `M14KirmiziBandi`.
+- **"H > 0,50 an sayısı bandı" maddesi kapı OLMADI:** ölçüm 0,5-0,8/maç ve bu bir kalibrasyon
+  değil formül özelliği (nadirlik tablosu maksimumda bile 20. dakika golü eşiği geçmiyor).
+  Aritmetiğiyle DECISIONS.md'ye yazıldı, "Bekleyen kararlar"a 3 seçenekli öneri eklendi.
+- **Event log'un ilk kazancı:** M4'ten beri `kart = sarı + kırmızı` toplamının içinde saklanan
+  **kırmızı kart 1,0/maç** (bant 0,15-0,30) görünür oldu — tamamı ikinci sarı. M16 borcu.
+- **M12'nin 2 VAR sınıfı hâlâ açık:** engel event log değilmiş — ikisi de "gol verilir, sonra
+  incelenir, geri alınır" akışını istiyor; motorda askıda gol durumu yok. Ayrı dilim önerilir.
 
-### M15 — LOD 1-2 türetme (ME 16.1) + sunucu throughput (16.3)
+### M15 — LOD 1-2 türetme (ME 16.1) + sunucu throughput (16.3) — ✅ TAMAM (2026-08-16)
 Ligdeki tüm maçların aynı anda koşabilmesi buna bağlı.
-- **Kapı:** LOD 1/2 sonuç dağılımı LOD 0 ile istatistiksel uyum + CPU bütçesi (16.4).
+- **Kapı:** ~~LOD 1/2~~ LOD 2 sonuç dağılımı LOD 0 ile istatistiksel uyum + CPU bütçesi (16.4). ✓
+- **Ölçüm önce:** LOD 0 **131 ms/maç** — 16.1 bütçesinin (2.500 ms) **19 katı altında**;
+  24 çekirdekli düğüm ~185 maç/sn (16.3 hedefi 16,7). 16.3'ün "2 düğüm zirvede" hesabı
+  2,5 sn/maç varsayımına dayanıyordu.
+- **LOD 1 → LOD 0'ın eşleniği yapıldı** (karar, DECISIONS.md): tek gerekçesi CPU'ydu ve o gerekçe
+  ölçümle düştü. `M15Lod1Esdeger` kapısı bit-aynılığı doğruluyor.
+- **LOD 2 ızgara tablosu** (kendi güç × rakip güç, iki doğrusal ara değerleme) — 3 µs/maç,
+  5 güç kademesinde LOD 0 ile ±%25 uyum. Üretici: `-- fit-lod2` (ME 16.1 CI adımı).
+- **Bu dilimin en ağır çıktısı bir BULGU:** motorun güç tepkisi aşırı dik — 75,6'lık takım
+  39,6'lık takımı 28-0,1 yeniyor (gerçek ~3-0). Köşegen (eşit güç) bantta. ME 17.3 chaos upset
+  doğrulaması bu eğrinin üstünde durur → **M16'nın asıl işi**, artık sayısıyla birlikte.
 
 ### M16 — 10.000 maç kalibrasyon + chaos upset (ME 17.2/17.3)
 Bugüne kadar 8-24 maçlık örneklerle çalıştık; spec 10k istiyor. 75v55 upset ve 65v65
 beraberlik bandı (%22-30) doğrulaması burada.
 - **Kapı:** 17.2 tablosunun TAMAMI + 17.3 toleransları.
+
+#### M16-A — Sonuç dağılımı teşhisi — ✅ TAMAM (2026-08-16)
+Kalibrasyondan ÖNCE "neden kalibre edilemiyor" ölçüldü.
+- **Eşit güçte beraberlik %27** — ME 17.3 hedefi %22-30 → ✓ zaten bantta. Denk maç sağlam.
+- **75v55: %100 / %0 / %0** (hedef %66/%18/%16). Kök ölçüldü: sahiplik gerçekçi (60/40) ve
+  atak sayısı neredeyse eşit; kırılma tek yerde — **şut/atak 0,566 vs 0,004 (×100)**.
+- Bir atağın şuta dönmesi ~8 ardışık başarı istiyor (futbolda 3-4); zincir uzun çünkü sahiplik
+  maç başına 374 kez el değiştiriyor (gerçek ~120). Uzun zincirde halka başına küçük üstünlük
+  ÜSTEL katlanıyor.
+- **Tek katsayı çözmüyor:** `kDuel` 0,90 → 0,20 (×4,5 azaltma) 75v55'i yalnız %99,5 → %87
+  yapıyor; güç farkı ~8 ayrı kanaldan akıyor.
+- **Bu kök, M13/M14/M15'te ayrı ayrı yazılan dört borcun da kökü** — hepsi pas/sahiplik
+  modelinin topu çok sık ve çok kısa oynatmasına çıkıyor.
+- Kapılar: `M16BeraberlikBandi` (geçiyor) · `M16UpsetBandi` (borç muhafızı).
+
+#### M16-B — Pas aşımı düzeltmesi — ⛔ DENENDİ, ÖLÇÜLDÜ, GERİ ALINDI (2026-08-16)
+`groundSpeedMin` taban kırpması yerine fizikten türetilen varış hızı modeli denendi
+(v0² = v_varış² + 2·a·d → aşım mesafesi sabit).
+- **Hipotez yanlış çıktı:** aşımı tamamen kaldırmak sahiplik değişimini 360 → 331'in altına
+  indiremedi (hedef ~120) ve **75v55 hiç kıpırdamadı** (%97-100). Hiçbir v_varış değeri de
+  ME 17.2 bandını korumuyor. Ölçülebilir kazanç olmadan golden'lar yeniden pinlenmez → geri alındı.
+- **Düzeltilmiş kök:** her v_varış değerinde **tackle ≈ sahiplik değişimi** (333≈342, 298≈331).
+  Sahiplik neredeyse her seferinde bir tackle ile el değiştiriyor; gerçekte maç başına ~35 tackle
+  var, bizde 260-415 — model **~10 kat fazla tetikleniyor.** Sıradaki deneme burasıdır.
+- Yama saklandı: `scratchpad/M16B_pas_varis_hizi.patch`. Ölçüm tablosu DECISIONS.md'de.
+
+#### M16-C — Tackle tetikleme ölçümü — ✅ TAMAM (2026-08-16)
+Enstrüman (davranış-nötr: deneme aralığı karar kilidinden ayrıldı, ayrışım sayaçları, golden'lar
+korundu) + süpürme + karar.
+- **Ayrışım:** sahiplik değişimi 341 = tackle 165 + **pas kesme 167** + serbest 10. Zincir iki
+  eşit motorla dönüyor; M16-A'nın "sürücü tackle" okuması yarım doğruymuş.
+- **Süpürme:** deneme 873→431, tackle kaynaklı değişim 193→74 — AMA kesme kanalı sabit (~185
+  taban), toplam yalnız 379→278 ve **75v55 yerinden oynamadı (%99,2→%96,7)**. Varsayılanlar
+  değişmedi; katsayı ancak M16-E tam kalibrasyonuyla anlamlı.
+- **Asıl sonuç:** eksik mekanizmanın spec'te adı var — ME 7.2 **LongSwitch/ClearBall** + ME 9.4
+  kaleci **UzunDegaj/ElleAt** motorda YOK (M10'daki "orta" durumunun aynısı). Zayıf takımın
+  zinciri kısaltma yolu bunlar → M16-D uygular, upset ondan sonra yeniden ölçülür.
+
+#### M16-D — Uzun top + kaleci dağıtımı + CHAOS motoru — ✅ TAMAM (2026-08-16)
+Üç spec borcu birden: ME 7.2 aday kümesi (LongSwitch/ClearBall), ME 9.4 kaleci dağıtımı
+(KısaAçıl/UzunDegaj/ElleAt — kale vuruşları dahil), ME 13.1-13.3 chaos motoru (5 enjeksiyon
+noktasının TAMAMI, 3 seviye, MatchConfig.Chaos).
+- **Kullanım (Orta):** uzun top 27/maç (%54 kazanma) · temizleme 26 · GK 11/32/6,5.
+  Uzun top kullanımı chaos seviyesiyle kendiliğinden artıyor (18→29→66).
+- **ME 13.4'e karşı:** Düşük %99,3 · Orta %98,7 · Yüksek %94,7 (hedef %76/%66/%54) — YÖN ilk
+  kez doğru, büyüklük M16-E tam kalibrasyonunun işi.
+- Golden'lar yeniden pinlendi; LOD 2 tablosu yeni motorla yeniden üretildi (7.840 maç);
+  ME 17.2 bantları korundu. Kapılar: `M16DKullanim` · `M16DChaosDeterminizm` ·
+  `M16DChaosSeviyeEtkisi` · `M16DUpsetYuksek` (borç muhafızı).
+
+#### M16-E — 17.2 tam kalibrasyonu + iki yapısal asimetri düzeltmesi — ✅ TAMAM (2026-08-18)
+**10.000 maçta 13/13 bant ✓:** gol 2,48 · şut 27,4 · isabetli 7,4 · korner 8,4 · faul 18,7 ·
+sarı 3,11 · kırmızı 0,19 · penaltı 0,25 · ofsayt 4,9 · sakatlık 0,55 · pas %81,4 · xG sapması
+%1,4 · possession %64. Kalibrasyon seti tanımı: lig dağılımı ofset ±12 (Chaos domain çekilişi).
+- **Spec borçları kapandı:** ME 12.4 avantaj tehdit koşulu (28/maç → 4,5) · sarı sonrası
+  ihtiyat (kırmızı 1,0 → 0,19; ikinci-sarı tekeli kırıldı) · kale önü pas tamponu (serbest-gol
+  dönüşü bastırıldı) · `tutmaBoleni` [KALİBRE]'ye · xG `b0` yeniden kalibre (sapma %63 → %1,4) ·
+  `LooseGoalKind` 9-sınıf teşhis ayrışımı.
+- **Yapısal asimetri 1 — santra kuralı:** rakip santrada merkez dairesi içinde basıyordu
+  (ayna: devre 1 şutları 60/145, bir tohumda ev 0 şut). ME 4.1 santra hazırlığı eklendi:
+  anchor dizilişi + 9,15 m daire + `santraHazirlikTicks` beklemesi + devre arası diziliş
+  reset'i → 92/108; **M4/M5 eşit-güç gol kapıları kendiliğinden bant içine döndü** (2,08/2,00).
+- **Yapısal asimetri 2 — karar tarama yönü:** sabit 0→21 sıra aynı-tick savunma tepkisini hep
+  deplasmana veriyordu (ayna xG sapması %27; ters yön %9 ev lehine — mekanizma kanıtı).
+  Tick paritesiyle yön dönüşümü → N=120'de %9 (gürültü). ME 3.2 "sabit sıra" = yeniden
+  üretilebilir sıra; determinizm korunur.
+- **Bulgu (Bekleyen kararlar'a):** üstünlük zincirde üssel (ŞUT/ATAK %5→%13→%33) — 13.4 upset
+  büyüklüğü tasarım kararı, M17 dondurmasından önce. 10k G/B/M: %93/%6/%1 (hedef %66/%18/%16).
+- Golden'lar yeniden pinlendi (4); LOD 2 yeniden üretildi (`M15KompozisyonHatasi` %91→%60);
+  yeni kapı `M16ECalibGenis` (ME 17.4: CI 500 maç GENİŞ bant; dar bantlar `calib10k 10000`).
 
 ### M17 — Golden replay seti (ME 17.4) + FAZ 04 arayüz dondurması (18.3)
 - **Kapı:** replay dörtlüsü (seed + config_hash + komut zaman çizelgesi + sürüm) ile
