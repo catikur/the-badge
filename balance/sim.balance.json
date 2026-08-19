@@ -11,7 +11,7 @@
   },
   "duel": {
     "pTabanDefault": 0.48,
-    "kDuel": 0.9,
+    "kDuel": 0.35,
     "clampMin": 0.08,
     "clampMax": 0.92,
     "pTabanTackle": 0.3,
@@ -49,7 +49,7 @@
     "kayipKoridorRakip": 0.22,
     "pasKesmeBandiSn": 0.7,
     "kayipMesafePerM": 0.006,
-    "sutTehditCarpan": 0.46,
+    "sutTehditCarpan": 0.55,
     "sutBaskiCezasi": 0.35,
     "araPasIleriM": 12.0,
     "araPasRisk": 0.28,
@@ -62,7 +62,9 @@
     "kontraRiskTolerans": 0.25,
     "mentaliteTehditCarpan": 0.15,
     "mentaliteRiskTolerans": 0.1,
-    "tempoTutCezasi": 0.08
+    "tempoTutCezasi": 0.08,
+    "kontraBlokBonus": 1.0,
+    "sutKoridorCeza": 0.34
   },
   "offball": {
     "wTop": 0.25,
@@ -85,11 +87,17 @@
     "kutuDerinlikM": 8.0,
     "kutuYanM": 5.0,
     "ortaGenislikEsikMm": 8000,
-    "kontraIleriM": 8.0,
+    "kontraIleriM": 10.0,
     "gecisSnTaban": 3.0,
     "gecisSnPerMentalite": 2.8,
     "mentaliteIleriItmeM": 1.5,
-    "mentaliteHatM": 3.0
+    "mentaliteHatM": 3.0,
+    "blokBaskiBolgesiM": 22.0,
+    "blokPresKBolen": 64,
+    "blokCokmeMaxM": 14.0,
+    "blokDaralmaOran": 0.45,
+    "blokPresKBolenDusus": 320,
+    "kontraPresEkSn": 6.0
   },
   "xt": {
     "kolon": [
@@ -131,7 +139,7 @@
   "gk": {
     "tReactBase": 0.16,
     "tReactPerReflexEksik": 0.0016,
-    "reachBase": 3.1,
+    "reachBase": 3.0,
     "reachAgilityFactor": 2.2,
     "logisticSlope": 6.0,
     "saveClampMin": 0.04,
@@ -149,17 +157,20 @@
     "cikisMesafeM": 18.0,
     "cikisGenislikM": 22.0,
     "yakinMesafeM": 15.0,
-    "yakinKapatmaKatsayi": 3.2,
-    "tutmaBoleni": 260.0
+    "yakinKapatmaKatsayi": 3.0,
+    "tutmaBoleni": 290.0
   },
   "shotExec": {
     "sutMaxMesafeM": 30.0,
     "sutYariMesafeM": 12.0,
     "sutHiziMS": 24.0,
-    "sutSigmaTabanDeg": 24.5,
+    "sutSigmaTabanDeg": 19.0,
     "kafaSigmaCarpani": 2.4,
-    "nisanDirekOrani": 0.45,
-    "blokOlasilik": 0.55
+    "nisanDirekOrani": 0.3,
+    "blokOlasilik": 0.5,
+    "blokEkSavunucu": 0.3,
+    "blokOlasilikMax": 0.85,
+    "presSigmaKisiBasi": 0.18
   },
   "setpiece": {
     "penalty": {
@@ -188,10 +199,10 @@
     "santraHazirlikTicks": 50
   },
   "referee": {
-    "foulEsikTaban": 0.49,
+    "foulEsikTaban": 0.475,
     "strictnessCarpan": 0.002,
     "griBantOrta": 0.06,
-    "sariEsik": 0.565,
+    "sariEsik": 0.555,
     "kirmiziEsik": 0.8,
     "cezaSahasiIhtiyatCarpan": 0.88,
     "avantajXtEsik": 0.012,

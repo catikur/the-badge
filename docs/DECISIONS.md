@@ -727,20 +727,49 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   (12 metrik; kadro dağılımı üretici komutla birebir aynı tanım), dar bantlar `-- calib10k 10000`
   üretici komutuyla (sonuç bu kayda işlenir).
 
+### M16-F: derin blok + bloktan kontra — ME 13.4 hibrit kararının uygulaması (2026-08-19)
+- **Mekanizma seti (tümü pres01-ölçekli — blok kurulmadıkça eski davranış birebir korunur):**
+  (1) **Baskı EMA'sı** `presQ16[2]` — Q16 int (float durum yasağına uygun), top takımın kendi
+  `blokBaskiBolgesiM` (22 m) içinde kaldıkça dolar; ASİMETRİK (dolum böleni 64, boşalım 320 —
+  blok hızlı kurulur, yavaş çözülür); yalnız açık oyunda birikir; motor-yerel, hash dışı.
+  (2) **Hat çökmesi + daralma** (ME 7.6 genişlemesi): `blokCokmeMaxM 14` × pres01 hat kaleye iner,
+  `blokDaralmaOran 0,45` × pres01 blok kale eksenine daralır. (3) **Yoğunluk kanalları**: şut
+  koridorundaki gövde başına blok olasılığı artışı (`blokEkSavunucu 0,30`, tavan 0,85), şutçu
+  üstündeki pres → sigma bozulması (`presSigmaKisiBasi 0,18`), şut KARARINA koridor-kalabalık
+  cezası (`sutKoridorCeza 0,34`, taban 0,25 — şut asla tümüyle ölmez). (4) **Bloktan kontra**:
+  geçiş penceresi kazananın pres01'iyle uzar (`kontraPresEkSn 6`), kontra tehdit bonusu YALNIZ
+  bloktaki tarafa (`kontraBlokBonus 1,0` × pres01 — simetrik büyütme denendi ve geri alındı:
+  güçlünün hücumunu da coşturdu, 75v55 şut 47→52). (5) **kDuel 0,9→0,35**: M16-A'da tek başına
+  işlemeyen katsayı (eşit maç bozuluyordu), denge mekanizmaları kurulunca ANA kaldıraç oldu —
+  eşit maç metrikleri kDuel'e artık duyarsız (ölçüldü: 1,0/0,7/0,5 süpürmesi).
+- **ÜSSEL KATLANMA KIRILDI (zincir ölçümü, 60 maç/koşul):** şuta dönüşüm oranı (güçlü/zayıf)
+  +12 farkta ×6,1 → ×3,1; +24 farkta ×99 → ×8,8. +24'te güçlünün şutu 57→32, zayıfın golü
+  0,20→0,60; eşit maç tam simetrik (×1,01). 75v55 gol profili 4,4-0,18 → 2,8-0,45.
+- **ME 13.4 REVİZE hedefe karşı (lig dağılımlı ara-10k, 1.380 fark maçı):** G/B/M **%82/%12/%6**
+  (hedef %78/%12/%10) — beraberlik TAM hedefte; başlangıç %93/%6/%1'di. (Son mikro-kalibrasyon
+  paketi sonrası final 10k sayıları bir alt satırda.) Kaos fixture (200 maç, Orta): %88/%8/%4.
+  Düşük chaos %85 (hedef ~%85 ✓), Yüksek %81 (hedef ~%68 — chaos borcu sürer).
+- **Bilinçli sapma (17.2 dar bantları):** gol 2,3-2,4 sınırında (bant 2,4-3) ve isabetli ~6,8
+  (bant 7-11) — derin bloğun DOĞRU sonucu: fark maçlarında şut kalitesi kırpılıyor (isabetli
+  14→9,4). Sigma/blok kaldıraçlarının iki yüzeyi (bant ↔ upset) ters oynattığı ping-pong
+  ölçümleriyle kanıtlı; kalan mesafe İSABET-ÖZGÜ mekanizma ister (nişan modelinin kaleci
+  pozisyonuna bağlanması — ayrı dilim borcu). CI kapısı `M16ECalibGenis` (geniş bant) YEŞİL.
+- **Kapı değişimi:** `M16DUpsetYuksek` (eşiksiz muhafız) → `M16FUpsetOrta` (SERT eşik, 200 maç
+  Orta: güçlü ≤ %91, sürpriz+beraberlik ≥ %9 — bugünkü gerçek + SE; hedef %78/%22 metinde).
+- Golden'lar yeniden pinlendi (bilinçli); LOD 2 tablosu M16-F motoruyla yeniden üretildi.
+
 ## Bekleyen kararlar
-- **ME 13.4 upset büyüklüğü — ATİLLA KARARI (M16-E bulgusu, 2026-08-18):** 5 bağımsız ölçüm
-  (kDuel süpürmesi, pas varış hızı, tackle enstrümanı, yapı+chaos, kalibrasyon paketi) tek
-  katsayının upset tablosunu (75v55 hedef: Orta %66/%18/%16) yakalayamadığını gösterdi — 10k
-  ölçümü %93/%6/%1. Kök: üstünlük zincirde ÜSSEL katlanıyor (şuta dönüşüm eşit güçte %5,
-  +12 farkta %13, +24 farkta %33; +24'te maç başına 57 şut — gerçek dışı). Seçenekler:
-  **(a)** zincir normalizasyonu — pozisyon başına düello derinliği sınırlaması / savunma çekilme
-  hattı / yorgunluk asimetrisi gibi mekanizmalarla katlanmayı kırmak (motor işi, ayrı dilim;
-  davranışı köklü değiştirir, tüm golden'lar kayar); **(b)** 13.4 hedef tablosunun revizyonu —
-  "yetenek hissi" lehine upset hedefini gevşetmek (spec değişikliği, GDD 1.3 "yetenek kazanır"
-  ilkesiyle uyumlu ama sürpriz vaadini inceltir); **(c)** sonuç katmanında düzeltme (skor üstü
-  yeniden örnekleme) — determinizm ve xG tutarlılığıyla çatışır, ÖNERİLMEZ. Öneri: (a)'nın
-  tasarım taslağı ayrı dilim olarak; **M17 golden replay dondurmasından ÖNCE karar** (sonrası
-  her davranış değişikliği replay setini kırar).
+- ~~ME 13.4 upset büyüklüğü~~ → **KARAR (2026-08-19, Atilla): (d) HİBRİT.** Dört seçenek
+  sunuldu — (a) tam zincir normalizasyonu (2 dilim motor işi), (b) yalnız hedef revizyonu
+  (%93 revize hedefin de üstünde kalır), (c) skor üstü yeniden örnekleme (tek-kaynak ilkesi +
+  xG tutarlılığıyla çatışır — reddedildi), (d) hibrit. Seçilen: **spec hedef tablosunun
+  gerçekçi banda revizyonu + derin blok mekanizması tek dilimde.** Gerekçe: Elo'da 200 puanlık
+  fark ≈ %76 beklenen skor; büyük liglerde büyük favori galibiyeti ~%75-80 — 13.4'ün %66'sı
+  gerçekçilik değil tasarım tercihiydi ve 5 ölçüm motorun oraya tek katsayıyla inmediğini
+  kanıtladı. **Revize hedef tablo (75v55): Düşük ~%85/%8/%7 · Orta ~%78/%12/%10 ·
+  Yüksek ~%68/%16/%16.** Spec dosyasına dokunulmaz (yasak); bu kayıt bağlayıcıdır, kapı
+  metinleri bu tabloyu basar, GDD/ME v-sonraki revizyonda spec'e işlenir. Uygulama dilimi:
+  M16-F (derin blok — aşağıda).
 - **LOD 1'in geleceği (M15 kararı, 2026-08-16):** şu an LOD 0'ın eşleniği. Geri almak için gerekçe
   CPU olamaz (19 kat marj var); yalnız İSTEMCİ tarafında orta cihaz ölçümü LOD 0'ı 800 ms'nin
   üstüne çıkarırsa yeniden değerlendirilir. O ölçüm FAZ 05 cihaz testlerine ait.

@@ -175,6 +175,18 @@ sarı 3,11 · kırmızı 0,19 · penaltı 0,25 · ofsayt 4,9 · sakatlık 0,55 �
 - Golden'lar yeniden pinlendi (4); LOD 2 yeniden üretildi (`M15KompozisyonHatasi` %91→%60);
   yeni kapı `M16ECalibGenis` (ME 17.4: CI 500 maç GENİŞ bant; dar bantlar `calib10k 10000`).
 
+#### M16-F — Derin blok + bloktan kontra (ME 13.4 hibrit kararı) — ✅ TAMAM (2026-08-19)
+Atilla kararı (d) HİBRİT: 13.4 hedef tablosu gerçekçi banda revize (75v55: Düşük ~%85/%8/%7 ·
+Orta ~%78/%12/%10 · Yüksek ~%68/%16/%16 — DECISIONS kaydı bağlayıcı) + derin blok mekanizması.
+- **Mekanizma:** baskı EMA'sı (Q16, asimetrik) → hat çökmesi 14 m + daralma %45 + yoğunluk
+  kanalları (blok olasılığı, şut sigması, şut kararı cezası) + bloktan kontra (pencere +6 sn,
+  bonus yalnız bloktaki tarafa) + kDuel 0,9→0,35 (denge mekanizmalarıyla ana kaldıraç oldu).
+- **Sonuç:** üssel katlanma kırıldı (şuta dönüşüm +24 farkta ×99→×8,8); 10k lig ölçümünde
+  75v55 G/B/M %93/%6/%1 → **%82/%12/%6** (revize hedef %78/%12/%10; beraberlik tam hedefte).
+- **Bilinçli sapma:** 17.2 dar bantlarından gol (−0,05) ve isabetli (−0,2) — derin bloğun şut
+  kalitesi kırpması; isabet-özgü mekanizma dilimi borcu. CI kapısı (geniş bant) yeşil.
+- Kapı: `M16FUpsetOrta` (sert eşik: güçlü ≤ %91, sürpriz+beraberlik ≥ %9; hedef metinde).
+
 ### M17 — Golden replay seti (ME 17.4) + FAZ 04 arayüz dondurması (18.3)
 - **Kapı:** replay dörtlüsü (seed + config_hash + komut zaman çizelgesi + sürüm) ile
   bit-eşit yeniden üretim; sim ↔ sunucu/Unity sözleşmesi dondurulur.

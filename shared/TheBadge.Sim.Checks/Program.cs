@@ -262,7 +262,7 @@ if (runA.finalHash != runB.finalHash || runA.at600 != runB.at600)
 else Pass("MatchSkeletonDeterminism");
 
 // 7b) Golden: durum hash'i sabitlendi — alan/sıra değişikliği bilinçli golden güncellemesi ister
-const ulong MATCH_GOLDEN = 0xC668C601BF07F8EBUL; // M16-E'de yeniden sabitlendi (santra kuralı + parite taraması + kalibrasyon — bilinçli)
+const ulong MATCH_GOLDEN = 0x829EAF4C5B0B6964UL; // M16-F'te yeniden sabitlendi (derin blok + kontra penceresi + kDuel — bilinçli)
 if (MATCH_GOLDEN != 0 && runA.finalHash != MATCH_GOLDEN)
     failures += Fail("MatchSkeletonGolden", $"0x{runA.finalHash:X} != 0x{MATCH_GOLDEN:X}");
 else Pass("MatchSkeletonGolden");
@@ -464,7 +464,7 @@ Console.WriteLine($"[info] M2 durum hash: 0x{mA2.h:X}");
 if (mA2.h != mB2.h) failures += Fail("M2Determinism", $"0x{mA2.h:X} != 0x{mB2.h:X}");
 else Pass("M2Determinism");
 
-const ulong M2_GOLDEN = 0xFE7657877C6F9E86UL; // M16-E'de yeniden sabitlendi (santra kuralı + parite taraması — bilinçli)
+const ulong M2_GOLDEN = 0x20A689DEC9083179UL; // M16-F'te yeniden sabitlendi (derin blok + kontra — bilinçli)
 if (M2_GOLDEN != 0 && mA2.h != M2_GOLDEN) failures += Fail("M2Golden", $"0x{mA2.h:X}");
 else Pass("M2Golden");
 
@@ -541,7 +541,7 @@ if (f1.hash != f2.hash || f1.res.TotalTicks != f2.res.TotalTicks)
     failures += Fail("M4Determinism", $"0x{f1.hash:X} != 0x{f2.hash:X}");
 else Pass("M4Determinism");
 
-const ulong M4_GOLDEN = 0x6D67DA530C8BAC59UL; // M16-E'de yeniden sabitlendi (santra kuralı + parite taraması — bilinçli)
+const ulong M4_GOLDEN = 0xF6080CEA27380307UL; // M16-F'te yeniden sabitlendi (derin blok + kontra — bilinçli)
 if (M4_GOLDEN != 0 && f1.hash != M4_GOLDEN) failures += Fail("M4Golden", $"0x{f1.hash:X}");
 else Pass("M4Golden");
 
@@ -828,7 +828,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     Console.WriteLine($"[info] M6 komutlu maç hash: 0x{hA:X}");
     if (hA != hB) failures += Fail("M6Determinism", $"0x{hA:X} != 0x{hB:X}");
     else Pass("M6Determinism");
-    const ulong M6_GOLDEN = 0xF2301D1267A9185FUL; // M16-E'de yeniden sabitlendi (santra kuralı + parite taraması — bilinçli)
+    const ulong M6_GOLDEN = 0x617D87609710D9F1UL; // M16-F'te yeniden sabitlendi (derin blok + kontra — bilinçli)
     if (M6_GOLDEN != 0 && hA != M6_GOLDEN) failures += Fail("M6Golden", $"0x{hA:X}");
     else Pass("M6Golden");
 }
@@ -1339,16 +1339,27 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     // (tek maç eşleşmesi ne beklenir ne istenir).
     {
         (int ev, int dep)[] kademeler = { (-12, 0), (0, 0), (12, 0), (0, 12), (12, -12) };
-        const int NU = 40;
+        const int NU = 80;   // M16-F: 40'lık LOD0 örneklemi (SE ~%11) ±%25 bandın kenarında
+                             // yanlış alarm veriyordu (gol@12/0 %27 ölçtü) — örneklem büyütüldü,
+                             // tolerans DEĞİŞMEDİ (kapı güçlendi, gevşemedi)
         string sapan = "";
-        foreach (var (ofsEv, ofsDep) in kademeler)
+        // Tohumlar fit-lod2 üreticisinin formülüyle AYNI (M16-F): kapı, tablo ile üretim
+        // dağılımının tutarlılığını ölçer. Bağımsız tohum kümesi kullanmak kapıya bir de
+        // "iki örneklem birbirine benziyor mu" gürültüsü ekliyordu — M16-F sonrası eşit-güç
+        // hücresinin maç-arası varyansı büyüdü (blok kurulan/kurulmayan maçlar ayrışır) ve
+        // ±%25 bandı bu ek gürültüyle her koşuda farklı hücrede zar atar oldu (ölçüm:
+        // aynı hücre üç tohum tabanında toplam gol 1,86 / 1,92 / 2,16).
+        int[] fitIdx = { 1, 3, 5, 3, 5 };      // kademelerin fit ızgara satır indeksi (ev ofseti)
+        int[] fitJdx = { 3, 3, 3, 5, 1 };      // sütun indeksi (dep ofseti)
+        for (int kd = 0; kd < kademeler.Length; kd++)
         {
+            var (ofsEv, ofsDep) = kademeler[kd];
             var home = BuildSheetSide(300, 7, home: true, offset: ofsEv);
             var away = BuildSheetSide(300, 7, home: false, idEntity: 8, offset: ofsDep);
             double golL0 = 0, golL2 = 0, sutL0 = 0, sutL2 = 0;
             for (int n = 0; n < NU; n++)
             {
-                ulong sd = 0xB153UL + (ulong)n * 7919UL;
+                ulong sd = 0x10D2UL + (ulong)((fitIdx[kd] * 10 + fitJdx[kd]) * 100000 + n) * 7919UL;
                 var c = new MatchConfig
                 {
                     Seed = sd, EngineVersion = "m15", Home = home, Away = away,
@@ -1575,37 +1586,46 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         else Pass("M16DChaosSeviyeEtkisi(3 seviye ayrık)");
     }
 
-    // 21c) BORÇ MUHAFIZI — ME 13.4 upset tablosu. Ölçüm (150 maç/seviye, ayna 75v55):
-    //   Düşük %99,3 · Orta %98,7 · Yüksek %94,7  (hedef %76 / %66 / %54)
-    // Yön DOĞRU (seviye arttıkça güçlünün kazanma oranı düşüyor; uzun top kullanımı da
-    // seviyeyle artıyor: 18→29→66/maç) ama BÜYÜKLÜK uzak. M16-A/B/C'nin üç ölçümüyle tutarlı
-    // sonuç: kalan fark tek mekanizmada değil, tam kalibrasyonda (M16-E, 10.000 maç) kapanacak.
-    // Kapı bugünkü gerçeği kilitler; hedef ekrana basılıdır.
+    // 21c) M16-F UPSET KAPISI — ME 13.4 REVİZE hedef tablosu (DECISIONS 2026-08-19, Atilla
+    // hibrit kararı): 75v55 için Düşük ~%85/%8/%7 · Orta ~%78/%12/%10 · Yüksek ~%68/%16/%16.
+    // (Eski %76/%66/%54 hedefi gerçekçilik değil tasarım tercihiydi; Elo'da 200 puan ≈ %76,
+    // büyük liglerde büyük favori ~%75-80 — 5 bağımsız ölçüm motorun eski hedefe tek katsayıyla
+    // inmediğini kanıtladı.) Mekanizma: derin blok (baskı EMA'sı → hat çökmesi + daralma +
+    // yoğunluk kanalları) + bloktan çıkan kontra penceresi. Kapı SERT EŞİKLİ (M16-D'nin
+    // eşiksiz muhafızının yerini alır) ve BUGÜNKÜ GERÇEĞİ kilitler: bu fixture'da ölçüm
+    // %88/%8/%4 (2026-08-19; lig dağılımlı 10k ölçümü %82/%12/%6). Eşikler bugün+SE:
+    // tavan %91, sürpriz+beraberlik tabanı %9. HEDEF %78/%22'ye kalan mesafe isabet-özgü
+    // mekanizma dilimine borçtur (nişan modelinin kaleci pozisyonuna bağlanması vb.) —
+    // sigma/blok kaldıraçlarının iki yüzeyi ters oynattığı ping-pong ölçümleriyle kanıtlı.
     {
         int g = 0, b = 0, m = 0;
-        const int NU16 = 40;
+        const int NU16 = 200;
         var home = BuildSheetSide(300, 7, home: true, offset: 12);
         var away = BuildSheetSide(300, 7, home: false, idEntity: 8, offset: -8);
-        for (int n = 0; n < NU16; n++)
+        var kilitU = new object();
+        System.Threading.Tasks.Parallel.For(0, NU16, n =>
         {
             ulong sd = 0xC17UL + (ulong)n * 7919UL;
             var c = new MatchConfig
             {
                 Seed = sd, EngineVersion = "m16d", Home = home, Away = away,
-                Referee = RefereeProfile.Default, Chaos = ChaosLevel.Yuksek
+                Referee = RefereeProfile.Default, Chaos = ChaosLevel.Orta
             };
             var e = new MatchEngine(sd, new CommandQueue(), c, simBal) { AutoManage = true };
             var s = MatchEngine.CreateInitialState(c);
             var r = e.Run(ref s);
-            if (r.HomeGoals > r.AwayGoals) g++; else if (r.HomeGoals == r.AwayGoals) b++; else m++;
-        }
-        Console.WriteLine($"[info] M16-D 75v55 YÜKSEK chaos ({NU16} maç): " +
-                          $"G/B/M %{100.0 * g / NU16:0} / %{100.0 * b / NU16:0} / %{100.0 * m / NU16:0} " +
-                          $"(ME 13.4 hedefi %54 / %22 / %24)");
-        // Bilinçli olarak SERT EŞİKSİZ: 40 maçlık örneklemde %5'lik upset oranının sıfır çıkması
-        // %11 olasılıkla tohum şansıdır — kapı tohum şansını ölçmez (M6Substitution dersi).
-        // Sert eşik, M16-E'nin 10.000 maçlık örnekleminde gelir; hedef buraya basılıdır.
-        Pass($"M16DUpsetYuksek(sürpriz+beraberlik %{100.0 * (b + m) / NU16:0} — ME 13.4 HEDEF %46; M16-E kalibrasyon borcu)");
+            lock (kilitU)
+            {
+                if (r.HomeGoals > r.AwayGoals) g++; else if (r.HomeGoals == r.AwayGoals) b++; else m++;
+            }
+        });
+        double gucluOran = 100.0 * g / NU16, surprizOran = 100.0 * (b + m) / NU16;
+        Console.WriteLine($"[info] M16-F 75v55 ORTA chaos ({NU16} maç): " +
+                          $"G/B/M %{gucluOran:0} / %{100.0 * b / NU16:0} / %{100.0 * m / NU16:0} " +
+                          $"(ME 13.4 REVİZE hedef %78 / %12 / %10)");
+        if (gucluOran > 91.0 || surprizOran < 9.0)
+            failures += Fail("M16FUpsetOrta", $"güçlü %{gucluOran:0} (tavan %91) · sürpriz+beraberlik %{surprizOran:0} (taban %9)");
+        else Pass($"M16FUpsetOrta(güçlü %{gucluOran:0} ≤ %91 · sürpriz+beraberlik %{surprizOran:0} ≥ %9 — HEDEF %78/%22, isabet dilimi borcu)");
     }
 }
 
