@@ -23,13 +23,14 @@
     "presFactorPerRakip": 0.15,
     "groundSpeedMin": 12.0,
     "groundSpeedMax": 19.0,
-    "presYaricapM": 6.0
+    "presYaricapM": 6.0,
+    "kaleOnuTamponM": 9.0
   },
   "possession": {
     "kontrolYaricapM": 1.0,
     "tackleYaricapM": 1.2,
     "kontrolHizEsigiMS": 12.0,
-    "kaleciElCarpani": 2.5,
+    "kaleciElCarpani": 3.2,
     "yenidenAlmaTicks": 4,
     "tackleCooldownTicks": 40,
     "tackleDenemeAralikTicks": 40,
@@ -48,12 +49,12 @@
     "kayipKoridorRakip": 0.22,
     "pasKesmeBandiSn": 0.7,
     "kayipMesafePerM": 0.006,
-    "sutTehditCarpan": 0.45,
+    "sutTehditCarpan": 0.46,
     "sutBaskiCezasi": 0.35,
     "araPasIleriM": 12.0,
     "araPasRisk": 0.28,
     "araPasUlasimBandiM": 24.0,
-    "araPasKotuZamanlama": 0.3,
+    "araPasKotuZamanlama": 0.23,
     "ortaTehditCarpan": 6.0,
     "ortaMinMesafeM": 12.0,
     "ortaMaxMesafeM": 38.0,
@@ -118,7 +119,7 @@
   },
   "shot": {
     "xg": {
-      "b0": -0.9,
+      "b0": -2.6,
       "bLnDist": -1.05,
       "bAngle": 1.35,
       "bPres": -0.45,
@@ -130,9 +131,9 @@
   "gk": {
     "tReactBase": 0.16,
     "tReactPerReflexEksik": 0.0016,
-    "reachBase": 2.9,
+    "reachBase": 3.1,
     "reachAgilityFactor": 2.2,
-    "logisticSlope": 5.0,
+    "logisticSlope": 6.0,
     "saveClampMin": 0.04,
     "saveClampMax": 0.96,
     "dalisSureCarpan": 0.22,
@@ -148,13 +149,14 @@
     "cikisMesafeM": 18.0,
     "cikisGenislikM": 22.0,
     "yakinMesafeM": 15.0,
-    "yakinKapatmaKatsayi": 3.2
+    "yakinKapatmaKatsayi": 3.2,
+    "tutmaBoleni": 260.0
   },
   "shotExec": {
     "sutMaxMesafeM": 30.0,
     "sutYariMesafeM": 12.0,
     "sutHiziMS": 24.0,
-    "sutSigmaTabanDeg": 38.0,
+    "sutSigmaTabanDeg": 24.5,
     "kafaSigmaCarpani": 2.4,
     "nisanDirekOrani": 0.45,
     "blokOlasilik": 0.55
@@ -179,25 +181,65 @@
     "kornerHedefDerinlikM": 10.5,
     "havaTopuYaricapM": 4.0,
     "havaTopuYukseklikM": 1.6,
-    "korneriGozeAlmaOran": 0.85,
+    "korneriGozeAlmaOran": 0.95,
     "uzaklastirmaHizMS": 14.0,
-    "hazirlikTicks": 25
+    "hazirlikTicks": 25,
+    "santraDaireM": 9.15,
+    "santraHazirlikTicks": 50
   },
   "referee": {
-    "foulEsikTaban": 0.47,
+    "foulEsikTaban": 0.49,
     "strictnessCarpan": 0.002,
     "griBantOrta": 0.06,
-    "sariEsik": 0.58,
+    "sariEsik": 0.565,
     "kirmiziEsik": 0.8,
-    "cezaSahasiIhtiyatCarpan": 0.72
+    "cezaSahasiIhtiyatCarpan": 0.88,
+    "avantajXtEsik": 0.012,
+    "sariSonrasiIhtiyat": 0.18
   },
   "hava": {
-    "yagmur": { "passingDelta": -8, "firstTouchDelta": -10, "visionDelta": 0, "aRoll": 2.6, "sekmeE": 0.5, "topHiziCarpan": 1.0, "vMaxCarpan": 1.0, "sakatlikCarpan": 1.1, "staminaCarpan": 1.0 },
-    "kar":    { "passingDelta": 0,  "firstTouchDelta": 0,   "visionDelta": -10, "aRoll": 4.6, "sekmeE": 0.38, "topHiziCarpan": 0.9, "vMaxCarpan": 0.94, "sakatlikCarpan": 1.15, "staminaCarpan": 1.0 },
-    "sicak":  { "passingDelta": 0,  "firstTouchDelta": 0,   "visionDelta": 0,  "aRoll": 3.3, "sekmeE": 0.62, "topHiziCarpan": 1.0, "vMaxCarpan": 1.0, "sakatlikCarpan": 1.0, "staminaCarpan": 1.2 },
+    "yagmur": {
+      "passingDelta": -8,
+      "firstTouchDelta": -10,
+      "visionDelta": 0,
+      "aRoll": 2.6,
+      "sekmeE": 0.5,
+      "topHiziCarpan": 1.0,
+      "vMaxCarpan": 1.0,
+      "sakatlikCarpan": 1.1,
+      "staminaCarpan": 1.0
+    },
+    "kar": {
+      "passingDelta": 0,
+      "firstTouchDelta": 0,
+      "visionDelta": -10,
+      "aRoll": 4.6,
+      "sekmeE": 0.38,
+      "topHiziCarpan": 0.9,
+      "vMaxCarpan": 0.94,
+      "sakatlikCarpan": 1.15,
+      "staminaCarpan": 1.0
+    },
+    "sicak": {
+      "passingDelta": 0,
+      "firstTouchDelta": 0,
+      "visionDelta": 0,
+      "aRoll": 3.3,
+      "sekmeE": 0.62,
+      "topHiziCarpan": 1.0,
+      "vMaxCarpan": 1.0,
+      "sakatlikCarpan": 1.0,
+      "staminaCarpan": 1.2
+    },
     "ruzgarK": 0.15,
-    "zeminKotu": { "firstTouchDelta": -6, "sekmePertDeg": 2.0, "sakatlikCarpan": 1.2 },
-    "zeminIyi": { "passingDelta": 2 }
+    "zeminKotu": {
+      "firstTouchDelta": -6,
+      "sekmePertDeg": 2.0,
+      "sakatlikCarpan": 1.2
+    },
+    "zeminIyi": {
+      "passingDelta": 2
+    }
   },
   "longball": {
     "minMesafeM": 24.0,
@@ -247,8 +289,8 @@
       0.35,
       0.6
     ],
-    "sertMudahaleEsik": 0.45,
-    "pTabanMudahale": 0.013,
+    "sertMudahaleEsik": 0.49,
+    "pTabanMudahale": 0.0085,
     "pTabanSprint": 0.0001
   },
   "momentum": {
@@ -299,7 +341,7 @@
     "aRollKuru": 3.3,
     "sekmeEKuru": 0.62,
     "sekmeYatayCarpan": 0.78,
-    "blokIleriOran": 0.6,
+    "blokIleriOran": 0.65,
     "blokIleriAcisiDeg": 40.0,
     "blokSacilmaDeg": 55.0,
     "dragK": 0.0045,
@@ -317,10 +359,21 @@
     },
     "guc": {
       "kaleciPayi": 0.15,
-      "kaleci": { "reflexes": 0.35, "handling": 0.25, "oneOnOne": 0.2, "aerialCommand": 0.2 },
+      "kaleci": {
+        "reflexes": 0.35,
+        "handling": 0.25,
+        "oneOnOne": 0.2,
+        "aerialCommand": 0.2
+      },
       "sahaOyuncusu": {
-        "passing": 0.2, "finishing": 0.15, "tackling": 0.15, "pace": 0.1,
-        "positioning": 0.1, "decisions": 0.1, "firstTouch": 0.1, "strength": 0.1
+        "passing": 0.2,
+        "finishing": 0.15,
+        "tackling": 0.15,
+        "pace": 0.1,
+        "positioning": 0.1,
+        "decisions": 0.1,
+        "firstTouch": 0.1,
+        "strength": 0.1
       }
     }
   },

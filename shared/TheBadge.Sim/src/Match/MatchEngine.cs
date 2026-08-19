@@ -137,6 +137,8 @@ namespace TheBadge.Sim.Match
 
         int pendingPassTeam = -1; // pas sonrası ilk kontrol aynı takımsa tamamlanmış sayılır
         short lastToucher = -1;   // topa en son dokunan ajan (teşhis: gol kaynağı ayrımı)
+        byte lastTouchKind;       // teşhis: 1 çelme · 2 uzun/degaj · 3 blok · 4 uzaklaştırma · 5 pas · 6 şut · 7 tackle · 8 aerial-indirme
+        public readonly int[] LooseGoalKind = new int[9];   // serbest gol: son dokunuş türü sayacı
         short pendingPasser = -1; // pası atan — kendi pasını "tamamlanmış" saydırmaz (dürüst metrik)
         short pendingTarget = -1; // pasın hedeflediği oyuncu (sonuç sınıflandırması)
         // Devre başı taban değerleri (uzatma hesabı, ME 3.4) — koşu boyunca deterministik türer;
@@ -155,6 +157,10 @@ namespace TheBadge.Sim.Match
         /// 1214 pasın 669'unu pasçı geri alıyor, 543'ünü rakip topluyor, takım arkadaşına
         /// ulaşan pas sayısı SIFIR. Raporlanan "%55 isabet" tümüyle bu geri almaydı.</summary>
         readonly uint[] reclaimUntil = new uint[22];
+        /// <summary>Santra beklemesi (ME 4.1): bu tick'e kadar Flight=3 santra topu ALINAMAZ —
+        /// diziliş toparlanır, rakip merkez dairesi dışına çekilir. Kurucuda maç başı santrası
+        /// için, KickoffRestart'ta her santra için kurulur (motor-yerel, hash dışı).</summary>
+        uint kickoffHoldUntil;
         /// <summary>Tackle DENEME aralığı kapısı — karar kilidinden (ActionUntilTick) AYRI tutulur
         /// (M16-C): aralığı tek başına ayarlayabilmek için. `tackleDenemeAralikTicks == 
         /// tackleCooldownTicks` iken davranış eskisiyle BİREBİR aynıdır (iki kapı da aynı tick'te
@@ -178,6 +184,8 @@ namespace TheBadge.Sim.Match
             bal = balance ?? throw new ArgumentNullException(nameof(balance));
             luts = AttributeLuts.Build(balance);
             referee = cfg != null ? cfg.Referee : RefereeProfile.Default;
+            // Maç başı santrası da bekleme kuralına tabidir (tick 0'dan itibaren sayılır)
+            kickoffHoldUntil = (uint)bal.setpiece.santraHazirlikTicks;
 
             // --- M13: hava ve zemin (ME 12.4). Tablo tümüyle balance'tadır; kodda sabit yok.
             // Kuru koşulda hiçbir alana dokunulmaz → fizik/hareket taban değerleriyle kalır.
@@ -427,8 +435,16 @@ namespace TheBadge.Sim.Match
 
         void DecisionPass(ref MatchState st)
         {
-            for (int i = 0; i < 22; i++) // sıra sabit (ME 3.2)
+            // Tarama yönü tick paritesiyle değişir (deterministik — yalnız Tick'e bağlı).
+            // Tek yönlü sabit sıra, top sahibinin aksiyonuna grup içi AYNI-TİCK tepkisini hep
+            // aynı takıma veriyordu: ayna kadroda şut 7,7/10,3, xG sapması %27 (dep lehine);
+            // ters yön %9 ev lehine. Parite dönüşümü avantajı eşitler; 5'li kademe tek sayı
+            // olduğu için her ajan kendi ardışık kararlarında erken/geç konumu sırayla alır.
+            // ME 3.2 "sabit sıra" = yeniden üretilebilir sıra; sırasız yapı kullanılmıyor.
+            bool ileriTarama = (st.Tick & 1) == 0;
+            for (int s = 0; s < 22; s++)
             {
+                int i = ileriTarama ? s : 21 - s;
                 if ((uint)(i % 5) != st.Tick % 5) continue; // kademeli karar — ME 4.2
                 ref var a = ref st.Agents[i];
                 if (!a.Active) continue;
@@ -735,6 +751,7 @@ namespace TheBadge.Sim.Match
                         looseReason = 1;   // sahiplik ayrışımı: müdahale kaynaklı
                         st.Ball.OwnerId = -1;
                         st.Ball.LastTouchTeam = st.Agents[marker].TeamIdx; lastToucher = (short)marker;
+                    lastTouchKind = 7;
                         if (pendingPassTeam >= 0) PassLostDead++;
                         ClearPending();
                         st.Ball.Vx = 0; st.Ball.Vy = 0;
@@ -772,6 +789,16 @@ namespace TheBadge.Sim.Match
                 tgtY = st.Agents[j].Y + (int)(st.Agents[j].Vy * tFly);
             }
             tgtX = ClampX(tgtX); tgtY = ClampY(tgtY);
+            // KALE ÖNÜ TAMPONU (M16-E): hiçbir oyuncu bilerek kendi kale AĞZINA pas atmaz.
+            // Buluşma iterasyonu, kaleye koşan alıcıda hedefi kale çizgisine kırpabiliyordu ve
+            // nişan sapmasıyla pas direkler arasından giriyordu — lig setinde maç başına 1,46
+            // "pas türü" serbest gol (gol kaynağı teşhisi). Kaleciye pas yasağıyla aynı aile.
+            {
+                int ownGX = a.TeamIdx == 0 ? -PitchHalfXmm : PitchHalfXmm;
+                int tamponMm = (int)(bal.pass.kaleOnuTamponM * 1000);
+                if (a.TeamIdx == 0) { if (tgtX < ownGX + tamponMm) tgtX = ownGX + tamponMm; }
+                else { if (tgtX > ownGX - tamponMm) tgtX = ownGX - tamponMm; }
+            }
 
             double dxM = (tgtX - a.X) / 1000.0, dyM = (tgtY - a.Y) / 1000.0;
             double dM = Math.Sqrt(dxM * dxM + dyM * dyM);
@@ -796,6 +823,7 @@ namespace TheBadge.Sim.Match
             st.Ball.Vz = 0; // yerden pas; havadan top/orta M3+ (ME 8.3)
             st.Ball.OwnerId = -1;
             st.Ball.LastTouchTeam = a.TeamIdx; lastToucher = (short)i;
+            lastTouchKind = 5;
             PassAttempts++;
             reclaimUntil[i] = st.Tick + (uint)bal.possession.yenidenAlmaTicks;
             pendingPassTeam = a.TeamIdx;
@@ -887,6 +915,7 @@ namespace TheBadge.Sim.Match
                 st.Ball.OwnerId = -1;
                 st.Ball.Flight = 0;
                 st.Ball.LastTouchTeam = a.TeamIdx == 0 ? (byte)1 : (byte)0; lastToucher = (short)blocker; // savunucudan sekti
+                lastTouchKind = 3;
                 // Top BLOKÇUNUN üzerinden seker — şutçunun ayağında kalmaz (rebound çorbası önlendi)
                 st.Ball.X = ClampX(st.Agents[blocker].X + Units.QuantizeMm(blx * 2.5));
                 st.Ball.Y = st.Agents[blocker].Y + Units.QuantizeMm(bly * 2.5);
@@ -942,7 +971,9 @@ namespace TheBadge.Sim.Match
                                xg: (float)xgS, flags: shotFlags);
                     int handling = Eff(gk, attrs[gk].Handling);
                     // Zar gerekçesi: tutuş kontrolü Handling'e karşı — DUEL domain (9.2)
-                    bool catches = Rng.Rand01(seed, Domain.Duel, (uint)(400 + gk), st.Tick, 43) < handling / 130.0;
+                    // Tutma bölünü [KALİBRE gk.tutmaBoleni] — kodda 130 sabitti (eski magic number,
+                    // M16-E'de balance'a taşındı): böleni büyütmek çelme payını (→ korner) artırır.
+                    bool catches = Rng.Rand01(seed, Domain.Duel, (uint)(400 + gk), st.Tick, 43) < handling / bal.gk.tutmaBoleni;
                     if (catches)
                     {
                         // Tut: top kaleciye uçar, varışta yalnız o alır (Flight=2, ışınlama yok)
@@ -998,6 +1029,7 @@ namespace TheBadge.Sim.Match
             }
             st.Ball.LastTouchTeam = parried ? (a.TeamIdx == 0 ? (byte)1 : (byte)0) : a.TeamIdx;
             lastToucher = parried ? (short)(a.TeamIdx == 0 ? 11 : 0) : (short)i;
+            lastTouchKind = parried ? (byte)1 : (byte)6;
             // Şutçu topu anında geri alamaz (vuruş sonrası toparlanma) — karar + alım kilidi
             a.ActionUntilTick = st.Tick + (uint)bal.possession.tackleCooldownTicks;
             reclaimUntil[i] = st.Tick + (uint)bal.possession.yenidenAlmaTicks;
@@ -1071,6 +1103,7 @@ namespace TheBadge.Sim.Match
             st.Ball.Z = 100;
             st.Ball.OwnerId = -1;
             st.Ball.LastTouchTeam = a.TeamIdx; lastToucher = (short)i;
+            lastTouchKind = 2;
             st.Ball.Flight = 4;
             reclaimUntil[i] = st.Tick + (uint)bal.possession.yenidenAlmaTicks;
             looseReason = 2;   // sahiplik ayrışımı: uçuştaki teslimat
@@ -1230,6 +1263,29 @@ namespace TheBadge.Sim.Match
             {
                 a.TargetX = ClampX(st.Ball.X);
                 a.TargetY = ClampY(st.Ball.Y);
+                return;
+            }
+
+            // Santra dizilişi (ME 4.1 DEAD_BALL "santra hazırlığı"): herkes kendi dizilişine döner,
+            // restart YAPMAYAN takım merkez dairesinin (santraDaireM) dışına çekilir. Bu kural yokken
+            // rakip forvetler (anchor ±3 m) santra pasını 0. saniyede basıyordu ve santrayı kullanan
+            // takım yapısal dezavantaja düşüyordu — M7 ayna ölçümü: devre 1 şutları 60/145 (ev/dep).
+            if (st.SetPiece == SetPieceType.Kickoff && i != st.SetPieceTaker)
+            {
+                long skx = a.AnchorX, sky = a.AnchorY;
+                if (a.TeamIdx != st.SetPieceTeam)
+                {
+                    long d2c = skx * skx + sky * sky;
+                    long rMm = (long)(bal.setpiece.santraDaireM * 1000);
+                    if (d2c < rMm * rMm)
+                    {
+                        // Daire içindeki anchor RADYAL dışarı itilir (açı korunur, deterministik)
+                        double d = Math.Sqrt((double)d2c);
+                        if (d < 1.0) { skx = a.TeamIdx == 0 ? -rMm : rMm; sky = 0; }
+                        else { skx = (long)(skx * rMm / d); sky = (long)(sky * rMm / d); }
+                    }
+                }
+                a.TargetX = ClampX((int)skx); a.TargetY = ClampY((int)sky);
                 return;
             }
 
@@ -1472,7 +1528,9 @@ namespace TheBadge.Sim.Match
             // 1) Serbest top kontrolü — ilk ulaşan alır; aynı tick'te iki aday → kontrol düellosu (4.3)
             // Uçuş kilitleri: 1 = karara bağlı şut (kimse alamaz), 2 = kaleci tutuşu (yalnız o),
             // 3 = ölü top (yalnız kullanacak takım), 4 = havadaki orta (düello çözer)
-            if (st.Ball.OwnerId < 0 && st.Ball.Z < 400 && st.Ball.Flight != 1 && st.Ball.Flight != 4)
+            if (st.Ball.OwnerId < 0 && st.Ball.Z < 400 && st.Ball.Flight != 1 && st.Ball.Flight != 4
+                // Santra beklemesi (ME 4.1): diziliş toparlanmadan santra topu alınamaz
+                && !(st.Ball.Flight == 3 && st.SetPiece == SetPieceType.Kickoff && st.Tick < kickoffHoldUntil))
             {
                 int c1 = -1, c2 = -1; long d1 = long.MaxValue, d2 = long.MaxValue;
                 long r2 = (long)(bal.possession.kontrolYaricapM * 1000) * (long)(bal.possession.kontrolYaricapM * 1000);
@@ -1564,6 +1622,7 @@ namespace TheBadge.Sim.Match
                         looseReason = 1;   // sahiplik ayrışımı: tackle kaynaklı açık top
                         st.Ball.OwnerId = -1;
                         st.Ball.LastTouchTeam = d.TeamIdx; lastToucher = (short)i;
+                        lastTouchKind = 7;
                         // Kendi kutusunda kazanılan top: savunan çoğu zaman TEMİZLER, gerekirse
                         // korneri göze alır (hava topundaki davranışın yer karşılığı). Bu kol
                         // olmadan korner yalnız hava/blok artığından doğuyor ve bandın altında kalıyor.
@@ -1703,6 +1762,10 @@ namespace TheBadge.Sim.Match
                 if (rtF.MotivationTone == (byte)ToneType.Atesle && Eff(defender, attrs[defender].Aggression) > 70) s += 0.04;
                 else if (rtF.MotivationTone == (byte)ToneType.Sakinlestir) s -= 0.04;
             }
+            // SARI SONRASI İHTİYAT (M16-E): kartlı oyuncu çekinerek girer — gerçek futbol davranışı.
+            // Ölçülen kök: kırmızıların TAMAMI ikinci sarıydı (1,0/maç, bant 0,15-0,30) çünkü
+            // sarılar aynı agresif oyuncularda yoğunlaşıyor ve davranış değişmiyordu.
+            if (d.YellowCards > 0) s *= 1.0 - bal.referee.sariSonrasiIhtiyat;
             // Ceza sahasında savunucu AYAKTA kalır, dalmaz — şiddet skoru bu ihtiyatla ölçeklenir.
             // Model eki (spec dışı davranış gerçeği): bu çarpan olmadan penaltı sıklığı 1,2/maç
             // çıkıyordu (gerçek ~0,25). [KALİBRE referee.cezaSahasiIhtiyatCarpan]
@@ -1736,8 +1799,12 @@ namespace TheBadge.Sim.Match
 
             if (!foul) return;
 
-            // Avantaj (11.2): mağdur topa sahipse ve hakem eğilimi tutarsa oyun devam eder
+            // Avantaj — ME 11.2: "hücum eden takım TEHDİT hücresine ilerlerse ve AdvantageTendency
+            // çekilişi tutarsa". Tehdit koşulu (xT eşiği) M16-E'de eklendi: koşulsuz hâli maç
+            // başına 28 avantaj oynatıyordu (gerçek ~2-5) ve faul bandını yapay dengeliyordu —
+            // hakem makinesine sunulan olayların yarısı sessizce avantaja kaçıyordu.
             if (st.Ball.OwnerId == victim &&
+                XtAt(c.X, c.Y, c.TeamIdx) >= bal.referee.avantajXtEsik &&
                 Rng.Rand01(seed, Domain.Referee, (uint)(500 + defender), st.Tick, 52) < referee.AdvantageTendency / 100.0)
             { Advantages++; EmitAtBall(ref st, EventType.AdvantagePlayed, defender, victim, c.TeamIdx); return; }
 
@@ -2421,6 +2488,7 @@ namespace TheBadge.Sim.Match
                             else LooseGoalByMfFw++;
                         }
                         else LooseGoalByUnknown++;
+                        LooseGoalKind[lastTouchKind < 9 ? lastTouchKind : 0]++;
                         if (st.Ball.Z > 400) LooseGoalAirborne++;
                     }
                     if (scorer == 0) st.HomeGoals++; else st.AwayGoals++;
@@ -2540,11 +2608,19 @@ namespace TheBadge.Sim.Match
                     halfGoalsBase = st.HomeGoals + st.AwayGoals;
                     halfStoppageBase = st.StoppageTicks;
                     st.Phase = MatchPhase.HalfTime;
-                    // Devre arası toparlanması: +150 (tavan 1000) — ME 12.1
+                    // Devre arası toparlanması: +150 (tavan 1000) — ME 12.1. Ayrıca 15 dakikalık
+                    // arada takımlar soyunma odasından DİZİLİŞLE döner: pozisyonlar anchor'a alınır.
+                    // (Ara simüle edilmez; bu, ME 4.1'in oyun-içi "ışınlanma yasağı" kapsamında değildir.
+                    //  Bu reset yokken 2. devre santrası 1. devrenin bittiği dağınık yerleşimden
+                    //  başlıyordu ve iki devrenin santra koşulları asimetrikleşiyordu — M7 ölçümü.)
                     for (int i = 0; i < 22; i++)
                     {
                         int e = st.Agents[i].Energy + (int)bal.stamina.devreArasi;
                         st.Agents[i].Energy = (ushort)(e > 1000 ? 1000 : e);
+                        if (!st.Agents[i].Active) continue;
+                        st.Agents[i].X = st.Agents[i].AnchorX; st.Agents[i].Y = st.Agents[i].AnchorY;
+                        st.Agents[i].TargetX = st.Agents[i].AnchorX; st.Agents[i].TargetY = st.Agents[i].AnchorY;
+                        st.Agents[i].Vx = 0; st.Agents[i].Vy = 0;
                     }
                     KickoffRestart(ref st, startTeam: 1); // ikinci devreyi deplasman başlatır
                 }
@@ -2927,6 +3003,7 @@ namespace TheBadge.Sim.Match
                     st.Ball.Y = w.Y;
                     st.Ball.Vx = Units.QuantizeMm(dirA * 1.5); st.Ball.Vy = 0; st.Ball.Vz = 0;
                     st.Ball.LastTouchTeam = w.TeamIdx; lastToucher = (short)atk;
+                    lastTouchKind = 8;
                     // Kaybeden toparlanır: kazananın ilk dokunuşu anında yeniden yarışılmaz
                     if (def >= 0) st.Agents[def].ActionUntilTick = st.Tick + (uint)bal.utility.kararKilidiTicks;
                 }
@@ -2956,6 +3033,7 @@ namespace TheBadge.Sim.Match
                     st.Ball.OwnerId = -1;
                     st.Ball.Flight = 0;
                     st.Ball.LastTouchTeam = d2.TeamIdx; lastToucher = (short)def;
+                    lastTouchKind = 4;
                     return;
                 }
                 st.Ball.Vx = Units.QuantizeMm(away * envUzaklastirmaHizi * 0.9);
@@ -3056,6 +3134,7 @@ namespace TheBadge.Sim.Match
             st.SetPiece = SetPieceType.Kickoff;
             st.SetPieceTeam = startTeam;
             st.Phase = MatchPhase.Kickoff;
+            kickoffHoldUntil = st.Tick + (uint)bal.setpiece.santraHazirlikTicks;
             if (pendingPassTeam >= 0) PassLostDead++;
             ClearPending();
             int fw = startTeam == 0 ? 10 : 21;

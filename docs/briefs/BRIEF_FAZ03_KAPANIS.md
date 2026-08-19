@@ -154,10 +154,26 @@ noktasının TAMAMI, 3 seviye, MatchConfig.Chaos).
   ME 17.2 bantları korundu. Kapılar: `M16DKullanim` · `M16DChaosDeterminizm` ·
   `M16DChaosSeviyeEtkisi` · `M16DUpsetYuksek` (borç muhafızı).
 
-#### M16-E — açık (sıradaki)
-10.000 maçlık 17.2 tablosu + 13.4/17.3 upset kalibrasyonu (çok katsayılı arama) + kart/faul
-hacmi (kırmızı 1,0/maç, avantaj 28/maç; kart üretiminin kadro-farkı bağımlılığı → kalibrasyon
-setinin kadro dağılımı tanımlanmalı).
+#### M16-E — 17.2 tam kalibrasyonu + iki yapısal asimetri düzeltmesi — ✅ TAMAM (2026-08-18)
+**10.000 maçta 13/13 bant ✓:** gol 2,48 · şut 27,4 · isabetli 7,4 · korner 8,4 · faul 18,7 ·
+sarı 3,11 · kırmızı 0,19 · penaltı 0,25 · ofsayt 4,9 · sakatlık 0,55 · pas %81,4 · xG sapması
+%1,4 · possession %64. Kalibrasyon seti tanımı: lig dağılımı ofset ±12 (Chaos domain çekilişi).
+- **Spec borçları kapandı:** ME 12.4 avantaj tehdit koşulu (28/maç → 4,5) · sarı sonrası
+  ihtiyat (kırmızı 1,0 → 0,19; ikinci-sarı tekeli kırıldı) · kale önü pas tamponu (serbest-gol
+  dönüşü bastırıldı) · `tutmaBoleni` [KALİBRE]'ye · xG `b0` yeniden kalibre (sapma %63 → %1,4) ·
+  `LooseGoalKind` 9-sınıf teşhis ayrışımı.
+- **Yapısal asimetri 1 — santra kuralı:** rakip santrada merkez dairesi içinde basıyordu
+  (ayna: devre 1 şutları 60/145, bir tohumda ev 0 şut). ME 4.1 santra hazırlığı eklendi:
+  anchor dizilişi + 9,15 m daire + `santraHazirlikTicks` beklemesi + devre arası diziliş
+  reset'i → 92/108; **M4/M5 eşit-güç gol kapıları kendiliğinden bant içine döndü** (2,08/2,00).
+- **Yapısal asimetri 2 — karar tarama yönü:** sabit 0→21 sıra aynı-tick savunma tepkisini hep
+  deplasmana veriyordu (ayna xG sapması %27; ters yön %9 ev lehine — mekanizma kanıtı).
+  Tick paritesiyle yön dönüşümü → N=120'de %9 (gürültü). ME 3.2 "sabit sıra" = yeniden
+  üretilebilir sıra; determinizm korunur.
+- **Bulgu (Bekleyen kararlar'a):** üstünlük zincirde üssel (ŞUT/ATAK %5→%13→%33) — 13.4 upset
+  büyüklüğü tasarım kararı, M17 dondurmasından önce. 10k G/B/M: %93/%6/%1 (hedef %66/%18/%16).
+- Golden'lar yeniden pinlendi (4); LOD 2 yeniden üretildi (`M15KompozisyonHatasi` %91→%60);
+  yeni kapı `M16ECalibGenis` (ME 17.4: CI 500 maç GENİŞ bant; dar bantlar `calib10k 10000`).
 
 ### M17 — Golden replay seti (ME 17.4) + FAZ 04 arayüz dondurması (18.3)
 - **Kapı:** replay dörtlüsü (seed + config_hash + komut zaman çizelgesi + sürüm) ile

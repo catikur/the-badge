@@ -209,6 +209,8 @@ namespace TheBadge.Sim.Config
             public double griBantOrta;        // ± gri bant genişliği
             public double sariEsik, kirmiziEsik;
             public double cezaSahasiIhtiyatCarpan; // kendi ceza sahasında şiddet skoru çarpanı
+            public double avantajXtEsik;      // avantaj için mağdurun hücresinin asgari xT'si (ME 11.2 tehdit koşulu)
+            public double sariSonrasiIhtiyat; // sarı görmüş oyuncunun şiddet skoru iskontosu (M16-E)
         }
 
         /// <summary>Duran toplar — ME Spec 10 [KALİBRE].</summary>
@@ -228,6 +230,8 @@ namespace TheBadge.Sim.Config
             public double korneriGozeAlmaOran;   // baskı altında kendi kutusunda topu dışarı atma oranı
             public double uzaklastirmaHizMS;     // savunmanın uzaklaştırma hızı
             public int hazirlikTicks;            // duran top hazırlığı (sıkıştırılmış çözüm, ME 3.4)
+            public double santraDaireM;          // santrada rakibin çekilmek zorunda olduğu daire yarıçapı (ME 4.1 DEAD_BALL)
+            public int santraHazirlikTicks;      // santra beklemesi: diziliş toparlanana dek alım kilidi (ME 4.1)
 
             [System.Serializable]
             public sealed class PenaltyCfg
@@ -264,6 +268,7 @@ namespace TheBadge.Sim.Config
             public double cikisGenislikM;       // çıkış bölgesinin yarı genişliği (m)
             public double yakinMesafeM;         // 1v1 kapatma etkisinin başladığı mesafe (ME 9.3)
             public double yakinKapatmaKatsayi;  // OneOnOne'ın marja katkısı (sn)
+            public double tutmaBoleni;          // tutuş kontrolü: Handling/bu (çelme payının tersi, M16-E)
         }
 
         /// <summary>Şut yürütme — ME 6.4 kompoziti + 8.3 (M3 ekleme) [KALİBRE].</summary>
@@ -343,6 +348,7 @@ namespace TheBadge.Sim.Config
             public double presFactorPerRakip;  // M_pres = 1 + bu × yakın rakip
             public double groundSpeedMin, groundSpeedMax; // yerden pas hızı bandı (m/sn)
             public double presYaricapM;        // "yakın rakip" sayım yarıçapı (M2 ekleme)
+            public double kaleOnuTamponM;      // pas hedefi kendi kale çizgisine bundan fazla yaklaşamaz (M16-E)
         }
 
         /// <summary>Topsuz konumlanmada anchor ağırlığı — ME Spec 7.4 [KALİBRE].</summary>

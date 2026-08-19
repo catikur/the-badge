@@ -20,6 +20,96 @@ const ulong SEED = 0xC0FFEE2026UL;
 // duruyor çünkü ikisi de AYNI kadro üreticisini ve AYNI balance yükleyicisini kullanmak
 // zorunda — ayrı proje, ikinci bir "test kadrosu" tanımı doğururdu.
 // ============================================================================================
+// ============================================================================================
+// ÜRETİCİ MODU — `-- calib10k [macSayisi]` : ME 17.2'nin 10.000 maçlık kalibrasyon seti.
+// KADRO DAĞILIMI TANIMI (M16-E): lig benzeri — her maçta iki takımın nitelik ofseti
+// [-12, +12] bandından DETERMİNİSTİK çekilir (Chaos domain, maç indeksi entity). Tek profil
+// (ayna/sabit) yerine dağılım: kart/faul üretiminin kadro-farkı bağımlılığı ölçümde görülmüştü;
+// tablo, ligin TAMAMINI temsil etmeli. CI bu seti koşmaz (ME 17.4: CI = 500 maç geniş tolerans,
+// tam set gece koşusu/elle) — sonuç DECISIONS.md'ye işlenir.
+// ============================================================================================
+if (args.Length > 0 && args[0] == "calib10k")
+{
+    var cOpts = new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true };
+    var cBal = System.Text.Json.JsonSerializer.Deserialize<TheBadge.Sim.Config.SimBalance>(
+        System.IO.File.ReadAllText(FindRepoFile("balance/sim.balance.json")), cOpts);
+    int NM = args.Length > 1 ? int.Parse(args[1]) : 10000;
+
+    double g = 0, sh = 0, isb = 0, ko = 0, fa = 0, sa = 0, ki = 0, pe = 0, of = 0, inj = 0;
+    double pa = 0, pc = 0, xgT = 0, av = 0, golSut = 0, golLoose = 0, kurtaris = 0;
+    double lgGk = 0, lgDf = 0, lgMf = 0, lgAtk = 0, lgOwn = 0, lgHava = 0;
+    var lgKind = new double[9];
+    // 75v55 alt profili (ME 17.2 possession bandı %55-65 + 13.4): ofset farkı >= 16 olan maçlar
+    double pGucluPos = 0; int nProfil = 0, gProfil = 0, bProfil = 0, mProfil = 0;
+    var kilit = new object();
+    int bitti = 0;
+
+    System.Threading.Tasks.Parallel.For(0, NM, n =>
+    {
+        ulong sd = 0xCA11B0UL + (ulong)n * 7919UL;
+        // Ofset çekilişi: Chaos domain, maç indeksi entity — kadro dağılımı tanımının kendisi
+        int ofsEv = (int)(Rng.Rand01(sd, Domain.Chaos, 9000, 0, 1) * 25) - 12;
+        int ofsDep = (int)(Rng.Rand01(sd, Domain.Chaos, 9000, 0, 2) * 25) - 12;
+        var cfg = new MatchConfig
+        {
+            Seed = sd, EngineVersion = "calib10k",
+            Home = BuildSheetSide(300, 7, home: true, offset: ofsEv),
+            Away = BuildSheetSide(300, 7, home: false, idEntity: 8, offset: ofsDep),
+            Referee = RefereeProfile.Default
+        };
+        var e = new MatchEngine(sd, new CommandQueue(), cfg, cBal) { AutoManage = true };
+        var st = MatchEngine.CreateInitialState(cfg);
+        var r = e.Run(ref st);
+        var pkt = e.BuildSummary(in st);
+        lock (kilit)
+        {
+            g += r.HomeGoals + r.AwayGoals; sh += r.Shots; isb += e.ShotsOnTarget; ko += r.Corners;
+            fa += r.Fouls; sa += r.Yellows; ki += r.Reds; pe += r.Penalties; of += e.Offsides;
+            inj += e.Injuries; pa += e.PassAttempts; pc += e.PassCompletions;
+            xgT += r.XgHome + r.XgAway; av += e.Advantages;
+            golSut += e.GoalsFromShot; golLoose += e.GoalsFromLoose; kurtaris += r.Saves;
+            lgGk += e.LooseGoalByGk; lgDf += e.LooseGoalByDf; lgMf += e.LooseGoalByMfFw;
+            lgAtk += e.LooseGoalAttackTouch; lgOwn += e.LooseGoalOwnTouch; lgHava += e.LooseGoalAirborne;
+            for (int k2 = 0; k2 < 9; k2++) lgKind[k2] += e.LooseGoalKind[k2];
+            if (ofsEv - ofsDep >= 16) { pGucluPos += pkt.Home.PossessionPct; nProfil++;
+                if (r.HomeGoals > r.AwayGoals) gProfil++; else if (r.HomeGoals == r.AwayGoals) bProfil++; else mProfil++; }
+            else if (ofsDep - ofsEv >= 16) { pGucluPos += pkt.Away.PossessionPct; nProfil++;
+                if (r.AwayGoals > r.HomeGoals) gProfil++; else if (r.HomeGoals == r.AwayGoals) bProfil++; else mProfil++; }
+            bitti++;
+            if (bitti % 1000 == 0) Console.WriteLine($"[calib] {bitti}/{NM}");
+        }
+    });
+
+    double golOrt = g / NM, xgOrt = xgT / NM;
+    Console.WriteLine($"[calib] ==== ME 17.2 TABLOSU ({NM} maç, lig dağılımı ofset ±12) ====");
+    void Satir(string ad, double v, double lo, double hi, string fmt = "0.00") =>
+        Console.WriteLine($"[calib] {ad,-26} {v.ToString(fmt),8}   bant {lo}-{hi}   {(v >= lo && v <= hi ? "✓" : "✗")}");
+    Satir("gol", golOrt, 2.4, 3.0);
+    Satir("şut", sh / NM, 20, 28, "0.0");
+    Satir("isabetli şut", isb / NM, 7, 11, "0.0");
+    Satir("korner", ko / NM, 8, 12, "0.0");
+    Satir("faul", fa / NM, 18, 28, "0.0");
+    Satir("sarı", sa / NM, 3.0, 5.0);
+    Satir("kırmızı", ki / NM, 0.15, 0.30);
+    Satir("penaltı", pe / NM, 0.20, 0.35);
+    Satir("ofsayt", of / NM, 2, 5, "0.0");
+    Satir("sakatlık", inj / NM, 0.35, 0.60);
+    Satir("pas isabet %", 100.0 * pc / Math.Max(1, pa), 78, 86, "0.0");
+    double xgSapma = Math.Abs(g - xgT) / Math.Max(1.0, xgT) * 100.0;
+    Console.WriteLine($"[calib] {"gol vs xG sapması %",-26} {xgSapma,8:0.0}   bant ±8   {(xgSapma <= 8 ? "✓" : "✗")}");
+    Console.WriteLine($"[calib] gol kaynağı: şut {golSut / NM:0.00} + serbest top {golLoose / NM:0.00} · kurtarış {kurtaris / NM:0.0} · xG/şut {xgT / Math.Max(1, sh):0.000}");
+    Console.WriteLine($"[calib] serbest gol: son dokunan GK {lgGk / NM:0.00} / DF {lgDf / NM:0.00} / OS-FV {lgMf / NM:0.00} · dokunuş hücum {lgAtk / NM:0.00} / savunan {lgOwn / NM:0.00} · havada {lgHava / NM:0.00}");
+    Console.WriteLine($"[calib] serbest gol TÜRÜ: diğer {lgKind[0] / NM:0.00} · çelme {lgKind[1] / NM:0.00} · uzun/degaj {lgKind[2] / NM:0.00} · blok {lgKind[3] / NM:0.00} · uzaklaştırma {lgKind[4] / NM:0.00} · pas {lgKind[5] / NM:0.00} · şut {lgKind[6] / NM:0.00} · tackle {lgKind[7] / NM:0.00} · indirme {lgKind[8] / NM:0.00}");
+    if (nProfil > 0)
+    {
+        Satir("güçlü possession % (75v55)", pGucluPos / nProfil, 55, 65, "0.0");
+        Console.WriteLine($"[calib] 75v55 profili ({nProfil} maç): G/B/M " +
+                          $"%{100.0 * gProfil / nProfil:0} / %{100.0 * bProfil / nProfil:0} / %{100.0 * mProfil / nProfil:0} " +
+                          $"(ME 13.4 Orta hedefi %66/%18/%16) · avantaj {av / NM:0.0}/maç");
+    }
+    return 0;
+}
+
 if (args.Length > 0 && args[0] == "fit-lod2")
 {
     var fitOpts = new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true };
@@ -172,7 +262,7 @@ if (runA.finalHash != runB.finalHash || runA.at600 != runB.at600)
 else Pass("MatchSkeletonDeterminism");
 
 // 7b) Golden: durum hash'i sabitlendi — alan/sıra değişikliği bilinçli golden güncellemesi ister
-const ulong MATCH_GOLDEN = 0x300F058710920B36UL; // M16-D'de yeniden sabitlendi (uzun top + kaleci dağıtımı + chaos motoru — bilinçli)
+const ulong MATCH_GOLDEN = 0xC668C601BF07F8EBUL; // M16-E'de yeniden sabitlendi (santra kuralı + parite taraması + kalibrasyon — bilinçli)
 if (MATCH_GOLDEN != 0 && runA.finalHash != MATCH_GOLDEN)
     failures += Fail("MatchSkeletonGolden", $"0x{runA.finalHash:X} != 0x{MATCH_GOLDEN:X}");
 else Pass("MatchSkeletonGolden");
@@ -374,7 +464,7 @@ Console.WriteLine($"[info] M2 durum hash: 0x{mA2.h:X}");
 if (mA2.h != mB2.h) failures += Fail("M2Determinism", $"0x{mA2.h:X} != 0x{mB2.h:X}");
 else Pass("M2Determinism");
 
-const ulong M2_GOLDEN = 0xD495175A7DA1CDC6UL; // M16-D'de yeniden sabitlendi (uzun top + kaleci dağıtımı + chaos motoru — bilinçli)
+const ulong M2_GOLDEN = 0xFE7657877C6F9E86UL; // M16-E'de yeniden sabitlendi (santra kuralı + parite taraması — bilinçli)
 if (M2_GOLDEN != 0 && mA2.h != M2_GOLDEN) failures += Fail("M2Golden", $"0x{mA2.h:X}");
 else Pass("M2Golden");
 
@@ -451,7 +541,7 @@ if (f1.hash != f2.hash || f1.res.TotalTicks != f2.res.TotalTicks)
     failures += Fail("M4Determinism", $"0x{f1.hash:X} != 0x{f2.hash:X}");
 else Pass("M4Determinism");
 
-const ulong M4_GOLDEN = 0xAF634A7CA41B7E79UL; // M16-D'de yeniden sabitlendi (uzun top + kaleci dağıtımı + chaos motoru — bilinçli)
+const ulong M4_GOLDEN = 0x6D67DA530C8BAC59UL; // M16-E'de yeniden sabitlendi (santra kuralı + parite taraması — bilinçli)
 if (M4_GOLDEN != 0 && f1.hash != M4_GOLDEN) failures += Fail("M4Golden", $"0x{f1.hash:X}");
 else Pass("M4Golden");
 
@@ -738,7 +828,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     Console.WriteLine($"[info] M6 komutlu maç hash: 0x{hA:X}");
     if (hA != hB) failures += Fail("M6Determinism", $"0x{hA:X} != 0x{hB:X}");
     else Pass("M6Determinism");
-    const ulong M6_GOLDEN = 0x4DFB0413CFEA80F5UL; // M16-D'de yeniden sabitlendi (uzun top + kaleci dağıtımı + chaos motoru — bilinçli)
+    const ulong M6_GOLDEN = 0xF2301D1267A9185FUL; // M16-E'de yeniden sabitlendi (santra kuralı + parite taraması — bilinçli)
     if (M6_GOLDEN != 0 && hA != M6_GOLDEN) failures += Fail("M6Golden", $"0x{hA:X}");
     else Pass("M6Golden");
 }
@@ -1517,6 +1607,52 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         // Sert eşik, M16-E'nin 10.000 maçlık örnekleminde gelir; hedef buraya basılıdır.
         Pass($"M16DUpsetYuksek(sürpriz+beraberlik %{100.0 * (b + m) / NU16:0} — ME 13.4 HEDEF %46; M16-E kalibrasyon borcu)");
     }
+}
+
+// 22) FAZ 03 M16-E — ME 17.2 kalibrasyon kapısı (ME 17.4 iki katman: CI = 500 maç GENİŞ
+// tolerans; tam set = `-- calib10k 10000` üretici komutu, sonucu DECISIONS/brief'e işlenir).
+// Kadro dağılımı üretici komutla AYNI tanımdır (ofset ±12, Chaos domain çekilişi) — kapı ile
+// üretici farklı evreni ölçmesin. Bantlar 17.2 hedeflerinin CI-geniş halidir (500 maç örneklem
+// gürültüsü payı); dar bantlar 10k örnekleminde denetlenir.
+{
+    const int NE = 500;
+    double g = 0, sh = 0, isb = 0, ko = 0, fa = 0, sa = 0, ki = 0, pe = 0, of = 0, inj = 0, pa = 0, pc = 0, xg = 0;
+    var kilit16e = new object();
+    System.Threading.Tasks.Parallel.For(0, NE, n =>
+    {
+        ulong sd = 0xCA11B0UL + (ulong)n * 7919UL;
+        // Ofset çekilişi: üretici komutun (calib10k) kadro dağılımı tanımıyla birebir aynı
+        int ofsEv = (int)(Rng.Rand01(sd, Domain.Chaos, 9000, 0, 1) * 25) - 12;
+        int ofsDep = (int)(Rng.Rand01(sd, Domain.Chaos, 9000, 0, 2) * 25) - 12;
+        var cfg = new MatchConfig
+        {
+            Seed = sd, EngineVersion = "calib10k",
+            Home = BuildSheetSide(300, 7, home: true, offset: ofsEv),
+            Away = BuildSheetSide(300, 7, home: false, idEntity: 8, offset: ofsDep),
+            Referee = RefereeProfile.Default
+        };
+        var e = new MatchEngine(sd, new CommandQueue(), cfg, simBal) { AutoManage = true };
+        var s = MatchEngine.CreateInitialState(cfg);
+        var r = e.Run(ref s);
+        lock (kilit16e)
+        {
+            g += r.HomeGoals + r.AwayGoals; sh += r.Shots; isb += e.ShotsOnTarget; ko += r.Corners;
+            fa += r.Fouls; sa += r.Yellows; ki += r.Reds; pe += r.Penalties; of += e.Offsides;
+            inj += e.Injuries; pa += e.PassAttempts; pc += e.PassCompletions; xg += r.XgHome + r.XgAway;
+        }
+    });
+    double pasP = 100.0 * pc / Math.Max(1, pa);
+    double xgSap = Math.Abs(g - xg) / Math.Max(1.0, xg) * 100.0;
+    Console.WriteLine($"[info] M16-E kalibrasyon ({NE} maç, lig dağılımı): gol {g / NE:0.00} · şut {sh / NE:0.0} · " +
+                      $"isabetli {isb / NE:0.0} · korner {ko / NE:0.0} · faul {fa / NE:0.0} · sarı {sa / NE:0.00} · " +
+                      $"kırmızı {ki / NE:0.00} · penaltı {pe / NE:0.00} · ofsayt {of / NE:0.0} · sakatlık {inj / NE:0.00} · " +
+                      $"pas %{pasP:0.0} · xG sapma %{xgSap:0.0}");
+    bool ok16e = g / NE is >= 2.2 and <= 3.2 && sh / NE is >= 18 and <= 30 && isb / NE is >= 6 and <= 12
+              && ko / NE is >= 7 and <= 13 && fa / NE is >= 16 and <= 30 && sa / NE is >= 2.6 and <= 5.5
+              && ki / NE is >= 0.10 and <= 0.36 && pe / NE is >= 0.15 and <= 0.42 && of / NE is >= 1.6 and <= 5.6
+              && inj / NE is >= 0.28 and <= 0.68 && pasP is >= 76 and <= 88 && xgSap <= 10;
+    if (!ok16e) failures += Fail("M16ECalibGenis", "yukarıdaki [info] satırı bant dışı değer içeriyor");
+    else Pass("M16ECalibGenis(12 metrik, CI-geniş bant; dar bantlar calib10k 10000 ile)");
 }
 
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");

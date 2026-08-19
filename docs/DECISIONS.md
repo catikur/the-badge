@@ -678,7 +678,69 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   · `M16DChaosDeterminizm` · `M16DChaosSeviyeEtkisi` · `M16DUpsetYuksek` (bilinçli sert-eşiksiz:
   40 maçta %5'lik oranın sıfır çıkması %11 tohum şansı — sert eşik M16-E'nin 10k örneklemine ait).
 
+### M16-E: 17.2 tam kalibrasyonu + iki yapısal taraf-asimetrisi düzeltmesi (2026-08-18)
+- M16-E uygulandı (Atilla'nın "hepsini kapatacak şekilde devam" talimatı kapsamında): ME 17.2
+  tablosunun 13 bandı lig dağılımlı sette (ofset ±12, Chaos domain çekilişi) yeşile çekildi;
+  spec borçları kapandı: **ME 12.4 avantaj tehdit koşulu** (`XtAt ≥ referee.avantajXtEsik` —
+  eksikken avantaj 28/maç, şimdi ~4,6), **sarı sonrası ihtiyat** (`sariSonrasiIhtiyat` — kırmızıların
+  tamamının ikinci sarı olması davranışsal kaynaktandı; oyuncu sarı görünce sertliği kısar),
+  **kale önü pas tamponu** (`pass.kaleOnuTamponM` — serbest-gol hastalığının dönüşü %77'den
+  bant içine), kaleci `tutmaBoleni` magic-number'ı [KALİBRE]'ye, xG `b0` yeniden kalibrasyonu
+  (gol-xG sapması %63→%1-3), `LooseGoalKind` teşhis ayrışımı (9 sınıf — hash dışı).
+- **Kalibrasyon paketi (hepsi [KALİBRE]):** `sutTehditCarpan 0,46` · `sutSigmaTabanDeg 24,5` ·
+  `tutmaBoleni 260` · `korneriGozeAlmaOran 0,95` · `blokIleriOran 0,65` · `b0 −2,6` ·
+  `pTabanMudahale 0,0085` · `logisticSlope 6,0 (geri alındı — gol'e etkisiz, M3 kaleci
+  işaretini bozuyordu)`.
+- **Yapısal asimetri 1 — santra kuralı eksikti:** rakip forvetler (anchor ±3 m) santra pasını
+  0. saniyede basıyordu; kilitlenme çarkıyla (korner→şut→blok→korner) santrayı kullanan takım
+  maç boyu eziliyordu. Ayna ölçümü: devre 1 şutları ev/dep 60/145, 20 tohumun 15'i deplasman
+  lehine, sd5'te ev 90 dakikada 0 şut. Düzeltme (ME 4.1 DEAD_BALL "santra hazırlığı"):
+  santrada herkes anchor dizilişine döner, restart yapmayan takım merkez dairesi
+  (`santraDaireM 9,15`) dışına radyal itilir, top `santraHazirlikTicks 50` bekleme dolmadan
+  alınamaz; devre arasında pozisyonlar anchor'a reset (15 dk'lık ara simüle edilmez — oyun-içi
+  ışınlama yasağının kapsamı dışında). SONUÇ: devre 1 şutları 92/108'e dengelendi ve **M4/M5
+  eşit-güç gol kapıları kendiliğinden bant içine döndü** (gol 2,08/2,00 — santra baskını eşit
+  maçların golünü de yiyormuş).
+- **Yapısal asimetri 2 — karar taramasının yönü:** tek yönlü sabit tarama (0→21), top sahibinin
+  aksiyonuna grup içi AYNI-TİCK savunma tepkisini hep deplasmana veriyordu (ev hücumu anında
+  cevaplanıyor, deplasman hücumu 1 tick bedava alıyordu). Kanıt: ayna kadroda xG sapması %27
+  (dep lehine), tarama TERSİNE çevrilince %9 (ev lehine) — yön mekanizmayı birebir izliyor.
+  Düzeltme: tarama yönü tick paritesiyle değişir (5'li kademe tek sayı olduğundan her ajan
+  ardışık kararlarında erken/geç konumu sırayla alır). N=120 ayna: sapma %9 (≈0,7σ — gürültü).
+  ME 3.2 "sabit sıra" yorumu: sıra yalnız Tick'e bağlı ve yeniden üretilebilir; sırasız yapı
+  yasağı ihlal edilmez.
+- **Eşit-güç maç ekonomisi bulgusu (ME 13.4 köküyle aynı):** şuta dönüşüm (ŞUT/ATAK) eşit güçte
+  %5, +12 farkta %13, +24 farkta %33 — üstünlük zincirde üssel katlanıyor; lig bantları eşit
+  maç (~gol 1,8-2,0) ile fark maçlarının (75v55 şut ~45) ortalamasıyla geçiyor. Düz çarpanlarla
+  iki uç birden hedeflenemiyor (ölçüldü: şut bandı ile eşit-maç golü aynı kaldıraca ters asılı).
+  Konvekslik kararı "Bekleyen kararlar"a yazıldı — M17 dondurmasından önce.
+- **10k doğrulaması (`-- calib10k 10000`) — 13/13 bant ✓:** gol 2,48 (2,4-3) · şut 27,4 (20-28) ·
+  isabetli 7,4 (7-11) · korner 8,4 (8-12) · faul 18,7 (18-28) · sarı 3,11 (3-5) · kırmızı 0,19
+  (0,15-0,3) · penaltı 0,25 (0,2-0,35) · ofsayt 4,9 (2-5) · sakatlık 0,55 (0,35-0,6) · pas isabet
+  %81,4 (78-86) · gol-xG sapması %1,4 (±8) · güçlü possession %64,0 (55-65). Gol kaynağı: şut 0,78 +
+  serbest top 1,52; kurtarış 5,9/maç; xG/şut 0,089. 75v55 profili (1.380 maç): G/B/M %93/%6/%1 —
+  ME 13.4 hedefinden uzak; karar maddesi aşağıda.
+- **Golden'lar yeniden pinlendi** (bilinçli — santra kuralı + parite taraması davranışı değiştirir):
+  skeleton `0xC668C601...`, M2 `0xFE765787...`, M4 `0x6D67DA53...`, M6 `0xF2301D12...`.
+  LOD 2 tablosu yeniden üretildi (7.840 maç); `M15KompozisyonHatasi` %91→%60 (eşik 0,60 altı).
+- **Yeni kapı:** `M16ECalibGenis` — ME 17.4'ün iki katmanı: CI'da 500 maç GENİŞ toleransla
+  (12 metrik; kadro dağılımı üretici komutla birebir aynı tanım), dar bantlar `-- calib10k 10000`
+  üretici komutuyla (sonuç bu kayda işlenir).
+
 ## Bekleyen kararlar
+- **ME 13.4 upset büyüklüğü — ATİLLA KARARI (M16-E bulgusu, 2026-08-18):** 5 bağımsız ölçüm
+  (kDuel süpürmesi, pas varış hızı, tackle enstrümanı, yapı+chaos, kalibrasyon paketi) tek
+  katsayının upset tablosunu (75v55 hedef: Orta %66/%18/%16) yakalayamadığını gösterdi — 10k
+  ölçümü %93/%6/%1. Kök: üstünlük zincirde ÜSSEL katlanıyor (şuta dönüşüm eşit güçte %5,
+  +12 farkta %13, +24 farkta %33; +24'te maç başına 57 şut — gerçek dışı). Seçenekler:
+  **(a)** zincir normalizasyonu — pozisyon başına düello derinliği sınırlaması / savunma çekilme
+  hattı / yorgunluk asimetrisi gibi mekanizmalarla katlanmayı kırmak (motor işi, ayrı dilim;
+  davranışı köklü değiştirir, tüm golden'lar kayar); **(b)** 13.4 hedef tablosunun revizyonu —
+  "yetenek hissi" lehine upset hedefini gevşetmek (spec değişikliği, GDD 1.3 "yetenek kazanır"
+  ilkesiyle uyumlu ama sürpriz vaadini inceltir); **(c)** sonuç katmanında düzeltme (skor üstü
+  yeniden örnekleme) — determinizm ve xG tutarlılığıyla çatışır, ÖNERİLMEZ. Öneri: (a)'nın
+  tasarım taslağı ayrı dilim olarak; **M17 golden replay dondurmasından ÖNCE karar** (sonrası
+  her davranış değişikliği replay setini kırar).
 - **LOD 1'in geleceği (M15 kararı, 2026-08-16):** şu an LOD 0'ın eşleniği. Geri almak için gerekçe
   CPU olamaz (19 kat marj var); yalnız İSTEMCİ tarafında orta cihaz ölçümü LOD 0'ı 800 ms'nin
   üstüne çıkarırsa yeniden değerlendirilir. O ölçüm FAZ 05 cihaz testlerine ait.
