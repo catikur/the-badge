@@ -207,6 +207,8 @@ gelir" hipotezi ölçümle ÇÜRÜTÜLDÜ: +24 farkta xG/şut ×0,99, atak sayı
 - **Kaldıraç dersi (kayıtlı):** `sutSigmaTabanDeg` ↓ golü getirir ama upset'i %92'ye fırlatır
   (geri alındı); `gk.saveClampMax 0,96→0,92` hem golü getirdi hem upset'i korudu — dominant
   kaleciye karşı şut atana (zayıfa) orantısal fayda sağlayan tek düz kaldıraç.
+- **Nihai 10k: 17.2 tablosu 13/13 ✓** (gol 2,46 · direk 0,46/maç) · 75v55 **%80/%13/%7**
+  (revize hedef %78/%12/%10 — galibiyet ve beraberlik hedefte, sürpriz 3 puan eksik).
 - Kapılar: `M16FUpsetOrta` sıkıldı (≤%90 / ≥%10); `M5NoRegression` örneklemi 32→96 (bant aynı).
 
 ### M17 — Golden replay seti (ME 17.4) + FAZ 04 arayüz dondurması (18.3)

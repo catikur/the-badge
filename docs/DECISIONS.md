@@ -836,6 +836,12 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
 - **Kapı:** `M16FUpsetOrta` bugünkü gerçeğe sıkıldı (güçlü ≤ %91→%90, sürpriz+beraberlik ≥ %9→%10).
   `M5NoRegression` 32→96 maç: 1,84 ± 0,15 ölçümü bandın 2,0 tabanını gürültüyle tetikliyordu;
   96 maçta 2,26 — BANT DEĞİŞMEDİ, örneklem büyüdü (kapı güçlendi).
+- **NİHAİ 10k (push edilen konfigürasyon) — 17.2 tablosu 13/13 ✓:** gol 2,46 · şut 27,4 ·
+  isabetli 7,4 · korner 8,3 · faul 20,4 · sarı 3,14 · kırmızı 0,19 · penaltı 0,29 · ofsayt 4,8 ·
+  sakatlık 0,50 · pas %81,3 · gol-xG sapması %2,4 · possession %58,0 · **direk 0,46/maç**.
+  75v55 (1.380 fark maçı): G/B/M **%80/%13/%7** — revize hedef %78/%12/%10: galibiyet ve
+  beraberlik oranı HEDEFTE, sürpriz payı 3 puan eksik (zincir borcunda). Günün başlangıcı
+  %93/%6/%1 idi; M16-F sonrası %83/%12/%6.
 - **Spec önerisi (DEĞİŞİKLİK YAPILMADI):** ME 15.1 event tablosuna `Woodwork` tipi eklenmesi —
   direği bulan şut sunum/highlight değeri yüksek dramatik bir andır ama tablo 30 tiple kapalı
   olduğu için şimdilik `ShotOffTarget` olarak yayımlanıyor ve yalnız hash-dışı sayaçla izleniyor.
