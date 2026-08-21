@@ -799,6 +799,47 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   (1.380 fark maçı): G/B/M **%84/%12/%4** — revize hedef %78/%12/%10; beraberlik tam hedefte,
   kalan 6 puan isabet dilimi + Yüksek chaos borcunda.
 
+### M16-G: ME 9.1/9.2 isabet borçları — ve "isabet dilimi upset'i kapatır" hipotezinin ÇÜRÜTÜLMESİ (2026-08-19)
+- **Önce teşhis (zincir ölçümü, 60 maç/koşul) — kendi hipotezimi çürüttü.** M16-F kapanışında
+  "kalan upset açığı isabet/nişan modelinden gelir" diye yazmıştım. Ölçüm bunun YANLIŞ olduğunu
+  gösterdi: +24 farkta **xG/şut ×0,99** (0,101 vs 0,103) — şut KALİTESİ iki taraf için zaten
+  eşit; **atak sayısı ×1,14** (182 vs 159) — pozisyon kazanma da neredeyse eşit. Fark tümüyle
+  **ŞUT/ATAK ×8,33**'te (0,202 vs 0,024): zayıf takım aynı sayıda atağı şuta çeviremiyor.
+  Kök, M16-A'dan beri kayıtlı "atak zincirinin uzunluğu" borcudur — isabet modeli değil.
+  Kayıt amacı: bu satır, hipotezin ölçümle reddedildiğini ve upset açığının gerçek adresini
+  sabitler (varsayım borcu ikinci kez ödenmesin).
+- **Spec borçları yine de kapatıldı (fidelity işi, upset işi değil):**
+  (1) **ME 9.1 açıortay hatası** — `sigma_pos = 0,9 × (1 − Positioning/120) m` motorda YOKTU;
+  kaleci kusursuz açıortayda duruyordu ve Positioning niteliği kalecinin KENDİ pozisyonlamasında
+  hiç kullanılmıyordu. Hata `posHataYenilemeTicks` kovasıyla yavaş değişir (tick başına çekiliş
+  kaleciyi titretirdi); DECISION domain (pozisyon alma bir yargı hatasıdır).
+  (2) **ME 9.2 direk bandı** — "kesişim direğe < 12 cm" kuralı yoktu (kodda "direk bandı
+  M-duran-top/ince ayar" notuyla ertelenmişti). Uygulandı: `direkBandiMm 120`. Sıralama spec'te
+  kurtarıştan SONRAdır; burada GEOMETRİ ÖNCE çözülür — gerekçe: event log TEK YÖNLÜDÜR (ME 15.1),
+  ShotOnTarget yayımlandıktan sonra "aslında direkti" demek log'u geri almayı gerektirirdi.
+  Direği bulan şut isabetli sayılmaz (Opta konvansiyonu); top direkten sahaya seker.
+  **Ölçüm: 0,47 direk/maç, şutların %1,7 — gerçek futbolla birebir.**
+  (3) **Nişan noktasının kaleciye bağlanması** — şutçu kalecinin BOŞ bıraktığı tarafa nişan alır;
+  doğru tarafı seçme olasılığı şut kompozitiyle ölçeklenir. Bu bağ olmadan (1) SONUÇSUZ kalırdı:
+  kimse boşluğu kullanmadığı için kalecinin nerede durduğu şutçu için bilgi taşımıyordu.
+- **Beklenmeyen sonuç — upset YİNE DE iyileşti:** üçlü mekanizma 75v55 profilini (Kaos fixture,
+  240 maç, Orta) **%88/%8/%4 → %82,9/%11,7/%5,4** taşıdı; beraberlik revize hedefe (%12) oturdu.
+  Nedeni isabet DEĞİL, eklenen mekanizmaların çok şut atan tarafı orantısal olarak daha çok
+  cezalandırması (direk bandı + kaleci hatası varyansı).
+- **Kalibrasyon — kaldıraç seçimi ölçümle yapıldı:** gol bandı için önce `sutSigmaTabanDeg`
+  denendi (19,0→18,4): gol geldi ama upset %79→%92 fırladı (isabet artışı ÇOK ŞUT ATANA yarar) →
+  GERİ ALINDI. Sonra `nisanDogruTaban` yükseltildi (düz kaldıraç, düşük yeteneğe orantısal fayda):
+  0,62→0,76 golü getirdi ama upset %82→%85 → orta noktada bırakıldı (0,62). Nihai kaldıraç
+  **`gk.saveClampMax 0,96→0,92`**: dominant kaleciye KARŞI şut atan tarafa (yani zayıfa)
+  orantısal olarak daha çok yarayan tek düz kaldıraç — gol 2,35→2,44 ✓ ve upset %82,9 KORUNDU.
+  0,89 denendi: ek upset faydası YOK, yalnız gol şişiyor → 0,92'de yakınsandı.
+- **Kapı:** `M16FUpsetOrta` bugünkü gerçeğe sıkıldı (güçlü ≤ %91→%90, sürpriz+beraberlik ≥ %9→%10).
+  `M5NoRegression` 32→96 maç: 1,84 ± 0,15 ölçümü bandın 2,0 tabanını gürültüyle tetikliyordu;
+  96 maçta 2,26 — BANT DEĞİŞMEDİ, örneklem büyüdü (kapı güçlendi).
+- **Spec önerisi (DEĞİŞİKLİK YAPILMADI):** ME 15.1 event tablosuna `Woodwork` tipi eklenmesi —
+  direği bulan şut sunum/highlight değeri yüksek dramatik bir andır ama tablo 30 tiple kapalı
+  olduğu için şimdilik `ShotOffTarget` olarak yayımlanıyor ve yalnız hash-dışı sayaçla izleniyor.
+
 ## Bekleyen kararlar
 - ~~ME 13.4 upset büyüklüğü~~ → **KARAR (2026-08-19, Atilla): (d) HİBRİT.** Dört seçenek
   sunuldu — (a) tam zincir normalizasyonu (2 dilim motor işi), (b) yalnız hedef revizyonu

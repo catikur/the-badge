@@ -68,6 +68,8 @@ namespace TheBadge.Sim.Match
         public int PassAttempts, PassCompletions, Tackles, OutOfBounds, PossessionChanges;
         public int Shots, Saves;
         public int Fouls, Advantages, Yellows, Reds, Corners, GoalKicks, ThrowIns, Penalties, FreeKicks, Blocks, Offsides;
+        /// <summary>Direği bulan şut sayısı — ME 9.2 direk bandı teşhisi (hash dışı).</summary>
+        public int Woodwork;
         public int Injuries, ThroughPasses;
         public int RedsDirect, RedsSecondYellow, FoulIncidents;  // teşhis (M14 bant denetimi)
         public int TackleAttempts;    // yerdeki müdahale DENEMESİ (başarı + başarısızlık) — M16-C teşhisi
@@ -893,8 +895,18 @@ namespace TheBadge.Sim.Match
                               * (1.0 + presSayisi * bal.shotExec.presSigmaKisiBasi * pres01Sav)
                               * chaosAim;   // enjeksiyon 3 (ME 13.2)
             double sigmaPlaneM = dGoal * Math.Tan(sigmaRad);
-            // Nişan noktası: kaleciyi geçmek için direk dibi (merkez değil) — taraf DECISION akışından
-            double side = Rng.Rand01(seed, Domain.Decision, (uint)(200 + i), st.Tick, 44) < 0.5 ? -1.0 : 1.0;
+            // Nişan noktası — ME 6.4 "şut isabeti" kompozitinin YERLEŞİM tarafı (M16-G): şutçu
+            // kalecinin BOŞ BIRAKTIĞI tarafa nişan alır; tarafı doğru seçme olasılığı şut
+            // kompozitiyle ölçeklenir (düşük yetenek rastgele seçer, kalecinin üstüne nişan
+            // alabilir). Bu bağ olmadan ME 9.1 pozisyon hatası SONUÇSUZ kalırdı: kimse boşluğu
+            // kullanmadığı için kalecinin nerede durduğu şutçu için bilgi taşımıyordu.
+            int gkIdx = a.TeamIdx == 0 ? 11 : 0;
+            double bosTaraf = st.Agents[gkIdx].Y >= 0 ? -1.0 : 1.0;   // kalecinin ters tarafı
+            double pDogruTaraf = bal.shotExec.nisanDogruTaban + fin / 100.0 * bal.shotExec.nisanDogruSpan;
+            // Zar gerekçesi: taraf SEÇİMİ bir karardır — DECISION domain (ME 3.1)
+            double side = Rng.Rand01(seed, Domain.Decision, (uint)(200 + i), st.Tick, 44) < pDogruTaraf
+                          ? bosTaraf
+                          : (Rng.Rand01(seed, Domain.Decision, (uint)(200 + i), st.Tick, 53) < 0.5 ? -1.0 : 1.0);
             double aimTarget = side * GoalHalfWidthMm * bal.shotExec.nisanDirekOrani;
             // Zar gerekçesi: şut yürütme hatası fizikseldir — PHYSICS domain (ME 3.1)
             double aimY = aimTarget + sigmaPlaneM * 1000.0
@@ -965,7 +977,13 @@ namespace TheBadge.Sim.Match
             double xgS = RecordXg(ref st, i, dGoal, header);
             var shotFlags = ShotFlags(xgS, ref st, a.TeamIdx);
 
-            bool insidePosts = Math.Abs(interY) <= GoalHalfWidthMm;
+            // ME 9.2 DİREK BANDI: kale düzlemi kesişimi direğe 12 cm'den yakınsa top direği bulur
+            // [KALİBRE gk.direkBandiMm]. Spec sıralaması kurtarıştan SONRAdır ("kaçırdı → gol /
+            // direk"); burada GEOMETRİ ÖNCE çözülür çünkü event log TEK YÖNLÜDÜR (ME 15.1):
+            // kurtarış dalına girip ShotOnTarget yayımlandıktan sonra "aslında direkti" demek
+            // log'u geri almayı gerektirirdi. Direği bulan şut isabetli sayılmaz (Opta konvansiyonu).
+            bool direkVurdu = Math.Abs(Math.Abs(interY) - GoalHalfWidthMm) < bal.gk.direkBandiMm;
+            bool insidePosts = !direkVurdu && Math.Abs(interY) <= GoalHalfWidthMm;
             double vy = ((interY - a.Y) / 1000.0) / tPlane;
             double vx = planeDx / tPlane;
             byte flight = insidePosts ? (byte)1 : (byte)0; // karara bağlı gol yolu / dışarı serbest
@@ -978,7 +996,7 @@ namespace TheBadge.Sim.Match
                 EmitAtBall(ref st, EventType.ShotOnTarget, i, -1, a.TeamIdx,
                            aux: (int)dGoal, xg: (float)xgS, flags: shotFlags);
                 // 9.2 analitik kurtarış — kaleci: rakip takım slot 0
-                int gk = a.TeamIdx == 0 ? 11 : 0;
+                int gk = gkIdx;
                 double tReact = bal.gk.tReactBase + (100 - Eff(gk, attrs[gk].Reflexes)) * bal.gk.tReactPerReflexEksik;
                 double reach = bal.gk.reachBase + Eff(gk, attrs[gk].Agility) / 100.0 * bal.gk.reachAgilityFactor;
                 double gkDist = Math.Abs(st.Agents[gk].Y - interY) / 1000.0;
@@ -1043,6 +1061,24 @@ namespace TheBadge.Sim.Match
                     }
                 }
                 // kurtaramadı → hız aynen: top çizgiyi direkler arasından geçer → EventAndState GOL sayar
+            }
+            else if (direkVurdu)
+            {
+                // Direkten dönen top: direk dibinden sahaya geri seker (ME 8.3 sekme katsayısı).
+                // Serbest top → ribaund/korner zinciri doğal akışta çözülür; son dokunan hücumcu
+                // kaldığı için çizgiyi geçerse kale vuruşu çıkar (10.1 doğru sonucu).
+                // Ayrı bir Woodwork event TİPİ YOK (ME 15.1 tablosu 30 tiple kapalı) — sunum
+                // değeri için tip önerisi DECISIONS'a yazıldı; sayaç teşhis amaçlı, hash dışı.
+                Woodwork++;
+                EmitAtBall(ref st, EventType.ShotOffTarget, i, -1, a.TeamIdx,
+                           aux: (int)dGoal, xg: (float)xgS, flags: shotFlags);
+                int sgnD = interY >= 0 ? 1 : -1;
+                double hzD = Math.Sqrt(vx * vx + vy * vy) * envSekmeE;
+                vx = (a.TeamIdx == 0 ? -1.0 : 1.0) * hzD * 0.8;   // sahaya geri
+                vy = sgnD * hzD * 0.6;                            // direk açısıyla yana
+                st.Ball.X = ClampX(gx + (a.TeamIdx == 0 ? -300 : 300));
+                st.Ball.Y = ClampY(sgnD * GoalHalfWidthMm);
+                flight = 0;
             }
             else EmitAtBall(ref st, EventType.ShotOffTarget, i, -1, a.TeamIdx,
                             aux: (int)dGoal, xg: (float)xgS, flags: shotFlags);
@@ -1363,8 +1399,19 @@ namespace TheBadge.Sim.Match
                 double bd = Math.Max(0.5, Math.Sqrt(bdx * bdx + bdy * bdy));
                 double depth = bal.gk.derinlikTaban + bal.gk.derinlikPerM * bd;
                 if (depth > bal.gk.derinlikMax) depth = bal.gk.derinlikMax;
+                // ME 9.1 AÇIORTAY HATASI: sigma_pos = 0,9 × (1 − Positioning/120) m [KALİBRE].
+                // Kaleci Positioning niteliği bu dilime kadar KENDİ pozisyonlamasında hiç
+                // kullanılmıyordu (yalnız saha oyuncusu kompozitlerinde) — kaleci kusursuz
+                // açıortayda duruyordu. Hata YAVAŞ değişir (posHataYenilemeTicks kovası):
+                // tick başına yeni çekiliş kaleciyi titretir ve fizik modelini bozardı.
+                double sigmaPos = bal.gk.posHataTabanM * (1.0 - Eff(i, attrs[i].Positioning) / bal.gk.posHataBolen);
+                if (sigmaPos < 0) sigmaPos = 0;
+                // Zar gerekçesi: pozisyon alma bir YARGI hatasıdır — DECISION domain (ME 3.1/9.1)
+                uint posKova = st.Tick / (uint)bal.gk.posHataYenilemeTicks;
+                double posHataMm = sigmaPos * 1000.0
+                                   * Rng.Gauss01(seed, Domain.Decision, (uint)(500 + i), posKova, 51);
                 a.TargetX = ClampX(Units.QuantizeMm(ogx / 1000.0 + bdx / bd * depth));
-                a.TargetY = ClampY(Units.QuantizeMm(bdy / bd * depth));
+                a.TargetY = ClampY(Units.QuantizeMm(bdy / bd * depth + posHataMm / 1000.0));
                 return;
             }
 

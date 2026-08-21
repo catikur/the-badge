@@ -268,7 +268,12 @@ namespace TheBadge.Sim.Config
             public double cikisGenislikM;       // çıkış bölgesinin yarı genişliği (m)
             public double yakinMesafeM;         // 1v1 kapatma etkisinin başladığı mesafe (ME 9.3)
             public double yakinKapatmaKatsayi;  // OneOnOne'ın marja katkısı (sn)
-            public double tutmaBoleni;          // tutuş kontrolü: Handling/bu (çelme payının tersi, M16-E)
+            public double tutmaBoleni;
+            // ME 9.1 açıortay hatası + 9.2 direk bandı (M16-G)
+            public double posHataTabanM;     // sigma_pos tabanı (spec: 0,9 m)
+            public double posHataBolen;      // Positioning böleni (spec: 120)
+            public int posHataYenilemeTicks; // hata çekilişinin yenilenme aralığı (titreme önlenir)
+            public double direkBandiMm;      // kesişim direğe bu kadar yakınsa direk (spec: 120 mm)          // tutuş kontrolü: Handling/bu (çelme payının tersi, M16-E)
         }
 
         /// <summary>Şut yürütme — ME 6.4 kompoziti + 8.3 (M3 ekleme) [KALİBRE].</summary>
@@ -287,6 +292,9 @@ namespace TheBadge.Sim.Config
             public double blokEkSavunucu;      // koridordaki ek savunucu başına blok olasılığı artışı
             public double blokOlasilikMax;     // blok olasılığı tavanı
             public double presSigmaKisiBasi;   // şutçuya yakın (pass.presYaricapM) rakip başına sigma çarpım artışı
+            // Nişan tarafı seçimi — kalecinin boş bıraktığı taraf (M16-G, ME 6.4 yerleşim tarafı)
+            public double nisanDogruTaban;     // sıfır yetenekte doğru tarafı seçme olasılığı
+            public double nisanDogruSpan;      // şut kompoziti başına ek doğru-seçim olasılığı
         }
 
         /// <summary>xG kayıt modeli — ME Spec 15.2 [KALİBRE]. Yalnız KAYIT/analiz — sonuç

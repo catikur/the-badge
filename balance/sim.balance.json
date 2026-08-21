@@ -143,7 +143,7 @@
     "reachAgilityFactor": 2.2,
     "logisticSlope": 6.0,
     "saveClampMin": 0.04,
-    "saveClampMax": 0.96,
+    "saveClampMax": 0.92,
     "dalisSureCarpan": 0.22,
     "celmeDirekPayiMm": 1800,
     "cildirmaAcisiDeg": 50.0,
@@ -158,7 +158,11 @@
     "cikisGenislikM": 22.0,
     "yakinMesafeM": 15.0,
     "yakinKapatmaKatsayi": 3.0,
-    "tutmaBoleni": 290.0
+    "tutmaBoleni": 290.0,
+    "posHataTabanM": 0.9,
+    "posHataBolen": 120.0,
+    "posHataYenilemeTicks": 10,
+    "direkBandiMm": 120.0
   },
   "shotExec": {
     "sutMaxMesafeM": 30.0,
@@ -170,7 +174,9 @@
     "blokOlasilik": 0.5,
     "blokEkSavunucu": 0.36,
     "blokOlasilikMax": 0.85,
-    "presSigmaKisiBasi": 0.18
+    "presSigmaKisiBasi": 0.18,
+    "nisanDogruTaban": 0.62,
+    "nisanDogruSpan": 0.33
   },
   "setpiece": {
     "penalty": {
