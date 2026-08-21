@@ -68,6 +68,8 @@ namespace TheBadge.Sim.Match
         public int PassAttempts, PassCompletions, Tackles, OutOfBounds, PossessionChanges;
         public int Shots, Saves;
         public int Fouls, Advantages, Yellows, Reds, Corners, GoalKicks, ThrowIns, Penalties, FreeKicks, Blocks, Offsides;
+        /// <summary>Direği bulan şut sayısı — ME 9.2 direk bandı teşhisi (hash dışı).</summary>
+        public int Woodwork;
         public int Injuries, ThroughPasses;
         public int RedsDirect, RedsSecondYellow, FoulIncidents;  // teşhis (M14 bant denetimi)
         public int TackleAttempts;    // yerdeki müdahale DENEMESİ (başarı + başarısızlık) — M16-C teşhisi
@@ -161,6 +163,11 @@ namespace TheBadge.Sim.Match
         /// diziliş toparlanır, rakip merkez dairesi dışına çekilir. Kurucuda maç başı santrası
         /// için, KickoffRestart'ta her santra için kurulur (motor-yerel, hash dışı).</summary>
         uint kickoffHoldUntil;
+        /// <summary>Son SAHİPLİK takımı (2 = henüz yok) — sahiplik değişimi algısı buna dayanır.
+        /// LastTouchTeam taç/korner hakemliği için dokunuşu izler; tackle gibi "dokundu ama
+        /// sahip olmadı" anları değişim algısını bozuyordu (M16-F incelemesi). Motor-yerel,
+        /// hash dışı; santrada restart takımına kurulur (santra alımı değişim sayılmaz).</summary>
+        byte lastOwnerTeam = 2;
         /// <summary>Tackle DENEME aralığı kapısı — karar kilidinden (ActionUntilTick) AYRI tutulur
         /// (M16-C): aralığı tek başına ayarlayabilmek için. `tackleDenemeAralikTicks == 
         /// tackleCooldownTicks` iken davranış eskisiyle BİREBİR aynıdır (iki kapı da aynı tick'te
@@ -526,7 +533,12 @@ namespace TheBadge.Sim.Match
             bool kontra = st.Tick < gecisUntil[1 - a.TeamIdx];
             if (kontra)
             {
-                wThreat *= 1.0 + u.kontraTehditCarpan;
+                // Blok bonusu (M16-F): kontra dikeyliği DERİN BLOKTAN çıkan takımda ekstra —
+                // pres01 ölçekli olduğundan blok kurulmamışsa davranış eski çarpanla birebir.
+                // Simetrik büyütme DENENDİ ve GERİ ALINDI: kontra çarpanı 0,8'e çıkınca güçlü
+                // takımın hücumu da coştu (75v55 şut 47→52, gol 3,7→4,1 — ters etki).
+                double blokBonus = u.kontraBlokBonus * (presQ16[a.TeamIdx] / 65536.0);
+                wThreat *= 1.0 + u.kontraTehditCarpan + blokBonus;
                 wRisk *= 1.0 - u.kontraRiskTolerans;
             }
 
@@ -582,6 +594,15 @@ namespace TheBadge.Sim.Match
                     // dışı yüksek); düşük üs uzaktan şutu da aday yapar → mesafe dağılımı gerçekçileşir
                     double proxy = closeness * (0.4 + 0.6 * central)
                                    * (0.5 + 0.5 * fin) * (1.0 - u.sutBaskiCezasi * presN);
+                    // KORİDOR YOĞUNLUĞU CEZASI (M16-F): kurulmuş derin bloka karşı forvet şut
+                    // yerine pas arar — mevcut baskı terimi 1,5 m yarıçaplı (blok gövdeleri 2-4
+                    // m'de, görünmüyorlar). pres01 ölçekli: blok yoksa ceza ~0, karar eski
+                    // kalibrasyonla aynı. Taban 0,25'e kırpılır — şut asla tamamen ölmez.
+                    int korSavK = CorridorOpponents(ref st, a.X, a.Y, gx, 0, a.TeamIdx, gkHaric: true);
+                    double kalabalik = 1.0 - u.sutKoridorCeza * (korSavK > 4 ? 4 : korSavK)
+                                             * (presQ16[1 - a.TeamIdx] / 65536.0);
+                    if (kalabalik < 0.25) kalabalik = 0.25;
+                    proxy *= kalabalik;
                     double s3 = wThreat * u.sutTehditCarpan * proxy
                                 + wRisk * proxy + u.wVar * Noise(14);
                     if (s3 > best) { best = s3; bestKind = 3; bestTarget = -1; }
@@ -863,12 +884,29 @@ namespace TheBadge.Sim.Match
             // Kafa vuruşu ayakla aynı isabette olamaz (ME 6.4 aksiyon tablosu): nişan sapması
             // kafa çarpanıyla büyür. Kutuya giriş davranışı geldikten sonra kafa şutu hacmi
             // arttı; aynı isabetle bırakmak gol bandını şişiriyordu.
+            // FİZİKSEL PRES (M16-F, ME 6.4 ruhu): şutçunun üstündeki gövde sayısı nişanı bozar —
+            // DERİN BLOĞUN ödülü. Savunanın baskı EMA'sıyla (pres01) ölçeklenir: blok kurulmadıysa
+            // terim ~0 kalır ve taban davranış eski kalibrasyonla aynıdır (eşit maç bantları
+            // korunur); kurulmuş blokta sıkışık kutu şutu bozar.
+            int presSayisi = NearOpponents(ref st, a.X, a.Y, a.TeamIdx);
+            double pres01Sav = presQ16[1 - a.TeamIdx] / 65536.0;
             double sigmaRad = bal.shotExec.sutSigmaTabanDeg * (header ? bal.shotExec.kafaSigmaCarpani : 1.0)
                               * (1.0 + baski) * Math.PI / 180.0 * (1.0 - fin / 125.0)
+                              * (1.0 + presSayisi * bal.shotExec.presSigmaKisiBasi * pres01Sav)
                               * chaosAim;   // enjeksiyon 3 (ME 13.2)
             double sigmaPlaneM = dGoal * Math.Tan(sigmaRad);
-            // Nişan noktası: kaleciyi geçmek için direk dibi (merkez değil) — taraf DECISION akışından
-            double side = Rng.Rand01(seed, Domain.Decision, (uint)(200 + i), st.Tick, 44) < 0.5 ? -1.0 : 1.0;
+            // Nişan noktası — ME 6.4 "şut isabeti" kompozitinin YERLEŞİM tarafı (M16-G): şutçu
+            // kalecinin BOŞ BIRAKTIĞI tarafa nişan alır; tarafı doğru seçme olasılığı şut
+            // kompozitiyle ölçeklenir (düşük yetenek rastgele seçer, kalecinin üstüne nişan
+            // alabilir). Bu bağ olmadan ME 9.1 pozisyon hatası SONUÇSUZ kalırdı: kimse boşluğu
+            // kullanmadığı için kalecinin nerede durduğu şutçu için bilgi taşımıyordu.
+            int gkIdx = a.TeamIdx == 0 ? 11 : 0;
+            double bosTaraf = st.Agents[gkIdx].Y >= 0 ? -1.0 : 1.0;   // kalecinin ters tarafı
+            double pDogruTaraf = bal.shotExec.nisanDogruTaban + fin / 100.0 * bal.shotExec.nisanDogruSpan;
+            // Zar gerekçesi: taraf SEÇİMİ bir karardır — DECISION domain (ME 3.1)
+            double side = Rng.Rand01(seed, Domain.Decision, (uint)(200 + i), st.Tick, 44) < pDogruTaraf
+                          ? bosTaraf
+                          : (Rng.Rand01(seed, Domain.Decision, (uint)(200 + i), st.Tick, 53) < 0.5 ? -1.0 : 1.0);
             double aimTarget = side * GoalHalfWidthMm * bal.shotExec.nisanDirekOrani;
             // Zar gerekçesi: şut yürütme hatası fizikseldir — PHYSICS domain (ME 3.1)
             double aimY = aimTarget + sigmaPlaneM * 1000.0
@@ -878,10 +916,17 @@ namespace TheBadge.Sim.Match
             double tPlane = Math.Abs(planeDx) / envSutHizi;
             double interY = aimY; // kale düzleminde kesişim
 
-            // Blok: şut koridorunda savunucu varsa top ona çarpar (ME 15.1 ShotBlocked) — serbest top
+            // Blok: şut koridorunda savunucu varsa top ona çarpar (ME 15.1 ShotBlocked) — serbest top.
+            // Blok olasılığı koridor YOĞUNLUĞUYLA ölçeklenir (M16-F): tek gövde de altı gövde de
+            // aynı 0,55'i veriyordu — daralan bloğun hiçbir ödülü yoktu. Ek savunucu başına artış
+            // [KALİBRE blokEkSavunucu], tavan [blokOlasilikMax].
             int blocker = NearestCorridorOpponent(ref st, a.X, a.Y, gx, Units.QuantizeMm(interY / 1000.0), a.TeamIdx);
+            int korSav = CorridorOpponents(ref st, a.X, a.Y, gx, Units.QuantizeMm(interY / 1000.0), a.TeamIdx, gkHaric: true);
+            double pBlok = bal.shotExec.blokOlasilik
+                           + bal.shotExec.blokEkSavunucu * (korSav > 1 ? korSav - 1 : 0) * pres01Sav;
+            if (pBlok > bal.shotExec.blokOlasilikMax) pBlok = bal.shotExec.blokOlasilikMax;
             if (blocker >= 0 &&
-                Rng.Rand01(seed, Domain.Duel, (uint)(200 + i), st.Tick, 45) < bal.shotExec.blokOlasilik)
+                Rng.Rand01(seed, Domain.Duel, (uint)(200 + i), st.Tick, 45) < pBlok)
             {
                 Shots++;
                 double xgB = RecordXg(ref st, i, dGoal, header);
@@ -932,7 +977,13 @@ namespace TheBadge.Sim.Match
             double xgS = RecordXg(ref st, i, dGoal, header);
             var shotFlags = ShotFlags(xgS, ref st, a.TeamIdx);
 
-            bool insidePosts = Math.Abs(interY) <= GoalHalfWidthMm;
+            // ME 9.2 DİREK BANDI: kale düzlemi kesişimi direğe 12 cm'den yakınsa top direği bulur
+            // [KALİBRE gk.direkBandiMm]. Spec sıralaması kurtarıştan SONRAdır ("kaçırdı → gol /
+            // direk"); burada GEOMETRİ ÖNCE çözülür çünkü event log TEK YÖNLÜDÜR (ME 15.1):
+            // kurtarış dalına girip ShotOnTarget yayımlandıktan sonra "aslında direkti" demek
+            // log'u geri almayı gerektirirdi. Direği bulan şut isabetli sayılmaz (Opta konvansiyonu).
+            bool direkVurdu = Math.Abs(Math.Abs(interY) - GoalHalfWidthMm) < bal.gk.direkBandiMm;
+            bool insidePosts = !direkVurdu && Math.Abs(interY) <= GoalHalfWidthMm;
             double vy = ((interY - a.Y) / 1000.0) / tPlane;
             double vx = planeDx / tPlane;
             byte flight = insidePosts ? (byte)1 : (byte)0; // karara bağlı gol yolu / dışarı serbest
@@ -945,7 +996,7 @@ namespace TheBadge.Sim.Match
                 EmitAtBall(ref st, EventType.ShotOnTarget, i, -1, a.TeamIdx,
                            aux: (int)dGoal, xg: (float)xgS, flags: shotFlags);
                 // 9.2 analitik kurtarış — kaleci: rakip takım slot 0
-                int gk = a.TeamIdx == 0 ? 11 : 0;
+                int gk = gkIdx;
                 double tReact = bal.gk.tReactBase + (100 - Eff(gk, attrs[gk].Reflexes)) * bal.gk.tReactPerReflexEksik;
                 double reach = bal.gk.reachBase + Eff(gk, attrs[gk].Agility) / 100.0 * bal.gk.reachAgilityFactor;
                 double gkDist = Math.Abs(st.Agents[gk].Y - interY) / 1000.0;
@@ -1010,6 +1061,27 @@ namespace TheBadge.Sim.Match
                     }
                 }
                 // kurtaramadı → hız aynen: top çizgiyi direkler arasından geçer → EventAndState GOL sayar
+            }
+            else if (direkVurdu)
+            {
+                // Direkten dönen top: direk dibinden sahaya geri seker (ME 8.3 sekme katsayısı).
+                // Serbest top → ribaund/korner zinciri doğal akışta çözülür; son dokunan hücumcu
+                // kaldığı için çizgiyi geçerse kale vuruşu çıkar (10.1 doğru sonucu).
+                // Olay tipi ME 15.1 şut zincirinin KENDİ tipidir: Post (penaltı kolu da bunu
+                // yayımlar — tek kaynak). İnceleme düzeltmesi: burada önce ShotOffTarget
+                // yayımlanıyordu ve açık oyun direği sıradan bir ıskadan ayırt edilemiyordu;
+                // StatLine iki tipi zaten aynı dalda sayar (şut evet, isabetli hayır), yani
+                // düzeltme istatistiği DEĞİŞTİRMEZ, log'u dürüstleştirir. Sayaç hash dışı.
+                Woodwork++;
+                EmitAtBall(ref st, EventType.Post, i, -1, a.TeamIdx,
+                           aux: (int)dGoal, xg: (float)xgS, flags: shotFlags);
+                int sgnD = interY >= 0 ? 1 : -1;
+                double hzD = Math.Sqrt(vx * vx + vy * vy) * envSekmeE;
+                vx = (a.TeamIdx == 0 ? -1.0 : 1.0) * hzD * 0.8;   // sahaya geri
+                vy = sgnD * hzD * 0.6;                            // direk açısıyla yana
+                st.Ball.X = ClampX(gx + (a.TeamIdx == 0 ? -300 : 300));
+                st.Ball.Y = ClampY(sgnD * GoalHalfWidthMm);
+                flight = 0;
             }
             else EmitAtBall(ref st, EventType.ShotOffTarget, i, -1, a.TeamIdx,
                             aux: (int)dGoal, xg: (float)xgS, flags: shotFlags);
@@ -1330,8 +1402,19 @@ namespace TheBadge.Sim.Match
                 double bd = Math.Max(0.5, Math.Sqrt(bdx * bdx + bdy * bdy));
                 double depth = bal.gk.derinlikTaban + bal.gk.derinlikPerM * bd;
                 if (depth > bal.gk.derinlikMax) depth = bal.gk.derinlikMax;
+                // ME 9.1 AÇIORTAY HATASI: sigma_pos = 0,9 × (1 − Positioning/120) m [KALİBRE].
+                // Kaleci Positioning niteliği bu dilime kadar KENDİ pozisyonlamasında hiç
+                // kullanılmıyordu (yalnız saha oyuncusu kompozitlerinde) — kaleci kusursuz
+                // açıortayda duruyordu. Hata YAVAŞ değişir (posHataYenilemeTicks kovası):
+                // tick başına yeni çekiliş kaleciyi titretir ve fizik modelini bozardı.
+                double sigmaPos = bal.gk.posHataTabanM * (1.0 - Eff(i, attrs[i].Positioning) / bal.gk.posHataBolen);
+                if (sigmaPos < 0) sigmaPos = 0;
+                // Zar gerekçesi: pozisyon alma bir YARGI hatasıdır — DECISION domain (ME 3.1/9.1)
+                uint posKova = st.Tick / (uint)bal.gk.posHataYenilemeTicks;
+                double posHataMm = sigmaPos * 1000.0
+                                   * Rng.Gauss01(seed, Domain.Decision, (uint)(500 + i), posKova, 51);
                 a.TargetX = ClampX(Units.QuantizeMm(ogx / 1000.0 + bdx / bd * depth));
-                a.TargetY = ClampY(Units.QuantizeMm(bdy / bd * depth));
+                a.TargetY = ClampY(Units.QuantizeMm(bdy / bd * depth + posHataMm / 1000.0));
                 return;
             }
 
@@ -1469,6 +1552,14 @@ namespace TheBadge.Sim.Match
                 else if (hatTabanM > o.hatMaxM) hatTabanM = o.hatMaxM;
                 // Kendi kalesinden hatTabanM metre ileri + topun orta sahaya göre kayması
                 double hatX = ownGoalX + dir * hatTabanM * 1000.0 + o.hatTopKatsayi * st.Ball.X;
+                // DERİN BLOK (ME 7.6 genişlemesi — M16-F, DECISIONS 2026-08-19 hibrit kararı):
+                // baskı yaşayan takım hattını kademeli indirir (aşağıda bloku da daraltır).
+                // Sinyal presQ16 EMA'sı — kadro gücü değil, sahada GÖZLENEN baskı. Bu mekanizma
+                // yokken üstünlük zincirde üssel katlanıyordu (şuta dönüşüm eşitte %5, +24 farkta
+                // %33; maç başına 57 şut) — derin blok gerçek futbolun dengeleyicisidir: şut
+                // SAYISINI değil KALİTESİNİ kırpar, kutu önü yoğunlukla blok/koridor direnci artar.
+                double pres01 = presQ16[a.TeamIdx] / 65536.0;
+                hatX -= dir * o.blokCokmeMaxM * 1000.0 * pres01;
                 // Rol derinliği: stoperler hatta, orta saha ve forvet hattın önünde
                 double roleIleriM = a.RoleId <= 2 ? 0.0 : a.RoleId == 3 ? o.hatIleriMfM : o.hatIleriFwM;
                 bx = hatX + dir * roleIleriM * 1000.0;
@@ -1476,6 +1567,7 @@ namespace TheBadge.Sim.Match
                 if (dir > 0) { if (bx < ownGoalX + 3000) bx = ownGoalX + 3000; }
                 else { if (bx > ownGoalX - 3000) bx = ownGoalX - 3000; }
                 by = a.AnchorY * o.hatYanAnchor + st.Ball.Y * (1.0 - o.hatYanAnchor);
+                by *= 1.0 - o.blokDaralmaOran * pres01;   // blok kale eksenine daralır (yoğunluk)
 
                 // GEÇİŞ: henüz toparlanmadıysak hücum duruşundan savunma duruşuna KADEMELİ geçeriz
                 uint gu = gecisUntil[a.TeamIdx];
@@ -2267,7 +2359,13 @@ namespace TheBadge.Sim.Match
                 ClearPending();
                 pendingReceiver = -1;
             }
-            if (st.Ball.LastTouchTeam != 2 && st.Ball.LastTouchTeam != a.TeamIdx)
+            // Sahiplik değişimi SAHİPLİK takımıyla algılanır (lastOwnerTeam), dokunuş takımıyla
+            // (LastTouchTeam) DEĞİL — M16-F incelemesi: kazanılan tackle LastTouchTeam'i tackle
+            // yapana çeviriyor, topu takımı toplayınca "değişim" görünmüyordu → geçiş penceresi,
+            // markaj ataması ve kontra bonusu tackle-kazanımlı geçişlerde (derin bloğun ANA
+            // kazanım yolu) hiç işlemiyordu. LastTouchTeam taç/korner kararlarının sahibi olarak
+            // aynen kalır; değişim algısı sahiplik tarihçesine taşındı.
+            if (lastOwnerTeam != 2 && lastOwnerTeam != a.TeamIdx)
             {
                 PossessionChanges++;
                 if (looseReason == 1) PossChangeTackle++;
@@ -2275,16 +2373,24 @@ namespace TheBadge.Sim.Match
                 else PossChangeLoose++;
                 Possessions[a.TeamIdx]++;
                 looseReason = 0;   // ayrışım nedeni tüketildi (sıra: SINIFLANDIRMADAN sonra)
-                AssignMarking(ref st, defendingTeam: st.Ball.LastTouchTeam); // ME 7.5: geçiş anında
-                // Kaptıran takım için geçiş penceresi: mentalite ileri gittikçe uzar
+                AssignMarking(ref st, defendingTeam: lastOwnerTeam); // ME 7.5: geçiş anında
+                // Kaptıran takım için geçiş penceresi: mentalite ileri gittikçe uzar. DERİN BLOKTAN
+                // çıkan kontra ek pencere alır (M16-F): kazanan takım baskı altındaysa (pres01)
+                // kaybeden o kadar İLERİ yığılmıştır — toparlanması uzun sürer. Blok yokken
+                // pres01≈0 ve davranış eski kalibrasyonla birebir aynıdır. Kontra, upset'in gol
+                // yoludur (ME 13.4 hibrit kararı): derin blok yalnız savunmayı sağlamlaştırıyordu,
+                // zayıfın golü 0,2/maçta kalıyordu — kazanamazsın.
                 {
-                    byte kayip = st.Ball.LastTouchTeam;
+                    byte kayip = lastOwnerTeam;
                     ref var rtK = ref kayip == 0 ? ref st.HomeRt : ref st.AwayRt;
-                    double sn = bal.offball.gecisSnTaban + Math.Max(0, (int)rtK.Mentalite) * bal.offball.gecisSnPerMentalite;
+                    double pres01Kazanan = presQ16[a.TeamIdx] / 65536.0;
+                    double sn = bal.offball.gecisSnTaban + Math.Max(0, (int)rtK.Mentalite) * bal.offball.gecisSnPerMentalite
+                                + pres01Kazanan * bal.offball.kontraPresEkSn;
                     gecisUntil[kayip] = st.Tick + (uint)(sn * TicksPerSecond);
                 }
             }
             st.Ball.LastTouchTeam = a.TeamIdx;
+            lastOwnerTeam = a.TeamIdx;
 
             // Duran top kullanıldı: bayrak HER durumda temizlenir — topu atanan kullanıcı yerine
             // takım arkadaşı alırsa bayrak asılı kalıyor ve korner dizilişi sonsuza donuyordu
@@ -2845,6 +2951,10 @@ namespace TheBadge.Sim.Match
             st.Ball.Vx = st.Ball.Vy = st.Ball.Vz = 0;
             st.Ball.OwnerId = -1;
             st.Ball.LastTouchTeam = forTeam;
+            // Duran top alımı sahiplik DEĞİŞİMİ sayılmaz (M16-F incelemesi): lastOwnerTeam
+            // senkronlanmazsa kale vuruşu gibi rutin restart'larda pencere/markaj/kontra
+            // "açık oyun çalması" gibi ateşleniyordu — santra zaten senkron, diğerleri buradan.
+            lastOwnerTeam = forTeam;
             st.Ball.Flight = 3;
             st.Phase = type == SetPieceType.Corner || type == SetPieceType.FreeKick
                 ? MatchPhase.SetPiece : MatchPhase.DeadBall;
@@ -3135,6 +3245,7 @@ namespace TheBadge.Sim.Match
             st.SetPieceTeam = startTeam;
             st.Phase = MatchPhase.Kickoff;
             kickoffHoldUntil = st.Tick + (uint)bal.setpiece.santraHazirlikTicks;
+            lastOwnerTeam = startTeam;          // santra alımı sahiplik değişimi sayılmaz
             if (pendingPassTeam >= 0) PassLostDead++;
             ClearPending();
             int fw = startTeam == 0 ? 10 : 21;
@@ -3177,6 +3288,16 @@ namespace TheBadge.Sim.Match
         readonly ushort[] energyCache = new ushort[22];
         readonly sbyte[] momentumCache = new sbyte[22];
         readonly byte[] injuryPenalty = new byte[22];
+        /// <summary>Takım başına saha baskısı EMA'sı — Q16 (0..65536), int (float durum yasağı, ME 3.2).
+        /// Top takımın kendi "baskı bölgesinde" (blokBaskiBolgesiM) kaldıkça 65536'ya, çıkınca 0'a
+        /// yaklaşır (bölen blokPresKBolen). Derin blok bu sinyalle çöker — ME 7.6 genişlemesi (M16-F):
+        /// baskı maç-içi GÖZLEMLENEBİLİR büyüklüktür; kadro gücü gibi maç-dışı bilgi motora sızmaz.</summary>
+        readonly int[] presQ16 = new int[2];
+        /// <summary>Teşhis okuması (hash dışı): takımın anlık baskı EMA'sı 0..1.</summary>
+        public double Pres01(int team) => presQ16[team] / 65536.0;
+        /// <summary>Teşhis (hash dışı): tick-ağırlıklı ortalama baskı toplayıcısı.</summary>
+        public readonly double[] PresToplam = new double[2];
+        public uint PresTickSayisi;
 
         void RefreshStateCache(ref MatchState st)
         {
@@ -3185,6 +3306,25 @@ namespace TheBadge.Sim.Match
                 energyCache[i] = st.Agents[i].Energy;
                 momentumCache[i] = st.Agents[i].TeamIdx == 0 ? st.HomeRt.Momentum : st.AwayRt.Momentum;
                 injuryPenalty[i] = st.Agents[i].Injury == InjuryState.Hafif ? (byte)5 : (byte)0;
+            }
+            // Baskı EMA güncellemesi (sıra sabit: takım 0, takım 1) — yalnız açık oyunda birikir;
+            // ölü topta mevcut değer korunur (duran top dizilişi baskı ölçüsünü kirletmesin)
+            if (st.Phase == MatchPhase.OpenPlay)
+            {
+                int bolge = (int)(bal.offball.blokBaskiBolgesiM * 1000);
+                for (int t = 0; t < 2; t++)
+                {
+                    int ownGX = t == 0 ? -PitchHalfXmm : PitchHalfXmm;
+                    bool baskida = Math.Abs(st.Ball.X - ownGX) < bolge;
+                    int hedef = baskida ? 65536 : 0;
+                    // ASİMETRİK EMA: baskı hızlı kurulur (blok hemen çöker), yavaş çözülür —
+                    // takım bir kez bloka indiğinde top kısaca uzaklaştı diye yüksek hatta dönmez
+                    int bolen = hedef > presQ16[t] ? bal.offball.blokPresKBolen
+                                                   : bal.offball.blokPresKBolenDusus;
+                    presQ16[t] += (hedef - presQ16[t]) / bolen;
+                    PresToplam[t] += presQ16[t] / 65536.0;   // teşhis (hash dışı)
+                }
+                PresTickSayisi++;
             }
         }
 
@@ -3395,7 +3535,11 @@ namespace TheBadge.Sim.Match
             return v0;
         }
 
-        int CorridorOpponents(ref MatchState st, int x1, int y1, int x2, int y2, byte team)
+        /// <summary>Koridordaki rakip sayısı. gkHaric: ŞUT koridoru sayımlarında kaleci atlanır —
+        /// kaleci kurtarış zarında (9.2) zaten ayrıca ele alınır; yoğunluk bonusuna da girmesi
+        /// merkezi şutlarda çifte sayımdı (isabetli şut + kurtarış sistematik bastırılıyordu —
+        /// M16-F incelemesinde yakalandı). Pas kesme koridorunda kaleci SAYILIR (gkHaric=false).</summary>
+        int CorridorOpponents(ref MatchState st, int x1, int y1, int x2, int y2, byte team, bool gkHaric = false)
         {
             double dx = x2 - x1, dy = y2 - y1;
             double len = Math.Sqrt(dx * dx + dy * dy);
@@ -3404,6 +3548,7 @@ namespace TheBadge.Sim.Match
             for (int i = 0; i < 22; i++)
             {
                 if (st.Agents[i].TeamIdx == team || !st.Agents[i].Active) continue;
+                if (gkHaric && i % 11 == 0) continue;
                 double px = st.Agents[i].X - x1, py = st.Agents[i].Y - y1;
                 double t = (px * dx + py * dy) / (len * len);
                 if (t < 0.05 || t > 0.95) continue;

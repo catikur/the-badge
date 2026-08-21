@@ -727,20 +727,142 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   (12 metrik; kadro dağılımı üretici komutla birebir aynı tanım), dar bantlar `-- calib10k 10000`
   üretici komutuyla (sonuç bu kayda işlenir).
 
+### M16-F: derin blok + bloktan kontra — ME 13.4 hibrit kararının uygulaması (2026-08-19)
+- **Mekanizma seti (tümü pres01-ölçekli — blok kurulmadıkça eski davranış birebir korunur):**
+  (1) **Baskı EMA'sı** `presQ16[2]` — Q16 int (float durum yasağına uygun), top takımın kendi
+  `blokBaskiBolgesiM` (22 m) içinde kaldıkça dolar; ASİMETRİK (dolum böleni 64, boşalım 320 —
+  blok hızlı kurulur, yavaş çözülür); yalnız açık oyunda birikir; motor-yerel, hash dışı.
+  (2) **Hat çökmesi + daralma** (ME 7.6 genişlemesi): `blokCokmeMaxM 14` × pres01 hat kaleye iner,
+  `blokDaralmaOran 0,45` × pres01 blok kale eksenine daralır. (3) **Yoğunluk kanalları**: şut
+  koridorundaki gövde başına blok olasılığı artışı (`blokEkSavunucu 0,30`, tavan 0,85), şutçu
+  üstündeki pres → sigma bozulması (`presSigmaKisiBasi 0,18`), şut KARARINA koridor-kalabalık
+  cezası (`sutKoridorCeza 0,34`, taban 0,25 — şut asla tümüyle ölmez). (4) **Bloktan kontra**:
+  geçiş penceresi kazananın pres01'iyle uzar (`kontraPresEkSn 6`), kontra tehdit bonusu YALNIZ
+  bloktaki tarafa (`kontraBlokBonus 1,0` × pres01 — simetrik büyütme denendi ve geri alındı:
+  güçlünün hücumunu da coşturdu, 75v55 şut 47→52). (5) **kDuel 0,9→0,35**: M16-A'da tek başına
+  işlemeyen katsayı (eşit maç bozuluyordu), denge mekanizmaları kurulunca ANA kaldıraç oldu —
+  eşit maç metrikleri kDuel'e artık duyarsız (ölçüldü: 1,0/0,7/0,5 süpürmesi).
+- **ÜSSEL KATLANMA KIRILDI (zincir ölçümü, 60 maç/koşul):** şuta dönüşüm oranı (güçlü/zayıf)
+  +12 farkta ×6,1 → ×3,1; +24 farkta ×99 → ×8,8. +24'te güçlünün şutu 57→32, zayıfın golü
+  0,20→0,60; eşit maç tam simetrik (×1,01). 75v55 gol profili 4,4-0,18 → 2,8-0,45.
+- **ME 13.4 REVİZE hedefe karşı (lig dağılımlı ara-10k, 1.380 fark maçı):** G/B/M **%82/%12/%6**
+  (hedef %78/%12/%10) — beraberlik TAM hedefte; başlangıç %93/%6/%1'di. Kaos fixture (200 maç,
+  Orta): %88/%8/%4. Düşük chaos %85 (hedef ~%85 ✓), Yüksek %81 (hedef ~%68 — chaos borcu sürer).
+- **FİNAL 10k (`-- calib10k 10000`, push edilen konfigürasyon):** 75v55 G/B/M **%84/%11/%6**
+  (sürpriz+beraberlik %17; hedef %22). 17.2 tablosu **11/13 ✓**: şut 24,9 · korner 8,4 ·
+  faul 20,9 · sarı 3,24 · kırmızı 0,20 · penaltı 0,30 · ofsayt 4,9 · sakatlık 0,56 · pas %80,8 ·
+  xG sapması %4,8 · possession %59,3. Bilinçli sapma İKİ bantta: **gol 2,38** (bant 2,4-3;
+  −0,02) ve **isabetli 6,9** (bant 7-11; −0,1) — isabet dilimi borcunun kapanışında düzelir.
+- **Bilinçli sapma (17.2 dar bantları):** gol 2,3-2,4 sınırında (bant 2,4-3) ve isabetli ~6,8
+  (bant 7-11) — derin bloğun DOĞRU sonucu: fark maçlarında şut kalitesi kırpılıyor (isabetli
+  14→9,4). Sigma/blok kaldıraçlarının iki yüzeyi (bant ↔ upset) ters oynattığı ping-pong
+  ölçümleriyle kanıtlı; kalan mesafe İSABET-ÖZGÜ mekanizma ister (nişan modelinin kaleci
+  pozisyonuna bağlanması — ayrı dilim borcu). CI kapısı `M16ECalibGenis` (geniş bant) YEŞİL.
+- **Kapı değişimi:** `M16DUpsetYuksek` (eşiksiz muhafız) → `M16FUpsetOrta` (SERT eşik, 200 maç
+  Orta: güçlü ≤ %91, sürpriz+beraberlik ≥ %9 — bugünkü gerçek + SE; hedef %78/%22 metinde).
+- Golden'lar yeniden pinlendi (bilinçli); LOD 2 tablosu M16-F motoruyla yeniden üretildi.
+- **PR incelemesinden iki gerçek bulgu (2026-08-19, Codex + Bugbot; ikisi de doğrulanıp kapatıldı):**
+  (1) **GK koridor çifte sayımı** — `CorridorOpponents` şut koridorunda KALECİYİ de sayıyordu;
+  kaleci kurtarış zarında (9.2) zaten ayrıca ele alınırken merkezi şutlarda blok yoğunluğuna
+  +1 gövde olarak giriyor, isabetli şutu ve kurtarışı sistematik bastırıyordu (M16-F'nin
+  "bilinçli sapma" dediği isabetli açığının gerçek kökü BUYMUŞ). Düzeltme: `gkHaric` parametresi
+  — ŞUT sayımlarında kaleci atlanır, PAS kesme koridorunda sayılmaya devam eder. Sonuç: gol ve
+  isabetli bantları KENDİLİĞİNDEN bant içine döndü; b0 −2,48 ve sutTehditCarpan 0,53 ile hizalandı.
+  (2) **Tackle-kazanımlı geçişlerde pencere atlanması** — kazanılan tackle `LastTouchTeam`'i
+  tackle yapana çeviriyor, topu takımı toplayınca "sahiplik değişimi" algılanmıyordu: geçiş
+  penceresi, MARKAJ ataması (M9'dan beri!) ve M16-F kontra bonusu derin bloğun ANA kazanım
+  yolunda hiç işlemiyordu. Düzeltme: değişim algısı dokunuş-takımından SAHİPLİK-takımına
+  (`lastOwnerTeam`, motor-yerel) taşındı; `LastTouchTeam` taç/korner hakemliğinin sahibi olarak
+  aynen kaldı; santra alımı değişim sayılmaz. İki düzeltme davranış değiştirir → golden'lar
+  yeniden pinlendi, kalibrasyon yeniden doğrulandı (bir alt satır).
+- **İnceleme turu 2 — üçüncü bulgu (Bugbot, HIGH; doğrulanıp kapatıldı):** sahiplik değişimi
+  artık `lastOwnerTeam`'e bakıyordu ama `AwardSetPiece` yalnız `LastTouchTeam`'i sıfırlıyordu —
+  santra senkronluyken taç/kale vuruşu/frikik senkronlamıyordu, dolayısıyla RUTİN RESTART'lar
+  "açık oyunda top çalma" gibi işlem görüyordu (geçiş penceresi + markaj ataması + M16-F kontra
+  bonusu, özellikle kale vuruşlarında). Düzeltme: `AwardSetPiece` de `lastOwnerTeam = forTeam`
+  senkronunu yapar. Ölçüm: sahte değişimler sayaçtan temizlendi (sahiplik değişimi 396→347/maç);
+  bantlar korundu. **İki kapı bu değişimle bant kenarına düştü ve ÖRNEKLEM BÜYÜTÜLEREK çözüldü
+  (bant/tolerans DEĞİŞMEDİ — kapılar güçlendi):** `M3GoalsBand` tek maçta "en az 1 gol" şartı
+  0-0'ı hata sayıyordu → 8 tohum ortalaması (1,5-5,0 bandı, tek maç 1-12'den daha sıkı);
+  `M5NoRegression` 12→32 maç; `M14SariBandi` 12→32 maç (12'de 5,83 ölçen fikstürün gerçek
+  ortalaması 5,25 — küçük örneklem zarı). Kalibrasyon yeniden hizalandı: `sutTehditCarpan 0,57`
+  (eşit maç golü), `sutKoridorCeza 0,42` + `blokEkSavunucu 0,36` (pres01-ölçekli — yalnız fark
+  maçlarını kırpar), `kDuel 0,35→0,28` (upset kaldıracı; eşit maça duyarsız olduğu ölçülüydü).
+- **NİHAİ 10k (push edilen konfigürasyon) — 17.2 tablosu 13/13 ✓:** gol 2,46 · şut 27,4 ·
+  isabetli 7,7 · korner 8,5 · faul 20,5 · sarı 3,14 · kırmızı 0,20 · penaltı 0,28 · ofsayt 4,8 ·
+  sakatlık 0,50 · pas %81,4 · gol-xG sapması %2,8 · possession %58,2. 75v55 (1.380 fark maçı):
+  G/B/M **%83/%12/%6** — revize hedef %78/%12/%10; beraberlik tam hedefte, kalan 5 puan
+  isabet/nişan dilimi + Yüksek chaos borcunda. LOD 2 tablosu bu motorla yeniden üretildi.
+- **İnceleme turu 1 sonrası 10k (duran top senkronundan ÖNCEKİ konfigürasyon) — 13/13 ✓:** gol 2,41 ·
+  şut 26,6 · isabetli 7,5 · korner 8,3 · faul 20,7 · sarı 3,18 · kırmızı 0,20 · penaltı 0,29 ·
+  ofsayt 4,9 · sakatlık 0,51 · pas %81,2 · gol-xG sapması %0,0 · possession %59,2. 75v55
+  (1.380 fark maçı): G/B/M **%84/%12/%4** — revize hedef %78/%12/%10; beraberlik tam hedefte,
+  kalan 6 puan isabet dilimi + Yüksek chaos borcunda.
+
+### M16-G: ME 9.1/9.2 isabet borçları — ve "isabet dilimi upset'i kapatır" hipotezinin ÇÜRÜTÜLMESİ (2026-08-19)
+- **Önce teşhis (zincir ölçümü, 60 maç/koşul) — kendi hipotezimi çürüttü.** M16-F kapanışında
+  "kalan upset açığı isabet/nişan modelinden gelir" diye yazmıştım. Ölçüm bunun YANLIŞ olduğunu
+  gösterdi: +24 farkta **xG/şut ×0,99** (0,101 vs 0,103) — şut KALİTESİ iki taraf için zaten
+  eşit; **atak sayısı ×1,14** (182 vs 159) — pozisyon kazanma da neredeyse eşit. Fark tümüyle
+  **ŞUT/ATAK ×8,33**'te (0,202 vs 0,024): zayıf takım aynı sayıda atağı şuta çeviremiyor.
+  Kök, M16-A'dan beri kayıtlı "atak zincirinin uzunluğu" borcudur — isabet modeli değil.
+  Kayıt amacı: bu satır, hipotezin ölçümle reddedildiğini ve upset açığının gerçek adresini
+  sabitler (varsayım borcu ikinci kez ödenmesin).
+- **Spec borçları yine de kapatıldı (fidelity işi, upset işi değil):**
+  (1) **ME 9.1 açıortay hatası** — `sigma_pos = 0,9 × (1 − Positioning/120) m` motorda YOKTU;
+  kaleci kusursuz açıortayda duruyordu ve Positioning niteliği kalecinin KENDİ pozisyonlamasında
+  hiç kullanılmıyordu. Hata `posHataYenilemeTicks` kovasıyla yavaş değişir (tick başına çekiliş
+  kaleciyi titretirdi); DECISION domain (pozisyon alma bir yargı hatasıdır).
+  (2) **ME 9.2 direk bandı** — "kesişim direğe < 12 cm" kuralı yoktu (kodda "direk bandı
+  M-duran-top/ince ayar" notuyla ertelenmişti). Uygulandı: `direkBandiMm 120`. Sıralama spec'te
+  kurtarıştan SONRAdır; burada GEOMETRİ ÖNCE çözülür — gerekçe: event log TEK YÖNLÜDÜR (ME 15.1),
+  ShotOnTarget yayımlandıktan sonra "aslında direkti" demek log'u geri almayı gerektirirdi.
+  Direği bulan şut isabetli sayılmaz (Opta konvansiyonu); top direkten sahaya seker.
+  **Ölçüm: 0,47 direk/maç, şutların %1,7 — gerçek futbolla birebir.**
+  (3) **Nişan noktasının kaleciye bağlanması** — şutçu kalecinin BOŞ bıraktığı tarafa nişan alır;
+  doğru tarafı seçme olasılığı şut kompozitiyle ölçeklenir. Bu bağ olmadan (1) SONUÇSUZ kalırdı:
+  kimse boşluğu kullanmadığı için kalecinin nerede durduğu şutçu için bilgi taşımıyordu.
+- **Beklenmeyen sonuç — upset YİNE DE iyileşti:** üçlü mekanizma 75v55 profilini (Kaos fixture,
+  240 maç, Orta) **%88/%8/%4 → %82,9/%11,7/%5,4** taşıdı; beraberlik revize hedefe (%12) oturdu.
+  Nedeni isabet DEĞİL, eklenen mekanizmaların çok şut atan tarafı orantısal olarak daha çok
+  cezalandırması (direk bandı + kaleci hatası varyansı).
+- **Kalibrasyon — kaldıraç seçimi ölçümle yapıldı:** gol bandı için önce `sutSigmaTabanDeg`
+  denendi (19,0→18,4): gol geldi ama upset %79→%92 fırladı (isabet artışı ÇOK ŞUT ATANA yarar) →
+  GERİ ALINDI. Sonra `nisanDogruTaban` yükseltildi (düz kaldıraç, düşük yeteneğe orantısal fayda):
+  0,62→0,76 golü getirdi ama upset %82→%85 → orta noktada bırakıldı (0,62). Nihai kaldıraç
+  **`gk.saveClampMax 0,96→0,92`**: dominant kaleciye KARŞI şut atan tarafa (yani zayıfa)
+  orantısal olarak daha çok yarayan tek düz kaldıraç — gol 2,35→2,44 ✓ ve upset %82,9 KORUNDU.
+  0,89 denendi: ek upset faydası YOK, yalnız gol şişiyor → 0,92'de yakınsandı.
+- **Kapı:** `M16FUpsetOrta` bugünkü gerçeğe sıkıldı (güçlü ≤ %91→%90, sürpriz+beraberlik ≥ %9→%10).
+  `M5NoRegression` 32→96 maç: 1,84 ± 0,15 ölçümü bandın 2,0 tabanını gürültüyle tetikliyordu;
+  96 maçta 2,26 — BANT DEĞİŞMEDİ, örneklem büyüdü (kapı güçlendi).
+- **NİHAİ 10k (push edilen konfigürasyon) — 17.2 tablosu 13/13 ✓:** gol 2,46 · şut 27,4 ·
+  isabetli 7,4 · korner 8,3 · faul 20,4 · sarı 3,14 · kırmızı 0,19 · penaltı 0,29 · ofsayt 4,8 ·
+  sakatlık 0,50 · pas %81,3 · gol-xG sapması %2,4 · possession %58,0 · **direk 0,46/maç**.
+  75v55 (1.380 fark maçı): G/B/M **%80/%13/%7** — revize hedef %78/%12/%10: galibiyet ve
+  beraberlik oranı HEDEFTE, sürpriz payı 3 puan eksik (zincir borcunda). Günün başlangıcı
+  %93/%6/%1 idi; M16-F sonrası %83/%12/%6.
+- **DÜZELTME (inceleme, Bugbot):** ilk push'ta direği bulan şut `ShotOffTarget` olarak
+  yayımlanıyordu ve gerekçe olarak "ME 15.1 tablosu 30 tiple kapalı, uygun tip yok" yazmıştım.
+  **Bu gerekçe YANLIŞTI:** `EventType.Post` zaten 15.1 şut zincirinde tanımlı ve penaltı kolu
+  onu kullanıyor — ben aramamışım. Açık oyun direği artık `Post` yayımlıyor (tek kaynak).
+  StatLine iki tipi zaten aynı dalda sayar (şut evet, isabetli hayır) ve event log hash dışıdır,
+  yani düzeltme kalibrasyonu ve golden'ları DEĞİŞTİRMEZ — yalnız log'u dürüstleştirir: açık
+  oyun direği artık sıradan bir ıskadan ayırt edilebiliyor (highlight/sunum değeri).
+  Spec'e önerilecek bir şey YOK; borç yanlış teşhis edilmişti.
+
 ## Bekleyen kararlar
-- **ME 13.4 upset büyüklüğü — ATİLLA KARARI (M16-E bulgusu, 2026-08-18):** 5 bağımsız ölçüm
-  (kDuel süpürmesi, pas varış hızı, tackle enstrümanı, yapı+chaos, kalibrasyon paketi) tek
-  katsayının upset tablosunu (75v55 hedef: Orta %66/%18/%16) yakalayamadığını gösterdi — 10k
-  ölçümü %93/%6/%1. Kök: üstünlük zincirde ÜSSEL katlanıyor (şuta dönüşüm eşit güçte %5,
-  +12 farkta %13, +24 farkta %33; +24'te maç başına 57 şut — gerçek dışı). Seçenekler:
-  **(a)** zincir normalizasyonu — pozisyon başına düello derinliği sınırlaması / savunma çekilme
-  hattı / yorgunluk asimetrisi gibi mekanizmalarla katlanmayı kırmak (motor işi, ayrı dilim;
-  davranışı köklü değiştirir, tüm golden'lar kayar); **(b)** 13.4 hedef tablosunun revizyonu —
-  "yetenek hissi" lehine upset hedefini gevşetmek (spec değişikliği, GDD 1.3 "yetenek kazanır"
-  ilkesiyle uyumlu ama sürpriz vaadini inceltir); **(c)** sonuç katmanında düzeltme (skor üstü
-  yeniden örnekleme) — determinizm ve xG tutarlılığıyla çatışır, ÖNERİLMEZ. Öneri: (a)'nın
-  tasarım taslağı ayrı dilim olarak; **M17 golden replay dondurmasından ÖNCE karar** (sonrası
-  her davranış değişikliği replay setini kırar).
+- ~~ME 13.4 upset büyüklüğü~~ → **KARAR (2026-08-19, Atilla): (d) HİBRİT.** Dört seçenek
+  sunuldu — (a) tam zincir normalizasyonu (2 dilim motor işi), (b) yalnız hedef revizyonu
+  (%93 revize hedefin de üstünde kalır), (c) skor üstü yeniden örnekleme (tek-kaynak ilkesi +
+  xG tutarlılığıyla çatışır — reddedildi), (d) hibrit. Seçilen: **spec hedef tablosunun
+  gerçekçi banda revizyonu + derin blok mekanizması tek dilimde.** Gerekçe: Elo'da 200 puanlık
+  fark ≈ %76 beklenen skor; büyük liglerde büyük favori galibiyeti ~%75-80 — 13.4'ün %66'sı
+  gerçekçilik değil tasarım tercihiydi ve 5 ölçüm motorun oraya tek katsayıyla inmediğini
+  kanıtladı. **Revize hedef tablo (75v55): Düşük ~%85/%8/%7 · Orta ~%78/%12/%10 ·
+  Yüksek ~%68/%16/%16.** Spec dosyasına dokunulmaz (yasak); bu kayıt bağlayıcıdır, kapı
+  metinleri bu tabloyu basar, GDD/ME v-sonraki revizyonda spec'e işlenir. Uygulama dilimi:
+  M16-F (derin blok — aşağıda).
 - **LOD 1'in geleceği (M15 kararı, 2026-08-16):** şu an LOD 0'ın eşleniği. Geri almak için gerekçe
   CPU olamaz (19 kat marj var); yalnız İSTEMCİ tarafında orta cihaz ölçümü LOD 0'ı 800 ms'nin
   üstüne çıkarırsa yeniden değerlendirilir. O ölçüm FAZ 05 cihaz testlerine ait.

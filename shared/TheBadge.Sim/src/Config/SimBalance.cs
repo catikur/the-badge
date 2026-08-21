@@ -268,7 +268,12 @@ namespace TheBadge.Sim.Config
             public double cikisGenislikM;       // çıkış bölgesinin yarı genişliği (m)
             public double yakinMesafeM;         // 1v1 kapatma etkisinin başladığı mesafe (ME 9.3)
             public double yakinKapatmaKatsayi;  // OneOnOne'ın marja katkısı (sn)
-            public double tutmaBoleni;          // tutuş kontrolü: Handling/bu (çelme payının tersi, M16-E)
+            public double tutmaBoleni;       // tutuş kontrolü: Handling/bu (çelme payının tersi, M16-E)
+            // ME 9.1 açıortay hatası + 9.2 direk bandı (M16-G)
+            public double posHataTabanM;     // sigma_pos tabanı (spec: 0,9 m)
+            public double posHataBolen;      // Positioning böleni (spec: 120)
+            public int posHataYenilemeTicks; // hata çekilişinin yenilenme aralığı (titreme önlenir)
+            public double direkBandiMm;      // kesişim direğe bu kadar yakınsa direk (spec: 120 mm)
         }
 
         /// <summary>Şut yürütme — ME 6.4 kompoziti + 8.3 (M3 ekleme) [KALİBRE].</summary>
@@ -282,6 +287,14 @@ namespace TheBadge.Sim.Config
             public double kafaSigmaCarpani;    // kafa vuruşunda nişan sapması çarpanı (ME 6.4)
             public double nisanDirekOrani;     // nişan noktası: direk yarı genişliğinin bu oranı
             public double blokOlasilik;        // koridorda savunucu varsa blok olasılığı (ME 15.1)
+            // Yoğunluk kanalları — M16-F derin blok ödülü (ME 6.4/9.2 ruhu): sıkışık kutu
+            // şutu hem bloklar hem bozar; bu iki alan yokken savunucu SAYISI çözüme girmiyordu
+            public double blokEkSavunucu;      // koridordaki ek savunucu başına blok olasılığı artışı
+            public double blokOlasilikMax;     // blok olasılığı tavanı
+            public double presSigmaKisiBasi;   // şutçuya yakın (pass.presYaricapM) rakip başına sigma çarpım artışı
+            // Nişan tarafı seçimi — kalecinin boş bıraktığı taraf (M16-G, ME 6.4 yerleşim tarafı)
+            public double nisanDogruTaban;     // sıfır yetenekte doğru tarafı seçme olasılığı
+            public double nisanDogruSpan;      // şut kompoziti başına ek doğru-seçim olasılığı
         }
 
         /// <summary>xG kayıt modeli — ME Spec 15.2 [KALİBRE]. Yalnız KAYIT/analiz — sonuç
@@ -389,6 +402,7 @@ namespace TheBadge.Sim.Config
             public double pasKesmeBandiSn;        // pas kesme yarışında %50→%100 taşıyan zaman marjı (sn)
             public double sutTehditCarpan;        // şut adayının tehdit ağırlığı (M3)
             public double sutBaskiCezasi;         // yakın rakip başına şut iştahı cezası (M4)
+            public double sutKoridorCeza;         // kurulmuş blokta koridor gövdesi başına şut iştahı cezası (M16-F, pres01 ölçekli)
             public double araPasIleriM;           // ara pasın alıcının önüne bıraktığı mesafe (M5)
             public double araPasRisk;             // ara pasın ek kayıp riski
             public double araPasUlasimBandiM;     // ulaşım yarışında %50→%100'e taşıyan mesafe farkı (m)
@@ -398,6 +412,7 @@ namespace TheBadge.Sim.Config
             public double ortaMaxMesafeM;         // bu mesafeden uzaksa orta aday olmaz
             public double kontraTehditCarpan;     // kontra penceresinde wThreat kayması (M9)
             public double kontraRiskTolerans;     // kontra penceresinde wRisk kayması (M9)
+            public double kontraBlokBonus;        // derin bloktan çıkan kontranın ek tehdit çarpanı (M16-F, pres01 ölçekli)
             public double mentaliteTehditCarpan;  // mentalite ucunda wThreat kayması (±oran, ME 7.2/14.2)
             public double mentaliteRiskTolerans;  // mentalite ucunda wRisk kayması (±oran — kayıp korkusu)
             public double tempoTutCezasi;         // tempo başına "topu tut" cezası
@@ -433,6 +448,14 @@ namespace TheBadge.Sim.Config
             public double gecisSnPerMentalite; // ofansif mentalite başına ek toparlanma süresi (sn)
             public double mentaliteIleriItmeM; // mentalite başına hücumda ileri itme (m, ME 7.4/14.2)
             public double mentaliteHatM;     // ofansif mentalite başına hat yükselmesi (m)
+            // Derin blok — ME 7.6 genişlemesi (M16-F, DECISIONS 2026-08-19 hibrit kararı):
+            // baskı yaşayan takım hattını kademeli indirir ve bloku kale eksenine daraltır
+            public double blokBaskiBolgesiM; // kendi kalesinden bu mesafe içi "baskı bölgesi" (m)
+            public int blokPresKBolen;       // baskı EMA'sı DOLUM böleni (Q16) — blok hızlı kurulur
+            public int blokPresKBolenDusus;  // baskı EMA'sı BOŞALIM böleni — blok yavaş çözülür
+            public double blokCokmeMaxM;     // tam baskıda hattın ek çökme miktarı (m)
+            public double blokDaralmaOran;   // tam baskıda yanal daralma oranı (0-1)
+            public double kontraPresEkSn;    // tam baskıdan çıkan kontranın ek geçiş penceresi (sn)
         }
 
         /// <summary>xT (beklenen tehdit) tablosu — ME Spec 7.2 [KALİBRE]. M2: ayrıştırılabilir

@@ -175,6 +175,42 @@ sarı 3,11 · kırmızı 0,19 · penaltı 0,25 · ofsayt 4,9 · sakatlık 0,55 �
 - Golden'lar yeniden pinlendi (4); LOD 2 yeniden üretildi (`M15KompozisyonHatasi` %91→%60);
   yeni kapı `M16ECalibGenis` (ME 17.4: CI 500 maç GENİŞ bant; dar bantlar `calib10k 10000`).
 
+#### M16-F — Derin blok + bloktan kontra (ME 13.4 hibrit kararı) — ✅ TAMAM (2026-08-19)
+Atilla kararı (d) HİBRİT: 13.4 hedef tablosu gerçekçi banda revize (75v55: Düşük ~%85/%8/%7 ·
+Orta ~%78/%12/%10 · Yüksek ~%68/%16/%16 — DECISIONS kaydı bağlayıcı) + derin blok mekanizması.
+- **Mekanizma:** baskı EMA'sı (Q16, asimetrik) → hat çökmesi 14 m + daralma %45 + yoğunluk
+  kanalları (blok olasılığı, şut sigması, şut kararı cezası) + bloktan kontra (pencere +6 sn,
+  bonus yalnız bloktaki tarafa) + kDuel 0,9→0,35 (denge mekanizmalarıyla ana kaldıraç oldu).
+- **Sonuç:** üssel katlanma kırıldı (şuta dönüşüm +24 farkta ×99→×8,8); FİNAL 10k lig ölçümünde
+  75v55 G/B/M %93/%6/%1 → **%84/%12/%4** (revize hedef %78/%12/%10); **17.2 tablosu 13/13 ✓**
+  (gol 2,41 · isabetli 7,5 · xG sapması %0,0).
+- **PR incelemesinden ÜÇ gerçek bulgu kapatıldı:** (1) GK koridor çifte sayımı (Codex — isabetli
+  açığının gerçek köküymüş; `gkHaric` ile bantlar kendiliğinden döndü); (2) tackle-kazanımlı
+  geçişlerde pencere/markaj/kontra atlanması (Bugbot — değişim algısı sahiplik-takımına taşındı,
+  `lastOwnerTeam`); (3) duran top restart'larının senkronsuz kalması (Bugbot HIGH — kale
+  vuruşları "top çalma" gibi işleniyordu; `AwardSetPiece` senkronu). Üçüncü düzeltmenin yan
+  etkisiyle bant kenarına düşen üç kapı ÖRNEKLEM BÜYÜTÜLEREK çözüldü (bant/tolerans değişmedi).
+  **Nihai 10k: 13/13 ✓ · 75v55 %83/%12/%6.** Detay DECISIONS'ta.
+- Kapı: `M16FUpsetOrta` (sert eşik: güçlü ≤ %91, sürpriz+beraberlik ≥ %9; hedef metinde).
+
+#### M16-G — ME 9.1/9.2 isabet borçları + hipotez çürütmesi — ✅ TAMAM (2026-08-19)
+**Önce teşhis, sonra kod.** M16-F kapanışında yazdığım "kalan upset açığı isabet modelinden
+gelir" hipotezi ölçümle ÇÜRÜTÜLDÜ: +24 farkta xG/şut ×0,99, atak sayısı ×1,14 — fark tümüyle
+ŞUT/ATAK'ta (×8,33). Upset'in gerçek adresi atak zincirinin uzunluğu (M16-A borcu), isabet değil.
+- **Kapatılan spec borçları:** ME 9.1 açıortay hatası (`sigma_pos = 0,9 × (1 − Positioning/120)`;
+  kaleci Positioning'i kendi pozisyonlamasında hiç kullanılmıyordu) · ME 9.2 direk bandı (12 cm;
+  ölçüm 0,47 direk/maç = şutların %1,7, gerçek futbolla birebir) · nişan noktasının kaleci
+  konumuna bağlanması (bu bağ olmadan 9.1 sonuçsuz kalırdı).
+- **Beklenmeyen kazanç:** upset 75v55 (Kaos fixture, Orta) %88/%8/%4 → **%82,9/%11,7/%5,4** —
+  beraberlik revize hedefe (%12) oturdu. Neden isabet değil: yeni mekanizmalar çok şut atan
+  tarafı orantısal olarak daha çok cezalandırıyor.
+- **Kaldıraç dersi (kayıtlı):** `sutSigmaTabanDeg` ↓ golü getirir ama upset'i %92'ye fırlatır
+  (geri alındı); `gk.saveClampMax 0,96→0,92` hem golü getirdi hem upset'i korudu — dominant
+  kaleciye karşı şut atana (zayıfa) orantısal fayda sağlayan tek düz kaldıraç.
+- **Nihai 10k: 17.2 tablosu 13/13 ✓** (gol 2,46 · direk 0,46/maç) · 75v55 **%80/%13/%7**
+  (revize hedef %78/%12/%10 — galibiyet ve beraberlik hedefte, sürpriz 3 puan eksik).
+- Kapılar: `M16FUpsetOrta` sıkıldı (≤%90 / ≥%10); `M5NoRegression` örneklemi 32→96 (bant aynı).
+
 ### M17 — Golden replay seti (ME 17.4) + FAZ 04 arayüz dondurması (18.3)
 - **Kapı:** replay dörtlüsü (seed + config_hash + komut zaman çizelgesi + sürüm) ile
   bit-eşit yeniden üretim; sim ↔ sunucu/Unity sözleşmesi dondurulur.
