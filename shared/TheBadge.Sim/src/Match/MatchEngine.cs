@@ -1067,10 +1067,13 @@ namespace TheBadge.Sim.Match
                 // Direkten dönen top: direk dibinden sahaya geri seker (ME 8.3 sekme katsayısı).
                 // Serbest top → ribaund/korner zinciri doğal akışta çözülür; son dokunan hücumcu
                 // kaldığı için çizgiyi geçerse kale vuruşu çıkar (10.1 doğru sonucu).
-                // Ayrı bir Woodwork event TİPİ YOK (ME 15.1 tablosu 30 tiple kapalı) — sunum
-                // değeri için tip önerisi DECISIONS'a yazıldı; sayaç teşhis amaçlı, hash dışı.
+                // Olay tipi ME 15.1 şut zincirinin KENDİ tipidir: Post (penaltı kolu da bunu
+                // yayımlar — tek kaynak). İnceleme düzeltmesi: burada önce ShotOffTarget
+                // yayımlanıyordu ve açık oyun direği sıradan bir ıskadan ayırt edilemiyordu;
+                // StatLine iki tipi zaten aynı dalda sayar (şut evet, isabetli hayır), yani
+                // düzeltme istatistiği DEĞİŞTİRMEZ, log'u dürüstleştirir. Sayaç hash dışı.
                 Woodwork++;
-                EmitAtBall(ref st, EventType.ShotOffTarget, i, -1, a.TeamIdx,
+                EmitAtBall(ref st, EventType.Post, i, -1, a.TeamIdx,
                            aux: (int)dGoal, xg: (float)xgS, flags: shotFlags);
                 int sgnD = interY >= 0 ? 1 : -1;
                 double hzD = Math.Sqrt(vx * vx + vy * vy) * envSekmeE;

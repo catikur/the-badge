@@ -268,12 +268,12 @@ namespace TheBadge.Sim.Config
             public double cikisGenislikM;       // çıkış bölgesinin yarı genişliği (m)
             public double yakinMesafeM;         // 1v1 kapatma etkisinin başladığı mesafe (ME 9.3)
             public double yakinKapatmaKatsayi;  // OneOnOne'ın marja katkısı (sn)
-            public double tutmaBoleni;
+            public double tutmaBoleni;       // tutuş kontrolü: Handling/bu (çelme payının tersi, M16-E)
             // ME 9.1 açıortay hatası + 9.2 direk bandı (M16-G)
             public double posHataTabanM;     // sigma_pos tabanı (spec: 0,9 m)
             public double posHataBolen;      // Positioning böleni (spec: 120)
             public int posHataYenilemeTicks; // hata çekilişinin yenilenme aralığı (titreme önlenir)
-            public double direkBandiMm;      // kesişim direğe bu kadar yakınsa direk (spec: 120 mm)          // tutuş kontrolü: Handling/bu (çelme payının tersi, M16-E)
+            public double direkBandiMm;      // kesişim direğe bu kadar yakınsa direk (spec: 120 mm)
         }
 
         /// <summary>Şut yürütme — ME 6.4 kompoziti + 8.3 (M3 ekleme) [KALİBRE].</summary>

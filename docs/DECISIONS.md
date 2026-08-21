@@ -842,9 +842,14 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   75v55 (1.380 fark maçı): G/B/M **%80/%13/%7** — revize hedef %78/%12/%10: galibiyet ve
   beraberlik oranı HEDEFTE, sürpriz payı 3 puan eksik (zincir borcunda). Günün başlangıcı
   %93/%6/%1 idi; M16-F sonrası %83/%12/%6.
-- **Spec önerisi (DEĞİŞİKLİK YAPILMADI):** ME 15.1 event tablosuna `Woodwork` tipi eklenmesi —
-  direği bulan şut sunum/highlight değeri yüksek dramatik bir andır ama tablo 30 tiple kapalı
-  olduğu için şimdilik `ShotOffTarget` olarak yayımlanıyor ve yalnız hash-dışı sayaçla izleniyor.
+- **DÜZELTME (inceleme, Bugbot):** ilk push'ta direği bulan şut `ShotOffTarget` olarak
+  yayımlanıyordu ve gerekçe olarak "ME 15.1 tablosu 30 tiple kapalı, uygun tip yok" yazmıştım.
+  **Bu gerekçe YANLIŞTI:** `EventType.Post` zaten 15.1 şut zincirinde tanımlı ve penaltı kolu
+  onu kullanıyor — ben aramamışım. Açık oyun direği artık `Post` yayımlıyor (tek kaynak).
+  StatLine iki tipi zaten aynı dalda sayar (şut evet, isabetli hayır) ve event log hash dışıdır,
+  yani düzeltme kalibrasyonu ve golden'ları DEĞİŞTİRMEZ — yalnız log'u dürüstleştirir: açık
+  oyun direği artık sıradan bir ıskadan ayırt edilebiliyor (highlight/sunum değeri).
+  Spec'e önerilecek bir şey YOK; borç yanlış teşhis edilmişti.
 
 ## Bekleyen kararlar
 - ~~ME 13.4 upset büyüklüğü~~ → **KARAR (2026-08-19, Atilla): (d) HİBRİT.** Dört seçenek
