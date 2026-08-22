@@ -38,6 +38,8 @@ if (args.Length > 0 && args[0] == "calib10k")
     double g = 0, sh = 0, isb = 0, ko = 0, fa = 0, sa = 0, ki = 0, pe = 0, of = 0, inj = 0;
     double pa = 0, pc = 0, xgT = 0, av = 0, golSut = 0, golLoose = 0, kurtaris = 0;
     double lgGk = 0, lgDf = 0, lgMf = 0, lgAtk = 0, lgOwn = 0, lgHava = 0, direk = 0;
+    // Zincir teşhisi: [0] güçlü taraf, [1] zayıf taraf (yalnız ofset farkı >= 16 olan maçlar)
+    var zDizi = new double[2]; var zPas = new double[2]; var zSut = new double[2]; var zIleri = new double[2];
     var lgKind = new double[9];
     // 75v55 alt profili (ME 17.2 possession bandı %55-65 + 13.4): ofset farkı >= 16 olan maçlar
     double pGucluPos = 0; int nProfil = 0, gProfil = 0, bProfil = 0, mProfil = 0;
@@ -71,6 +73,42 @@ if (args.Length > 0 && args[0] == "calib10k")
             lgGk += e.LooseGoalByGk; lgDf += e.LooseGoalByDf; lgMf += e.LooseGoalByMfFw;
             lgAtk += e.LooseGoalAttackTouch; lgOwn += e.LooseGoalOwnTouch; lgHava += e.LooseGoalAirborne;
             for (int k2 = 0; k2 < 9; k2++) lgKind[k2] += e.LooseGoalKind[k2];
+            // Zincir çıkarımı yalnız FARK maçlarında (güçlü/zayıf ayrımı anlamlı olsun)
+            if (Math.Abs(ofsEv - ofsDep) >= 16)
+            {
+                int gucluT = ofsEv > ofsDep ? 0 : 1;
+                var zd = new double[2]; var zp = new double[2]; var zs = new double[2]; var zi = new double[2];
+                int cur = -1; int pas = 0; double enIleri = 0;
+                double Norm(int t2, int xmm) => t2 == 0 ? (xmm + 52500) / 1000.0 : (52500 - xmm) / 1000.0;
+                void Kapat(bool sutla)
+                {
+                    if (cur < 0) return;
+                    int slot = cur == gucluT ? 0 : 1;
+                    zd[slot]++; zp[slot] += pas; zi[slot] += enIleri; if (sutla) zs[slot]++;
+                    cur = -1; pas = 0; enIleri = 0;
+                }
+                for (int q = 0; q < e.EventCount; q++)
+                {
+                    var ev = e.GetEvent(q);
+                    switch (ev.Kind)
+                    {
+                        case EventType.PassCompleted:
+                        case EventType.DribblePast:
+                            if (ev.TeamIdx != cur) { Kapat(false); cur = ev.TeamIdx; }
+                            pas++; { double adv = Norm(cur, ev.X); if (adv > enIleri) enIleri = adv; }
+                            break;
+                        case EventType.ShotOnTarget: case EventType.ShotOffTarget:
+                        case EventType.ShotBlocked: case EventType.Post:
+                            if (ev.TeamIdx != cur) { Kapat(false); cur = ev.TeamIdx; }
+                            { double adv = Norm(cur, ev.X); if (adv > enIleri) enIleri = adv; }
+                            Kapat(true); break;
+                        case EventType.PassIntercepted: case EventType.TackleWon:
+                        case EventType.BallOut: case EventType.Offside:
+                            Kapat(false); break;
+                    }
+                }
+                for (int z = 0; z < 2; z++) { zDizi[z] += zd[z]; zPas[z] += zp[z]; zSut[z] += zs[z]; zIleri[z] += zi[z]; }
+            }
             if (ofsEv - ofsDep >= 16) { pGucluPos += pkt.Home.PossessionPct; nProfil++;
                 if (r.HomeGoals > r.AwayGoals) gProfil++; else if (r.HomeGoals == r.AwayGoals) bProfil++; else mProfil++; }
             else if (ofsDep - ofsEv >= 16) { pGucluPos += pkt.Away.PossessionPct; nProfil++;
@@ -98,6 +136,14 @@ if (args.Length > 0 && args[0] == "calib10k")
     double xgSapma = Math.Abs(g - xgT) / Math.Max(1.0, xgT) * 100.0;
     Console.WriteLine($"[calib] {"gol vs xG sapması %",-26} {xgSapma,8:0.0}   bant ±8   {(xgSapma <= 8 ? "✓" : "✗")}");
     Console.WriteLine($"[calib] direk (ME 9.2 bandı): {direk / NM:0.00}/maç · şutların %{100.0 * direk / Math.Max(1, sh):0.0}");
+    // ZİNCİR TEŞHİSİ (M16-H): upset açığının adresi burasıdır — sahiplik dizisi olay log'undan
+    // çıkarılır. Güçlü/zayıf ayrımı ofset farkına göre yapılır (kalibrasyon setinin kendi tanımı).
+    // Ölçülen: dizi başına pas · dizinin ŞUTLA bitme oranı · dizinin ulaştığı EN İLERİ nokta (m,
+    // 0 = kendi kalesi, 105 = rakip kale). M16-H ölçümü (+24 fark): güçlü %23,8 şut / 62,3 m ·
+    // zayıf %2,8 / 42,4 m — zayıf takımın ortalama atağı orta sahayı GEÇMİYOR. Zincir yeniden
+    // yapılandırılırsa doğrulama bu satırdan okunur.
+    Console.WriteLine($"[calib] zincir — güçlü: pas/dizi {zPas[0] / Math.Max(1, zDizi[0]):0.00} · şutla biten %{100.0 * zSut[0] / Math.Max(1, zDizi[0]):0.0} · en ileri {zIleri[0] / Math.Max(1, zDizi[0]):0.0} m" +
+                      $"  |  zayıf: pas/dizi {zPas[1] / Math.Max(1, zDizi[1]):0.00} · şutla biten %{100.0 * zSut[1] / Math.Max(1, zDizi[1]):0.0} · en ileri {zIleri[1] / Math.Max(1, zDizi[1]):0.0} m");
     Console.WriteLine($"[calib] gol kaynağı: şut {golSut / NM:0.00} + serbest top {golLoose / NM:0.00} · kurtarış {kurtaris / NM:0.0} · xG/şut {xgT / Math.Max(1, sh):0.000}");
     Console.WriteLine($"[calib] serbest gol: son dokunan GK {lgGk / NM:0.00} / DF {lgDf / NM:0.00} / OS-FV {lgMf / NM:0.00} · dokunuş hücum {lgAtk / NM:0.00} / savunan {lgOwn / NM:0.00} · havada {lgHava / NM:0.00}");
     Console.WriteLine($"[calib] serbest gol TÜRÜ: diğer {lgKind[0] / NM:0.00} · çelme {lgKind[1] / NM:0.00} · uzun/degaj {lgKind[2] / NM:0.00} · blok {lgKind[3] / NM:0.00} · uzaklaştırma {lgKind[4] / NM:0.00} · pas {lgKind[5] / NM:0.00} · şut {lgKind[6] / NM:0.00} · tackle {lgKind[7] / NM:0.00} · indirme {lgKind[8] / NM:0.00}");

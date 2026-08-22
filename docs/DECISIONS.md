@@ -851,6 +851,37 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   oyun direği artık sıradan bir ıskadan ayırt edilebiliyor (highlight/sunum değeri).
   Spec'e önerilecek bir şey YOK; borç yanlış teşhis edilmişti.
 
+### M16-H: atak zinciri denemesi — ⛔ DENENDİ, ÖLÇÜLDÜ, GERİ ALINDI (2026-08-21)
+M16-G'nin adresini kesinleştirdiği zincir açığına üç mekanizmayla girildi; **üçü de zinciri
+kıpırdatmadı**, M16-B precedent'i uygulandı (ölçülebilir kazanç olmadan golden yeniden pinlenmez).
+- **Yeni teşhis aleti — sahiplik dizisi çıkarımı (olay log'undan):** dizi başına pas · dizinin
+  ŞUTLA bitme oranı · dizinin ulaştığı EN İLERİ nokta. **Bulgu (+24 fark, 60 maç):** güçlü
+  %23,8 şut / 62,3 m · zayıf **%2,8 şut / 42,4 m** — zayıf takımın ortalama atağı **orta sahayı
+  bile geçmiyor**. Kayıp NEDENLERİ iki tarafta neredeyse aynı (kesme ~%36-40, tackle ~%54-61):
+  sorun topu kaptırma biçimi değil, İLERLEYEMEMEK. Eşit maçta iki taraf da 51-52 m'ye ulaşıyor
+  ve dizilerin %8-10'u şutla bitiyor — bu oran gerçek futbolla uyumlu (~%11), yani model
+  şekli eşit maçta DOĞRU; kusur yalnız asimetride.
+- **Denenen 1 — derin blokta çıkış noktası:** forvet hatla birlikte çökmesin, yukarıda kalsın
+  (otobüsü park eden takım santrforu bırakır). Etki: en ileri nokta 42,7 → 42,4 m. YOK.
+- **Denenen 2 — uzun top aday kümesinin ayrılması:** LongSwitch alıcıları kısa pas listesinden
+  geliyordu; o liste mesafeye göre EN YAKIN N ile kırpılıyor, uzun topun hedefi ise tanımı gereği
+  UZAK. Ayrı ileri-sıralı aday kümesi yazıldı (Vision kapısı korunarak). Etki: uzun top 26 → 41/maç
+  (mekanizma ÇALIŞTI) ama en ileri nokta değişmedi. **Kusur gerçekti, sonucu değiştirmedi.**
+- **Denenen 3 — LongSwitch pres bonusu** (ClearBall'daki `clearPresBonus` simetriği). Ölçüm
+  gösterdi ki iki takım zaten SİMETRİK sayıda uzun top atıyor (17/maç) — "yeterince uzun
+  oynamıyorlar" hipotezi de yanlıştı; uzun top zayıfa toprak KAZANDIRMIYOR.
+- **Sonuç ve karar:** kalan upset açığı bir ayar veya tek mekanizma işi değil; **pas/sahiplik
+  modelinin kendi şekli** (maç başına ~145 dizi × ~3 pas) territoryi TEKRARLA kazandırıyor ve
+  tekrar, daha iyi takımı çarpımsal olarak ödüllendiriyor. Bu, DECISIONS'ta M13/M14/M15/M16-A
+  borçlarının ortak kökü olarak zaten kayıtlı. Düzeltmek faz ölçeğinde bir yeniden yapılandırmadır
+  (tüm golden'lar + tüm kalibrasyon yeniden). **M17 dondurmasının hemen öncesinde, ölçülmüş
+  kazancı olmayan bir davranış değişikliğini push etmek projenin kendi kuralına aykırıdır** →
+  kod geri alındı, yama `scratchpad/M16H_zincir_denemesi.patch` olarak saklandı.
+- **Kalıcı kazanç:** zincir teşhisi `-- calib10k` üretici komutuna KALICI olarak eklendi
+  (hash dışı, yalnız üretici modda) — sonraki dilim körlemesine başlamaz.
+- **Bugünkü gerçek (M16-G, dondurulacak taban):** 75v55 %80/%13/%7 · revize hedef %78/%12/%10 —
+  galibiyet ve beraberlik HEDEFTE, sürpriz payı 3 puan eksik ve adresi yukarıda yazılıdır.
+
 ## Bekleyen kararlar
 - ~~ME 13.4 upset büyüklüğü~~ → **KARAR (2026-08-19, Atilla): (d) HİBRİT.** Dört seçenek
   sunuldu — (a) tam zincir normalizasyonu (2 dilim motor işi), (b) yalnız hedef revizyonu
