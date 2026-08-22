@@ -26,7 +26,13 @@ namespace TheBadge.Sim.Match
     public sealed class MatchConfig
     {
         public ulong Seed;
+        /// <summary>ME 3.3 config_hash — `ConfigHash.Compute(cfg, BalanceHash)` ile doldurulur.
+        /// Replay dörtlüsünün kimlik üyesi; motor bunu OKUMAZ (sonuç üretimine girmez).</summary>
         public ulong ConfigHash;
+        /// <summary>Balance dosyasının HAM bayt özeti — HOST doldurur (çekirdek JSON parse etmez,
+        /// CLAUDE.md bağımlılıksızlık kuralı). config_hash'in girdisi; ME 3.3 sapma notu
+        /// `Config/ConfigHash.cs` başlığındadır.</summary>
+        public ulong BalanceHash;
         public string EngineVersion;
         public TeamSheet Home, Away;
         public RefereeProfile Referee = RefereeProfile.Default;

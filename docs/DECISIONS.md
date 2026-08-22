@@ -882,6 +882,38 @@ kıpırdatmadı**, M16-B precedent'i uygulandı (ölçülebilir kazanç olmadan 
 - **Bugünkü gerçek (M16-G, dondurulacak taban):** 75v55 %80/%13/%7 · revize hedef %78/%12/%10 —
   galibiyet ve beraberlik HEDEFTE, sürpriz payı 3 puan eksik ve adresi yukarıda yazılıdır.
 
+### M17: golden replay seti + config_hash + FAZ 04 arayüz dondurması — ✅ TAMAM (2026-08-21)
+FAZ 03'ün son dilimi. Üç parça birlikte kapandı; **FAZ 03 motor tarafı dondu.**
+- **ME 3.3 config_hash UYGULANDI** (alan vardı, hiç hesaplanmıyordu): motor sürümü · LOD · tick
+  oranı · balance ham bayt özeti · chaos · **hava · zemin · rüzgar (kuantalanmış)** · hakem
+  profili · kadro anlık görüntüsü. Hava/zemin/rüzgar 3.3'ün listesinde YOK ama sonucu doğrudan
+  değiştiriyor — kimliğe girmezlerse iki farklı kurulum aynı hash'i paylaşır ve spec'in
+  "eski replay yeni parametrelerle sessizce oynamaz" güvencesi delinirdi (kapsam genişletmesi
+  gerekçesiyle birlikte kodda ve dondurma dokümanında yazılı).
+- **Bilinçli sapma (mimari değişmez gereği):** 3.3 "balanceJson_kanonik_bytes" der; `TheBadge.Sim`
+  JSON PARSE ETMEZ (CLAUDE.md bağımlılıksızlık kuralı). Ham bayt özeti HOST'ta hesaplanır
+  (dosyayı zaten o okur) ve `MatchConfig.BalanceHash` ile verilir. Spec'in amacı birebir korunur:
+  balance'taki tek bayt değişikliği config_hash'i değiştirir; çekirdek bağımlılıksız kalır.
+- **Golden replay seti (ME 17.4) — 50 arşiv replay:** `shared/TheBadge.Sim.Checks/goldens/
+  replay_set_v1.json`; üretici `-- gen-replays`, doğrulayıcı `M17GoldenReplay`. Her kayıt
+  replay dörtlüsünün TAMAMINI pinler: config_hash · durum hash'i · skor · süre · **komut izi**
+  (`AppliedTraceHash`) · uygulanan/reddedilen komut sayısı. Kurulum çeşitliliği tohumdan türer:
+  50 replay hava/zemin/rüzgar/chaos/hakem/kadro-gücü kombinasyonlarını tarar — dondurulan
+  sözleşme yalnız "kuru + Orta" değildir. Komut zaman çizelgesi üç aileyi de içerir
+  (taktik/motivasyon/değişiklik) ki replay yalnız fiziği değil MÜDAHALE yolunu da pinlesin.
+- **Üretici ve kapı TEK KAYNAKTAN kurulur** (`BuildReplay`): "üretici ile kapı farklı evreni
+  ölçer" hatası yapısal olarak imkansız (M16-E'de bu ders bir kez ödendi).
+- **Bayat set sessizce GEÇMEZ:** `M17ReplaySetiGuncel` balance ham bayt özetini karşılaştırır;
+  tutmuyorsa kapı düşer ve yeniden üretim ister (spec: "balance değişikliği yeni golden set").
+- **`M17ConfigHashAyirtEdici`:** 9 alanın (sürüm·lod·balance·chaos·hava·zemin·rüzgar·hakem·kadro)
+  her birini tek tek değiştirip hash'in gerçekten kaydığını doğrular — "eklendi ama bağlanmadı"
+  sessiz hatasına karşı.
+- **FAZ 04 arayüz dondurması:** `docs/INTERFACE_FREEZE_FAZ04.md` — giriş noktası, determinizm
+  sözleşmesi, veri sözleşmeleri, balance ve LOD sözleşmeleri, dondurma kapsamı DIŞINDA kalanlar
+  (teşhis sayaçları, [KALİBRE] değerler) ve **bilinen açık borçlar** (upset 3 puanı, VAR 2 sınıfı,
+  LOD 2 kompozisyon hatası, Yüksek chaos). Borçların hiçbiri arayüzü değiştirmez — kapatıldıklarında
+  golden set yeniden üretilir, sözleşme aynı kalır.
+
 ## Bekleyen kararlar
 - ~~ME 13.4 upset büyüklüğü~~ → **KARAR (2026-08-19, Atilla): (d) HİBRİT.** Dört seçenek
   sunuldu — (a) tam zincir normalizasyonu (2 dilim motor işi), (b) yalnız hedef revizyonu

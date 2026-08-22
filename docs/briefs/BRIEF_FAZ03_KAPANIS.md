@@ -223,9 +223,19 @@ saklandı, negatif sonuç DECISIONS'a yazıldı.
   yapılandırma işi, dilim değil. Zaten kayıtlı ortak borç.
 - **Kalıcı kazanç:** zincir teşhisi `-- calib10k` üretici komutuna eklendi (hash dışı).
 
-### M17 — Golden replay seti (ME 17.4) + FAZ 04 arayüz dondurması (18.3)
-- **Kapı:** replay dörtlüsü (seed + config_hash + komut zaman çizelgesi + sürüm) ile
-  bit-eşit yeniden üretim; sim ↔ sunucu/Unity sözleşmesi dondurulur.
+### M17 — Golden replay seti (ME 17.4) + FAZ 04 arayüz dondurması (18.3) — ✅ TAMAM (2026-08-21)
+- ~~**Kapı:** replay dörtlüsü (seed + config_hash + komut zaman çizelgesi + sürüm) ile
+  bit-eşit yeniden üretim; sim ↔ sunucu/Unity sözleşmesi dondurulur.~~
+- **ME 3.3 config_hash uygulandı** (alan vardı, hesaplanmıyordu) — kapsam hava/zemin/rüzgar
+  ile genişletildi (gerekçe: kimliğe girmezlerse iki farklı kurulum aynı hash'i paylaşır).
+  Balance ham bayt özeti HOST'ta hesaplanır (çekirdek JSON parse etmez — bilinçli sapma, kayıtlı).
+- **50 golden replay** (`goldens/replay_set_v1.json`, üretici `-- gen-replays`): her kayıt
+  config_hash + durum hash'i + skor + süre + KOMUT İZİ + uygulanan/reddedilen sayısını pinler.
+  Kurulumlar hava/zemin/rüzgar/chaos/hakem/kadro-gücü kombinasyonlarını tarar; komut çizelgesi
+  üç aileyi de içerir. Üretici ve kapı tek kaynaktan kurulur.
+- **Kapılar:** `M17GoldenReplay` (50 replay bit-eşit) · `M17ReplaySetiGuncel` (bayat set
+  sessizce geçmez) · `M17ConfigHashAyirtEdici` (9 alanın her biri hash'i gerçekten değiştiriyor).
+- **Dondurma dokümanı:** `docs/INTERFACE_FREEZE_FAZ04.md` — sözleşme + kapsam dışı + açık borçlar.
 
 ## FAZ 03 dışı ama açık (karar bekleyen — kod değil, senin kararın)
 
