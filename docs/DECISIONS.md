@@ -908,6 +908,19 @@ FAZ 03'ün son dilimi. Üç parça birlikte kapandı; **FAZ 03 motor tarafı don
 - **`M17ConfigHashAyirtEdici`:** 9 alanın (sürüm·lod·balance·chaos·hava·zemin·rüzgar·hakem·kadro)
   her birini tek tek değiştirip hash'in gerçekten kaydığını doğrular — "eklendi ama bağlanmadı"
   sessiz hatasına karşı.
+- **İnceleme düzeltmeleri (Codex, 3 bulgu — üçü de haklı):**
+  (1) **Değişiklik komutu hiç uygulanmıyormuş.** `SubstitutionCmd` sözleşmesi `OutId` = SAHA
+  SLOTU (0-10 ev / 11-21 deplasman), `InId` = KULÜBE İNDEKSİ (0-4) ister; golden set PlayerId
+  (705/711) geçiyordu → her replay'de 1 reddedilen komut ve **"komut zaman çizelgesi üç aileyi
+  de içerir" iddiası GERÇEKLEŞMİYORDU.** Düzeltildi ve ölçülebilir kılındı: `SubsMade` de
+  pinlenir. Ölçüm: reddedilen 50 → **0**, değişiklik 0 → **66** (50 replay'in 50'sinde ≥1).
+  (2) **Kapı indeks kapsamını denetlemiyormuş:** döngü yalnız DOSYADAKİ kayıtları doğruluyordu;
+  kırpılmış ya da yinelenen indeksli bir set "50 replay geçti" diye raporlanabilirdi. Yeni kapı
+  `M17ReplaySetiKapsami` 0..49'un tam ve tekil olduğunu ayrıca denetler.
+  (3) **`config_hash`'te motor sürümü kırpılıyormuş:** sabit tampona yazım 196 karakterden
+  uzun sürümlerde kuyruğu sessizce düşürüyor, `(byte)` daraltması ASCII dışı karakterleri
+  örtüşüyordu. Sürüm artık AYRI hash'lenir (UTF-16 kod birimleri, uzunluk önekli, kırpma yok).
+  Golden set üç düzeltmeden sonra yeniden üretildi — kapının kendisi bunu zaten zorunlu kılıyor.
 - **FAZ 04 arayüz dondurması:** `docs/INTERFACE_FREEZE_FAZ04.md` — giriş noktası, determinizm
   sözleşmesi, veri sözleşmeleri, balance ve LOD sözleşmeleri, dondurma kapsamı DIŞINDA kalanlar
   (teşhis sayaçları, [KALİBRE] değerler) ve **bilinen açık borçlar** (upset 3 puanı, VAR 2 sınıfı,

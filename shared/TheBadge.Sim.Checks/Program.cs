@@ -195,14 +195,18 @@ static (MatchConfig cfg, CommandQueue q) BuildReplay(int idx, ulong balanceHash)
     q.Enqueue(new TacticChangeCmd((uint)(3000 + idx * 37), (byte)(idx % 2),
               new TacticDelta((sbyte)((idx % 3) - 1), 0, 0, (sbyte)((idx % 3) - 1))));
     q.Enqueue(new MotivationCmd((uint)(27000 + idx * 11), (byte)((idx + 1) % 2), (ToneType)(idx % 3)));
+    // SubstitutionCmd sözleşmesi (CanExecuteSub): OutId = SAHA SLOTU (0-10 ev / 11-21 deplasman),
+    // InId = KULÜBE İNDEKSİ (0..Bench.Length-1) — PlayerId DEĞİL. İnceleme bulgusu (Codex):
+    // ilk sürümde PlayerId geçilmişti, bu yüzden her replay'de değişiklik reddediliyor ve
+    // "üç komut ailesi de temsil edilir" iddiası GERÇEKLEŞMİYORDU. Artık SubsMade de pinlenir.
+    int subLo = (idx % 2) * 11;
     q.Enqueue(new SubstitutionCmd((uint)(36000 + idx * 53), (byte)(idx % 2),
-              (short)(idx % 2 == 0 ? 700 + 5 + idx % 5 : 800 + 5 + idx % 5),
-              (short)(idx % 2 == 0 ? 700 + 11 + idx % 5 : 800 + 11 + idx % 5)));
+              (short)(subLo + 5 + idx % 5), (short)(idx % 5)));
     return (cfg, q);
 }
 
 // Bir replay'i oynatır ve KİMLİK ALANLARINI döndürür (bit-eşitlik bunlarla denetlenir).
-static (ulong cfgHash, ulong stateHash, int gh, int ga, uint ticks, ulong trace, uint applied, uint red)
+static (ulong cfgHash, ulong stateHash, int gh, int ga, uint ticks, ulong trace, uint applied, uint red, uint subs)
     RunReplay(int idx, ulong balanceHash, TheBadge.Sim.Config.SimBalance bal)
 {
     var (cfg, q) = BuildReplay(idx, balanceHash);
@@ -210,7 +214,7 @@ static (ulong cfgHash, ulong stateHash, int gh, int ga, uint ticks, ulong trace,
     var st = MatchEngine.CreateInitialState(cfg);
     var r = e.Run(ref st);
     return (cfg.ConfigHash, MatchEngine.StateHash(in st), r.HomeGoals, r.AwayGoals,
-            r.TotalTicks, q.AppliedTraceHash, q.AppliedCount, (uint)e.RejectedCommands);
+            r.TotalTicks, q.AppliedTraceHash, q.AppliedCount, (uint)e.RejectedCommands, (uint)e.SubsMade);
 }
 
 const int ReplaySetN = 50;   // ME 17.4: "50 arşiv golden replay"
@@ -238,6 +242,7 @@ if (args.Length > 0 && args[0] == "gen-replays")
           .Append(", \"komutIz\": \"0x").Append(g.trace.ToString("X16"))
           .Append("\", \"uygulanan\": ").Append(g.applied)
           .Append(", \"reddedilen\": ").Append(g.red)
+          .Append(", \"degisiklik\": ").Append(g.subs)
           .Append(" }").Append(i == ReplaySetN - 1 ? "\n" : ",\n");
     }
     sb.Append("  ]\n}\n");
@@ -1856,9 +1861,17 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             Pass($"M17ReplaySetiGuncel(balanceHash 0x{balHashR:X16})");
             var kayitlar = kok.GetProperty("replayler");
             int sapan = 0; string ilkSapma = "";
+            // İNDEKS KAPSAMI (inceleme bulgusu, Codex): döngü yalnız DOSYADAKİ kayıtları
+            // doğruluyordu — kırpılmış ya da yinelenen indeksli bir set "50 replay geçti"
+            // diye raporlanabilirdi. 0..49'un TAMAMI ve TEKİL olduğu ayrıca denetlenir.
+            var gorulen = new bool[ReplaySetN];
+            int yinelenen = 0, bandDisi = 0;
             foreach (var kayit in kayitlar.EnumerateArray())
             {
                 int idx = kayit.GetProperty("idx").GetInt32();
+                if (idx < 0 || idx >= ReplaySetN) { bandDisi++; continue; }
+                if (gorulen[idx]) yinelenen++;
+                gorulen[idx] = true;
                 var g = RunReplay(idx, balHashR, simBal);
                 ulong bekCfg = Convert.ToUInt64(kayit.GetProperty("configHash").GetString().Substring(2), 16);
                 ulong bekSt = Convert.ToUInt64(kayit.GetProperty("stateHash").GetString().Substring(2), 16);
@@ -1867,9 +1880,10 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                 uint bekTick = kayit.GetProperty("tick").GetUInt32();
                 uint bekUyg = kayit.GetProperty("uygulanan").GetUInt32();
                 uint bekRed = kayit.GetProperty("reddedilen").GetUInt32();
+                uint bekSub = kayit.GetProperty("degisiklik").GetUInt32();
                 bool esit = g.cfgHash == bekCfg && g.stateHash == bekSt && g.trace == bekIz
                             && $"{g.gh}-{g.ga}" == bekSkor && g.ticks == bekTick
-                            && g.applied == bekUyg && g.red == bekRed;
+                            && g.applied == bekUyg && g.red == bekRed && g.subs == bekSub;
                 if (!esit)
                 {
                     sapan++;
@@ -1878,9 +1892,15 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                                    $"skor {g.gh}-{g.ga}/{bekSkor} · tick {g.ticks}/{bekTick} · iz 0x{g.trace:X16}/0x{bekIz:X16}";
                 }
             }
+            int eksik = 0;
+            for (int z = 0; z < ReplaySetN; z++) if (!gorulen[z]) eksik++;
+            if (eksik > 0 || yinelenen > 0 || bandDisi > 0)
+                failures += Fail("M17ReplaySetiKapsami",
+                    $"0..{ReplaySetN - 1} indeks kapsamı bozuk: eksik {eksik} · yinelenen {yinelenen} · bant dışı {bandDisi}");
+            else Pass($"M17ReplaySetiKapsami(0..{ReplaySetN - 1} tam ve tekil)");
             if (sapan > 0)
                 failures += Fail("M17GoldenReplay", $"{sapan}/{ReplaySetN} replay bit-eşit DEĞİL — ilk sapma {ilkSapma}");
-            else Pass($"M17GoldenReplay({ReplaySetN} replay bit-eşit: config_hash + durum + skor + süre + komut izi)");
+            else Pass($"M17GoldenReplay({ReplaySetN} replay bit-eşit: config_hash + durum + skor + süre + komut izi + değişiklik)");
 
             // config_hash AYIRT EDİCİ mi: kurulumun tek alanı değişince hash değişmeli (3.3'ün
             // "eski replay yeni parametrelerle sessizce oynamaz" güvencesi). Hava/zemin/rüzgar/

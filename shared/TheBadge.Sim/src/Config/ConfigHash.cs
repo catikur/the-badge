@@ -68,10 +68,12 @@ namespace TheBadge.Sim.Config
             if (cfg == null) throw new ArgumentNullException(nameof(cfg));
             Span<byte> buf = stackalloc byte[256];
             int o = 0;
-            // Motor sürümü (ASCII, uzunluk önekli — sürüm dizesi kimliğin parçasıdır)
-            string ev = cfg.EngineVersion ?? string.Empty;
-            W32(buf, ref o, (uint)ev.Length);
-            for (int i = 0; i < ev.Length && o < 200; i++) buf[o++] = (byte)ev[i];
+            // Motor sürümü — TAM dize, kırpma ve daraltma YOK. İnceleme bulgusu (Codex): ilk
+            // sürüm baytları sabit tampona yazıyordu; 196 karakterden uzun sürümlerde kuyruk
+            // sessizce düşüyor, ayrıca (byte) daraltması ASCII dışı karakterleri örtüşüyordu —
+            // ikisi de replay uyumluluğunu belirleyen bir kimlik için kabul edilemez.
+            // Dize AYRI hash'lenir (UTF-16 kod birimleri, little-endian) ve 8 bayt olarak girer.
+            W64(buf, ref o, StringHash(cfg.EngineVersion));
             // LOD + tick oranı (3.3 "lodLevel, tickRates")
             buf[o++] = (byte)cfg.Lod;
             W32(buf, ref o, (uint)MatchEngine.TicksPerSecond);
@@ -91,6 +93,24 @@ namespace TheBadge.Sim.Config
             // Kadro anlık görüntüsü (3.3 rosterSnapshotHash)
             W64(buf, ref o, RosterHash(cfg.Home, cfg.Away));
             return XxHash64.Hash(buf.Slice(0, o));
+        }
+
+        /// <summary>Dize özeti — UTF-16 kod birimleri, little-endian, uzunluk önekli.
+        /// Kırpma yok; kod birimi daraltması yok. Soğuk yol (kurulumda bir kez) olduğu için
+        /// tahsis serbesttir — zero-alloc kuralı tick geçişleri içindir (ME 16.2).</summary>
+        static ulong StringHash(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return XxHash64.Hash(ReadOnlySpan<byte>.Empty);
+            var b = new byte[4 + s.Length * 2];
+            uint n = (uint)s.Length;
+            b[0] = (byte)n; b[1] = (byte)(n >> 8); b[2] = (byte)(n >> 16); b[3] = (byte)(n >> 24);
+            for (int i = 0; i < s.Length; i++)
+            {
+                ushort c = s[i];
+                b[4 + i * 2] = (byte)c;
+                b[5 + i * 2] = (byte)(c >> 8);
+            }
+            return XxHash64.Hash(b);
         }
 
         static void W32(Span<byte> b, ref int o, uint v)
