@@ -851,6 +851,82 @@ Anayasa v2.1 uyumu — geriye dönük yazıldı (retrofit Bölüm 13.2): fiili d
   oyun direği artık sıradan bir ıskadan ayırt edilebiliyor (highlight/sunum değeri).
   Spec'e önerilecek bir şey YOK; borç yanlış teşhis edilmişti.
 
+### M16-H: atak zinciri denemesi — ⛔ DENENDİ, ÖLÇÜLDÜ, GERİ ALINDI (2026-08-21)
+M16-G'nin adresini kesinleştirdiği zincir açığına üç mekanizmayla girildi; **üçü de zinciri
+kıpırdatmadı**, M16-B precedent'i uygulandı (ölçülebilir kazanç olmadan golden yeniden pinlenmez).
+- **Yeni teşhis aleti — sahiplik dizisi çıkarımı (olay log'undan):** dizi başına pas · dizinin
+  ŞUTLA bitme oranı · dizinin ulaştığı EN İLERİ nokta. **Bulgu (+24 fark, 60 maç):** güçlü
+  %23,8 şut / 62,3 m · zayıf **%2,8 şut / 42,4 m** — zayıf takımın ortalama atağı **orta sahayı
+  bile geçmiyor**. Kayıp NEDENLERİ iki tarafta neredeyse aynı (kesme ~%36-40, tackle ~%54-61):
+  sorun topu kaptırma biçimi değil, İLERLEYEMEMEK. Eşit maçta iki taraf da 51-52 m'ye ulaşıyor
+  ve dizilerin %8-10'u şutla bitiyor — bu oran gerçek futbolla uyumlu (~%11), yani model
+  şekli eşit maçta DOĞRU; kusur yalnız asimetride.
+- **Denenen 1 — derin blokta çıkış noktası:** forvet hatla birlikte çökmesin, yukarıda kalsın
+  (otobüsü park eden takım santrforu bırakır). Etki: en ileri nokta 42,7 → 42,4 m. YOK.
+- **Denenen 2 — uzun top aday kümesinin ayrılması:** LongSwitch alıcıları kısa pas listesinden
+  geliyordu; o liste mesafeye göre EN YAKIN N ile kırpılıyor, uzun topun hedefi ise tanımı gereği
+  UZAK. Ayrı ileri-sıralı aday kümesi yazıldı (Vision kapısı korunarak). Etki: uzun top 26 → 41/maç
+  (mekanizma ÇALIŞTI) ama en ileri nokta değişmedi. **Kusur gerçekti, sonucu değiştirmedi.**
+- **Denenen 3 — LongSwitch pres bonusu** (ClearBall'daki `clearPresBonus` simetriği). Ölçüm
+  gösterdi ki iki takım zaten SİMETRİK sayıda uzun top atıyor (17/maç) — "yeterince uzun
+  oynamıyorlar" hipotezi de yanlıştı; uzun top zayıfa toprak KAZANDIRMIYOR.
+- **Sonuç ve karar:** kalan upset açığı bir ayar veya tek mekanizma işi değil; **pas/sahiplik
+  modelinin kendi şekli** (maç başına ~145 dizi × ~3 pas) territoryi TEKRARLA kazandırıyor ve
+  tekrar, daha iyi takımı çarpımsal olarak ödüllendiriyor. Bu, DECISIONS'ta M13/M14/M15/M16-A
+  borçlarının ortak kökü olarak zaten kayıtlı. Düzeltmek faz ölçeğinde bir yeniden yapılandırmadır
+  (tüm golden'lar + tüm kalibrasyon yeniden). **M17 dondurmasının hemen öncesinde, ölçülmüş
+  kazancı olmayan bir davranış değişikliğini push etmek projenin kendi kuralına aykırıdır** →
+  kod geri alındı, yama `scratchpad/M16H_zincir_denemesi.patch` olarak saklandı.
+- **Kalıcı kazanç:** zincir teşhisi `-- calib10k` üretici komutuna KALICI olarak eklendi
+  (hash dışı, yalnız üretici modda) — sonraki dilim körlemesine başlamaz.
+- **Bugünkü gerçek (M16-G, dondurulacak taban):** 75v55 %80/%13/%7 · revize hedef %78/%12/%10 —
+  galibiyet ve beraberlik HEDEFTE, sürpriz payı 3 puan eksik ve adresi yukarıda yazılıdır.
+
+### M17: golden replay seti + config_hash + FAZ 04 arayüz dondurması — ✅ TAMAM (2026-08-21)
+FAZ 03'ün son dilimi. Üç parça birlikte kapandı; **FAZ 03 motor tarafı dondu.**
+- **ME 3.3 config_hash UYGULANDI** (alan vardı, hiç hesaplanmıyordu): motor sürümü · LOD · tick
+  oranı · balance ham bayt özeti · chaos · **hava · zemin · rüzgar (kuantalanmış)** · hakem
+  profili · kadro anlık görüntüsü. Hava/zemin/rüzgar 3.3'ün listesinde YOK ama sonucu doğrudan
+  değiştiriyor — kimliğe girmezlerse iki farklı kurulum aynı hash'i paylaşır ve spec'in
+  "eski replay yeni parametrelerle sessizce oynamaz" güvencesi delinirdi (kapsam genişletmesi
+  gerekçesiyle birlikte kodda ve dondurma dokümanında yazılı).
+- **Bilinçli sapma (mimari değişmez gereği):** 3.3 "balanceJson_kanonik_bytes" der; `TheBadge.Sim`
+  JSON PARSE ETMEZ (CLAUDE.md bağımlılıksızlık kuralı). Ham bayt özeti HOST'ta hesaplanır
+  (dosyayı zaten o okur) ve `MatchConfig.BalanceHash` ile verilir. Spec'in amacı birebir korunur:
+  balance'taki tek bayt değişikliği config_hash'i değiştirir; çekirdek bağımlılıksız kalır.
+- **Golden replay seti (ME 17.4) — 50 arşiv replay:** `shared/TheBadge.Sim.Checks/goldens/
+  replay_set_v1.json`; üretici `-- gen-replays`, doğrulayıcı `M17GoldenReplay`. Her kayıt
+  replay dörtlüsünün TAMAMINI pinler: config_hash · durum hash'i · skor · süre · **komut izi**
+  (`AppliedTraceHash`) · uygulanan/reddedilen komut sayısı. Kurulum çeşitliliği tohumdan türer:
+  50 replay hava/zemin/rüzgar/chaos/hakem/kadro-gücü kombinasyonlarını tarar — dondurulan
+  sözleşme yalnız "kuru + Orta" değildir. Komut zaman çizelgesi üç aileyi de içerir
+  (taktik/motivasyon/değişiklik) ki replay yalnız fiziği değil MÜDAHALE yolunu da pinlesin.
+- **Üretici ve kapı TEK KAYNAKTAN kurulur** (`BuildReplay`): "üretici ile kapı farklı evreni
+  ölçer" hatası yapısal olarak imkansız (M16-E'de bu ders bir kez ödendi).
+- **Bayat set sessizce GEÇMEZ:** `M17ReplaySetiGuncel` balance ham bayt özetini karşılaştırır;
+  tutmuyorsa kapı düşer ve yeniden üretim ister (spec: "balance değişikliği yeni golden set").
+- **`M17ConfigHashAyirtEdici`:** 9 alanın (sürüm·lod·balance·chaos·hava·zemin·rüzgar·hakem·kadro)
+  her birini tek tek değiştirip hash'in gerçekten kaydığını doğrular — "eklendi ama bağlanmadı"
+  sessiz hatasına karşı.
+- **İnceleme düzeltmeleri (Codex, 3 bulgu — üçü de haklı):**
+  (1) **Değişiklik komutu hiç uygulanmıyormuş.** `SubstitutionCmd` sözleşmesi `OutId` = SAHA
+  SLOTU (0-10 ev / 11-21 deplasman), `InId` = KULÜBE İNDEKSİ (0-4) ister; golden set PlayerId
+  (705/711) geçiyordu → her replay'de 1 reddedilen komut ve **"komut zaman çizelgesi üç aileyi
+  de içerir" iddiası GERÇEKLEŞMİYORDU.** Düzeltildi ve ölçülebilir kılındı: `SubsMade` de
+  pinlenir. Ölçüm: reddedilen 50 → **0**, değişiklik 0 → **66** (50 replay'in 50'sinde ≥1).
+  (2) **Kapı indeks kapsamını denetlemiyormuş:** döngü yalnız DOSYADAKİ kayıtları doğruluyordu;
+  kırpılmış ya da yinelenen indeksli bir set "50 replay geçti" diye raporlanabilirdi. Yeni kapı
+  `M17ReplaySetiKapsami` 0..49'un tam ve tekil olduğunu ayrıca denetler.
+  (3) **`config_hash`'te motor sürümü kırpılıyormuş:** sabit tampona yazım 196 karakterden
+  uzun sürümlerde kuyruğu sessizce düşürüyor, `(byte)` daraltması ASCII dışı karakterleri
+  örtüşüyordu. Sürüm artık AYRI hash'lenir (UTF-16 kod birimleri, uzunluk önekli, kırpma yok).
+  Golden set üç düzeltmeden sonra yeniden üretildi — kapının kendisi bunu zaten zorunlu kılıyor.
+- **FAZ 04 arayüz dondurması:** `docs/INTERFACE_FREEZE_FAZ04.md` — giriş noktası, determinizm
+  sözleşmesi, veri sözleşmeleri, balance ve LOD sözleşmeleri, dondurma kapsamı DIŞINDA kalanlar
+  (teşhis sayaçları, [KALİBRE] değerler) ve **bilinen açık borçlar** (upset 3 puanı, VAR 2 sınıfı,
+  LOD 2 kompozisyon hatası, Yüksek chaos). Borçların hiçbiri arayüzü değiştirmez — kapatıldıklarında
+  golden set yeniden üretilir, sözleşme aynı kalır.
+
 ## Bekleyen kararlar
 - ~~ME 13.4 upset büyüklüğü~~ → **KARAR (2026-08-19, Atilla): (d) HİBRİT.** Dört seçenek
   sunuldu — (a) tam zincir normalizasyonu (2 dilim motor işi), (b) yalnız hedef revizyonu

@@ -38,6 +38,8 @@ if (args.Length > 0 && args[0] == "calib10k")
     double g = 0, sh = 0, isb = 0, ko = 0, fa = 0, sa = 0, ki = 0, pe = 0, of = 0, inj = 0;
     double pa = 0, pc = 0, xgT = 0, av = 0, golSut = 0, golLoose = 0, kurtaris = 0;
     double lgGk = 0, lgDf = 0, lgMf = 0, lgAtk = 0, lgOwn = 0, lgHava = 0, direk = 0;
+    // Zincir teşhisi: [0] güçlü taraf, [1] zayıf taraf (yalnız ofset farkı >= 16 olan maçlar)
+    var zDizi = new double[2]; var zPas = new double[2]; var zSut = new double[2]; var zIleri = new double[2];
     var lgKind = new double[9];
     // 75v55 alt profili (ME 17.2 possession bandı %55-65 + 13.4): ofset farkı >= 16 olan maçlar
     double pGucluPos = 0; int nProfil = 0, gProfil = 0, bProfil = 0, mProfil = 0;
@@ -71,6 +73,42 @@ if (args.Length > 0 && args[0] == "calib10k")
             lgGk += e.LooseGoalByGk; lgDf += e.LooseGoalByDf; lgMf += e.LooseGoalByMfFw;
             lgAtk += e.LooseGoalAttackTouch; lgOwn += e.LooseGoalOwnTouch; lgHava += e.LooseGoalAirborne;
             for (int k2 = 0; k2 < 9; k2++) lgKind[k2] += e.LooseGoalKind[k2];
+            // Zincir çıkarımı yalnız FARK maçlarında (güçlü/zayıf ayrımı anlamlı olsun)
+            if (Math.Abs(ofsEv - ofsDep) >= 16)
+            {
+                int gucluT = ofsEv > ofsDep ? 0 : 1;
+                var zd = new double[2]; var zp = new double[2]; var zs = new double[2]; var zi = new double[2];
+                int cur = -1; int pas = 0; double enIleri = 0;
+                double Norm(int t2, int xmm) => t2 == 0 ? (xmm + 52500) / 1000.0 : (52500 - xmm) / 1000.0;
+                void Kapat(bool sutla)
+                {
+                    if (cur < 0) return;
+                    int slot = cur == gucluT ? 0 : 1;
+                    zd[slot]++; zp[slot] += pas; zi[slot] += enIleri; if (sutla) zs[slot]++;
+                    cur = -1; pas = 0; enIleri = 0;
+                }
+                for (int q = 0; q < e.EventCount; q++)
+                {
+                    var ev = e.GetEvent(q);
+                    switch (ev.Kind)
+                    {
+                        case EventType.PassCompleted:
+                        case EventType.DribblePast:
+                            if (ev.TeamIdx != cur) { Kapat(false); cur = ev.TeamIdx; }
+                            pas++; { double adv = Norm(cur, ev.X); if (adv > enIleri) enIleri = adv; }
+                            break;
+                        case EventType.ShotOnTarget: case EventType.ShotOffTarget:
+                        case EventType.ShotBlocked: case EventType.Post:
+                            if (ev.TeamIdx != cur) { Kapat(false); cur = ev.TeamIdx; }
+                            { double adv = Norm(cur, ev.X); if (adv > enIleri) enIleri = adv; }
+                            Kapat(true); break;
+                        case EventType.PassIntercepted: case EventType.TackleWon:
+                        case EventType.BallOut: case EventType.Offside:
+                            Kapat(false); break;
+                    }
+                }
+                for (int z = 0; z < 2; z++) { zDizi[z] += zd[z]; zPas[z] += zp[z]; zSut[z] += zs[z]; zIleri[z] += zi[z]; }
+            }
             if (ofsEv - ofsDep >= 16) { pGucluPos += pkt.Home.PossessionPct; nProfil++;
                 if (r.HomeGoals > r.AwayGoals) gProfil++; else if (r.HomeGoals == r.AwayGoals) bProfil++; else mProfil++; }
             else if (ofsDep - ofsEv >= 16) { pGucluPos += pkt.Away.PossessionPct; nProfil++;
@@ -98,6 +136,14 @@ if (args.Length > 0 && args[0] == "calib10k")
     double xgSapma = Math.Abs(g - xgT) / Math.Max(1.0, xgT) * 100.0;
     Console.WriteLine($"[calib] {"gol vs xG sapması %",-26} {xgSapma,8:0.0}   bant ±8   {(xgSapma <= 8 ? "✓" : "✗")}");
     Console.WriteLine($"[calib] direk (ME 9.2 bandı): {direk / NM:0.00}/maç · şutların %{100.0 * direk / Math.Max(1, sh):0.0}");
+    // ZİNCİR TEŞHİSİ (M16-H): upset açığının adresi burasıdır — sahiplik dizisi olay log'undan
+    // çıkarılır. Güçlü/zayıf ayrımı ofset farkına göre yapılır (kalibrasyon setinin kendi tanımı).
+    // Ölçülen: dizi başına pas · dizinin ŞUTLA bitme oranı · dizinin ulaştığı EN İLERİ nokta (m,
+    // 0 = kendi kalesi, 105 = rakip kale). M16-H ölçümü (+24 fark): güçlü %23,8 şut / 62,3 m ·
+    // zayıf %2,8 / 42,4 m — zayıf takımın ortalama atağı orta sahayı GEÇMİYOR. Zincir yeniden
+    // yapılandırılırsa doğrulama bu satırdan okunur.
+    Console.WriteLine($"[calib] zincir — güçlü: pas/dizi {zPas[0] / Math.Max(1, zDizi[0]):0.00} · şutla biten %{100.0 * zSut[0] / Math.Max(1, zDizi[0]):0.0} · en ileri {zIleri[0] / Math.Max(1, zDizi[0]):0.0} m" +
+                      $"  |  zayıf: pas/dizi {zPas[1] / Math.Max(1, zDizi[1]):0.00} · şutla biten %{100.0 * zSut[1] / Math.Max(1, zDizi[1]):0.0} · en ileri {zIleri[1] / Math.Max(1, zDizi[1]):0.0} m");
     Console.WriteLine($"[calib] gol kaynağı: şut {golSut / NM:0.00} + serbest top {golLoose / NM:0.00} · kurtarış {kurtaris / NM:0.0} · xG/şut {xgT / Math.Max(1, sh):0.000}");
     Console.WriteLine($"[calib] serbest gol: son dokunan GK {lgGk / NM:0.00} / DF {lgDf / NM:0.00} / OS-FV {lgMf / NM:0.00} · dokunuş hücum {lgAtk / NM:0.00} / savunan {lgOwn / NM:0.00} · havada {lgHava / NM:0.00}");
     Console.WriteLine($"[calib] serbest gol TÜRÜ: diğer {lgKind[0] / NM:0.00} · çelme {lgKind[1] / NM:0.00} · uzun/degaj {lgKind[2] / NM:0.00} · blok {lgKind[3] / NM:0.00} · uzaklaştırma {lgKind[4] / NM:0.00} · pas {lgKind[5] / NM:0.00} · şut {lgKind[6] / NM:0.00} · tackle {lgKind[7] / NM:0.00} · indirme {lgKind[8] / NM:0.00}");
@@ -108,6 +154,105 @@ if (args.Length > 0 && args[0] == "calib10k")
                           $"%{100.0 * gProfil / nProfil:0} / %{100.0 * bProfil / nProfil:0} / %{100.0 * mProfil / nProfil:0} " +
                           $"(ME 13.4 Orta hedefi %66/%18/%16) · avantaj {av / NM:0.0}/maç");
     }
+    return 0;
+}
+
+// ============================ M17 — GOLDEN REPLAY SETİ (ME 17.4) ============================
+// Replay dörtlüsü (ME 3.3): { engineVersion, config_hash, seed, komut zaman çizelgesi }.
+// Aynı dörtlü = BİT-EŞİT oynatım. Set 50 arşiv replay'i tutar; balance/motor değişikliği
+// config_hash'i kaydırır ve set yeniden ÜRETİLİR (spec: "balance değişikliği yeni golden set").
+// Üretici:  dotnet run --project shared/TheBadge.Sim.Checks -c Release -- gen-replays
+// Kapı:     M17GoldenReplay (aşağıda, normal koşuda)
+
+// Replay kurulumu TEK KAYNAKTAN türetilir: üretici ve kapı AYNI fonksiyonu çağırır, böylece
+// "üretici ile kapı farklı evreni ölçer" hatası yapısal olarak imkansızdır.
+static (MatchConfig cfg, CommandQueue q) BuildReplay(int idx, ulong balanceHash)
+{
+    ulong sd = 0x5EED0000UL + (ulong)idx * 7919UL;
+    // Kurulum çeşitliliği tohumdan TÜRETİLİR: 50 replay hava/zemin/rüzgar/chaos/hakem
+    // kombinasyonlarını tarar — dondurulan sözleşme yalnız "kuru + Orta" değildir.
+    var cfg = new MatchConfig
+    {
+        Seed = sd,
+        EngineVersion = "m17-golden-v1",
+        BalanceHash = balanceHash,
+        Home = BuildSheetSide(300, 7, home: true, offset: (idx % 5) * 6 - 12),
+        Away = BuildSheetSide(300, 7, home: false, idEntity: 8, offset: ((idx / 5) % 5) * 6 - 12),
+        Weather = (WeatherKind)(idx % 4),
+        PitchTier = (byte)(1 + idx % 5),
+        WindMS = (idx % 3) * 6.0,
+        WindDirX = (idx % 2) == 0 ? 1.0 : 0.0,
+        WindDirY = (idx % 2) == 0 ? 0.0 : 1.0,
+        Chaos = (ChaosLevel)(idx % 3),
+        Referee = new RefereeProfile
+        { Strictness = (byte)(35 + idx % 40), AdvantageTendency = 50, Consistency = 60 }
+    };
+    cfg.ConfigHash = TheBadge.Sim.Config.ConfigHash.Compute(cfg, balanceHash);
+
+    // KOMUT ZAMAN ÇİZELGESİ — dörtlünün dördüncü üyesi. Üç komut ailesi de temsil edilir
+    // (taktik / motivasyon / değişiklik) ki replay yalnız fizik değil MÜDAHALE yolunu da pinlesin.
+    var q = new CommandQueue();
+    q.Enqueue(new TacticChangeCmd((uint)(3000 + idx * 37), (byte)(idx % 2),
+              new TacticDelta((sbyte)((idx % 3) - 1), 0, 0, (sbyte)((idx % 3) - 1))));
+    q.Enqueue(new MotivationCmd((uint)(27000 + idx * 11), (byte)((idx + 1) % 2), (ToneType)(idx % 3)));
+    // SubstitutionCmd sözleşmesi (CanExecuteSub): OutId = SAHA SLOTU (0-10 ev / 11-21 deplasman),
+    // InId = KULÜBE İNDEKSİ (0..Bench.Length-1) — PlayerId DEĞİL. İnceleme bulgusu (Codex):
+    // ilk sürümde PlayerId geçilmişti, bu yüzden her replay'de değişiklik reddediliyor ve
+    // "üç komut ailesi de temsil edilir" iddiası GERÇEKLEŞMİYORDU. Artık SubsMade de pinlenir.
+    int subLo = (idx % 2) * 11;
+    q.Enqueue(new SubstitutionCmd((uint)(36000 + idx * 53), (byte)(idx % 2),
+              (short)(subLo + 5 + idx % 5), (short)(idx % 5)));
+    return (cfg, q);
+}
+
+// Bir replay'i oynatır ve KİMLİK ALANLARINI döndürür (bit-eşitlik bunlarla denetlenir).
+static (ulong cfgHash, ulong stateHash, int gh, int ga, uint ticks, ulong trace, uint applied, uint red, uint subs)
+    RunReplay(int idx, ulong balanceHash, TheBadge.Sim.Config.SimBalance bal)
+{
+    var (cfg, q) = BuildReplay(idx, balanceHash);
+    var e = new MatchEngine(cfg.Seed, q, cfg, bal) { AutoManage = true };
+    var st = MatchEngine.CreateInitialState(cfg);
+    var r = e.Run(ref st);
+    return (cfg.ConfigHash, MatchEngine.StateHash(in st), r.HomeGoals, r.AwayGoals,
+            r.TotalTicks, q.AppliedTraceHash, q.AppliedCount, (uint)e.RejectedCommands, (uint)e.SubsMade);
+}
+
+const int ReplaySetN = 50;   // ME 17.4: "50 arşiv golden replay"
+
+if (args.Length > 0 && args[0] == "gen-replays")
+{
+    var gOpts = new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true };
+    string balPath = FindRepoFile("balance/sim.balance.json");
+    var gBal = System.Text.Json.JsonSerializer.Deserialize<TheBadge.Sim.Config.SimBalance>(
+        System.IO.File.ReadAllText(balPath), gOpts);
+    // Balance HAM BAYT özeti — host işi (çekirdek JSON parse etmez; ME 3.3 sapma notu)
+    ulong balHash = TheBadge.Sim.Core.XxHash64.Hash(System.IO.File.ReadAllBytes(balPath));
+
+    var sb = new System.Text.StringBuilder();
+    sb.Append("{\n  \"surum\": \"m17-golden-v1\",\n  \"balanceHash\": \"0x");
+    sb.Append(balHash.ToString("X16")).Append("\",\n  \"replayler\": [\n");
+    for (int i = 0; i < ReplaySetN; i++)
+    {
+        var g = RunReplay(i, balHash, gBal);
+        sb.Append("    { \"idx\": ").Append(i)
+          .Append(", \"configHash\": \"0x").Append(g.cfgHash.ToString("X16"))
+          .Append("\", \"stateHash\": \"0x").Append(g.stateHash.ToString("X16"))
+          .Append("\", \"skor\": \"").Append(g.gh).Append('-').Append(g.ga)
+          .Append("\", \"tick\": ").Append(g.ticks)
+          .Append(", \"komutIz\": \"0x").Append(g.trace.ToString("X16"))
+          .Append("\", \"uygulanan\": ").Append(g.applied)
+          .Append(", \"reddedilen\": ").Append(g.red)
+          .Append(", \"degisiklik\": ").Append(g.subs)
+          .Append(" }").Append(i == ReplaySetN - 1 ? "\n" : ",\n");
+    }
+    sb.Append("  ]\n}\n");
+    string outPath = System.IO.Path.Combine(
+        System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json")), "..",
+        "shared", "TheBadge.Sim.Checks", "goldens");
+    System.IO.Directory.CreateDirectory(outPath);
+    string file = System.IO.Path.Combine(outPath, "replay_set_v1.json");
+    System.IO.File.WriteAllText(file, sb.ToString());
+    Console.WriteLine($"[gen] {ReplaySetN} golden replay üretildi (balanceHash 0x{balHash:X16}) → {file}");
     return 0;
 }
 
@@ -1687,6 +1832,106 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
               && inj / NE is >= 0.28 and <= 0.68 && pasP is >= 76 and <= 88 && xgSap <= 10;
     if (!ok16e) failures += Fail("M16ECalibGenis", "yukarıdaki [info] satırı bant dışı değer içeriyor");
     else Pass("M16ECalibGenis(12 metrik, CI-geniş bant; dar bantlar calib10k 10000 ile)");
+}
+
+// 23) FAZ 03 M17 — GOLDEN REPLAY SETİ (ME 17.4) + config_hash (3.3)
+// Replay dörtlüsü { engineVersion, config_hash, seed, komut zaman çizelgesi } ile 50 arşiv
+// replay BİT-EŞİT oynamalı. Set üretici komutla yazılır (`-- gen-replays`); burada YALNIZ
+// doğrulanır. Bayat set SESSİZCE GEÇMEZ: balance ham bayt özeti tutmuyorsa kapı düşer ve
+// yeniden üretim ister (spec: "balance değişikliği yeni golden set üretir").
+{
+    string balPathR = FindRepoFile("balance/sim.balance.json");
+    ulong balHashR = TheBadge.Sim.Core.XxHash64.Hash(System.IO.File.ReadAllBytes(balPathR));
+    string setPath = System.IO.Path.Combine(
+        System.IO.Path.GetDirectoryName(balPathR), "..",
+        "shared", "TheBadge.Sim.Checks", "goldens", "replay_set_v1.json");
+
+    if (!System.IO.File.Exists(setPath))
+        failures += Fail("M17GoldenReplaySeti", "set dosyası yok — `-- gen-replays` ile üret");
+    else
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(setPath));
+        var kok = doc.RootElement;
+        ulong setBal = Convert.ToUInt64(kok.GetProperty("balanceHash").GetString().Substring(2), 16);
+        if (setBal != balHashR)
+            failures += Fail("M17ReplaySetiGuncel",
+                $"balance değişmiş (set 0x{setBal:X16} ≠ dosya 0x{balHashR:X16}) — `-- gen-replays` ile YENİDEN ÜRET");
+        else
+        {
+            Pass($"M17ReplaySetiGuncel(balanceHash 0x{balHashR:X16})");
+            var kayitlar = kok.GetProperty("replayler");
+            int sapan = 0; string ilkSapma = "";
+            // İNDEKS KAPSAMI (inceleme bulgusu, Codex): döngü yalnız DOSYADAKİ kayıtları
+            // doğruluyordu — kırpılmış ya da yinelenen indeksli bir set "50 replay geçti"
+            // diye raporlanabilirdi. 0..49'un TAMAMI ve TEKİL olduğu ayrıca denetlenir.
+            var gorulen = new bool[ReplaySetN];
+            int yinelenen = 0, bandDisi = 0;
+            foreach (var kayit in kayitlar.EnumerateArray())
+            {
+                int idx = kayit.GetProperty("idx").GetInt32();
+                if (idx < 0 || idx >= ReplaySetN) { bandDisi++; continue; }
+                if (gorulen[idx]) yinelenen++;
+                gorulen[idx] = true;
+                var g = RunReplay(idx, balHashR, simBal);
+                ulong bekCfg = Convert.ToUInt64(kayit.GetProperty("configHash").GetString().Substring(2), 16);
+                ulong bekSt = Convert.ToUInt64(kayit.GetProperty("stateHash").GetString().Substring(2), 16);
+                ulong bekIz = Convert.ToUInt64(kayit.GetProperty("komutIz").GetString().Substring(2), 16);
+                string bekSkor = kayit.GetProperty("skor").GetString();
+                uint bekTick = kayit.GetProperty("tick").GetUInt32();
+                uint bekUyg = kayit.GetProperty("uygulanan").GetUInt32();
+                uint bekRed = kayit.GetProperty("reddedilen").GetUInt32();
+                uint bekSub = kayit.GetProperty("degisiklik").GetUInt32();
+                bool esit = g.cfgHash == bekCfg && g.stateHash == bekSt && g.trace == bekIz
+                            && $"{g.gh}-{g.ga}" == bekSkor && g.ticks == bekTick
+                            && g.applied == bekUyg && g.red == bekRed && g.subs == bekSub;
+                if (!esit)
+                {
+                    sapan++;
+                    if (ilkSapma.Length == 0)
+                        ilkSapma = $"#{idx}: cfg 0x{g.cfgHash:X16}/0x{bekCfg:X16} · state 0x{g.stateHash:X16}/0x{bekSt:X16} · " +
+                                   $"skor {g.gh}-{g.ga}/{bekSkor} · tick {g.ticks}/{bekTick} · iz 0x{g.trace:X16}/0x{bekIz:X16}";
+                }
+            }
+            int eksik = 0;
+            for (int z = 0; z < ReplaySetN; z++) if (!gorulen[z]) eksik++;
+            if (eksik > 0 || yinelenen > 0 || bandDisi > 0)
+                failures += Fail("M17ReplaySetiKapsami",
+                    $"0..{ReplaySetN - 1} indeks kapsamı bozuk: eksik {eksik} · yinelenen {yinelenen} · bant dışı {bandDisi}");
+            else Pass($"M17ReplaySetiKapsami(0..{ReplaySetN - 1} tam ve tekil)");
+            if (sapan > 0)
+                failures += Fail("M17GoldenReplay", $"{sapan}/{ReplaySetN} replay bit-eşit DEĞİL — ilk sapma {ilkSapma}");
+            else Pass($"M17GoldenReplay({ReplaySetN} replay bit-eşit: config_hash + durum + skor + süre + komut izi + değişiklik)");
+
+            // config_hash AYIRT EDİCİ mi: kurulumun tek alanı değişince hash değişmeli (3.3'ün
+            // "eski replay yeni parametrelerle sessizce oynamaz" güvencesi). Hava/zemin/rüzgar/
+            // chaos M17'de kimliğe EKLENDİ — bu kapı o eklemenin gerçekten bağlı olduğunu ölçer.
+            var (baseCfg, _) = BuildReplay(0, balHashR);
+            ulong h0 = TheBadge.Sim.Config.ConfigHash.Compute(baseCfg, balHashR);
+            var varyantlar = new (string ad, Action<MatchConfig> uygula)[]
+            {
+                ("hava",    c => c.Weather = c.Weather == WeatherKind.Kuru ? WeatherKind.Kar : WeatherKind.Kuru),
+                ("zemin",   c => c.PitchTier = (byte)(c.PitchTier == 5 ? 1 : c.PitchTier + 1)),
+                ("rüzgar",  c => c.WindMS += 3.0),
+                ("chaos",   c => c.Chaos = c.Chaos == ChaosLevel.Yuksek ? ChaosLevel.Dusuk : ChaosLevel.Yuksek),
+                ("lod",     c => c.Lod = c.Lod == LodLevel.Lod0 ? LodLevel.Lod2 : LodLevel.Lod0),
+                ("hakem",   c => c.Referee = new RefereeProfile { Strictness = (byte)(c.Referee.Strictness + 1),
+                                     AdvantageTendency = c.Referee.AdvantageTendency, Consistency = c.Referee.Consistency }),
+                ("sürüm",   c => c.EngineVersion = c.EngineVersion + "x"),
+                ("kadro",   c => c.Home.Starters[3].Attributes.Passing = (byte)(c.Home.Starters[3].Attributes.Passing ^ 1)),
+            };
+            string kor = "";
+            foreach (var (ad, uygula) in varyantlar)
+            {
+                var (v, _) = BuildReplay(0, balHashR);
+                uygula(v);
+                if (TheBadge.Sim.Config.ConfigHash.Compute(v, balHashR) == h0) kor += ad + " ";
+            }
+            // Balance özetinin kendisi de kimliğe girmeli
+            if (TheBadge.Sim.Config.ConfigHash.Compute(baseCfg, balHashR ^ 1UL) == h0) kor += "balance ";
+            if (kor.Length > 0) failures += Fail("M17ConfigHashAyirtEdici", $"şu alanlar hash'i DEĞİŞTİRMİYOR: {kor}");
+            else Pass("M17ConfigHashAyirtEdici(9 alan: sürüm·lod·balance·chaos·hava·zemin·rüzgar·hakem·kadro)");
+        }
+    }
 }
 
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");
