@@ -927,6 +927,43 @@ FAZ 03'ün son dilimi. Üç parça birlikte kapandı; **FAZ 03 motor tarafı don
   LOD 2 kompozisyon hatası, Yüksek chaos). Borçların hiçbiri arayüzü değiştirmez — kapatıldıklarında
   golden set yeniden üretilir, sözleşme aynı kalır.
 
+## FAZ 04 — Core Modüller
+
+### K1: Command Bus çekirdeği — ✅ TAMAM (2026-08-23)
+FAZ 04 açıldı (`docs/briefs/BRIEF_FAZ04_ACILIS.md`). **Sıra keyfi değil:** anayasa değişmezi #1
+(Tek Kapı) gereği durumu değiştiren her eylem `CommandEnvelope` ile bus'tan geçmek zorunda;
+bugün hub tarafında bus YOKTU (yalnız maç içi ucu, ME 14.1). Squad/Transfer/Tycoon bus'tan önce
+yazılsaydı ya değişmezi ihlal ederdi ya yeniden yazılırdı → K1 ilk dilim.
+- **Yeni paket `shared/TheBadge.CommandBus`** (netstandard2.1, **bağımlılıksız**): UnityEngine
+  ve JSON kütüphanesi SIZMAZ — `TheBadge.Sim` ile aynı disiplin. Hem sunucu hem Unity AYNI
+  doğrulama kodunu çalıştırır (istemci ön-doğrular, sunucu yeniden doğrular; otorite sunucuda).
+- **Katalog v1 — 32 aksiyon** (CB 4.1-4.4, 70 parametre): her aksiyonda tier (0-2), bağlam
+  (Hub/Maç/Online bayrağı), rate-limit sınıfı ve parametre tanımları. **Tier katalogda sabittir
+  ve kaynaktan bağımsızdır** (CB 6): LLM kaynaklı komut tier'ını asla düşüremez.
+- **4 kapılı zincir** (CB 5), deterministik sırayla, ilk hatada durur: (1) katalog+şema — sıkı
+  mod: eksik alan, tip hatası, **fazladan alan**, enum dışı, metin >40, kontrol karakteri hepsi
+  `SchemaViolation`; (2) parametre bandı — 46 bant `balance/command.bands.json`'dan, **bant
+  anahtarı tanımsızsa sessizce GEÇMEZ**, yapılandırma hatası da reddir; (3) bağlam/sahiplik/
+  kaynak/hak — `IValidationContext` arayüzü (uygulamaları K2-K5 ile gelir; bus modüllere
+  bağımlı olmaz, modüller bus'a bağlanır); (4) rate limit — CB 5.1 sınıf tablosu, kayan pencere.
+- **JSON sınırı — ME 3.3 `BalanceHash` deseninin aynısı:** çekirdek JSON parse etmez; host ham
+  payload'ı ayrıştırıp `IPayloadView` (alan adları + tipli okuyucular) olarak verir, şema
+  sıkılığı çekirdekte denetlenir. Böylece "spec JSON Schema diyor ama çekirdek bağımlılıksız
+  kalmalı" gerilimi mimari değişmezi bozmadan çözülür.
+- **Rate limit:** sınıf başına ÇOKLU pencere (Economic 20/dk **ve** 200/saat), kullanıcı yalıtımı,
+  AbuseFlag (5 dk içinde 3 red → denetim loguna sinyal, CB 5.1). **LLM kaynağı sınıfı düşürmez,
+  EKLER:** LLM'den gelen komut hem kendi sınıfının hem ModB penceresinin limitindedir.
+  Zaman DIŞARIDAN verilir (`DateTime.Now` yok) — test edilebilirlik + determinizm.
+- **Idempotency (CB 8.1):** `CommandId` 24 saatlik pencerede; aynı Id ikinci kez YÜRÜTÜLMEZ,
+  önceki yanıt aynen döner. **Tasarım notu:** idempotency doğrulamadan ÖNCEdir — yeniden
+  doğrulamak, aradaki durum değişimi yüzünden aynı komuta farklı yanıt üretebilir ve retry'yi
+  güvensiz kılardı. RED de idempotenttir (düzeltilmiş payload'la aynı Id gelirse eski red döner).
+- **Kapılar (7):** `K1KatalogTamligi` (32 aksiyon, her bantlı parametrenin bandı balance'ta VAR) ·
+  `K1SemaSikiligi` (7 senaryo) · `K1BantZorlamasi` (**59 bantlı parametrenin TAMAMI** alt sınırda
+  reddediliyor — tek tek değil, katalog taranarak) · `K1BaglamKapisi` (maç↔hub ayrımı) ·
+  `K1RateLimit` · `K1Idempotency` · `K1RedDeterminizmi` (aynı girdi=aynı sebep, kapı sırası,
+  tier kaynaktan bağımsız).
+
 ## Bekleyen kararlar
 - ~~ME 13.4 upset büyüklüğü~~ → **KARAR (2026-08-19, Atilla): (d) HİBRİT.** Dört seçenek
   sunuldu — (a) tam zincir normalizasyonu (2 dilim motor işi), (b) yalnız hedef revizyonu

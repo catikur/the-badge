@@ -4,6 +4,9 @@ using TheBadge.Sim.Commands;
 using TheBadge.Sim.Core;
 using TheBadge.Sim.Determinism;
 using TheBadge.Sim.Match;
+using System.Collections.Generic;
+using TheBadge.CommandBus;
+using TheBadge.Sim.Commands;
 
 // Bağımlılıksız determinizm kapısı — CI ve yerel geliştirme her commit öncesi koşar.
 // Kural (CLAUDE.md): Bu program yeşil değilse commit YOK.
@@ -1931,6 +1934,238 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             if (kor.Length > 0) failures += Fail("M17ConfigHashAyirtEdici", $"şu alanlar hash'i DEĞİŞTİRMİYOR: {kor}");
             else Pass("M17ConfigHashAyirtEdici(9 alan: sürüm·lod·balance·chaos·hava·zemin·rüzgar·hakem·kadro)");
         }
+    }
+}
+
+// 24) FAZ 04 K1 — COMMAND BUS ÇEKİRDEĞİ (CB Spec 3-6, 8)
+// Tek Kapı'nın hub ucu. Katalog + 4 kapılı doğrulama + rate limit + idempotency.
+{
+    var cbOpts = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+    string bandPath = System.IO.Path.Combine(
+        System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json")), "command.bands.json");
+    using var bandDoc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(bandPath));
+    var bandKok = bandDoc.RootElement;
+    var bands = new TheBadge.Checks.TestBands();
+    foreach (var b in bandKok.GetProperty("bantlar").EnumerateObject())
+    {
+        var arr = b.Value;
+        bands.Add(b.Name, arr[0].GetDouble(), arr[1].GetDouble());
+    }
+
+    // 24a) KATALOG TAMLIĞI — CB 4: 32 aksiyon; her aksiyonun tier/bağlam/sınıfı ve her sayısal
+    // parametrenin balance'ta BANDI olmalı. Bant anahtarı eksikse doğrulama sessizce geçmez
+    // (Validator ParamOutOfBand döner) — ama bunu CI'da ÖNCEDEN yakalamak daha ucuz.
+    {
+        string eksikBant = "", bosBaglam = "";
+        int paramSayisi = 0;
+        foreach (var a in Catalog.Actions)
+        {
+            if (a.Context == TheBadge.CommandBus.Context.None) bosBaglam += a.ActionType + " ";
+            foreach (var pd in a.Params)
+            {
+                paramSayisi++;
+                if (pd.BandKey != null && !bands.Has(pd.BandKey)) eksikBant += a.ActionType + "." + pd.Name + " ";
+                if (pd.Type == ParamType.Enum && (pd.EnumValues == null || pd.EnumValues.Length == 0))
+                    eksikBant += a.ActionType + "." + pd.Name + "(enum boş) ";
+            }
+        }
+        Console.WriteLine($"[info] K1 katalog: {Catalog.Count} aksiyon · {paramSayisi} parametre · " +
+                          $"{bandKok.GetProperty("bantlar").EnumerateObject().Count()} bant tanımı");
+        if (Catalog.Count != 32)
+            failures += Fail("K1KatalogTamligi", $"{Catalog.Count} aksiyon (CB 4 tablosu 32 diyor)");
+        else if (eksikBant.Length > 0 || bosBaglam.Length > 0)
+            failures += Fail("K1KatalogTamligi", $"eksik bant: {eksikBant}· boş bağlam: {bosBaglam}");
+        else Pass($"K1KatalogTamligi(32 aksiyon, {paramSayisi} parametre, bant/enum tanımları tam)");
+    }
+
+    // Ortak kurulum
+    var rlCfg = new Dictionary<RateClass, RateLimitCfg[]>();
+    foreach (var r in bandKok.GetProperty("rateLimit").EnumerateObject())
+    {
+        var list = new List<RateLimitCfg>();
+        foreach (var w in r.Value.EnumerateArray()) list.Add(new RateLimitCfg(w[0].GetInt32(), w[1].GetInt64() * 1000));
+        rlCfg[(RateClass)Enum.Parse(typeof(RateClass), r.Name)] = list.ToArray();
+    }
+    int abuseEsik = bandKok.GetProperty("abuse").GetProperty("esik").GetInt32();
+    long abusePen = bandKok.GetProperty("abuse").GetProperty("pencereSn").GetInt64() * 1000;
+
+    CommandEnvelope Env(string action, long user = 7, uint tick = 0, CommandSource src = CommandSource.UI, Guid? id = null)
+        => new CommandEnvelope
+        {
+            CommandId = id ?? Guid.NewGuid(), CatalogVersion = Catalog.Version, Source = src,
+            ActionType = action, IssuedAtUnixMs = 1_700_000_000_000L, MatchTick = tick,
+            UserId = user, SaveSlotId = 1, TeamIdx = 0, PayloadJson = new byte[0]
+        };
+    var gecerliBilet = new TheBadge.Checks.TestPayload().Set("tribun", "kuzey").Set("fiyat", 50.0);
+
+    TheBadge.Sim.Commands.RejectionReason Dogrula(CommandEnvelope e, TheBadge.Checks.TestPayload pl,
+        TheBadge.Checks.TestContext c = null, IRateLimiter rl = null)
+        => Validator.Validate(e, Catalog.Find(e.ActionType), pl, bands,
+                              c ?? new TheBadge.Checks.TestContext(), rl).Reason;
+
+    // 24b) ŞEMA SIKILIĞI — CB 3.2: eksik alan, tip hatası, FAZLADAN alan, enum dışı,
+    // metin uzunluğu, kontrol karakteri; hepsi SchemaViolation.
+    {
+        var senaryolar = new (string ad, TheBadge.Checks.TestPayload pl, RejectionReason bek)[]
+        {
+            ("geçerli",        gecerliBilet.Copy(), RejectionReason.None),
+            ("eksik alan",     gecerliBilet.Copy().Remove("fiyat"), RejectionReason.SchemaViolation),
+            ("fazladan alan",  gecerliBilet.Copy().Set("ekstra", 1), RejectionReason.SchemaViolation),
+            ("tip hatası",     gecerliBilet.Copy().Set("fiyat", "elli"), RejectionReason.SchemaViolation),
+            ("enum dışı",      gecerliBilet.Copy().Set("tribun", "kuzeydogu"), RejectionReason.SchemaViolation),
+        };
+        string hata = "";
+        foreach (var (ad, pl, bek) in senaryolar)
+        {
+            var got = Dogrula(Env("tycoon.set_ticket_price"), pl);
+            if (got != bek) hata += $"{ad}: {got}≠{bek} ";
+        }
+        // metin uzunluğu (≤40) ve kontrol karakteri — squad.save_tactic_preset
+        var uzun = new TheBadge.Checks.TestPayload().Set("ad", new string('a', 41)).Set("slot", 3);
+        if (Dogrula(Env("squad.save_tactic_preset"), uzun) != RejectionReason.SchemaViolation) hata += "uzun metin geçti ";
+        var kontrol = new TheBadge.Checks.TestPayload().Set("ad", "kotu\u0007ad").Set("slot", 3);
+        if (Dogrula(Env("squad.save_tactic_preset"), kontrol) != RejectionReason.SchemaViolation) hata += "kontrol karakteri geçti ";
+        // bilinmeyen aksiyon + desteklenmeyen katalog sürümü
+        if (Dogrula(Env("tycoon.bilinmeyen"), gecerliBilet.Copy()) != RejectionReason.UnknownAction) hata += "bilinmeyen aksiyon ";
+        var eskiSurum = Env("tycoon.set_ticket_price") with { CatalogVersion = 99 };
+        if (Dogrula(eskiSurum, gecerliBilet.Copy()) != RejectionReason.UnsupportedCatalogVersion) hata += "sürüm kapısı ";
+        if (hata.Length > 0) failures += Fail("K1SemaSikiligi", hata);
+        else Pass("K1SemaSikiligi(7 senaryo: eksik·fazladan·tip·enum·uzunluk·kontrol karakteri·sürüm)");
+    }
+
+    // 24c) BANT ZORLAMASI — CB 5 kapı 2: her sayısal parametrenin sınırları balance'tan.
+    {
+        string hata = "";
+        // bilet fiyatı bandı 1-500: sınır içi geçer, sınır dışı reddedilir
+        foreach (var (deger, bek) in new (double, RejectionReason)[]
+                 { (1.0, RejectionReason.None), (500.0, RejectionReason.None),
+                   (0.99, RejectionReason.ParamOutOfBand), (500.01, RejectionReason.ParamOutOfBand) })
+        {
+            var got = Dogrula(Env("tycoon.set_ticket_price"), gecerliBilet.Copy().Set("fiyat", deger));
+            if (got != bek) hata += $"fiyat {deger}: {got}≠{bek} ";
+        }
+        // KATALOĞUN TAMAMI için sınır taraması: her bantlı parametrede min-1 reddedilmeli
+        int tarandi = 0;
+        foreach (var a in Catalog.Actions)
+        {
+            var pl = new TheBadge.Checks.TestPayload();
+            foreach (var pd in a.Params)
+            {
+                if (pd.Type == ParamType.Enum) pl.Set(pd.Name, pd.EnumValues[0]);
+                else if (pd.Type == ParamType.Text) pl.Set(pd.Name, "ad");
+                else if (pd.Type == ParamType.Bool) pl.Set(pd.Name, true);
+                else { bands.TryGetBand(pd.BandKey, out double mn, out _); pl.Set(pd.Name, mn); }
+            }
+            uint tick = (a.Context & TheBadge.CommandBus.Context.Match) != 0
+                        && (a.Context & TheBadge.CommandBus.Context.Hub) == 0 ? 100u : 0u;
+            if (Dogrula(Env(a.ActionType, tick: tick), pl) != RejectionReason.None)
+                hata += a.ActionType + "(min geçmedi) ";
+            foreach (var pd in a.Params)
+            {
+                if (pd.BandKey == null) continue;
+                bands.TryGetBand(pd.BandKey, out double mn, out _);
+                var kotu = pl.Copy().Set(pd.Name, mn - 1);
+                if (Dogrula(Env(a.ActionType, tick: tick), kotu) != RejectionReason.ParamOutOfBand)
+                    hata += a.ActionType + "." + pd.Name + "(alt sınır) ";
+                tarandi++;
+            }
+        }
+        if (hata.Length > 0) failures += Fail("K1BantZorlamasi", hata);
+        else Pass($"K1BantZorlamasi({tarandi} bantlı parametrenin tamamı alt sınırda reddediliyor)");
+    }
+
+    // 24d) BAĞLAM KAPISI — maç komutu hub'dan, hub komutu maçtan gelemez (CB 4 "Bağlam" sütunu)
+    {
+        string hata = "";
+        var subPl = new TheBadge.Checks.TestPayload().Set("cikanId", 5).Set("girenId", 2);
+        if (Dogrula(Env("match.substitution", tick: 0), subPl) != RejectionReason.StateConflict) hata += "maç komutu hub'dan geçti ";
+        if (Dogrula(Env("match.substitution", tick: 100), subPl) != RejectionReason.None) hata += "maç komutu maçta geçmedi ";
+        var kredi = new TheBadge.Checks.TestPayload().Set("miktar", 50000.0).Set("vadeAy", 24);
+        if (Dogrula(Env("tycoon.take_loan", tick: 100), kredi) != RejectionReason.StateConflict) hata += "hub komutu maçtan geçti ";
+        // kapı 3 sebebi zincirden aynen döner
+        var ctxRed = new TheBadge.Checks.TestContext { Next = RejectionReason.InsufficientFunds };
+        if (Dogrula(Env("tycoon.take_loan"), kredi, ctxRed) != RejectionReason.InsufficientFunds) hata += "kapı 3 sebebi kaybolıyor ";
+        if (hata.Length > 0) failures += Fail("K1BaglamKapisi", hata);
+        else Pass("K1BaglamKapisi(maç↔hub ayrımı + kapı 3 sebebi korunuyor)");
+    }
+
+    // 24e) RATE LIMIT — CB 5.1 sınıf tablosu + AbuseFlag
+    {
+        var rl = new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen);
+        long t0 = 1_700_000_000_000L;
+        int gecen = 0;
+        for (int i = 0; i < 25; i++)
+            if (rl.Allow(42, RateClass.Economic, CommandSource.UI, t0 + i)) gecen++;
+        // Economic: 20/dk → ilk 20 geçer, kalan 5 reddedilir
+        string hata = gecen == 20 ? "" : $"ekonomik sınıf {gecen}/20 geçti ";
+        // pencere kayınca yeniden açılır
+        if (!rl.Allow(42, RateClass.Economic, CommandSource.UI, t0 + 61_000)) hata += "pencere kaymadı ";
+        // AbuseFlag: 5 dk içinde 3 red
+        if (!rl.ConsumeAbuseFlag(42, t0 + 100)) hata += "AbuseFlag düşmedi ";
+        if (rl.ConsumeAbuseFlag(42, t0 + 100)) hata += "AbuseFlag iki kez tüketildi ";
+        // farklı kullanıcı etkilenmez
+        if (!rl.Allow(43, RateClass.Economic, CommandSource.UI, t0)) hata += "kullanıcı sızması ";
+        // LLM kaynağı ModB penceresine DE tabidir
+        var rl2 = new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen);
+        int llmGecen = 0;
+        for (int i = 0; i < 15; i++)
+            if (rl2.Allow(44, RateClass.Tactic, CommandSource.LLM, t0 + i)) llmGecen++;
+        if (llmGecen != 10) hata += $"LLM ModB sınırı {llmGecen}/10 ";
+        if (hata.Length > 0) failures += Fail("K1RateLimit", hata);
+        else Pass("K1RateLimit(sınıf penceresi · kayma · AbuseFlag · kullanıcı yalıtımı · LLM ModB sınırı)");
+    }
+
+    // 24f) IDEMPOTENCY — CB 8.1: aynı CommandId ikinci kez YÜRÜTÜLMEZ, önceki yanıt döner
+    {
+        var idem = new IdempotencyStore(24L * 3600 * 1000);
+        var exec = new TheBadge.Checks.TestExecutor();
+        var bus = new TheBadge.CommandBus.CommandBus(bands, new TheBadge.Checks.TestContext(),
+                      new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen), idem);
+        var id = Guid.NewGuid();
+        var e1 = Env("tycoon.set_ticket_price", id: id);
+        var r1 = bus.Submit(e1, gecerliBilet.Copy(), exec);
+        var r2 = bus.Submit(e1, gecerliBilet.Copy(), exec);
+        string hata = "";
+        if (!r1.Ok || r1.Replayed) hata += "ilk komut kabul edilmedi ";
+        if (!r2.Ok || !r2.Replayed) hata += "ikinci komut önceki yanıtı döndürmedi ";
+        if (exec.Executions != 1) hata += $"yürütme {exec.Executions}≠1 ";
+        // RED de idempotenttir: aynı Id ile gelen kötü komut yeniden doğrulanmaz
+        var idem2 = new IdempotencyStore();
+        var exec2 = new TheBadge.Checks.TestExecutor();
+        var bus2 = new TheBadge.CommandBus.CommandBus(bands, new TheBadge.Checks.TestContext(),
+                       new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen), idem2);
+        var idR = Guid.NewGuid();
+        var kotu = Env("tycoon.set_ticket_price", id: idR);
+        var k1 = bus2.Submit(kotu, gecerliBilet.Copy().Set("fiyat", 9999.0), exec2);
+        var k2 = bus2.Submit(kotu, gecerliBilet.Copy().Set("fiyat", 50.0), exec2);   // düzeltilmiş payload!
+        if (k1.Reason != RejectionReason.ParamOutOfBand) hata += "bant reddi yok ";
+        if (k2.Reason != RejectionReason.ParamOutOfBand || !k2.Replayed) hata += "red idempotent değil ";
+        if (exec2.Executions != 0) hata += "reddedilen komut yürütüldü ";
+        if (hata.Length > 0) failures += Fail("K1Idempotency", hata);
+        else Pass("K1Idempotency(tek yürütme · önceki yanıt · red de idempotent)");
+    }
+
+    // 24g) RED DETERMİNİZMİ + TIER BÜTÜNLÜĞÜ
+    // CB 5: kapılar deterministik sırayla, ilk hatada durur → aynı zarf + aynı bağlam = aynı sebep.
+    // CB 6: tier KATALOGDAN gelir, KAYNAKTAN değil — LLM komutu tier'ını asla düşüremez.
+    {
+        string hata = "";
+        var bozuk = gecerliBilet.Copy().Set("fiyat", 9999.0).Set("ekstra", 1);
+        var sebepKumesi = new HashSet<RejectionReason>();
+        for (int i = 0; i < 5; i++) sebepKumesi.Add(Dogrula(Env("tycoon.set_ticket_price"), bozuk));
+        if (sebepKumesi.Count != 1) hata += "aynı zarf farklı sebepler ";
+        // Sıra: şema (kapı 1) banttan (kapı 2) ÖNCE gelir — iki hata birden varken şema kazanır
+        if (Dogrula(Env("tycoon.set_ticket_price"), bozuk) != RejectionReason.SchemaViolation)
+            hata += "kapı sırası bozuk ";
+        foreach (var a in Catalog.Actions)
+        {
+            var ui = TheBadge.CommandBus.CommandBus.RequiredTier(a.ActionType);
+            if (ui != a.Tier) hata += a.ActionType + "(tier sapması) ";
+        }
+        if (TheBadge.CommandBus.CommandBus.RequiredTier("bilinmeyen.aksiyon") != Tier.T2)
+            hata += "bilinmeyen aksiyon en yüksek onayı istemiyor ";
+        if (hata.Length > 0) failures += Fail("K1RedDeterminizmi", hata);
+        else Pass("K1RedDeterminizmi(aynı girdi=aynı sebep · kapı sırası · tier kaynaktan bağımsız)");
     }
 }
 
