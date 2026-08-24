@@ -2303,25 +2303,25 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         {
             var st9 = new IdempotencyStore();
             var id9 = Guid.NewGuid();
-            var r9a = st9.TryReserve(id9, HostSaat, out _, out var tokA);
+            var r9a = st9.TryReserve(7L, id9, HostSaat, out _, out var tokA);
             // uzun süre sonra bile İKİNCİ rezervasyon verilmez (ilk çağrı hâlâ yürütüyor olabilir)
-            var r9b = st9.TryReserve(id9, HostSaat + 10L * 60 * 60 * 1000, out _, out var tokB);
+            var r9b = st9.TryReserve(7L, id9, HostSaat + 10L * 60 * 60 * 1000, out _, out var tokB);
             if (r9a != ReserveResult.Reserved) hata += "ilk rezervasyon alınamadı ";
             if (r9b != ReserveResult.InFlight) hata += "uçuş süresi sonrası DEVRALMA yapıldı ";
             if (tokB.IsValid) hata += "devralanmış gibi jeton verildi ";
             // Yabancı jetonla Complete/Release hiçbir şey yapmaz
-            if (st9.Complete(id9, new ReservationToken(999999), HostSaat, new CommandOutcome(RejectionReason.None, null)))
+            if (st9.Complete(7L, id9, new ReservationToken(999999), HostSaat, new CommandOutcome(RejectionReason.None, null)))
                 hata += "yabancı jeton Complete edebildi ";
-            if (st9.Release(id9, new ReservationToken(999999))) hata += "yabancı jeton Release edebildi ";
+            if (st9.Release(7L, id9, new ReservationToken(999999))) hata += "yabancı jeton Release edebildi ";
             // Sahip kapatabilir
-            if (!st9.Complete(id9, tokA, HostSaat, new CommandOutcome(RejectionReason.None, null)))
+            if (!st9.Complete(7L, id9, tokA, HostSaat, new CommandOutcome(RejectionReason.None, null)))
                 hata += "sahip Complete edemedi ";
             // Asılı rezervasyon YALNIZ Prune ile açılır (operatör denetimi)
             var st10 = new IdempotencyStore();
             var id10 = Guid.NewGuid();
-            st10.TryReserve(id10, HostSaat, out _, out _);
+            st10.TryReserve(7L, id10, HostSaat, out _, out _);
             if (st10.Prune(HostSaat + 60_000, asiliRezervasyonMs: 30_000) != 1) hata += "asılı rezervasyon Prune ile açılmıyor ";
-            if (st10.TryReserve(id10, HostSaat + 60_000, out _, out _) != ReserveResult.Reserved)
+            if (st10.TryReserve(7L, id10, HostSaat + 60_000, out _, out _) != ReserveResult.Reserved)
                 hata += "Prune sonrası rezervasyon alınamadı ";
         }
 
@@ -2417,6 +2417,40 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             foreach (var k in casus.AbuseKimlikleri) if (k != 7L) hata += $"AbuseFlag kimliği {k} ";
         }
 
+        // (A4) KISA DEVRE YOLLARI (ikinci inceleme bulgusu). Kimlik denetimi kapı 1'deydi, ama
+        // `Submit` idempotency kısa devresinde doğrulamaya HİÇ ulaşmadan dönüyordu: başka bir
+        // oturumun `CommandId`'sini bilen biri onun önbellekli yanıtını okuyabilir, uçuş durumunu
+        // yoklayabilirdi. Daha kötüsü ÇAKIŞMA: aynı Guid'i kullanan ikinci kullanıcının komutu
+        // hiç çalışmadan ötekinin sonucunu alırdı. İki katmanlı çözüm sınanıyor.
+        {
+            var idemX = new IdempotencyStore();
+            var busX = new TheBadge.CommandBus.CommandBus(bands, new TheBadge.Checks.TestContext(),
+                           new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen), idemX);
+            var execX = new TheBadge.Checks.TestExecutor();
+            var ortakId = Guid.NewGuid();
+
+            // Kullanıcı 7 komutu yürütür
+            var o7 = busX.Submit(Env("tycoon.set_ticket_price", user: 7, id: ortakId), gecerliBilet.Copy(), execX, HostSaat, 7L);
+            if (!o7.Ok || execX.Executions != 1) hata += "ilk kullanıcı yürütemedi ";
+            // Kullanıcı 8 AYNI Id ile gelir: ötekinin yanıtını ALMAMALI, kendi komutu YÜRÜTÜLMELİ
+            var o8 = busX.Submit(Env("tycoon.set_ticket_price", user: 8, id: ortakId), gecerliBilet.Copy(), execX, HostSaat, 8L);
+            if (o8.Replayed) hata += "KULLANICILAR ARASI REPLAY: 8, 7'nin yanıtını aldı ";
+            if (execX.Executions != 2) hata += "ikinci kullanıcının komutu yürütülmedi ";
+            // Kendi retry'si hâlâ idempotent
+            var o7b = busX.Submit(Env("tycoon.set_ticket_price", user: 7, id: ortakId), gecerliBilet.Copy(), execX, HostSaat, 7L);
+            if (!o7b.Replayed || execX.Executions != 2) hata += "kendi retry'si idempotent değil ";
+
+            // Uyuşmayan zarf REZERVASYON bile almamalı (kısa devreden önce düşer)
+            var idemY = new IdempotencyStore();
+            var busY = new TheBadge.CommandBus.CommandBus(bands, new TheBadge.Checks.TestContext(),
+                           new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen), idemY);
+            var execY = new TheBadge.Checks.TestExecutor();
+            var rY = busY.Submit(Env("tycoon.set_ticket_price", user: 99), gecerliBilet.Copy(), execY, HostSaat, 7L);
+            if (rY.Reason != RejectionReason.NotOwned) hata += $"kısa devre öncesi kimlik reddi yok ({rY.Reason}) ";
+            if (idemY.Count != 0) hata += $"uyuşmayan zarf rezervasyon aldı ({idemY.Count}) ";
+            if (execY.Executions != 0) hata += "uyuşmayan zarf yürütüldü ";
+        }
+
         // (B1) İKİ PENCERE: doğrulamada düşen kısa, YÜRÜTÜLEN uzun pencerede tutulur
         {
             long redMs = redDk * 60_000L;
@@ -2428,16 +2462,16 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             if (busR.Submit(Env("tycoon.set_ticket_price", id: idKotu), semaBozuk.Copy(), execR, HostSaat, 7L).Reason
                 != RejectionReason.SchemaViolation) hata += "şema reddi beklenmedi ";
             // kısa pencere İÇİNDE hâlâ idempotent (sözleşme korunuyor)
-            if (idemR.TryReserve(idKotu, HostSaat + redMs / 2, out _, out _) != ReserveResult.Completed)
+            if (idemR.TryReserve(7L, idKotu, HostSaat + redMs / 2, out _, out _) != ReserveResult.Completed)
                 hata += "red kısa pencere içinde idempotent değil ";
             // kısa pencere DIŞINDA kayıt düşer
-            if (idemR.TryReserve(idKotu, HostSaat + redMs + 1, out _, out _) != ReserveResult.Reserved)
+            if (idemR.TryReserve(7L, idKotu, HostSaat + redMs + 1, out _, out _) != ReserveResult.Reserved)
                 hata += "red kaydı kısa pencerede düşmüyor ";
             var idIyi = Guid.NewGuid();
             if (!busR.Submit(Env("tycoon.set_ticket_price", id: idIyi), gecerliBilet.Copy(), execR, HostSaat, 7L).Ok)
                 hata += "geçerli komut reddedildi ";
             // YÜRÜTÜLEN komut aynı anda hâlâ uzun pencerede
-            if (idemR.TryReserve(idIyi, HostSaat + redMs + 1, out _, out _) != ReserveResult.Completed)
+            if (idemR.TryReserve(7L, idIyi, HostSaat + redMs + 1, out _, out _) != ReserveResult.Completed)
                 hata += "yürütülen komut kısa pencereye yazıldı ";
         }
 
@@ -2462,7 +2496,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         }
 
         if (hata.Length > 0) failures += Fail("K1GuvenlikTuru", hata);
-        else Pass($"K1GuvenlikTuru(2 MEDIUM: kota kimliği oturumdan — döndürme inert, AbuseFlag oturumda · " +
+        else Pass($"K1GuvenlikTuru(3 MEDIUM: kota kimliği oturumdan — döndürme inert, AbuseFlag oturumda · " +
+                  $"kısa devre yolları da kimlik altında, depo (kullanıcı,Id) anahtarlı · " +
                   $"idempotency iki pencere ({redDk} dk red / 24 sa yürütülen) + {budamaDk} dk amorti budama)");
     }
 }

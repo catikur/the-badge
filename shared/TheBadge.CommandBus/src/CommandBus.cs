@@ -105,10 +105,19 @@ namespace TheBadge.CommandBus
             if (executor == null) throw new ArgumentNullException(nameof(executor),
                 "Yürütücüsüz Submit durum değiştirmez ama başarı raporlar; yalnız doğrulama için Validate kullanın.");
 
+            // KİMLİK, rezervasyondan ÖNCE (inceleme bulgusu, 2026-08-24): denetim kapı 1'deydi,
+            // ama `Submit` idempotency kısa devresinde `Validator.Validate`e HİÇ ulaşmadan dönüyor.
+            // Yani kimlik sözleşmesi tam da kısa devre yollarında geçerli değildi. Artık zarf
+            // oturumla ayrışıyorsa rezervasyon bile alınmaz. (Denetim `Validator`da DA durur:
+            // ön-doğrulama yolu için gereklidir — savunma iki katmanlı.)
+            if (env.UserId != authenticatedUserId)
+                return new CommandOutcome(RejectionReason.NotOwned, "kimlik uyuşmazlığı");
+
             BelkiBuda(receivedAtUnixMs);
 
-            // 1) ATOMİK rezervasyon (CB 8.1) — eşzamanlı iki çağrı aynı Id'yi yürütemez
-            var rez = idem.TryReserve(env.CommandId, receivedAtUnixMs, out var onceki, out var jeton);
+            // 1) ATOMİK rezervasyon (CB 8.1) — eşzamanlı iki çağrı aynı Id'yi yürütemez.
+            // Anahtar (KULLANICI, CommandId): başka bir oturumun kaydına erişilemez.
+            var rez = idem.TryReserve(authenticatedUserId, env.CommandId, receivedAtUnixMs, out var onceki, out var jeton);
             if (rez == ReserveResult.Completed)
             {
                 audit?.Record(env, onceki, false, receivedAtUnixMs);
@@ -130,7 +139,7 @@ namespace TheBadge.CommandBus
                 {
                     var red = new CommandOutcome(v.Reason, v.Detail);
                     // yurutuldu: FALSE — doğrulamada düşen komut KISA dedup penceresine yazılır
-                    idem.Complete(env.CommandId, jeton, receivedAtUnixMs, red, yurutuldu: false);
+                    idem.Complete(authenticatedUserId, env.CommandId, jeton, receivedAtUnixMs, red, yurutuldu: false);
                     bool abuse = v.Reason == RejectionReason.RateLimited
                                  && rate != null && rate.ConsumeAbuseFlag(authenticatedUserId, receivedAtUnixMs);
                     audit?.Record(env, red, abuse, receivedAtUnixMs);   // red durum değiştirmez
@@ -140,12 +149,12 @@ namespace TheBadge.CommandBus
                 // 3) Yürütme — denetim kaydı YÜRÜTME TRANSACTION'ININ İÇİNDE (CB 5.2)
                 var yr = executor.Execute(env, action, payload, new AuditRecord(env, receivedAtUnixMs), out string detay);
                 var sonuc = new CommandOutcome(yr, yr == RejectionReason.None ? null : (detay ?? env.ActionType));
-                idem.Complete(env.CommandId, jeton, receivedAtUnixMs, sonuc);
+                idem.Complete(authenticatedUserId, env.CommandId, jeton, receivedAtUnixMs, sonuc);
                 return sonuc;
             }
             catch
             {
-                idem.Release(env.CommandId, jeton);   // yalnız KENDİ rezervasyonumuzu bırakırız
+                idem.Release(authenticatedUserId, env.CommandId, jeton);   // yalnız KENDİ rezervasyonumuzu bırakırız
                 throw;
             }
         }

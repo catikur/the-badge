@@ -1101,6 +1101,20 @@ Kapı 4'e hiç ulaşmadığından rate limit tüketmez, ama yine de kayıt açar
   TÜM alanları birlikte taramalıydım. İki alanı taşıyıp üçüncüsünü bırakmak, kararın kendisini
   değil yalnız iki örneğini uygulamak demek.
 
+**(C) Kimlik denetimi KISA DEVRE yollarında geçerli değildi** (üçüncü MEDIUM, aynı gün, benim
+(A) düzeltmemin içinde). Denetimi kapı 1'e koymuştum; oysa `Submit` idempotency kısa devresinde
+(`Completed`/`InFlight`) `Validator.Validate`e HİÇ ulaşmadan dönüyor. Yani sözleşme tam da onu
+atlayan yollarda yoktu. Kayıt yalnız `CommandId` ile anahtarlı olduğundan sonuç bilgi sızıntısından
+ibaret de değildi: aynı Guid'i kullanan İKİNCİ kullanıcının komutu hiç çalışmadan ötekinin
+önbellekli yanıtını alıyor, yani sessizce hiçbir şey yapmadan "başarılı" görünüyordu.
+- **Çözüm iki katmanlı:** (1) depo anahtarı artık **(KULLANICI, CommandId)** — başka bir oturumun
+  kaydına erişmek yapısal olarak imkânsız, uçuş durumu da yoklanamaz; (2) kimlik denetimi
+  `Submit`in EN BAŞINA, rezervasyondan önce alındı (denetim `Validator`da DA duruyor: ön-doğrulama
+  yolu için gerekli — savunma iki katmanlı). Kendi retry'si idempotent kalıyor.
+- **Ders (öncekinin devamı):** bir denetimi "kapı 1'e koydum" demek, o kapıya ULAŞMAYAN yolların
+  denetimsiz olduğunu ölçmediğim sürece yeterli değil. Erken dönüş yolları da sözleşmenin
+  parçasıdır.
+
 ### K2 inceleme turu — ✅ TAMAM (2026-08-24)
 Bugbot K2'de 5 bulgu çıkardı (3 HIGH, 2 MEDIUM); beşi de haklı. İkisi tam da raporumda en
 kendinden emin anlattığım yerlerdeydi — atomiklik garantisi ve "üç ayrı sahiplik ilişkisi" tablosu.

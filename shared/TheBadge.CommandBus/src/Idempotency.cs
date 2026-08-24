@@ -48,8 +48,14 @@ namespace TheBadge.CommandBus
     public sealed class IdempotencyStore
     {
         readonly object kilit = new object();
-        readonly Dictionary<Guid, (long at, bool done, ulong tok, long pencere, CommandOutcome outcome)> kayit
-            = new Dictionary<Guid, (long, bool, ulong, long, CommandOutcome)>();
+        /// <summary>Anahtar (KULLANICI, CommandId) — yalnız CommandId DEĞİL. `CommandId` istemcinin
+        /// ürettiği bir Guid'dir; tek başına anahtar olduğunda kayıt SÜREÇ GENELİNDE paylaşılır ve
+        /// başka bir oturum aynı Id ile gelirse ötekinin ÖNBELLEKLİ YANITINI alır — kendi komutu
+        /// sessizce hiç çalışmadan "başarılı" görünür (inceleme bulgusu, 2026-08-24). Kimlik
+        /// anahtara girince bu çakışma yapısal olarak imkânsızdır; uçuşta olan başka bir oturumun
+        /// durumu da sorgulanamaz.</summary>
+        readonly Dictionary<(long user, Guid id), (long at, bool done, ulong tok, long pencere, CommandOutcome outcome)> kayit
+            = new Dictionary<(long, Guid), (long, bool, ulong, long, CommandOutcome)>();
         readonly long pencereMs;      // YÜRÜTÜLEN komutlar için (CB 8.1: 24 saat)
         readonly long redPencereMs;   // yürütmeye HİÇ ulaşmamış redler için (aşağıdaki not)
         ulong sonrakiJeton = 1;
@@ -75,18 +81,19 @@ namespace TheBadge.CommandBus
         /// korumak için yazılmış kolda deliniyordu. Canlılık uğruna GÜVENLİK feda edilmez:
         /// asılı kalan rezervasyon `Prune` ile (operatör denetiminde) temizlenir, o ana kadar
         /// retry'ler `DuplicateCommand` alır — istemci için güvenli, durum için bozulmasız.</summary>
-        public ReserveResult TryReserve(Guid commandId, long nowUnixMs,
+        public ReserveResult TryReserve(long userId, Guid commandId, long nowUnixMs,
                                         out CommandOutcome onceki, out ReservationToken token)
         {
             onceki = default; token = default;
+            var anahtar = (userId, commandId);
             lock (kilit)
             {
-                if (kayit.TryGetValue(commandId, out var k))
+                if (kayit.TryGetValue(anahtar, out var k))
                 {
                     if (k.done)
                     {
                         if (nowUnixMs - k.at < k.pencere) { onceki = k.outcome.AsReplay(); return ReserveResult.Completed; }
-                        kayit.Remove(commandId);            // pencere doldu, yeniden yürütülebilir
+                        kayit.Remove(anahtar);              // pencere doldu, yeniden yürütülebilir
                     }
                     else
                     {
@@ -94,7 +101,7 @@ namespace TheBadge.CommandBus
                     }
                 }
                 ulong t = sonrakiJeton++;
-                kayit[commandId] = (nowUnixMs, false, t, pencereMs, default);
+                kayit[anahtar] = (nowUnixMs, false, t, pencereMs, default);
                 token = new ReservationToken(t);
                 return ReserveResult.Reserved;
             }
@@ -106,27 +113,29 @@ namespace TheBadge.CommandBus
         /// `yurutuldu` = komut yürütücüye ULAŞTI mı (sonucu ne olursa olsun). Yalnız ulaşanlar
         /// uzun dedup penceresini hak eder; doğrulamada düşenler kısa pencereye yazılır
         /// (bkz. yapıcıdaki `redPencereMs` notu).</summary>
-        public bool Complete(Guid commandId, ReservationToken token, long nowUnixMs,
+        public bool Complete(long userId, Guid commandId, ReservationToken token, long nowUnixMs,
                              CommandOutcome outcome, bool yurutuldu = true)
         {
+            var anahtar = (userId, commandId);
             lock (kilit)
             {
                 if (!token.IsValid) return false;
-                if (!kayit.TryGetValue(commandId, out var k) || k.done || k.tok != token.Value) return false;
-                kayit[commandId] = (nowUnixMs, true, k.tok, yurutuldu ? pencereMs : redPencereMs, outcome);
+                if (!kayit.TryGetValue(anahtar, out var k) || k.done || k.tok != token.Value) return false;
+                kayit[anahtar] = (nowUnixMs, true, k.tok, yurutuldu ? pencereMs : redPencereMs, outcome);
                 return true;
             }
         }
 
         /// <summary>Rezervasyonu geri alır (yürütme sırasında istisna). Jeton eşleşmezse
         /// hiçbir şey yapmaz — gecikmiş bir çağrı başkasının rezervasyonunu silemez.</summary>
-        public bool Release(Guid commandId, ReservationToken token)
+        public bool Release(long userId, Guid commandId, ReservationToken token)
         {
+            var anahtar = (userId, commandId);
             lock (kilit)
             {
                 if (!token.IsValid) return false;
-                if (!kayit.TryGetValue(commandId, out var k) || k.done || k.tok != token.Value) return false;
-                kayit.Remove(commandId);
+                if (!kayit.TryGetValue(anahtar, out var k) || k.done || k.tok != token.Value) return false;
+                kayit.Remove(anahtar);
                 return true;
             }
         }
@@ -138,7 +147,7 @@ namespace TheBadge.CommandBus
         {
             lock (kilit)
             {
-                var silinecek = new List<Guid>();
+                var silinecek = new List<(long, Guid)>();
                 foreach (var kv in kayit)
                 {
                     long yas = nowUnixMs - kv.Value.at;
