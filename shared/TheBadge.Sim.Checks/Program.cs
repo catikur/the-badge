@@ -2213,6 +2213,13 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                 hata += "maç damgalı komut hub açıkken geçti ";
             if (Dogrula(Env("squad.set_player_role", tick: 0), rolPl, soloHub) != RejectionReason.None)
                 hata += "hub damgalı komut hub açıkken geçmedi ";
+            // TERS YÖN (autofix testinden alındı — kendi kapımda eksikti): hub damgalı komut
+            // YALNIZ maç açıkken de geçmemeli. Tek yönü sınamak maskeyi yarım doğrular.
+            var soloMac = new TheBadge.Checks.TestContext { Active = TheBadge.CommandBus.Context.Match };
+            if (Dogrula(Env("squad.set_player_role", tick: 0), rolPl, soloMac) != RejectionReason.StateConflict)
+                hata += "hub damgalı komut yalnız maç açıkken geçti ";
+            if (Dogrula(Env("squad.set_player_role", tick: 100), rolPl, soloMac) != RejectionReason.None)
+                hata += "maç damgalı komut maç açıkken geçmedi ";
         }
 
         // (6) P2 — AUTO kaynağı v1'de KAPALI + tanımsız enum reddedilir (CB 2.2)
@@ -2260,6 +2267,36 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             if (!rl3.Allow(89, 0L, RateClass.Economic, CommandSource.UI, HostSaat)) hata += "ekonomik sınıf kullanıcı yalıtımı bozuk ";
         }
 
+        // (9a) İDEMPOTENCY PENCERESİ istemci saatiyle düşürülemez (autofix testinden alındı):
+        // zarfın IssuedAt'ini 24 saat ileri almak dedup kaydını düşürmemeli — pencere HOST saatiyle.
+        {
+            var idemS = new IdempotencyStore();
+            var execS = new TheBadge.Checks.TestExecutor();
+            var busS = new TheBadge.CommandBus.CommandBus(bands, new TheBadge.Checks.TestContext(),
+                           new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen), idemS);
+            var idS = Guid.NewGuid();
+            var e1S = Env("tycoon.set_ticket_price", id: idS);
+            busS.Submit(e1S, gecerliBilet.Copy(), execS, HostSaat);
+            var e2S = e1S with { IssuedAtUnixMs = HostSaat + 48L * 3600 * 1000 };   // istemci 48 saat ileri
+            var rS = busS.Submit(e2S, gecerliBilet.Copy(), execS, HostSaat + 1);
+            if (!rS.Replayed || execS.Executions != 1) hata += "istemci saati dedup penceresini düşürdü ";
+        }
+
+        // (9b) YÜRÜTME DETAYI kaybolmaz — StateConflict gerekçesi replay'e taşınır (autofix testi)
+        {
+            var idemD = new IdempotencyStore();
+            var execD = new TheBadge.Checks.TestExecutor { Result = RejectionReason.StateConflict, Detail = "inşaat slotu dolu" };
+            var busD = new TheBadge.CommandBus.CommandBus(bands, new TheBadge.Checks.TestContext(),
+                           new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen), idemD);
+            var idD = Guid.NewGuid();
+            var eD = Env("tycoon.set_ticket_price", id: idD);
+            var d1 = busD.Submit(eD, gecerliBilet.Copy(), execD, HostSaat);
+            var d2 = busD.Submit(eD, gecerliBilet.Copy(), execD, HostSaat);
+            if (d1.Reason != RejectionReason.StateConflict || d1.Detail != "inşaat slotu dolu")
+                hata += "yürütme detayı kayboldu ";
+            if (!d2.Replayed || d2.Detail != "inşaat slotu dolu") hata += "replay detayı kayboldu ";
+        }
+
         // (9) DEVRALMA YOK + JETON KORUMASI (ikinci tur inceleme bulgusu)
         {
             var st9 = new IdempotencyStore();
@@ -2295,7 +2332,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         }
 
         if (hata.Length > 0) failures += Fail("K1IncelemeDuzeltmeleri", hata);
-        else Pass("K1IncelemeDuzeltmeleri(10 bulgu, 2 tur: host saati · eşzamanlı Id · eşzamanlı rate · yürütücü zorunlu · bağlam kesişimi · AUTO reddi · audit transaction · takım kovası paylaşımı · devralma yok · jeton koruması)");
+        else Pass("K1IncelemeDuzeltmeleri(10 bulgu + 3 ek kapsam: host saati · eşzamanlı Id · eşzamanlı rate · yürütücü zorunlu · bağlam kesişimi ÇİFT YÖN · AUTO reddi · audit transaction · takım kovası paylaşımı · devralma yok · jeton koruması · dedup penceresi · yürütme detayı)");
     }
 
     // 24g) RED DETERMİNİZMİ + TIER BÜTÜNLÜĞÜ

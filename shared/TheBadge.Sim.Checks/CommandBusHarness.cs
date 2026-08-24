@@ -95,9 +95,10 @@ namespace TheBadge.Checks
         int executions;
         public int Executions => System.Threading.Volatile.Read(ref executions);
         public RejectionReason Result = RejectionReason.None;
+        public string Detail;
         public RejectionReason Execute(CommandEnvelope env, ActionDef action, IPayloadView payload,
                                        AuditRecord auditRecord, out string detail)
-        { System.Threading.Interlocked.Increment(ref executions); detail = null; return Result; }
+        { System.Threading.Interlocked.Increment(ref executions); detail = Detail; return Result; }
     }
 
     /// <summary>Denetim kaydının YÜRÜTME transaction'ının içinde geldiğini kanıtlar (CB 5.2).</summary>
