@@ -42,12 +42,13 @@ namespace TheBadge.World
     {
         readonly List<Mutation> yazmalar = new List<Mutation>();
         readonly List<WorldEvent> olaylar = new List<WorldEvent>();
+        readonly List<long> geriDegerler = new List<long>();   // Apply öncesi değerler (geri alma)
 
         public int Count => yazmalar.Count;
         public IReadOnlyList<Mutation> Mutations => yazmalar;
         public IReadOnlyList<WorldEvent> Events => olaylar;
 
-        public void Clear() { yazmalar.Clear(); olaylar.Clear(); }
+        public void Clear() { yazmalar.Clear(); olaylar.Clear(); geriDegerler.Clear(); }
 
         public void Set(MutTarget t, int index, byte field, long value) => yazmalar.Add(new Mutation(t, index, field, value, false));
         public void Add(MutTarget t, int index, byte field, long delta) => yazmalar.Add(new Mutation(t, index, field, delta, true));
@@ -62,13 +63,22 @@ namespace TheBadge.World
 
         /// <summary>ÖN DENETİM — uygulamadan önce her yazmanın hedefi ve aralığı doğrulanır.
         /// Tek bir geçersiz yazma varsa HİÇBİRİ uygulanmaz (atomiklik). Aralık taşması sessizce
-        /// kırpılmaz: byte alana 300 yazan bir handler hatası burada GÖRÜNÜR olur.</summary>
+        /// kırpılmaz: byte alana 300 yazan bir handler hatası burada GÖRÜNÜR olur.
+        ///
+        /// ZİNCİRLEME (inceleme bulgusu, 2026-08-24 — HIGH): ilk sürüm her yazmayı DEĞİŞMEMİŞ
+        /// duruma karşı denetliyordu, oysa `Apply` yazmaları SIRAYLA zincirliyor. Aynı alana iki
+        /// delta (ör. moral +30, +30; taban 60) tek tek bakıldığında bantta görünür ama zincirde
+        /// 120 yazardı — yani tam da bu metnin verdiği garanti deliniyordu. Artık her yazma,
+        /// KENDİNDEN ÖNCEKİ aynı hedefli yazmalar katlandıktan sonraki değere karşı denetlenir;
+        /// böylece her ARA sonuç da banttadır. Tarama O(n²)'dir; journal birkaç yazmalıktır
+        /// (TeamSheet.Validate'te kurulan "küçük n için yeterli" precedent'i).</summary>
         public bool Validate(GameState st, out string hata)
         {
             for (int i = 0; i < yazmalar.Count; i++)
             {
                 var m = yazmalar[i];
-                if (!Hedef(st, m, out long mevcut, out long min, out long max, out hata)) return false;
+                if (!Hedef(st, m, out long taban, out long min, out long max, out hata)) return false;
+                long mevcut = Katla(taban, i, m);
                 long yeni = m.IsDelta ? mevcut + m.Value : m.Value;
                 if (yeni < min || yeni > max)
                 { hata = $"{m.Target}[{m.Index}].{m.Field} = {yeni} aralık dışı [{min},{max}]"; return false; }
@@ -77,17 +87,50 @@ namespace TheBadge.World
             return true;
         }
 
+        /// <summary>`i`'den ÖNCEKİ aynı hedefli yazmaları taban değere katlar.</summary>
+        long Katla(long taban, int i, in Mutation m)
+        {
+            long deger = taban;
+            for (int j = 0; j < i; j++)
+            {
+                var e = yazmalar[j];
+                if (e.Target != m.Target || e.Index != m.Index || e.Field != m.Field) continue;
+                deger = e.IsDelta ? deger + e.Value : e.Value;
+            }
+            return deger;
+        }
+
         /// <summary>Journal'ı sırayla uygular ve `StateVersion`ı BİR artırır (komut başına tek
-        /// versiyon — CB 8.2). Çağrılmadan önce `Validate` geçmiş olmalıdır.</summary>
+        /// versiyon — CB 8.2). Çağrılmadan önce `Validate` geçmiş olmalıdır. Her yazmanın ÖNCEKİ
+        /// değeri saklanır ki `Geri` ile tam geri alınabilsin.</summary>
         public void Apply(GameState st)
         {
+            geriDegerler.Clear();
             for (int i = 0; i < yazmalar.Count; i++)
             {
                 var m = yazmalar[i];
                 Hedef(st, m, out long mevcut, out _, out _, out _);
+                geriDegerler.Add(mevcut);
                 Yaz(st, m, m.IsDelta ? mevcut + m.Value : m.Value);
             }
             st.StateVersion++;
+        }
+
+        /// <summary>`Apply`ı GERİ ALIR — yalnız başarılı bir `Apply`ın hemen ardından çağrılır.
+        /// Yazmalar TERS sırayla eski değerlerine döndürülür (zincirleme yazmalar için sıra
+        /// önemlidir) ve `StateVersion` geri alınır.
+        ///
+        /// Neden var (inceleme bulgusu, 2026-08-24): denetim kaydı yazımı (`IWorldAuditSink`)
+        /// fırlatırsa host'un veritabanı transaction'ı geri alınır ama BELLEKTEKİ durum ilerlemiş
+        /// kalırdı — "hep ya da hiç" sözleşmesinin bellek ayağı yoktu. Önceki yorumum bunu
+        /// host'un geri almasına havale ediyordu; havale mekanizma değildir, bu odur.</summary>
+        public void Geri(GameState st)
+        {
+            if (geriDegerler.Count != yazmalar.Count)
+                throw new InvalidOperationException("Geri: eşleşen bir Apply yok.");
+            for (int i = yazmalar.Count - 1; i >= 0; i--) Yaz(st, yazmalar[i], geriDegerler[i]);
+            geriDegerler.Clear();
+            st.StateVersion--;
         }
 
         /// <summary>Hedefin mevcut değerini ve geçerli aralığını verir. Aralıklar alanın

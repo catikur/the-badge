@@ -24,17 +24,19 @@ namespace TheBadge.World
     /// `WorldExecutor`dır (Tek Kapı, CLAUDE.md değişmez #1).</summary>
     public sealed class WorldContext : IValidationContext
     {
-        readonly GameState st;
+        readonly WorldStore depo;
         readonly WorldRules kural;
         readonly IActionRule[] ekKural;   // katalog indeksine göre; K3-K5 doldurur
+
+        GameState st => depo.State;
 
         /// <summary>Host tarafından ayarlanır: şu an hangi bağlamlar açık (hub ekranı, maç,
         /// online oturum). Kapı 3'ün ilk ayağı bunu okur.</summary>
         public Context Active = Context.Hub;
 
-        public WorldContext(GameState state, WorldRules rules)
+        public WorldContext(WorldStore store, WorldRules rules)
         {
-            st = state ?? throw new ArgumentNullException(nameof(state));
+            depo = store ?? throw new ArgumentNullException(nameof(store));
             kural = rules ?? throw new ArgumentNullException(nameof(rules));
             ekKural = new IActionRule[Catalog.Count];
         }
@@ -60,11 +62,19 @@ namespace TheBadge.World
 
         /// <summary>KARARLI takım kimliği — CB 5.1 maç içi limiti "10/dk/TAKIM". Zarftaki
         /// `TeamIdx` yalnız ev/deplasman'dır; kararlı kimlik kulüptür.</summary>
-        public long ResolveTeamKey(CommandEnvelope env) => st.Club.ClubId;
+        public long ResolveTeamKey(CommandEnvelope env) { lock (depo.Kilit) return st.Club.ClubId; }
 
+        /// <summary>Kapı 3 — TAMAMI durum kilidi altında okunur (bkz. `WorldStore`). Yürütücü
+        /// aynı kilidi tutarken bu denetimi TEKRAR çağırır; kilit aynı iş parçacığında yeniden
+        /// girilebilir olduğu için çağrı doğrudan yapılabilir.</summary>
         public RejectionReason CheckOwnershipAndState(CommandEnvelope env, ActionDef action, IPayloadView payload)
         {
             if (action == null) return RejectionReason.UnknownAction;
+            lock (depo.Kilit) return Denetle(env, action, payload);
+        }
+
+        RejectionReason Denetle(CommandEnvelope env, ActionDef action, IPayloadView payload)
+        {
 
             // (1) KULÜP SAHİPLİĞİ — komutu veren kullanıcı bu kulübü yönetiyor mu.
             // Diğer her denetim bunun üstüne kuruludur: başkasının kulübünde "yeterli bakiye"
@@ -83,7 +93,10 @@ namespace TheBadge.World
                 switch (need)
                 {
                     case OwnerNeed.Sahip: if (sahip != st.Club.ClubId) return RejectionReason.NotOwned; break;
-                    case OwnerNeed.Yabanci: if (sahip == st.Club.ClubId) return RejectionReason.NotOwned; break;
+                    // Yabanci = BAŞKA BİR KULÜBÜN oyuncusu. Serbest oyuncu (ClubId 0) buraya
+                    // GİRMEZ: bedel teklif edilecek bir kulübü yoktur, yolu `sign_free_agent`tir.
+                    // (İnceleme bulgusu, HIGH — ilk tablo yalnız "bizim değilse geçer" diyordu.)
+                    case OwnerNeed.Yabanci: if (sahip == 0 || sahip == st.Club.ClubId) return RejectionReason.NotOwned; break;
                     case OwnerNeed.Serbest: if (sahip != 0) return RejectionReason.NotOwned; break;
                 }
             }
@@ -111,6 +124,13 @@ namespace TheBadge.World
                 if (!payload.TryGetInt("insaatId", out long iid)) return RejectionReason.SchemaViolation;
                 if (st.IndexOfConstruction((int)iid) < 0) return RejectionReason.StateConflict;
             }
+
+            // (5a) KADRO ÜST SINIRI — tavanı aşan imza reddedilir. `kadroMax` yükleme anında
+            // doğrulanıp hiç kullanılmıyordu (inceleme bulgusu): hiçbir şey yapmayan bir
+            // yapılandırma anahtarı, olmayan anahtardan daha kötüdür — var sanılır.
+            if (string.Equals(action.ActionType, "transfer.sign_free_agent", StringComparison.Ordinal)
+                && KadroSayisi() >= kural.yapi.kadroMax)
+                return RejectionReason.StateConflict;
 
             // (5b) KADRO ALT SINIRI — kadroyu oynanamaz hâle getiren fesih reddedilir.
             // Sınır [KALİBRE] (`world.balance.json` → yapi.kadroMin), kodda sabit değil.

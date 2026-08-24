@@ -1101,6 +1101,44 @@ Kapı 4'e hiç ulaşmadığından rate limit tüketmez, ama yine de kayıt açar
   TÜM alanları birlikte taramalıydım. İki alanı taşıyıp üçüncüsünü bırakmak, kararın kendisini
   değil yalnız iki örneğini uygulamak demek.
 
+### K2 inceleme turu — ✅ TAMAM (2026-08-24)
+Bugbot K2'de 5 bulgu çıkardı (3 HIGH, 2 MEDIUM); beşi de haklı. İkisi tam da raporumda en
+kendinden emin anlattığım yerlerdeydi — atomiklik garantisi ve "üç ayrı sahiplik ilişkisi" tablosu.
+
+1. **(HIGH) Journal ön denetimi zincirlemeyi atlıyordu.** `Validate` her yazmayı DEĞİŞMEMİŞ duruma
+   karşı bakıyordu, `Apply` ise sırayla zincirliyordu. Aynı alana iki delta (moral +30, +30; taban
+   60) tek tek bantta görünüp zincirde 120 yazıyordu — yani "aralık taşması sessizce kırpılmaz"
+   garantisi, tam da onu veren metnin altında deliniyordu. Artık her yazma, kendinden önceki aynı
+   hedefli yazmalar katlandıktan sonraki değere karşı denetleniyor; her ARA sonuç da bantta.
+   Tarama O(n²) — journal birkaç yazmalık (TeamSheet.Validate precedent'i).
+2. **(HIGH) Kapı 3 yürütmeyle yarışıyordu.** Bağlam durumu KİLİTSİZ okuyor, yürütücü kendi kilidi
+   altında yazıyordu: iki paralel komut aynı bakiyeyi "yeterli" görüp ikisi de yürütülebiliyordu.
+   Yürütme kilidi yazmaları serileştiriyor ama KARARI korumuyordu (klasik TOCTOU). İki parçalı
+   çözüm: (a) `WorldStore` — durum ve onu koruyan kilit tek sahipte, okuyanla yazanın aynı kilidi
+   paylaşması konvansiyon değil YAPISAL zorunluluk; (b) yürütücü kilit içinde Kapı 3'ü YENİDEN
+   denetliyor. Bu, projenin "istemci ön-doğrular, sunucu yeniden doğrular" ilkesinin bir katman
+   aşağıya uygulanmasıdır. `gate3` zorunlu parametre — unutulabilir varsayılan bırakılmıyor.
+3. **(HIGH) `OwnerNeed.Yabanci` serbest oyuncuyu geçiriyordu.** Kural "bizim değilse geçer" diye
+   yazılmıştı; serbest oyuncunun (ClubId 0) bedel teklif edilecek bir kulübü yok, yolu
+   `sign_free_agent`. Üç ilişkiyi ayırdığımı yazmışım ama üçüncüsünü ikincinin içinden
+   çıkarmamışım. Artık `Yabanci` = BAŞKA BİR KULÜBÜN oyuncusu.
+4. **(MEDIUM) `kadroMax` hiç zorlanmıyordu.** Yükleme anında doğrulanıp kullanılmıyordu; hiçbir şey
+   yapmayan bir yapılandırma anahtarı, olmayan anahtardan daha kötüdür — var sanılır.
+   `transfer.sign_free_agent` artık tavanı denetliyor.
+5. **(MEDIUM) Audit fırlarsa bellek ilerlemiş kalıyordu.** Yorumum bunu host'un veritabanı
+   rollback'ine havale ediyordu ama bellek o rollback'in parçası değildi: "hep ya da hiç" bir
+   MEKANİZMAYA değil bir VARSAYIMA dayanıyordu. `WorldJournal.Geri` eklendi (Apply öncesi değerler
+   saklanır, ters sırayla geri yazılır, `StateVersion` geri alınır); sink fırlarsa geri alınıp
+   istisna yukarı bırakılıyor.
+
+- **Kapılar:** `K2ZincirlemeYazma` · `K2AuditGeriAlma` · `K2Kapi3Yarisi` + `K2Kapi3Sebepleri`
+  genişletildi (NotOwned×5, StateConflict×7).
+- **Kendi testimin dişsiz çıkması (kayda değer):** ilk yazdığım `K2Kapi3Yarisi` yarışı ŞANSA
+  bırakıyordu — tekrar denetimini kaldırdığımda kapı YEŞİL kaldı, yani hatayı yakalamıyordu.
+  `BarrierContext` ile 8 komutun Kapı 3'ü BİRLİKTE geçmesi garanti edildi; şimdi tekrar denetimi
+  kaldırılınca her koşuda kırmızı (8 komut geçiyor, kasa **-700**). **Ders: eşzamanlılık kapısının
+  dişi ölçülmeden yazılmış sayılmaz** — zamanlamaya bağlı bir test, hata varken de yeşil kalar.
+
 ## Bekleyen kararlar
 - **Offline kuyruk uzlaştırma politikası (K2'den çıktı, 2026-08-24):** brief §4.1'in "dünya durumu
   nerede yaşar" sorusu **D3 (G3, sunucu-otoriter) + GDD 6.3 + GDD 11.2 ile zaten kapalı**; K2 bunu

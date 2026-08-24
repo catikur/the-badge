@@ -31,6 +31,7 @@ namespace TheBadge.Checks
         public byte OyuncuAlan = PlayerField.Moral;
         public long OyuncuDeger;
         public WorldEventType Olay = WorldEventType.None;
+        public Action<WorldJournal> Ozel;   // serbest journal kurgusu (zincirleme yazma sınamaları)
         int cagri;
         public int Cagrilar => System.Threading.Volatile.Read(ref cagri);
 
@@ -45,6 +46,7 @@ namespace TheBadge.Checks
             if (GecersizYazma) journal.Set(MutTarget.Oyuncu, 0, PlayerField.Moral, 300);  // 0-100 dışı
             if (Olay != WorldEventType.None)
                 journal.Emit(new WorldEvent(Olay, 0, KasaDelta, st.Takvim.Sezon, st.Takvim.Hafta));
+            Ozel?.Invoke(journal);
             return RejectionReason.None;
         }
     }
@@ -56,6 +58,39 @@ namespace TheBadge.Checks
         public int Cagrilar;
         public RejectionReason Check(GameState st, CommandEnvelope env, ActionDef action, IPayloadView payload, out string detail)
         { Cagrilar++; detail = Sonuc == RejectionReason.None ? null : "test kuralı"; return Sonuc; }
+    }
+
+    /// <summary>Kapı 3 yarışını DETERMİNİSTİK yapan sarmalayıcı. Yarışı şansa bırakan bir test,
+    /// hata varken de yeşil kalabilir — nitekim ilk sürümü öyle oldu: tekrar denetimi kaldırıldığı
+    /// hâlde kapı yeşil kaldı. Burada bariyer, TÜM iş parçacıkları Kapı 3'ü geçene kadar hiçbirinin
+    /// yürütmeye geçmemesini garantiler; yani "doğrula-sonra-yürüt" penceresi her koşuda açılır.
+    ///
+    /// Bariyer YALNIZ iş parçacığının İLK çağrısında (bus doğrulaması) beklenir; yürütücünün
+    /// kilit altındaki TEKRAR denetimi (ikinci çağrı) geçer — yoksa kilitlenirdi.</summary>
+    public sealed class BarrierContext : IValidationContext
+    {
+        readonly IValidationContext ic;
+        readonly System.Threading.Barrier bariyer;
+        [ThreadStatic] static int derinlik;
+        public BarrierContext(IValidationContext inner, int katilimci)
+        { ic = inner; bariyer = new System.Threading.Barrier(katilimci); }
+        public bool IsContextActive(Context context) => ic.IsContextActive(context);
+        public long ResolveTeamKey(CommandEnvelope env) => ic.ResolveTeamKey(env);
+        public RejectionReason CheckOwnershipAndState(CommandEnvelope env, ActionDef action, IPayloadView payload)
+        {
+            var r = ic.CheckOwnershipAndState(env, action, payload);
+            if (derinlik++ == 0) bariyer.SignalAndWait();   // durum kilidi BURADA tutulmuyor
+            return r;
+        }
+    }
+
+    /// <summary>Fırlatan denetim sinki — CB 5.2'nin bellek ayağını sınar: audit yazımı
+    /// başarısızsa durum İLERLEMEMİŞ olmalı.</summary>
+    public sealed class ThrowingAuditSink : IWorldAuditSink
+    {
+        public int Cagrilar;
+        public void Persist(WorldAuditEntry entry, IReadOnlyList<WorldEvent> events)
+        { Cagrilar++; throw new InvalidOperationException("denetim deposu erişilemez"); }
     }
 
     /// <summary>K2 dünya durumu kurulum yardımcıları.</summary>

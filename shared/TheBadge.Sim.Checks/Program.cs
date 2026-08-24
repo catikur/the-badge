@@ -2598,7 +2598,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         { if (gercek != bek) hata += $"{ad}({gercek}≠{bek}) "; }
 
         var st = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
-        var wc = new TheBadge.World.WorldContext(st, wRules)
+        var depo = new TheBadge.World.WorldStore(st);
+        var wc = new TheBadge.World.WorldContext(depo, wRules)
         { Active = TheBadge.CommandBus.Context.Hub | TheBadge.CommandBus.Context.Match | TheBadge.CommandBus.Context.Online };
         int kendi = TheBadge.Checks.WorldFixture.IlkKendi(st);
         int yabanci = TheBadge.Checks.WorldFixture.IlkYabanci(st);
@@ -2668,17 +2669,39 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         Bekle("kadro yeterliyken fesih", RejectionReason.None,
               WDog(wc, "transfer.release_player", new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)kendi)));
         var dar = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, wRules.yapi.kadroMin, 1, 0, 1_000_000);
-        var wcDar = new TheBadge.World.WorldContext(dar, wRules);
+        var wcDar = new TheBadge.World.WorldContext(new TheBadge.World.WorldStore(dar), wRules);
         Bekle("kadro alt sınırında fesih", RejectionReason.StateConflict,
               WDog(wcDar, "transfer.release_player",
                    new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)TheBadge.Checks.WorldFixture.IlkKendi(dar))));
 
+        // SERBEST OYUNCUYA BEDEL TEKLİFİ — teklif edilecek kulüp yok, yol `sign_free_agent`
+        // (inceleme bulgusu: "bizim değilse geçer" kuralı serbest oyuncuyu da geçiriyordu)
+        st.Takvim.Pencere = TheBadge.World.TransferWindow.Yaz;
+        st.Club.KasaTl = 1_000_000;
+        Bekle("serbest oyuncuya bedel teklifi", RejectionReason.NotOwned,
+              WDog(wc, "transfer.propose_offer", new TheBadge.Checks.TestPayload()
+                   .Set("hedefOyuncuId", (long)serbest).Set("bedel", 1000.0).Set("maas", 100.0)));
+
+        // KADRO ÜST SINIRI — tavandaki kulüp yeni imza atamaz (kadroMax artık ZORLANIYOR)
+        var tavan = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, wRules.yapi.kadroMax, 0, 2, 1_000_000);
+        tavan.Takvim.Pencere = TheBadge.World.TransferWindow.Yaz;   // imza penceresi açık olmalı
+        var wcTavan = new TheBadge.World.WorldContext(new TheBadge.World.WorldStore(tavan), wRules);
+        Bekle("kadro tavanında imza", RejectionReason.StateConflict,
+              WDog(wcTavan, "transfer.sign_free_agent", new TheBadge.Checks.TestPayload()
+                   .Set("oyuncuId", (long)TheBadge.Checks.WorldFixture.IlkSerbest(tavan)).Set("maas", 100.0).Set("sureYil", 2L)));
+        var bosluk = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, wRules.yapi.kadroMax - 1, 0, 2, 1_000_000);
+        bosluk.Takvim.Pencere = TheBadge.World.TransferWindow.Yaz;
+        var wcBosluk = new TheBadge.World.WorldContext(new TheBadge.World.WorldStore(bosluk), wRules);
+        Bekle("tavanın altında imza", RejectionReason.None,
+              WDog(wcBosluk, "transfer.sign_free_agent", new TheBadge.Checks.TestPayload()
+                   .Set("oyuncuId", (long)TheBadge.Checks.WorldFixture.IlkSerbest(bosluk)).Set("maas", 100.0).Set("sureYil", 2L)));
+
         // BAĞLAM — hub kapalıyken hub komutu geçmez (K1 kesişimi K2 durumuyla birlikte)
-        var wcKapali = new TheBadge.World.WorldContext(st, wRules) { Active = TheBadge.CommandBus.Context.Match };
+        var wcKapali = new TheBadge.World.WorldContext(depo, wRules) { Active = TheBadge.CommandBus.Context.Match };
         Bekle("hub kapalı", RejectionReason.StateConflict, WDog(wcKapali, "squad.set_player_role", rolPl));
 
         if (hata.Length > 0) failures += Fail("K2Kapi3Sebepleri", hata);
-        else Pass("K2Kapi3Sebepleri(NotOwned×4 · WindowClosed · InsufficientFunds×2 · NoChargesLeft · StateConflict×5 · bağlam)");
+        else Pass("K2Kapi3Sebepleri(NotOwned×5 · WindowClosed · InsufficientFunds×2 · NoChargesLeft · StateConflict×7 · bağlam)");
     }
 
     // 25d) K3-K5 SEAMİ — aksiyona özgü kural devri. Kayıtlı kural yapısal denetimden SONRA
@@ -2686,7 +2709,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     {
         string hata = "";
         var st = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
-        var wc = new TheBadge.World.WorldContext(st, wRules);
+        var wc = new TheBadge.World.WorldContext(new TheBadge.World.WorldStore(st), wRules);
         var rolPl = new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)TheBadge.Checks.WorldFixture.IlkKendi(st)).Set("rolId", 3L);
         if (WDog(wc, "squad.set_player_role", rolPl) != RejectionReason.None) hata += "kuralsız durumda geçmedi ";
         wc.RegisterRule("squad.set_player_role", new TheBadge.Checks.TestRule { Sonuc = RejectionReason.StateConflict });
@@ -2709,7 +2732,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         string hata = "";
         var st = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
         var sink = new TheBadge.Checks.CollectingAuditSink();
-        var exec = new TheBadge.World.WorldExecutor(st, sink);
+        var depoA = new TheBadge.World.WorldStore(st);
+        var exec = new TheBadge.World.WorldExecutor(depoA, new TheBadge.World.WorldContext(depoA, wRules), sink);
         var h = new TheBadge.Checks.TestHandler();
         exec.RegisterHandler("tycoon.set_ticket_price", h);
         var pl = new TheBadge.Checks.TestPayload().Set("tribun", "kuzey").Set("fiyat", 50.0);
@@ -2762,7 +2786,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     {
         string hata = "";
         var st = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
-        var exec = new TheBadge.World.WorldExecutor(st);
+        var depoF = new TheBadge.World.WorldStore(st);
+        var exec = new TheBadge.World.WorldExecutor(depoF, new TheBadge.World.WorldContext(depoF, wRules));
         if (exec.UnboundActions().Length != Catalog.Count) hata += "başlangıçta bağlı handler var ";
         ulong h0 = exec.StateHash();
         var r = exec.Execute(WEnv("tycoon.set_ticket_price"), Catalog.Find("tycoon.set_ticket_price"),
@@ -2787,7 +2812,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         ulong Kos(out ulong versiyon)
         {
             var st = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
-            var exec = new TheBadge.World.WorldExecutor(st);
+            var depoG = new TheBadge.World.WorldStore(st);
+            var exec = new TheBadge.World.WorldExecutor(depoG, new TheBadge.World.WorldContext(depoG, wRules));
             var h = new TheBadge.Checks.TestHandler();
             exec.RegisterHandler("tycoon.set_ticket_price", h);
             var act = Catalog.Find("tycoon.set_ticket_price");
@@ -2814,7 +2840,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     {
         string hata = "";
         var st = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 0);
-        var exec = new TheBadge.World.WorldExecutor(st);
+        var depoE = new TheBadge.World.WorldStore(st);
+        var exec = new TheBadge.World.WorldExecutor(depoE, new TheBadge.World.WorldContext(depoE, wRules));
         var h = new TheBadge.Checks.TestHandler { KasaDelta = 1 };
         exec.RegisterHandler("tycoon.set_ticket_price", h);
         var act = Catalog.Find("tycoon.set_ticket_price");
@@ -2849,7 +2876,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         var siki = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.WorldRules>(
             System.IO.File.ReadAllText(worldPath), wOpts);
         siki.yapi.kadroMin = 20;
-        var wcSiki = new TheBadge.World.WorldContext(st, siki);
+        var depoI = new TheBadge.World.WorldStore(st);
+        var wcSiki = new TheBadge.World.WorldContext(depoI, siki);
         if (WDog(wcSiki, "transfer.release_player",
                  new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)TheBadge.Checks.WorldFixture.IlkKendi(st)))
             != RejectionReason.StateConflict) hata += "kadroMin kodda sabitlenmiş ";
@@ -2859,7 +2887,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             System.IO.File.ReadAllText(worldPath), wOpts);
         gevsek.kapi3.pencereGerektiren = new string[0];
         st.Takvim.Pencere = TheBadge.World.TransferWindow.Kapali;
-        var wcGevsek = new TheBadge.World.WorldContext(st, gevsek);
+        var wcGevsek = new TheBadge.World.WorldContext(depoI, gevsek);
         if (WDog(wcGevsek, "transfer.propose_offer",
                  new TheBadge.Checks.TestPayload().Set("hedefOyuncuId", (long)TheBadge.Checks.WorldFixture.IlkYabanci(st))
                      .Set("bedel", 1000.0).Set("maas", 100.0)) != RejectionReason.None)
@@ -2893,9 +2921,10 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     {
         string hata = "";
         var st = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
-        var wc = new TheBadge.World.WorldContext(st, wRules);
+        var depoJ = new TheBadge.World.WorldStore(st);
+        var wc = new TheBadge.World.WorldContext(depoJ, wRules);
         var sink = new TheBadge.Checks.CollectingAuditSink();
-        var exec = new TheBadge.World.WorldExecutor(st, sink);
+        var exec = new TheBadge.World.WorldExecutor(depoJ, wc, sink);
         exec.RegisterHandler("tycoon.set_ticket_price", new TheBadge.Checks.TestHandler { KasaDelta = 250 });
         var rlCfgW = new Dictionary<RateClass, RateLimitCfg[]>();
         foreach (var r in wBandDoc.RootElement.GetProperty("rateLimit").EnumerateObject())
@@ -2925,6 +2954,132 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
 
         if (hata.Length > 0) failures += Fail("K2TekKapiUctanUca", hata);
         else Pass("K2TekKapiUctanUca(bus→kapı 3→yürütme→durum · idempotency durumu ikinci kez değiştirmiyor · red yazmıyor)");
+    }
+
+    // 25k) ZİNCİRLEME YAZMA (inceleme bulgusu, HIGH). Ön denetim her yazmayı DEĞİŞMEMİŞ duruma
+    // karşı bakıyordu; `Apply` ise zincirliyordu. Aynı alana iki delta tek tek bantta görünüp
+    // zincirde bandı aşabiliyordu — yani atomiklik garantisinin kendisi deliniyordu.
+    {
+        string hata = "";
+        TheBadge.World.GameState Kur() => TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
+        var act = Catalog.Find("tycoon.set_ticket_price");
+        var pl = new TheBadge.Checks.TestPayload().Set("tribun", "kuzey").Set("fiyat", 50.0);
+
+        RejectionReason Kos(Action<TheBadge.World.WorldJournal> kurgu, out TheBadge.World.GameState son, out ulong hash)
+        {
+            var g = Kur();
+            var d = new TheBadge.World.WorldStore(g);
+            var ex = new TheBadge.World.WorldExecutor(d, new TheBadge.World.WorldContext(d, wRules));
+            ex.RegisterHandler("tycoon.set_ticket_price", new TheBadge.Checks.TestHandler { Ozel = kurgu });
+            ulong once = ex.StateHash();
+            var r = ex.Execute(WEnv("tycoon.set_ticket_price"), act, pl, default, out _);
+            son = g; hash = once;
+            return r;
+        }
+
+        // Taban moral 60. İki ayrı +30 tek tek bakıldığında 90 (bantta), zincirde 120 (bant dışı).
+        var r1 = Kos(j => { j.Add(TheBadge.World.MutTarget.Oyuncu, 0, TheBadge.World.PlayerField.Moral, 30);
+                            j.Add(TheBadge.World.MutTarget.Oyuncu, 0, TheBadge.World.PlayerField.Moral, 30); },
+                     out var s1, out ulong h1);
+        if (r1 != RejectionReason.StateConflict) hata += $"zincirleme taşma kabul edildi ({r1}) ";
+        if (s1.Oyuncular[0].Moral != 60) hata += $"zincirleme taşma KISMEN yazıldı (moral {s1.Oyuncular[0].Moral}) ";
+        if (TheBadge.World.WorldHash.Compute(s1) != h1 || s1.StateVersion != 0) hata += "zincirleme redde durum oynadı ";
+
+        // Set-sonra-delta: 100'e ayarla, sonra +5 → 105, bant dışı
+        var r2 = Kos(j => { j.OyuncuSet(0, TheBadge.World.PlayerField.Moral, 100);
+                            j.Add(TheBadge.World.MutTarget.Oyuncu, 0, TheBadge.World.PlayerField.Moral, 5); },
+                     out var s2, out _);
+        if (r2 != RejectionReason.StateConflict) hata += $"set-sonra-delta taşması kabul edildi ({r2}) ";
+        if (s2.Oyuncular[0].Moral != 60) hata += "set-sonra-delta kısmen yazıldı ";
+
+        // MEŞRU zincir engellenmemeli: +30 sonra -30 → 60, hep bantta
+        var r3 = Kos(j => { j.Add(TheBadge.World.MutTarget.Oyuncu, 0, TheBadge.World.PlayerField.Moral, 30);
+                            j.Add(TheBadge.World.MutTarget.Oyuncu, 0, TheBadge.World.PlayerField.Moral, -30); },
+                     out var s3, out _);
+        if (r3 != RejectionReason.None) hata += $"meşru zincir reddedildi ({r3}) ";
+        if (s3.Oyuncular[0].Moral != 60 || s3.StateVersion != 1) hata += "meşru zincir yanlış uygulandı ";
+        // Farklı alanlar birbirini etkilemez
+        var r4 = Kos(j => { j.Add(TheBadge.World.MutTarget.Oyuncu, 0, TheBadge.World.PlayerField.Moral, 30);
+                            j.Add(TheBadge.World.MutTarget.Oyuncu, 1, TheBadge.World.PlayerField.Moral, 30); },
+                     out var s4, out _);
+        if (r4 != RejectionReason.None || s4.Oyuncular[0].Moral != 90 || s4.Oyuncular[1].Moral != 90)
+            hata += "ayrı hedefler karıştı ";
+
+        if (hata.Length > 0) failures += Fail("K2ZincirlemeYazma", hata);
+        else Pass("K2ZincirlemeYazma(iki delta · set+delta taşması reddi · meşru zincir geçer · ayrı hedefler bağımsız)");
+    }
+
+    // 25l) AUDIT GERİ ALMA (inceleme bulgusu). Denetim yazımı fırlarsa BELLEKTEKİ durum da
+    // geri alınmalı: önceki sürüm bunu host'un veritabanı rollback'ine havale ediyordu ama
+    // bellek o rollback'in parçası değildi — "hep ya da hiç" bir varsayıma dayanıyordu.
+    {
+        string hata = "";
+        var st = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
+        var depoL = new TheBadge.World.WorldStore(st);
+        var sinkL = new TheBadge.Checks.ThrowingAuditSink();
+        var exL = new TheBadge.World.WorldExecutor(depoL, new TheBadge.World.WorldContext(depoL, wRules), sinkL);
+        exL.RegisterHandler("tycoon.set_ticket_price", new TheBadge.Checks.TestHandler
+        { KasaDelta = 5000, OyuncuIndex = 0, OyuncuAlan = TheBadge.World.PlayerField.Moral, OyuncuDeger = 95 });
+        ulong h0 = exL.StateHash(); ulong v0 = exL.StateVersion; long kasa0 = st.Club.KasaTl;
+        bool patladi = false;
+        try
+        {
+            exL.Execute(WEnv("tycoon.set_ticket_price"), Catalog.Find("tycoon.set_ticket_price"),
+                        new TheBadge.Checks.TestPayload().Set("tribun", "kuzey").Set("fiyat", 50.0),
+                        default, out _);
+        }
+        catch (InvalidOperationException) { patladi = true; }
+        if (!patladi) hata += "denetim hatası yutuldu ";
+        if (sinkL.Cagrilar != 1) hata += "sink çağrılmadı ";
+        if (st.Club.KasaTl != kasa0) hata += $"kasa geri alınmadı ({st.Club.KasaTl}≠{kasa0}) ";
+        if (st.Oyuncular[0].Moral != 60) hata += "oyuncu yazması geri alınmadı ";
+        if (exL.StateVersion != v0) hata += $"StateVersion geri alınmadı ({exL.StateVersion}≠{v0}) ";
+        if (exL.StateHash() != h0) hata += "hash geri alınmadı ";
+
+        if (hata.Length > 0) failures += Fail("K2AuditGeriAlma", hata);
+        else Pass("K2AuditGeriAlma(sink fırlarsa kasa+oyuncu+versiyon+hash tam geri alınır)");
+    }
+
+    // 25m) KAPI 3 YARIŞI (inceleme bulgusu, HIGH). Bus doğrulaması kilidin DIŞINDA koşar;
+    // iki paralel komut aynı bakiyeyi "yeterli" görüp ikisi de yürütülebilirdi. Yürütme kilidi
+    // yazmaları serileştiriyor ama KARARI korumuyordu (TOCTOU). Otoriter karar artık kilit içinde.
+    {
+        string hata = "";
+        var st = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 100);
+        st.Club.Krediler[0] = new TheBadge.World.Loan { KrediId = 9, AnaparaTl = 100_000, KalanAy = 24, FaizBp = 1500 };
+        var depoM = new TheBadge.World.WorldStore(st);
+        var wcM = new TheBadge.World.WorldContext(depoM, wRules);
+        var exM = new TheBadge.World.WorldExecutor(depoM, wcM);
+        exM.RegisterHandler("tycoon.repay_loan", new TheBadge.Checks.TestHandler { KasaDelta = -100 });
+        var rlCfgM = new Dictionary<RateClass, RateLimitCfg[]>();
+        foreach (var r in wBandDoc.RootElement.GetProperty("rateLimit").EnumerateObject())
+        {
+            var list = new List<RateLimitCfg>();
+            foreach (var w in r.Value.EnumerateArray()) list.Add(new RateLimitCfg(w[0].GetInt32(), w[1].GetInt64() * 1000));
+            rlCfgM[(RateClass)Enum.Parse(typeof(RateClass), r.Name)] = list.ToArray();
+        }
+        // Bus'ın gördüğü bağlam BARİYERLİdir: 8 komutun HEPSİ Kapı 3'ü geçmeden hiçbiri
+        // yürütmeye giremez → doğrula-sonra-yürüt penceresi her koşuda garanti açılır.
+        const int Yaris = 8;
+        var busM = new TheBadge.CommandBus.CommandBus(wBands, new TheBadge.Checks.BarrierContext(wcM, Yaris),
+            new SlidingWindowRateLimiter(rlCfgM, 3, 300_000), new IdempotencyStore());
+        // Kasa 100; her komut 100 harcıyor → EN FAZLA BİRİ geçmeli
+        int basarili = 0;
+        var isler = new System.Threading.Tasks.Task[Yaris];
+        for (int t = 0; t < isler.Length; t++)
+            isler[t] = System.Threading.Tasks.Task.Factory.StartNew(() =>
+            {
+                var pl = new TheBadge.Checks.TestPayload().Set("krediId", 9L).Set("miktar", 100.0);
+                var o = busM.Submit(WEnv("tycoon.repay_loan"), pl, exM, WHost, WSahip);
+                if (o.Ok) System.Threading.Interlocked.Increment(ref basarili);
+            }, System.Threading.Tasks.TaskCreationOptions.LongRunning);
+        System.Threading.Tasks.Task.WaitAll(isler);
+        if (basarili != 1) hata += $"çift harcama ({basarili} komut geçti, 1 olmalı) ";
+        if (st.Club.KasaTl != 0) hata += $"kasa {st.Club.KasaTl} (0 olmalı) ";
+        if (exM.StateVersion != 1) hata += $"StateVersion {exM.StateVersion} (1 olmalı) ";
+
+        if (hata.Length > 0) failures += Fail("K2Kapi3Yarisi", hata);
+        else Pass($"K2Kapi3Yarisi(bariyerli: {Yaris} komut Kapı 3'ü BİRLİKTE geçti → yalnız 1 yürütüldü, kasa 0)");
     }
 }
 

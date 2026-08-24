@@ -48,15 +48,21 @@ namespace TheBadge.World
     /// `StateVersion` ve hash tutarsız kalırdı.</summary>
     public sealed class WorldExecutor : ICommandExecutor
     {
-        readonly GameState st;
+        readonly WorldStore depo;
+        readonly IValidationContext kapi3;
         readonly IActionHandler[] handlers;      // katalog indeksine göre
         readonly IWorldAuditSink audit;
         readonly WorldJournal journal = new WorldJournal();
-        readonly object kilit = new object();
 
-        public WorldExecutor(GameState state, IWorldAuditSink auditSink = null)
+        GameState st => depo.State;
+
+        /// <summary>`gate3` ZORUNLUDUR: yürütme anında Kapı 3 YENİDEN denetlenir (aşağıya bak).
+        /// İsteğe bağlı bırakılsaydı, unutulduğu her yerde yarış sessizce geri gelirdi — K1'in
+        /// "unutulabilir varsayılan bırakma" dersinin aynısı.</summary>
+        public WorldExecutor(WorldStore store, IValidationContext gate3, IWorldAuditSink auditSink = null)
         {
-            st = state ?? throw new ArgumentNullException(nameof(state));
+            depo = store ?? throw new ArgumentNullException(nameof(store));
+            kapi3 = gate3 ?? throw new ArgumentNullException(nameof(gate3));
             handlers = new IActionHandler[Catalog.Count];
             audit = auditSink;
         }
@@ -79,8 +85,8 @@ namespace TheBadge.World
             return eksik.ToArray();
         }
 
-        public ulong StateHash() { lock (kilit) return WorldHash.Compute(st); }
-        public ulong StateVersion { get { lock (kilit) return st.StateVersion; } }
+        public ulong StateHash() => depo.Hash();
+        public ulong StateVersion => depo.Version;
 
         public RejectionReason Execute(CommandEnvelope env, ActionDef action, IPayloadView payload,
                                        AuditRecord auditRecord, out string detail)
@@ -88,8 +94,17 @@ namespace TheBadge.World
             detail = null;
             if (action == null) return RejectionReason.UnknownAction;
 
-            lock (kilit)
+            lock (depo.Kilit)
             {
+                // KAPI 3 YENİDEN — bus doğrulaması kilidin DIŞINDA koştu; arada başka bir komut
+                // bakiyeyi harcamış, slotu doldurmuş ya da değişiklik hakkını bitirmiş olabilir
+                // (inceleme bulgusu, HIGH: doğrula-sonra-yürüt penceresi = TOCTOU). Otoriter
+                // karar kilidin İÇİNDE verilir; dışarıdaki doğrulama hızlı geri bildirim içindir.
+                // Bu, projenin "istemci ön-doğrular, sunucu yeniden doğrular" ilkesinin bir
+                // katman aşağıya uygulanmasıdır.
+                var tekrar = kapi3.CheckOwnershipAndState(env, action, payload);
+                if (tekrar != RejectionReason.None) { detail = "yürütme anında: " + tekrar; return tekrar; }
+
                 int ci = CatalogIndex(action.ActionType);
                 var h = ci >= 0 ? handlers[ci] : null;
                 if (h == null)
@@ -118,9 +133,20 @@ namespace TheBadge.World
                 journal.Apply(st);
                 ulong post = WorldHash.Compute(st);
 
-                // Denetim + olaylar YÜRÜTME TRANSACTION'ININ İÇİNDE (CB 5.2).
-                audit?.Persist(new WorldAuditEntry(auditRecord, RejectionReason.None, pre, post, st.StateVersion),
-                               journal.Events);
+                // Denetim + olaylar YÜRÜTME TRANSACTION'ININ İÇİNDE (CB 5.2). Sink fırlatırsa
+                // BELLEKTEKİ durum da geri alınır: önceki sürüm bunu host'un veritabanı
+                // rollback'ine havale ediyordu, ama bellek o rollback'in parçası değildi —
+                // "hep ya da hiç" bir varsayıma dayanıyordu (inceleme bulgusu). Artık mekanizma
+                // burada: geri al, sonra istisnayı yukarı bırak.
+                if (audit != null)
+                {
+                    try
+                    {
+                        audit.Persist(new WorldAuditEntry(auditRecord, RejectionReason.None, pre, post, st.StateVersion),
+                                      journal.Events);
+                    }
+                    catch { journal.Geri(st); throw; }
+                }
                 return RejectionReason.None;
             }
         }
