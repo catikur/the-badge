@@ -53,11 +53,17 @@ namespace TheBadge.CommandBus
     public static class Validator
     {
         public static ValidationResult Validate(CommandEnvelope env, ActionDef action,
-            IPayloadView payload, IBandProvider bands, IValidationContext ctx, IRateLimiter rate)
+            IPayloadView payload, IBandProvider bands, IValidationContext ctx, IRateLimiter rate,
+            long receivedAtUnixMs)
         {
             if (env == null) return new ValidationResult(RejectionReason.SchemaViolation, "zarf yok");
 
             // ---- KAPI 1: katalog + şema ----
+            // KAYNAK denetimi (CB 2.2): AUTO v1'de KAPALIDIR ve tanımsız enum değeri kabul edilmez.
+            // İnceleme düzeltmesi: kaynak hiç doğrulanmıyordu, `Auto` zarfı UI komutu gibi
+            // yürüyebiliyordu — kaynağa özgü tier/rate politikası yazılana dek reddedilir.
+            if (env.Source != CommandSource.UI && env.Source != CommandSource.LLM)
+                return new ValidationResult(RejectionReason.SchemaViolation, "kaynak: " + env.Source);
             if (!Catalog.SupportsVersion(env.CatalogVersion))
                 return new ValidationResult(RejectionReason.UnsupportedCatalogVersion, env.CatalogVersion.ToString());
             if (action == null)
@@ -101,15 +107,25 @@ namespace TheBadge.CommandBus
 
             // ---- KAPI 3: bağlam, sahiplik, kaynak, hak ----
             if (ctx == null) return new ValidationResult(RejectionReason.StateConflict, "bağlam yok");
-            if ((action.Context & KomutBaglami(env)) == 0)
+            // Zarfın SEÇTİĞİ bağlam ile aksiyonun izin verdiği bayrakların KESİŞİMİ.
+            // İnceleme düzeltmesi: aktiflik denetimi aksiyonun BİRLEŞİK bayraklarıyla yapılıyordu,
+            // yani hem hub hem maç geçerli bir aksiyon (ör. squad.set_player_role) maç damgasıyla
+            // gelse bile "hub açık" olduğu için geçiyordu. Artık maç damgalı komut MAÇ bağlamının
+            // açık olmasını ister.
+            var etkin = action.Context & KomutBaglami(env);
+            if (etkin == Context.None)
                 return new ValidationResult(RejectionReason.StateConflict, "yanlış bağlam");
-            if (!ctx.IsContextActive(action.Context))
+            if (!ctx.IsContextActive(etkin))
                 return new ValidationResult(RejectionReason.StateConflict, "bağlam kapalı");
             var g3 = ctx.CheckOwnershipAndState(env, action, payload);
             if (g3 != RejectionReason.None) return new ValidationResult(g3);
 
             // ---- KAPI 4: rate limit ----
-            if (rate != null && !rate.Allow(env.UserId, action.RateClass, env.Source, env.IssuedAtUnixMs))
+            // Saat HOST'undur: `IssuedAtUnixMs` istemci verisidir ve ileri tarihli gönderilerek
+            // pencere sıfırlanabilirdi (inceleme düzeltmesi, P1). Takım kimliği de anahtara girer:
+            // CB 5.1 maç içi limiti "10/dk/TAKIM" der (aynı takımı paylaşan kullanıcılar tek
+            // sayaçta, farklı takımları yöneten kullanıcı ayrı sayaçlarda).
+            if (rate != null && !rate.Allow(env.UserId, env.TeamIdx, action.RateClass, env.Source, receivedAtUnixMs))
                 return new ValidationResult(RejectionReason.RateLimited, action.RateClass.ToString());
 
             return ValidationResult.Pass;

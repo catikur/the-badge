@@ -1998,10 +1998,11 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         };
     var gecerliBilet = new TheBadge.Checks.TestPayload().Set("tribun", "kuzey").Set("fiyat", 50.0);
 
+    const long HostSaat = 1_700_000_000_000L;   // HOST alış saati (istemcinin IssuedAtUnixMs'i değil)
     TheBadge.Sim.Commands.RejectionReason Dogrula(CommandEnvelope e, TheBadge.Checks.TestPayload pl,
         TheBadge.Checks.TestContext c = null, IRateLimiter rl = null)
         => Validator.Validate(e, Catalog.Find(e.ActionType), pl, bands,
-                              c ?? new TheBadge.Checks.TestContext(), rl).Reason;
+                              c ?? new TheBadge.Checks.TestContext(), rl, HostSaat).Reason;
 
     // 24b) ŞEMA SIKILIĞI — CB 3.2: eksik alan, tip hatası, FAZLADAN alan, enum dışı,
     // metin uzunluğu, kontrol karakteri; hepsi SchemaViolation.
@@ -2095,21 +2096,21 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         long t0 = 1_700_000_000_000L;
         int gecen = 0;
         for (int i = 0; i < 25; i++)
-            if (rl.Allow(42, RateClass.Economic, CommandSource.UI, t0 + i)) gecen++;
+            if (rl.Allow(42, 0, RateClass.Economic, CommandSource.UI, t0 + i)) gecen++;
         // Economic: 20/dk → ilk 20 geçer, kalan 5 reddedilir
         string hata = gecen == 20 ? "" : $"ekonomik sınıf {gecen}/20 geçti ";
         // pencere kayınca yeniden açılır
-        if (!rl.Allow(42, RateClass.Economic, CommandSource.UI, t0 + 61_000)) hata += "pencere kaymadı ";
+        if (!rl.Allow(42, 0, RateClass.Economic, CommandSource.UI, t0 + 61_000)) hata += "pencere kaymadı ";
         // AbuseFlag: 5 dk içinde 3 red
         if (!rl.ConsumeAbuseFlag(42, t0 + 100)) hata += "AbuseFlag düşmedi ";
         if (rl.ConsumeAbuseFlag(42, t0 + 100)) hata += "AbuseFlag iki kez tüketildi ";
         // farklı kullanıcı etkilenmez
-        if (!rl.Allow(43, RateClass.Economic, CommandSource.UI, t0)) hata += "kullanıcı sızması ";
+        if (!rl.Allow(43, 0, RateClass.Economic, CommandSource.UI, t0)) hata += "kullanıcı sızması ";
         // LLM kaynağı ModB penceresine DE tabidir
         var rl2 = new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen);
         int llmGecen = 0;
         for (int i = 0; i < 15; i++)
-            if (rl2.Allow(44, RateClass.Tactic, CommandSource.LLM, t0 + i)) llmGecen++;
+            if (rl2.Allow(44, 0, RateClass.Tactic, CommandSource.LLM, t0 + i)) llmGecen++;
         if (llmGecen != 10) hata += $"LLM ModB sınırı {llmGecen}/10 ";
         if (hata.Length > 0) failures += Fail("K1RateLimit", hata);
         else Pass("K1RateLimit(sınıf penceresi · kayma · AbuseFlag · kullanıcı yalıtımı · LLM ModB sınırı)");
@@ -2123,8 +2124,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                       new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen), idem);
         var id = Guid.NewGuid();
         var e1 = Env("tycoon.set_ticket_price", id: id);
-        var r1 = bus.Submit(e1, gecerliBilet.Copy(), exec);
-        var r2 = bus.Submit(e1, gecerliBilet.Copy(), exec);
+        var r1 = bus.Submit(e1, gecerliBilet.Copy(), exec, HostSaat);
+        var r2 = bus.Submit(e1, gecerliBilet.Copy(), exec, HostSaat);
         string hata = "";
         if (!r1.Ok || r1.Replayed) hata += "ilk komut kabul edilmedi ";
         if (!r2.Ok || !r2.Replayed) hata += "ikinci komut önceki yanıtı döndürmedi ";
@@ -2136,13 +2137,133 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                        new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen), idem2);
         var idR = Guid.NewGuid();
         var kotu = Env("tycoon.set_ticket_price", id: idR);
-        var k1 = bus2.Submit(kotu, gecerliBilet.Copy().Set("fiyat", 9999.0), exec2);
-        var k2 = bus2.Submit(kotu, gecerliBilet.Copy().Set("fiyat", 50.0), exec2);   // düzeltilmiş payload!
+        var k1 = bus2.Submit(kotu, gecerliBilet.Copy().Set("fiyat", 9999.0), exec2, HostSaat);
+        var k2 = bus2.Submit(kotu, gecerliBilet.Copy().Set("fiyat", 50.0), exec2, HostSaat);   // düzeltilmiş payload!
         if (k1.Reason != RejectionReason.ParamOutOfBand) hata += "bant reddi yok ";
         if (k2.Reason != RejectionReason.ParamOutOfBand || !k2.Replayed) hata += "red idempotent değil ";
         if (exec2.Executions != 0) hata += "reddedilen komut yürütüldü ";
         if (hata.Length > 0) failures += Fail("K1Idempotency", hata);
         else Pass("K1Idempotency(tek yürütme · önceki yanıt · red de idempotent)");
+    }
+
+    // 24g2) İNCELEME DÜZELTMELERİ (Codex, 8 bulgu) — her biri ayrı ayrı sınanır
+    {
+        string hata = "";
+        var rlX = new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen);
+
+        // (1) P1 — İSTEMCİ SAATİ rate limit penceresini sıfırlayamaz: zarf ileri tarihli
+        // gönderilse bile HOST saati kullanılır.
+        {
+            var rl = new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen);
+            int gecti = 0;
+            for (int i = 0; i < 25; i++)
+            {
+                // istemci her komutta saati 1 dk ileri atıyor — eskiden pencere sürekli sıfırlanırdı
+                var e = Env("tycoon.set_ticket_price") with { IssuedAtUnixMs = HostSaat + i * 60_000L };
+                if (Validator.Validate(e, Catalog.Find(e.ActionType), gecerliBilet.Copy(), bands,
+                        new TheBadge.Checks.TestContext(), rl, HostSaat).Ok) gecti++;
+            }
+            if (gecti != 20) hata += $"istemci saati penceresi kaydırıyor ({gecti}/20) ";
+        }
+
+        // (2) P1 — EŞZAMANLI aynı CommandId: yalnız BİRİ yürütür (atomik rezervasyon)
+        {
+            var idemC = new IdempotencyStore();
+            var execC = new TheBadge.Checks.TestExecutor();
+            var busC = new TheBadge.CommandBus.CommandBus(bands, new TheBadge.Checks.TestContext(),
+                           new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen), idemC);
+            var idC = Guid.NewGuid();
+            int ok = 0, dup = 0;
+            var kilitC = new object();
+            System.Threading.Tasks.Parallel.For(0, 16, _ =>
+            {
+                var r = busC.Submit(Env("tycoon.set_ticket_price", id: idC), gecerliBilet.Copy(), execC, HostSaat);
+                lock (kilitC) { if (r.Ok && !r.Replayed) ok++; else if (r.Reason == RejectionReason.DuplicateCommand) dup++; }
+            });
+            if (execC.Executions != 1) hata += $"eşzamanlı yürütme {execC.Executions}≠1 ";
+            if (ok != 1) hata += $"eşzamanlıda {ok} çağrı sahiplik aldı ";
+        }
+
+        // (3) P1 — EŞZAMANLI rate limit: paralel patlama limiti aşamaz
+        {
+            var rl = new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen);
+            int gecen = 0; var kilitR = new object();
+            System.Threading.Tasks.Parallel.For(0, 200, _ =>
+            {
+                if (rl.Allow(99, 0, RateClass.Economic, CommandSource.UI, HostSaat)) { lock (kilitR) gecen++; }
+            });
+            if (gecen != 20) hata += $"paralel patlama limiti aştı ({gecen}/20) ";
+        }
+
+        // (4) P1 — YÜRÜTÜCÜSÜZ Submit sahte başarı üretmez (kablolama hatası görünür patlar)
+        {
+            var busN = new TheBadge.CommandBus.CommandBus(bands, new TheBadge.Checks.TestContext(),
+                           new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen), new IdempotencyStore());
+            bool patladi = false;
+            try { busN.Submit(Env("tycoon.set_ticket_price"), gecerliBilet.Copy(), null, HostSaat); }
+            catch (ArgumentNullException) { patladi = true; }
+            if (!patladi) hata += "yürütücüsüz Submit sessizce başarı döndürdü ";
+        }
+
+        // (5) P2 — BAĞLAM KESİŞİMİ: maç damgalı komut, MAÇ bağlamı kapalıyken geçmemeli
+        {
+            var soloHub = new TheBadge.Checks.TestContext { Active = TheBadge.CommandBus.Context.Hub };
+            var rolPl = new TheBadge.Checks.TestPayload().Set("oyuncuId", 12).Set("rolId", 3);
+            if (Dogrula(Env("squad.set_player_role", tick: 100), rolPl, soloHub) != RejectionReason.StateConflict)
+                hata += "maç damgalı komut hub açıkken geçti ";
+            if (Dogrula(Env("squad.set_player_role", tick: 0), rolPl, soloHub) != RejectionReason.None)
+                hata += "hub damgalı komut hub açıkken geçmedi ";
+        }
+
+        // (6) P2 — AUTO kaynağı v1'de KAPALI + tanımsız enum reddedilir (CB 2.2)
+        {
+            if (Dogrula(Env("tycoon.set_ticket_price", src: CommandSource.Auto), gecerliBilet.Copy()) != RejectionReason.SchemaViolation)
+                hata += "AUTO kaynağı geçti ";
+            var tanimsiz = Env("tycoon.set_ticket_price") with { Source = (CommandSource)9 };
+            if (Dogrula(tanimsiz, gecerliBilet.Copy()) != RejectionReason.SchemaViolation)
+                hata += "tanımsız kaynak geçti ";
+            if (Dogrula(Env("tycoon.set_ticket_price", src: CommandSource.LLM), gecerliBilet.Copy()) != RejectionReason.None)
+                hata += "LLM kaynağı reddedildi ";
+        }
+
+        // (7) P2 — DENETİM KAYDI yürütme transaction'ının İÇİNDE (yürütücüye geçer)
+        {
+            var idemA = new IdempotencyStore();
+            var izleyen = new TheBadge.Checks.AuditCapturingExecutor();
+            var busA = new TheBadge.CommandBus.CommandBus(bands, new TheBadge.Checks.TestContext(),
+                           new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen), idemA);
+            var e = Env("tycoon.set_ticket_price", src: CommandSource.LLM);
+            busA.Submit(e, gecerliBilet.Copy(), izleyen, HostSaat);
+            if (!izleyen.Gordu) hata += "yürütücü denetim kaydını almadı ";
+            else if (izleyen.Kayit.CommandId != e.CommandId || izleyen.Kayit.ReceivedAtUnixMs != HostSaat
+                     || izleyen.Kayit.Source != CommandSource.LLM)
+                hata += "denetim kaydı eksik/yanlış ";
+        }
+
+        // (8) P2 — MAÇ İÇİ limit TAKIM kapsamlı (CB 5.1 "10/dk/takım")
+        {
+            var rl = new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen);
+            int t0g = 0, t1g = 0;
+            for (int i = 0; i < 12; i++) if (rl.Allow(77, 0, RateClass.MatchCmd, CommandSource.UI, HostSaat)) t0g++;
+            for (int i = 0; i < 12; i++) if (rl.Allow(77, 1, RateClass.MatchCmd, CommandSource.UI, HostSaat)) t1g++;
+            if (t0g != 10 || t1g != 10) hata += $"takım kapsamı yok (t0 {t0g}, t1 {t1g}) ";
+            // aynı takımı paylaşan İKİ kullanıcı tek sayaçta olmalı → ekonomik sınıf kullanıcı kapsamlı kalır
+            var rl3 = new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen);
+            int u1 = 0;
+            for (int i = 0; i < 25; i++) if (rl3.Allow(88, 0, RateClass.Economic, CommandSource.UI, HostSaat)) u1++;
+            if (!rl3.Allow(89, 0, RateClass.Economic, CommandSource.UI, HostSaat)) hata += "ekonomik sınıf kullanıcı yalıtımı bozuk ";
+        }
+
+        // Ön-doğrulama rate limit sayacını TÜKETMEZ
+        {
+            var rl = new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen);
+            var busV = new TheBadge.CommandBus.CommandBus(bands, new TheBadge.Checks.TestContext(), rl, new IdempotencyStore());
+            for (int i = 0; i < 50; i++) busV.Validate(Env("tycoon.set_ticket_price"), gecerliBilet.Copy(), HostSaat);
+            if (!rl.Allow(7, 0, RateClass.Economic, CommandSource.UI, HostSaat)) hata += "ön-doğrulama hak yiyor ";
+        }
+
+        if (hata.Length > 0) failures += Fail("K1IncelemeDuzeltmeleri", hata);
+        else Pass("K1IncelemeDuzeltmeleri(8 bulgu: host saati · eşzamanlı Id · eşzamanlı rate · yürütücü zorunlu · bağlam kesişimi · AUTO reddi · audit transaction · takım kapsamı)");
     }
 
     // 24g) RED DETERMİNİZMİ + TIER BÜTÜNLÜĞÜ

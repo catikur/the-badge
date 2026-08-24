@@ -88,9 +88,21 @@ namespace TheBadge.Checks
     /// <summary>Yürütücü sahtesi — kaç kez yürütüldüğünü sayar (idempotency kanıtı).</summary>
     public sealed class TestExecutor : ICommandExecutor
     {
-        public int Executions;
+        int executions;
+        public int Executions => System.Threading.Volatile.Read(ref executions);
         public RejectionReason Result = RejectionReason.None;
-        public RejectionReason Execute(CommandEnvelope env, ActionDef action, IPayloadView payload, out string detail)
-        { Executions++; detail = null; return Result; }
+        public RejectionReason Execute(CommandEnvelope env, ActionDef action, IPayloadView payload,
+                                       AuditRecord auditRecord, out string detail)
+        { System.Threading.Interlocked.Increment(ref executions); detail = null; return Result; }
+    }
+
+    /// <summary>Denetim kaydının YÜRÜTME transaction'ının içinde geldiğini kanıtlar (CB 5.2).</summary>
+    public sealed class AuditCapturingExecutor : ICommandExecutor
+    {
+        public bool Gordu;
+        public AuditRecord Kayit;
+        public RejectionReason Execute(CommandEnvelope env, ActionDef action, IPayloadView payload,
+                                       AuditRecord auditRecord, out string detail)
+        { Gordu = true; Kayit = auditRecord; detail = null; return RejectionReason.None; }
     }
 }

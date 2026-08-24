@@ -958,11 +958,39 @@ yazılsaydı ya değişmezi ihlal ederdi ya yeniden yazılırdı → K1 ilk dili
   önceki yanıt aynen döner. **Tasarım notu:** idempotency doğrulamadan ÖNCEdir — yeniden
   doğrulamak, aradaki durum değişimi yüzünden aynı komuta farklı yanıt üretebilir ve retry'yi
   güvensiz kılardı. RED de idempotenttir (düzeltilmiş payload'la aynı Id gelirse eski red döner).
-- **Kapılar (7):** `K1KatalogTamligi` (32 aksiyon, her bantlı parametrenin bandı balance'ta VAR) ·
+- **İnceleme düzeltmeleri (Codex, 8 bulgu — SEKİZİ DE haklı, üçü P1):**
+  (1) **İstemci saati güveniliyordu (P1).** Rate limit penceresi ve idempotency süresi zarfın
+  `IssuedAtUnixMs` alanıyla çalışıyordu; her partiyi ileri tarihli göndererek sayaç sıfırlanabilirdi.
+  Artık HOST'un alış saati (`receivedAtUnixMs`) ayrı parametredir; `IssuedAtUnixMs` yalnız metadata.
+  (2) **Idempotency atomik değildi (P1).** "Önce bak, sonra sakla" deseninde iki eşzamanlı RPC
+  aynı `CommandId`'yi birlikte yürütebiliyordu ve `Dictionary` senkronsuzdu — iddia edilen
+  exactly-once sağlanmıyordu. Artık `TryReserve → yürüt → Complete` (kilitli); ikinci eşzamanlı
+  çağrı `DuplicateCommand` alır, çöken rezervasyon uçuş süresi sonunda devralınır.
+  (3) **Rate limit kabulü atomik değildi (P1).** Paralel patlama hepsi birden boş kapasite görüp
+  limiti aşabiliyordu. Denetim+kayıt tek kilit altında.
+  (4) **Yürütücüsüz `Submit` SAHTE BAŞARI üretiyordu (P1).** Durum değişmediği hâlde "başarılı"
+  sonuç idempotency deposuna yazılıyor, gerçek yürütücüyle yapılan retry bu sahte başarıyı tekrar
+  oynatıyordu. Yürütücü artık ZORUNLU (kablolama hatası görünür patlar); yalnız doğrulama için
+  ayrı `Validate` API'si var ve o rate limit hakkını TÜKETMEZ.
+  (5) **Bağlam denetimi birleşik bayrakla yapılıyordu.** Hem hub hem maç geçerli bir aksiyon
+  (ör. `squad.set_player_role`) maç damgasıyla gelse bile "hub açık" olduğu için geçiyordu.
+  Artık zarfın seçtiği bağlamla aksiyon bayraklarının KESİŞİMİ denetlenir.
+  (6) **`CommandSource.Auto` hiç doğrulanmıyordu.** CB 2.2 "AUTO v1'de kapalı" derken `Auto`
+  zarfı UI komutu gibi yürüyebiliyordu. Artık `Auto` ve tanımsız enum değerleri reddedilir.
+  (7) **Denetim kaydı yürütmeden SONRA ayrı çağrılıyordu** — audit yazımı başarısız olursa durum
+  audit'siz kalır ve CB 5.2'nin "hep ya da hiç" sözleşmesi delinirdi. `AuditRecord` artık
+  yürütücüye geçer, yani durum/event ile AYNI transaction'da kalıcı olur; `IAuditSink` yalnız
+  durum değiştirmeyen sonuçlar (redler, tekrar oynatmalar) içindir.
+  (8) **Maç içi limit takım kapsamlı değildi.** CB 5.1 "10/dk/TAKIM" derken anahtar yalnız
+  `UserId`'ydi: takımı paylaşan kullanıcılar limiti birlikte aşabiliyor, farklı takımları yöneten
+  kullanıcı gereksiz kısılıyordu. `MatchCmd` sınıfında takım kimliği anahtara girdi.
+  Sekizi de ayrı kapıyla sınanır (`K1IncelemeDuzeltmeleri`) — eşzamanlılık bulguları gerçek
+  `Parallel.For` altında ölçülür.
+- **Kapılar (8):** `K1KatalogTamligi` (32 aksiyon, her bantlı parametrenin bandı balance'ta VAR) ·
   `K1SemaSikiligi` (7 senaryo) · `K1BantZorlamasi` (**59 bantlı parametrenin TAMAMI** alt sınırda
   reddediliyor — tek tek değil, katalog taranarak) · `K1BaglamKapisi` (maç↔hub ayrımı) ·
-  `K1RateLimit` · `K1Idempotency` · `K1RedDeterminizmi` (aynı girdi=aynı sebep, kapı sırası,
-  tier kaynaktan bağımsız).
+  `K1RateLimit` · `K1Idempotency` · `K1IncelemeDuzeltmeleri` (8 bulgu) · `K1RedDeterminizmi` (aynı girdi=aynı
+  sebep, kapı sırası, tier kaynaktan bağımsız).
 
 ## Bekleyen kararlar
 - ~~ME 13.4 upset büyüklüğü~~ → **KARAR (2026-08-19, Atilla): (d) HİBRİT.** Dört seçenek
