@@ -27,6 +27,11 @@ namespace TheBadge.CommandBus
         bool IsContextActive(Context context);
         /// <summary>Sahiplik/kaynak/hak denetimi. Geçerse `RejectionReason.None` döner.</summary>
         RejectionReason CheckOwnershipAndState(CommandEnvelope env, ActionDef action, IPayloadView payload);
+
+        /// <summary>KARARLI takım kimliği — CB 5.1 maç içi limiti "10/dk/TAKIM" der ve bu kimlik
+        /// zarftan TÜRETİLEMEZ: `TeamIdx` yalnız ev/deplasman'dır, aynı takımı yöneten iki
+        /// kullanıcıyı aynı kovaya sokmaz. Host (maç/lig bağlamını bilen taraf) üretir.</summary>
+        long ResolveTeamKey(CommandEnvelope env);
     }
 
     /// <summary>Bant sağlayıcı — değerler `balance/command.bands.json`'dan gelir (CB 5:
@@ -125,7 +130,8 @@ namespace TheBadge.CommandBus
             // pencere sıfırlanabilirdi (inceleme düzeltmesi, P1). Takım kimliği de anahtara girer:
             // CB 5.1 maç içi limiti "10/dk/TAKIM" der (aynı takımı paylaşan kullanıcılar tek
             // sayaçta, farklı takımları yöneten kullanıcı ayrı sayaçlarda).
-            if (rate != null && !rate.Allow(env.UserId, env.TeamIdx, action.RateClass, env.Source, receivedAtUnixMs))
+            long teamKey = action.RateClass == RateClass.MatchCmd ? ctx.ResolveTeamKey(env) : 0;
+            if (rate != null && !rate.Allow(env.UserId, teamKey, action.RateClass, env.Source, receivedAtUnixMs))
                 return new ValidationResult(RejectionReason.RateLimited, action.RateClass.ToString());
 
             return ValidationResult.Pass;

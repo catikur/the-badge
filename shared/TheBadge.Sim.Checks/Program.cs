@@ -2096,21 +2096,21 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         long t0 = 1_700_000_000_000L;
         int gecen = 0;
         for (int i = 0; i < 25; i++)
-            if (rl.Allow(42, 0, RateClass.Economic, CommandSource.UI, t0 + i)) gecen++;
+            if (rl.Allow(42, 0L, RateClass.Economic, CommandSource.UI, t0 + i)) gecen++;
         // Economic: 20/dk → ilk 20 geçer, kalan 5 reddedilir
         string hata = gecen == 20 ? "" : $"ekonomik sınıf {gecen}/20 geçti ";
         // pencere kayınca yeniden açılır
-        if (!rl.Allow(42, 0, RateClass.Economic, CommandSource.UI, t0 + 61_000)) hata += "pencere kaymadı ";
+        if (!rl.Allow(42, 0L, RateClass.Economic, CommandSource.UI, t0 + 61_000)) hata += "pencere kaymadı ";
         // AbuseFlag: 5 dk içinde 3 red
         if (!rl.ConsumeAbuseFlag(42, t0 + 100)) hata += "AbuseFlag düşmedi ";
         if (rl.ConsumeAbuseFlag(42, t0 + 100)) hata += "AbuseFlag iki kez tüketildi ";
         // farklı kullanıcı etkilenmez
-        if (!rl.Allow(43, 0, RateClass.Economic, CommandSource.UI, t0)) hata += "kullanıcı sızması ";
+        if (!rl.Allow(43, 0L, RateClass.Economic, CommandSource.UI, t0)) hata += "kullanıcı sızması ";
         // LLM kaynağı ModB penceresine DE tabidir
         var rl2 = new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen);
         int llmGecen = 0;
         for (int i = 0; i < 15; i++)
-            if (rl2.Allow(44, 0, RateClass.Tactic, CommandSource.LLM, t0 + i)) llmGecen++;
+            if (rl2.Allow(44, 0L, RateClass.Tactic, CommandSource.LLM, t0 + i)) llmGecen++;
         if (llmGecen != 10) hata += $"LLM ModB sınırı {llmGecen}/10 ";
         if (hata.Length > 0) failures += Fail("K1RateLimit", hata);
         else Pass("K1RateLimit(sınıf penceresi · kayma · AbuseFlag · kullanıcı yalıtımı · LLM ModB sınırı)");
@@ -2190,7 +2190,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             int gecen = 0; var kilitR = new object();
             System.Threading.Tasks.Parallel.For(0, 200, _ =>
             {
-                if (rl.Allow(99, 0, RateClass.Economic, CommandSource.UI, HostSaat)) { lock (kilitR) gecen++; }
+                if (rl.Allow(99, 0L, RateClass.Economic, CommandSource.UI, HostSaat)) { lock (kilitR) gecen++; }
             });
             if (gecen != 20) hata += $"paralel patlama limiti aştı ({gecen}/20) ";
         }
@@ -2244,14 +2244,46 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         {
             var rl = new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen);
             int t0g = 0, t1g = 0;
-            for (int i = 0; i < 12; i++) if (rl.Allow(77, 0, RateClass.MatchCmd, CommandSource.UI, HostSaat)) t0g++;
-            for (int i = 0; i < 12; i++) if (rl.Allow(77, 1, RateClass.MatchCmd, CommandSource.UI, HostSaat)) t1g++;
-            if (t0g != 10 || t1g != 10) hata += $"takım kapsamı yok (t0 {t0g}, t1 {t1g}) ";
+            for (int i = 0; i < 12; i++) if (rl.Allow(77, 500L, RateClass.MatchCmd, CommandSource.UI, HostSaat)) t0g++;
+            for (int i = 0; i < 12; i++) if (rl.Allow(77, 501L, RateClass.MatchCmd, CommandSource.UI, HostSaat)) t1g++;
+            if (t0g != 10 || t1g != 10) hata += $"farklı takımlar ayrı sayaçta değil (t0 {t0g}, t1 {t1g}) ";
+            // AYNI takımı yöneten İKİ FARKLI kullanıcı TEK kovayı paylaşır (CB 5.1 "10/dk/takım")
+            var rlOrtak = new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen);
+            int ortak = 0;
+            for (int i = 0; i < 8; i++) if (rlOrtak.Allow(101, 900L, RateClass.MatchCmd, CommandSource.UI, HostSaat)) ortak++;
+            for (int i = 0; i < 8; i++) if (rlOrtak.Allow(102, 900L, RateClass.MatchCmd, CommandSource.UI, HostSaat)) ortak++;
+            if (ortak != 10) hata += $"aynı takımın iki yöneticisi kovayı paylaşmıyor ({ortak}/10) ";
             // aynı takımı paylaşan İKİ kullanıcı tek sayaçta olmalı → ekonomik sınıf kullanıcı kapsamlı kalır
             var rl3 = new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen);
             int u1 = 0;
-            for (int i = 0; i < 25; i++) if (rl3.Allow(88, 0, RateClass.Economic, CommandSource.UI, HostSaat)) u1++;
-            if (!rl3.Allow(89, 0, RateClass.Economic, CommandSource.UI, HostSaat)) hata += "ekonomik sınıf kullanıcı yalıtımı bozuk ";
+            for (int i = 0; i < 25; i++) if (rl3.Allow(88, 0L, RateClass.Economic, CommandSource.UI, HostSaat)) u1++;
+            if (!rl3.Allow(89, 0L, RateClass.Economic, CommandSource.UI, HostSaat)) hata += "ekonomik sınıf kullanıcı yalıtımı bozuk ";
+        }
+
+        // (9) DEVRALMA YOK + JETON KORUMASI (ikinci tur inceleme bulgusu)
+        {
+            var st9 = new IdempotencyStore();
+            var id9 = Guid.NewGuid();
+            var r9a = st9.TryReserve(id9, HostSaat, out _, out var tokA);
+            // uzun süre sonra bile İKİNCİ rezervasyon verilmez (ilk çağrı hâlâ yürütüyor olabilir)
+            var r9b = st9.TryReserve(id9, HostSaat + 10L * 60 * 60 * 1000, out _, out var tokB);
+            if (r9a != ReserveResult.Reserved) hata += "ilk rezervasyon alınamadı ";
+            if (r9b != ReserveResult.InFlight) hata += "uçuş süresi sonrası DEVRALMA yapıldı ";
+            if (tokB.IsValid) hata += "devralanmış gibi jeton verildi ";
+            // Yabancı jetonla Complete/Release hiçbir şey yapmaz
+            if (st9.Complete(id9, new ReservationToken(999999), HostSaat, new CommandOutcome(RejectionReason.None, null)))
+                hata += "yabancı jeton Complete edebildi ";
+            if (st9.Release(id9, new ReservationToken(999999))) hata += "yabancı jeton Release edebildi ";
+            // Sahip kapatabilir
+            if (!st9.Complete(id9, tokA, HostSaat, new CommandOutcome(RejectionReason.None, null)))
+                hata += "sahip Complete edemedi ";
+            // Asılı rezervasyon YALNIZ Prune ile açılır (operatör denetimi)
+            var st10 = new IdempotencyStore();
+            var id10 = Guid.NewGuid();
+            st10.TryReserve(id10, HostSaat, out _, out _);
+            if (st10.Prune(HostSaat + 60_000, asiliRezervasyonMs: 30_000) != 1) hata += "asılı rezervasyon Prune ile açılmıyor ";
+            if (st10.TryReserve(id10, HostSaat + 60_000, out _, out _) != ReserveResult.Reserved)
+                hata += "Prune sonrası rezervasyon alınamadı ";
         }
 
         // Ön-doğrulama rate limit sayacını TÜKETMEZ
@@ -2259,11 +2291,11 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             var rl = new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen);
             var busV = new TheBadge.CommandBus.CommandBus(bands, new TheBadge.Checks.TestContext(), rl, new IdempotencyStore());
             for (int i = 0; i < 50; i++) busV.Validate(Env("tycoon.set_ticket_price"), gecerliBilet.Copy(), HostSaat);
-            if (!rl.Allow(7, 0, RateClass.Economic, CommandSource.UI, HostSaat)) hata += "ön-doğrulama hak yiyor ";
+            if (!rl.Allow(7, 0L, RateClass.Economic, CommandSource.UI, HostSaat)) hata += "ön-doğrulama hak yiyor ";
         }
 
         if (hata.Length > 0) failures += Fail("K1IncelemeDuzeltmeleri", hata);
-        else Pass("K1IncelemeDuzeltmeleri(8 bulgu: host saati · eşzamanlı Id · eşzamanlı rate · yürütücü zorunlu · bağlam kesişimi · AUTO reddi · audit transaction · takım kapsamı)");
+        else Pass("K1IncelemeDuzeltmeleri(10 bulgu, 2 tur: host saati · eşzamanlı Id · eşzamanlı rate · yürütücü zorunlu · bağlam kesişimi · AUTO reddi · audit transaction · takım kovası paylaşımı · devralma yok · jeton koruması)");
     }
 
     // 24g) RED DETERMİNİZMİ + TIER BÜTÜNLÜĞÜ

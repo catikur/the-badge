@@ -83,7 +83,7 @@ namespace TheBadge.CommandBus
                 "Yürütücüsüz Submit durum değiştirmez ama başarı raporlar; yalnız doğrulama için Validate kullanın.");
 
             // 1) ATOMİK rezervasyon (CB 8.1) — eşzamanlı iki çağrı aynı Id'yi yürütemez
-            var rez = idem.TryReserve(env.CommandId, receivedAtUnixMs, out var onceki);
+            var rez = idem.TryReserve(env.CommandId, receivedAtUnixMs, out var onceki, out var jeton);
             if (rez == ReserveResult.Completed)
             {
                 audit?.Record(env, onceki, false, receivedAtUnixMs);
@@ -104,7 +104,7 @@ namespace TheBadge.CommandBus
                 if (!v.Ok)
                 {
                     var red = new CommandOutcome(v.Reason, v.Detail);
-                    idem.Complete(env.CommandId, receivedAtUnixMs, red);
+                    idem.Complete(env.CommandId, jeton, receivedAtUnixMs, red);
                     bool abuse = v.Reason == RejectionReason.RateLimited
                                  && rate != null && rate.ConsumeAbuseFlag(env.UserId, receivedAtUnixMs);
                     audit?.Record(env, red, abuse, receivedAtUnixMs);   // red durum değiştirmez
@@ -114,12 +114,12 @@ namespace TheBadge.CommandBus
                 // 3) Yürütme — denetim kaydı YÜRÜTME TRANSACTION'ININ İÇİNDE (CB 5.2)
                 var yr = executor.Execute(env, action, payload, new AuditRecord(env, receivedAtUnixMs), out string detay);
                 var sonuc = new CommandOutcome(yr, yr == RejectionReason.None ? null : (detay ?? env.ActionType));
-                idem.Complete(env.CommandId, receivedAtUnixMs, sonuc);
+                idem.Complete(env.CommandId, jeton, receivedAtUnixMs, sonuc);
                 return sonuc;
             }
             catch
             {
-                idem.Release(env.CommandId);   // rezervasyon asılı kalmasın; retry yeniden dener
+                idem.Release(env.CommandId, jeton);   // yalnız KENDİ rezervasyonumuzu bırakırız
                 throw;
             }
         }

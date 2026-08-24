@@ -25,6 +25,16 @@ namespace TheBadge.CommandBus
         InFlight = 2    // BAŞKA bir çağrı şu an yürütüyor: DuplicateCommand
     }
 
+    /// <summary>Rezervasyon sahiplik jetonu. `Complete`/`Release` YALNIZ jetonu eşleşen çağrıdan
+    /// kabul edilir — gecikmiş bir çağrının başkasının rezervasyonunu kapatması/silmesi
+    /// (inceleme bulgusu) böylece imkansızdır. Varsayılan (0) geçersizdir.</summary>
+    public readonly struct ReservationToken
+    {
+        public readonly ulong Value;
+        public ReservationToken(ulong v) { Value = v; }
+        public bool IsValid => Value != 0;
+    }
+
     /// <summary>Idempotency deposu — CB Spec 8.1. `CommandId` 24 saatlik dedup penceresinde
     /// tutulur; at-least-once istemci retry'si exactly-once etkisi verir.
     ///
@@ -38,20 +48,28 @@ namespace TheBadge.CommandBus
     public sealed class IdempotencyStore
     {
         readonly object kilit = new object();
-        readonly Dictionary<Guid, (long at, bool done, CommandOutcome outcome)> kayit
-            = new Dictionary<Guid, (long, bool, CommandOutcome)>();
+        readonly Dictionary<Guid, (long at, bool done, ulong tok, CommandOutcome outcome)> kayit
+            = new Dictionary<Guid, (long, bool, ulong, CommandOutcome)>();
         readonly long pencereMs;
-        readonly long ucusSuresiMs;   // rezervasyon bu kadar sürede tamamlanmazsa düşer (çökme payı)
+        ulong sonrakiJeton = 1;
 
-        public IdempotencyStore(long pencereMs = 24L * 60 * 60 * 1000, long ucusSuresiMs = 30_000)
-        { this.pencereMs = pencereMs; this.ucusSuresiMs = ucusSuresiMs; }
+        public IdempotencyStore(long pencereMs = 24L * 60 * 60 * 1000)
+        { this.pencereMs = pencereMs; }
 
         public int Count { get { lock (kilit) return kayit.Count; } }
 
-        /// <summary>ATOMİK rezervasyon: ya sahiplik alınır, ya önceki yanıt döner, ya "sürüyor".</summary>
-        public ReserveResult TryReserve(Guid commandId, long nowUnixMs, out CommandOutcome onceki)
+        /// <summary>ATOMİK rezervasyon: ya sahiplik alınır, ya önceki yanıt döner, ya "sürüyor".
+        ///
+        /// UÇUŞ SÜRESİ DEVRALMASI YOKTUR (inceleme düzeltmesi): önceki sürümde bir rezervasyon
+        /// belli süre sonra "çökmüş sayılıp" devralınıyordu; ama ilk çağrı hâlâ `Execute` içindeyse
+        /// İKİ yürütme birden durum değiştirebiliyordu — yani exactly-once iddiası, tam da onu
+        /// korumak için yazılmış kolda deliniyordu. Canlılık uğruna GÜVENLİK feda edilmez:
+        /// asılı kalan rezervasyon `Prune` ile (operatör denetiminde) temizlenir, o ana kadar
+        /// retry'ler `DuplicateCommand` alır — istemci için güvenli, durum için bozulmasız.</summary>
+        public ReserveResult TryReserve(Guid commandId, long nowUnixMs,
+                                        out CommandOutcome onceki, out ReservationToken token)
         {
-            onceki = default;
+            onceki = default; token = default;
             lock (kilit)
             {
                 if (kayit.TryGetValue(commandId, out var k))
@@ -61,34 +79,48 @@ namespace TheBadge.CommandBus
                         if (nowUnixMs - k.at < pencereMs) { onceki = k.outcome.AsReplay(); return ReserveResult.Completed; }
                         kayit.Remove(commandId);            // pencere doldu, yeniden yürütülebilir
                     }
-                    else if (nowUnixMs - k.at < ucusSuresiMs)
+                    else
                     {
-                        return ReserveResult.InFlight;      // başka çağrı yürütüyor
+                        return ReserveResult.InFlight;      // başka çağrı yürütüyor — DEVRALMA YOK
                     }
-                    // uçuş süresi aşıldı: önceki çağrı çökmüş sayılır, rezervasyon devralınır
                 }
-                kayit[commandId] = (nowUnixMs, false, default);
+                ulong t = sonrakiJeton++;
+                kayit[commandId] = (nowUnixMs, false, t, default);
+                token = new ReservationToken(t);
                 return ReserveResult.Reserved;
             }
         }
 
-        /// <summary>Rezervasyonu sonuçla kapatır. Yalnız `Reserved` alan çağrı çağırmalıdır.</summary>
-        public void Complete(Guid commandId, long nowUnixMs, CommandOutcome outcome)
-        {
-            lock (kilit) kayit[commandId] = (nowUnixMs, true, outcome);
-        }
-
-        /// <summary>Rezervasyonu geri alır (yürütme başlamadan iptal — ör. beklenmeyen istisna).</summary>
-        public void Release(Guid commandId)
+        /// <summary>Rezervasyonu sonuçla kapatır. Jeton eşleşmezse HİÇBİR ŞEY yapmaz —
+        /// gecikmiş bir çağrı başkasının sonucunu ezemez.</summary>
+        public bool Complete(Guid commandId, ReservationToken token, long nowUnixMs, CommandOutcome outcome)
         {
             lock (kilit)
             {
-                if (kayit.TryGetValue(commandId, out var k) && !k.done) kayit.Remove(commandId);
+                if (!token.IsValid) return false;
+                if (!kayit.TryGetValue(commandId, out var k) || k.done || k.tok != token.Value) return false;
+                kayit[commandId] = (nowUnixMs, true, k.tok, outcome);
+                return true;
             }
         }
 
-        /// <summary>Pencere dışına düşen kayıtları atar (çağrı sıklığı host'un işi).</summary>
-        public int Prune(long nowUnixMs)
+        /// <summary>Rezervasyonu geri alır (yürütme sırasında istisna). Jeton eşleşmezse
+        /// hiçbir şey yapmaz — gecikmiş bir çağrı başkasının rezervasyonunu silemez.</summary>
+        public bool Release(Guid commandId, ReservationToken token)
+        {
+            lock (kilit)
+            {
+                if (!token.IsValid) return false;
+                if (!kayit.TryGetValue(commandId, out var k) || k.done || k.tok != token.Value) return false;
+                kayit.Remove(commandId);
+                return true;
+            }
+        }
+
+        /// <summary>Pencere dışına düşen TAMAMLANMIŞ kayıtları atar. `asiliRezervasyonMs` verilirse
+        /// o yaştan eski ASILI rezervasyonlar da temizlenir — bu, çökmüş bir işleyicinin bıraktığı
+        /// kilidi açmanın TEK yoludur ve operatör denetimindedir (otomatik devralma yok).</summary>
+        public int Prune(long nowUnixMs, long asiliRezervasyonMs = 0)
         {
             lock (kilit)
             {
@@ -96,7 +128,8 @@ namespace TheBadge.CommandBus
                 foreach (var kv in kayit)
                 {
                     long yas = nowUnixMs - kv.Value.at;
-                    if (kv.Value.done ? yas >= pencereMs : yas >= ucusSuresiMs) silinecek.Add(kv.Key);
+                    if (kv.Value.done) { if (yas >= pencereMs) silinecek.Add(kv.Key); }
+                    else if (asiliRezervasyonMs > 0 && yas >= asiliRezervasyonMs) silinecek.Add(kv.Key);
                 }
                 for (int i = 0; i < silinecek.Count; i++) kayit.Remove(silinecek[i]);
                 return silinecek.Count;

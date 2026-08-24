@@ -7,9 +7,12 @@ namespace TheBadge.CommandBus
     /// <summary>Rate limit — CB Spec 5.1. Kayan pencere, (userId + aksiyon sınıfı) kapsamında.</summary>
     public interface IRateLimiter
     {
-        /// <summary>`teamIdx` yalnız MatchCmd sınıfında anahtara girer — CB 5.1 maç içi limiti
-        /// "10/dk/TAKIM" der. `nowUnixMs` HOST saatidir (istemcinin IssuedAtUnixMs'i değil).</summary>
-        bool Allow(long userId, byte teamIdx, RateClass cls, CommandSource source, long nowUnixMs);
+        /// <summary>`teamKey` MatchCmd sınıfında anahtarın TEK bileşenidir — CB 5.1 maç içi
+        /// limiti "10/dk/TAKIM" der, kullanıcı başına değil: aynı takımı yöneten iki kullanıcı
+        /// TEK kovayı paylaşmalıdır. Değeri HOST üretir (`IValidationContext.ResolveTeamKey`):
+        /// zarftaki `TeamIdx` yalnız ev/deplasman'dır, kararlı bir takım kimliği DEĞİLDİR.
+        /// `nowUnixMs` HOST saatidir (istemcinin IssuedAtUnixMs'i değil).</summary>
+        bool Allow(long userId, long teamKey, RateClass cls, CommandSource source, long nowUnixMs);
         /// <summary>İstismar sinyali — CB 5.1: 5 dk içinde 3 kez RateLimited alan kullanıcı
         /// için denetim loguna AbuseFlag düşer (GDD 6.5 örüntü analizine girdi).</summary>
         bool ConsumeAbuseFlag(long userId, long nowUnixMs);
@@ -42,13 +45,14 @@ namespace TheBadge.CommandBus
             this.abuseEsik = abuseEsik; this.abusePencereMs = abusePencereMs;
         }
 
-        /// <summary>Sayaç anahtarı. MatchCmd TAKIM kapsamlıdır (CB 5.1: "10/dk/takım");
-        /// diğer sınıflar kullanıcı kapsamlıdır. İnceleme düzeltmesi: takım kimliği anahtara
-        /// girmiyordu, yani aynı takımı paylaşan kullanıcılar limiti birlikte aşabiliyor,
-        /// farklı takımları yöneten kullanıcı ise gereksiz yere tek sayaçta kısılıyordu.</summary>
-        static long Key(long userId, byte teamIdx, RateClass cls)
+        /// <summary>Sayaç anahtarı. MatchCmd YALNIZ takım kapsamlıdır (CB 5.1 "10/dk/takım"):
+        /// kullanıcı kimliği anahtara GİRMEZ, yoksa aynı takımı yöneten iki kullanıcı ikişer
+        /// pencere alır. Diğer sınıflar kullanıcı kapsamlıdır. İki uzay çakışmasın diye ayrı
+        /// öneklenir. (İki turluk inceleme düzeltmesi: önce takım kimliği hiç yoktu, sonra
+        /// userId ile BİRLİKTE anahtardaydı — ikisi de spec'in "per takım" ifadesini karşılamıyor.)</summary>
+        static long Key(long userId, long teamKey, RateClass cls)
             => cls == RateClass.MatchCmd
-               ? ((userId * 4 + teamIdx) * 16 + (long)cls)
+               ? unchecked((teamKey * 16 + (long)cls) ^ 0x5EED_0000_0000_0000L)
                : (userId * 64 + (long)cls);
 
         /// <summary>ATOMİK kabul: denetim ve kayıt TEK kilit altındadır. İnceleme düzeltmesi —
@@ -57,24 +61,24 @@ namespace TheBadge.CommandBus
         /// yarış/patlama riski).</summary>
         readonly object kilit = new object();
 
-        public bool Allow(long userId, byte teamIdx, RateClass cls, CommandSource source, long nowUnixMs)
+        public bool Allow(long userId, long teamKey, RateClass cls, CommandSource source, long nowUnixMs)
         {
             lock (kilit)
             {
                 // LLM kaynağı ModB penceresine DE tabidir (CB 5.1): kaynak sınıfı düşürmez, EKLER.
-                if (source == CommandSource.LLM && !Izin(userId, teamIdx, RateClass.ModB, nowUnixMs))
+                if (source == CommandSource.LLM && !Izin(userId, teamKey, RateClass.ModB, nowUnixMs))
                 { Redle(userId, nowUnixMs); return false; }
-                if (!Izin(userId, teamIdx, cls, nowUnixMs)) { Redle(userId, nowUnixMs); return false; }
-                Kaydet(userId, teamIdx, cls, nowUnixMs);
-                if (source == CommandSource.LLM) Kaydet(userId, teamIdx, RateClass.ModB, nowUnixMs);
+                if (!Izin(userId, teamKey, cls, nowUnixMs)) { Redle(userId, nowUnixMs); return false; }
+                Kaydet(userId, teamKey, cls, nowUnixMs);
+                if (source == CommandSource.LLM) Kaydet(userId, teamKey, RateClass.ModB, nowUnixMs);
                 return true;
             }
         }
 
-        bool Izin(long userId, byte teamIdx, RateClass cls, long now)
+        bool Izin(long userId, long teamKey, RateClass cls, long now)
         {
             if (!cfg.TryGetValue(cls, out var pencereler) || pencereler == null) return true;
-            long k = Key(userId, teamIdx, cls);
+            long k = Key(userId, teamKey, cls);
             if (!hits.TryGetValue(k, out var list)) return true;
             for (int i = 0; i < pencereler.Length; i++)
             {
@@ -90,9 +94,9 @@ namespace TheBadge.CommandBus
             return true;
         }
 
-        void Kaydet(long userId, byte teamIdx, RateClass cls, long now)
+        void Kaydet(long userId, long teamKey, RateClass cls, long now)
         {
-            long k = Key(userId, teamIdx, cls);
+            long k = Key(userId, teamKey, cls);
             if (!hits.TryGetValue(k, out var list)) { list = new List<long>(); hits[k] = list; }
             list.Add(now);
             // Budama: en uzun pencerenin dışında kalanlar atılır (bellek sızıntısı olmasın)

@@ -80,9 +80,13 @@ namespace TheBadge.Checks
         public Context Active = Context.Hub | Context.Match | Context.Online;
         public RejectionReason Next = RejectionReason.None;   // sıradaki komut için zorlanan sonuç
         public int Calls;
+        /// <summary>Host'un ürettiği kararlı takım kimliği. Testte "maç + taraf" ile modellenir:
+        /// aynı takımı yöneten farklı kullanıcılar AYNI anahtarı alır.</summary>
+        public long TeamKey = 1000;
         public bool IsContextActive(Context context) => (Active & context) != 0;
         public RejectionReason CheckOwnershipAndState(CommandEnvelope env, ActionDef action, IPayloadView payload)
         { Calls++; return Next; }
+        public long ResolveTeamKey(CommandEnvelope env) => TeamKey + env.TeamIdx;
     }
 
     /// <summary>Yürütücü sahtesi — kaç kez yürütüldüğünü sayar (idempotency kanıtı).</summary>

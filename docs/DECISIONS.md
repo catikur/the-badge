@@ -986,6 +986,22 @@ yazılsaydı ya değişmezi ihlal ederdi ya yeniden yazılırdı → K1 ilk dili
   kullanıcı gereksiz kısılıyordu. `MatchCmd` sınıfında takım kimliği anahtara girdi.
   Sekizi de ayrı kapıyla sınanır (`K1IncelemeDuzeltmeleri`) — eşzamanlılık bulguları gerçek
   `Parallel.For` altında ölçülür.
+- **İKİNCİ inceleme turu (Bugbot, düzeltme commit'i üzerinde — 2 bulgu, ikisi de haklı):**
+  (9) **Maç içi limit HÂLÂ takım kapsamlı değildi.** İlk düzeltmede takım kimliğini anahtara
+  EKLEDİM ama `userId`'yi ÇIKARMADIM — yani aynı takımı yöneten iki kullanıcı yine ikişer pencere
+  alıyordu; spec "10/dk/TAKIM" diyor, "kullanıcı+takım" değil. Ayrıca zarftaki `TeamIdx` kararlı
+  bir takım kimliği DEĞİL (yalnız ev/deplasman). Çözüm: kimliği HOST üretir
+  (`IValidationContext.ResolveTeamKey`) ve MatchCmd anahtarında kullanıcı kimliği YER ALMAZ.
+  (10) **Rezervasyon devralması çift yürütmeye açıktı.** Uçuş süresi dolunca rezervasyonu
+  "çökmüş sayıp" devralıyordum; ama ilk çağrı hâlâ `Execute` içindeyse İKİ yürütme birden durum
+  değiştirebilirdi — exactly-once iddiası, tam da onu korumak için yazdığım kolda deliniyordu.
+  Ayrıca `Complete`/`Release` sahiplik denetimsizdi: gecikmiş bir çağrı başkasının sonucunu
+  ezebiliyor ya da rezervasyonunu silebiliyordu. Çözüm: **otomatik devralma KALDIRILDI**
+  (canlılık uğruna güvenlik feda edilmez; asılı rezervasyon yalnız `Prune` ile, operatör
+  denetiminde açılır) + **sahiplik jetonu** (jeton eşleşmeyen `Complete`/`Release` no-op).
+- **Ders (kayıt için):** bus'ı tek iş parçacıklı bir zihinle yazmışım; hedefi paralel RPC işleyen
+  bir sunucu. İki inceleme turunun 10 bulgusunun 6'sı doğrudan eşzamanlılık/güven sınırı
+  konusuydu. K6 (Nakama köprüsü) bu dersle başlar.
 - **Kapılar (8):** `K1KatalogTamligi` (32 aksiyon, her bantlı parametrenin bandı balance'ta VAR) ·
   `K1SemaSikiligi` (7 senaryo) · `K1BantZorlamasi` (**59 bantlı parametrenin TAMAMI** alt sınırda
   reddediliyor — tek tek değil, katalog taranarak) · `K1BaglamKapisi` (maç↔hub ayrımı) ·
