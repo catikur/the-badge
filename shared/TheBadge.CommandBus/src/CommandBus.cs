@@ -45,10 +45,12 @@ namespace TheBadge.CommandBus
     /// buradan geçer: UI, LLM, otomasyon — istisnasız. Sıra CB 2.1'dir: rezervasyon → 4 kapı →
     /// yürütme (audit dahil) → sonuç.
     ///
-    /// ZAMAN SÖZLEŞMESİ (inceleme düzeltmesi, P1): rate limit ve idempotency penceresi HOST'un
-    /// alış saatiyle (`receivedAtUnixMs`) çalışır. Zarfın `IssuedAtUnixMs` alanı İSTEMCİ verisidir
-    /// ve yalnız METADATA'dır — güvenilseydi, her partiyi ileri tarihli göndererek rate limit
-    /// sayaçları sıfırlanabilirdi.
+    /// ZAMAN VE KİMLİK SÖZLEŞMESİ: rate limit ve idempotency penceresi HOST'un alış saatiyle
+    /// (`receivedAtUnixMs`), kota kimliği de HOST'un oturumundan (`authenticatedUserId`) gelir.
+    /// Zarfın `IssuedAtUnixMs` ve `UserId` alanları İSTEMCİ verisidir ve yalnız METADATA'dır —
+    /// güvenilseydi, her partiyi ileri tarihli ya da yeni kimlikli göndererek rate limit sayaçları
+    /// sıfırlanabilirdi. İkisi de ZORUNLU parametredir: host'un unutabileceği bir varsayılan
+    /// bırakılmaz (inceleme düzeltmeleri P1 + güvenlik turu, 2026-08-24).
     ///
     /// IDEMPOTENCY doğrulamadan ÖNCEdir: yeniden doğrulamak, aradaki durum değişimi yüzünden
     /// aynı komuta farklı yanıt üretebilir ve retry'yi güvensiz kılardı (CB 8.1).</summary>
@@ -59,15 +61,35 @@ namespace TheBadge.CommandBus
         readonly IRateLimiter rate;
         readonly IdempotencyStore idem;
         readonly IAuditSink audit;
+        readonly long budamaAraligiMs;
+        readonly object budamaKilidi = new object();
+        long sonBudamaMs = long.MinValue;
 
         public CommandBus(IBandProvider bands, IValidationContext ctx, IRateLimiter rate,
-                          IdempotencyStore idem, IAuditSink audit = null)
+                          IdempotencyStore idem, IAuditSink audit = null,
+                          long budamaAraligiMs = 5L * 60 * 1000)
         {
             this.bands = bands ?? throw new ArgumentNullException(nameof(bands));
             this.ctx = ctx ?? throw new ArgumentNullException(nameof(ctx));
             this.rate = rate;
             this.idem = idem ?? throw new ArgumentNullException(nameof(idem));
             this.audit = audit;
+            this.budamaAraligiMs = budamaAraligiMs;
+        }
+
+        /// <summary>AMORTİ EDİLMİŞ BUDAMA — güvenlik incelemesi bulgusu (2026-08-24): bus
+        /// idempotency deposunu hiç budamıyordu, yani süresi dolmuş kayıtlar yalnız aynı Id
+        /// tekrar geldiğinde temizleniyordu; benzersiz Id akışında depo süresiz büyürdü.
+        /// Budama ASILI rezervasyonlara DOKUNMAZ (`asiliRezervasyonMs` verilmez) — devralma
+        /// yasağı operatör denetiminde kalır.</summary>
+        void BelkiBuda(long nowUnixMs)
+        {
+            lock (budamaKilidi)
+            {
+                if (sonBudamaMs != long.MinValue && nowUnixMs - sonBudamaMs < budamaAraligiMs) return;
+                sonBudamaMs = nowUnixMs;
+            }
+            idem.Prune(nowUnixMs);
         }
 
         /// <summary>Komutu işler. `receivedAtUnixMs` HOST saatidir (istemci saati DEĞİL).
@@ -76,11 +98,14 @@ namespace TheBadge.CommandBus
         /// başarıyı tekrar oynatırdı (inceleme düzeltmesi, P1) — bu bir kablolama hatasıdır,
         /// sessizce yutulmaz. Yalnız doğrulama için `Validate` kullanın.</summary>
         public CommandOutcome Submit(CommandEnvelope env, IPayloadView payload,
-                                     ICommandExecutor executor, long receivedAtUnixMs)
+                                     ICommandExecutor executor, long receivedAtUnixMs,
+                                     long authenticatedUserId)
         {
             if (env == null) return new CommandOutcome(RejectionReason.SchemaViolation, "zarf yok");
             if (executor == null) throw new ArgumentNullException(nameof(executor),
                 "Yürütücüsüz Submit durum değiştirmez ama başarı raporlar; yalnız doğrulama için Validate kullanın.");
+
+            BelkiBuda(receivedAtUnixMs);
 
             // 1) ATOMİK rezervasyon (CB 8.1) — eşzamanlı iki çağrı aynı Id'yi yürütemez
             var rez = idem.TryReserve(env.CommandId, receivedAtUnixMs, out var onceki, out var jeton);
@@ -100,13 +125,14 @@ namespace TheBadge.CommandBus
             {
                 // 2) Dört kapı (CB 5)
                 var action = Catalog.Find(env.ActionType);
-                var v = Validator.Validate(env, action, payload, bands, ctx, rate, receivedAtUnixMs);
+                var v = Validator.Validate(env, action, payload, bands, ctx, rate, receivedAtUnixMs, authenticatedUserId);
                 if (!v.Ok)
                 {
                     var red = new CommandOutcome(v.Reason, v.Detail);
-                    idem.Complete(env.CommandId, jeton, receivedAtUnixMs, red);
+                    // yurutuldu: FALSE — doğrulamada düşen komut KISA dedup penceresine yazılır
+                    idem.Complete(env.CommandId, jeton, receivedAtUnixMs, red, yurutuldu: false);
                     bool abuse = v.Reason == RejectionReason.RateLimited
-                                 && rate != null && rate.ConsumeAbuseFlag(env.UserId, receivedAtUnixMs);
+                                 && rate != null && rate.ConsumeAbuseFlag(authenticatedUserId, receivedAtUnixMs);
                     audit?.Record(env, red, abuse, receivedAtUnixMs);   // red durum değiştirmez
                     return red;
                 }
@@ -126,8 +152,10 @@ namespace TheBadge.CommandBus
 
         /// <summary>Durum DEĞİŞTİRMEDEN yalnız doğrulama (istemci ön-doğrulaması, öneri kartı
         /// önizlemesi). Rate limit sayacını TÜKETMEZ — ön-doğrulama kullanıcının hakkını yemez.</summary>
-        public ValidationResult Validate(CommandEnvelope env, IPayloadView payload, long receivedAtUnixMs)
-            => Validator.Validate(env, Catalog.Find(env?.ActionType), payload, bands, ctx, null, receivedAtUnixMs);
+        public ValidationResult Validate(CommandEnvelope env, IPayloadView payload, long receivedAtUnixMs,
+                                         long authenticatedUserId)
+            => Validator.Validate(env, Catalog.Find(env?.ActionType), payload, bands, ctx, null,
+                                  receivedAtUnixMs, authenticatedUserId);
 
         /// <summary>Onay katmanı — CB Spec 6. Tier KATALOGDAN gelir, KAYNAKTAN DEĞİL:
         /// LLM kaynaklı komut tier'ını asla düşüremez. Sunum katmanı bunu okur.</summary>

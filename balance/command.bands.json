@@ -227,5 +227,7 @@
     "esik": 3,
     "pencereSn": 300
   },
-  "idempotencySaat": 24
+  "idempotencySaat": 24,
+  "idempotencyRedDk": 10,
+  "idempotencyBudamaDk": 5
 }

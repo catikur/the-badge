@@ -1063,6 +1063,44 @@ dönünce yerel Tier 0 kuyruğu sunucu durumuyla çeliştiğinde ne olur). Bekle
   eksiklik değil sözleşme; `UnboundActions()` sayısı K3-K5 ilerledikçe düşer ve ilerlemenin
   ölçüsüdür.
 
+### K1 güvenlik turu — ✅ TAMAM (2026-08-24)
+Cursor Security Agent PR #16'da iki MEDIUM buldu; ikisi de haklı çıktı.
+
+**(A) Kota kimliği istemci zarfından okunuyordu.** Kapı 4 rate limit'i (ve AbuseFlag'i)
+`env.UserId` ile anahtarlıyordu. Bu, *kendi verdiğim kararla tutarsızdı*: `IssuedAtUnixMs`'i
+"istemci verisi, güvenilmez" diye host saatiyle değiştirmiş, `TeamIdx`'i "kararlı kimlik değil"
+diye `ResolveTeamKey`e taşımıştım — ama aynı zarfın ASIL kota kimliğini olduğu gibi bırakmıştım.
+Zarfı deserialize edip `Submit` çağıran bir host, `UserId`'yi oturumdan ezmezse çağıran her parti
+için yeni kimlik uydurup Tactic/Economic/OnlineSocial/ModB pencerelerini döndürebilir, AbuseFlag'i
+başkasının kimliğine yapıştırabilirdi.
+- **Çözüm:** `authenticatedUserId` artık `Submit`/`Validate`/`Validator.Validate`'in **ZORUNLU**
+  parametresi (`receivedAtUnixMs` deseninin aynısı — host'un unutabileceği varsayılan bırakılmaz).
+  Zarfın iddiası oturumla ayrışıyorsa **kapı 1'de** `NotOwned` ("kimlik uyuşmazlığı") ile düşer:
+  bu bir zarf BÜTÜNLÜĞÜ önkoşuludur, ondan sonrası değerlendirilmez. `env.UserId` denetim
+  metadata'sı olarak kalır — değeri, artık uyuşmazlığın YAKALANABİLİR olmasıdır.
+
+**(B) Doğrulamada düşen komutlar 24 saatlik kayıt açıyordu, bus depoyu hiç budamıyordu.**
+Rezervasyon doğrulamadan ÖNCE alınır (bilinçli: retry'yi yeniden doğrulamak aradaki durum
+değişimi yüzünden aynı komuta farklı yanıt üretirdi). Yan etkisi: şema/bant/bağlam redleri
+Kapı 4'e hiç ulaşmadığından rate limit tüketmez, ama yine de kayıt açardı; benzersiz
+`CommandId`'li bozuk payload seli paylaşılan belleği sınırsız büyütebilirdi.
+- **Çözüm iki parçalı:** (1) dedup penceresi artık kayıt başına — **YÜRÜTÜLEN** komutlar için
+  24 saat, yürütmeye ulaşmamış redler için 10 dk [KALİBRE `idempotencyRedDk`]. "Red de
+  idempotenttir" sözleşmesi gerçek retry ufkunda korunur, sel maliyeti o ufka iner. (2) bus
+  `Submit`te amorti edilmiş budama yapar [KALİBRE `idempotencyBudamaDk` = 5 dk]. Budama ASILI
+  rezervasyonlara DOKUNMAZ — devralma yasağı operatör denetiminde kalır (ikinci tur kararı).
+- **Triyaj notu:** botun aynı bulguda geçen "her kullanıcı için o Id'leri blokler" kısmı pratikte
+  önemsiz (CommandId Guid; çakışma olmaz). Gerçek risk BELLEK BÜYÜMESİdir; kapı da onu ölçüyor.
+
+- **Kapı:** `K1GuvenlikTuru`. Dişi ölçüldü — kimlik denetimi kaldırılınca 6 ayrı iddia birden
+  düştü (uyuşmazlık geçiyor · döndürme pencereyi aşıyor · uyuşmayan zarf limiter'a ulaşıyor);
+  budama + kısa pencere kaldırılınca sel 201 kayda çıktı. Kota kimliğinin OTURUMDAN geldiği
+  `SpyRateLimiter` ile doğrudan ölçülüyor (bus AbuseFlag'i kendisi tükettiği için sonradan
+  sorgulamak yanıltıcı olurdu — ilk yazdığım kapı bu yüzden yanlış kırmızı verdi, düzeltildi).
+- **Ders:** bir güven sınırı kararını verirken (istemci verisi → host verisi) o sınırdan geçen
+  TÜM alanları birlikte taramalıydım. İki alanı taşıyıp üçüncüsünü bırakmak, kararın kendisini
+  değil yalnız iki örneğini uygulamak demek.
+
 ## Bekleyen kararlar
 - **Offline kuyruk uzlaştırma politikası (K2'den çıktı, 2026-08-24):** brief §4.1'in "dünya durumu
   nerede yaşar" sorusu **D3 (G3, sunucu-otoriter) + GDD 6.3 + GDD 11.2 ile zaten kapalı**; K2 bunu

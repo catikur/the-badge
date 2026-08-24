@@ -48,13 +48,22 @@ namespace TheBadge.CommandBus
     public sealed class IdempotencyStore
     {
         readonly object kilit = new object();
-        readonly Dictionary<Guid, (long at, bool done, ulong tok, CommandOutcome outcome)> kayit
-            = new Dictionary<Guid, (long, bool, ulong, CommandOutcome)>();
-        readonly long pencereMs;
+        readonly Dictionary<Guid, (long at, bool done, ulong tok, long pencere, CommandOutcome outcome)> kayit
+            = new Dictionary<Guid, (long, bool, ulong, long, CommandOutcome)>();
+        readonly long pencereMs;      // YÜRÜTÜLEN komutlar için (CB 8.1: 24 saat)
+        readonly long redPencereMs;   // yürütmeye HİÇ ulaşmamış redler için (aşağıdaki not)
         ulong sonrakiJeton = 1;
 
-        public IdempotencyStore(long pencereMs = 24L * 60 * 60 * 1000)
-        { this.pencereMs = pencereMs; }
+        /// <summary>`redPencereMs` — güvenlik incelemesi bulgusu (2026-08-24). Rezervasyon
+        /// doğrulamadan ÖNCE alınır (bu bilinçli: retry'yi yeniden doğrulamak aradaki durum
+        /// değişimi yüzünden aynı komuta farklı yanıt üretirdi). Yan etkisi: şema/bant/bağlam
+        /// redleri Kapı 4'e HİÇ ulaşmadığı için rate limit penceresini tüketmez, ama yine de
+        /// 24 saatlik kayıt açardı — benzersiz `CommandId`'lerle bozuk payload seli, paylaşılan
+        /// depoyu sınırsız büyütebilirdi. Çözüm: dedup penceresi YÜRÜTÜLEN komutlar için uzun,
+        /// yürütmeye ulaşmamış redler için kısadır. "Red de idempotenttir" sözleşmesi gerçek
+        /// retry ufkunda (saniyeler-dakikalar) korunur; sel maliyeti o ufka iner.</summary>
+        public IdempotencyStore(long pencereMs = 24L * 60 * 60 * 1000, long redPencereMs = 10L * 60 * 1000)
+        { this.pencereMs = pencereMs; this.redPencereMs = redPencereMs > 0 ? redPencereMs : pencereMs; }
 
         public int Count { get { lock (kilit) return kayit.Count; } }
 
@@ -76,7 +85,7 @@ namespace TheBadge.CommandBus
                 {
                     if (k.done)
                     {
-                        if (nowUnixMs - k.at < pencereMs) { onceki = k.outcome.AsReplay(); return ReserveResult.Completed; }
+                        if (nowUnixMs - k.at < k.pencere) { onceki = k.outcome.AsReplay(); return ReserveResult.Completed; }
                         kayit.Remove(commandId);            // pencere doldu, yeniden yürütülebilir
                     }
                     else
@@ -85,21 +94,26 @@ namespace TheBadge.CommandBus
                     }
                 }
                 ulong t = sonrakiJeton++;
-                kayit[commandId] = (nowUnixMs, false, t, default);
+                kayit[commandId] = (nowUnixMs, false, t, pencereMs, default);
                 token = new ReservationToken(t);
                 return ReserveResult.Reserved;
             }
         }
 
         /// <summary>Rezervasyonu sonuçla kapatır. Jeton eşleşmezse HİÇBİR ŞEY yapmaz —
-        /// gecikmiş bir çağrı başkasının sonucunu ezemez.</summary>
-        public bool Complete(Guid commandId, ReservationToken token, long nowUnixMs, CommandOutcome outcome)
+        /// gecikmiş bir çağrı başkasının sonucunu ezemez.
+        ///
+        /// `yurutuldu` = komut yürütücüye ULAŞTI mı (sonucu ne olursa olsun). Yalnız ulaşanlar
+        /// uzun dedup penceresini hak eder; doğrulamada düşenler kısa pencereye yazılır
+        /// (bkz. yapıcıdaki `redPencereMs` notu).</summary>
+        public bool Complete(Guid commandId, ReservationToken token, long nowUnixMs,
+                             CommandOutcome outcome, bool yurutuldu = true)
         {
             lock (kilit)
             {
                 if (!token.IsValid) return false;
                 if (!kayit.TryGetValue(commandId, out var k) || k.done || k.tok != token.Value) return false;
-                kayit[commandId] = (nowUnixMs, true, k.tok, outcome);
+                kayit[commandId] = (nowUnixMs, true, k.tok, yurutuldu ? pencereMs : redPencereMs, outcome);
                 return true;
             }
         }
@@ -128,7 +142,7 @@ namespace TheBadge.CommandBus
                 foreach (var kv in kayit)
                 {
                     long yas = nowUnixMs - kv.Value.at;
-                    if (kv.Value.done) { if (yas >= pencereMs) silinecek.Add(kv.Key); }
+                    if (kv.Value.done) { if (yas >= kv.Value.pencere) silinecek.Add(kv.Key); }
                     else if (asiliRezervasyonMs > 0 && yas >= asiliRezervasyonMs) silinecek.Add(kv.Key);
                 }
                 for (int i = 0; i < silinecek.Count; i++) kayit.Remove(silinecek[i]);

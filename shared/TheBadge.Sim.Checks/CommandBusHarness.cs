@@ -89,6 +89,21 @@ namespace TheBadge.Checks
         public long ResolveTeamKey(CommandEnvelope env) => TeamKey + env.TeamIdx;
     }
 
+    /// <summary>Rate limiter casusu — `Allow`/`ConsumeAbuseFlag` çağrılarının HANGİ kimlikle
+    /// yapıldığını kaydeder. Kota kimliğinin zarftan değil OTURUMDAN geldiğini doğrudan sınar
+    /// (güvenlik turu bulgusu, 2026-08-24).</summary>
+    public sealed class SpyRateLimiter : IRateLimiter
+    {
+        readonly IRateLimiter ic;
+        public readonly List<long> AllowKimlikleri = new List<long>();
+        public readonly List<long> AbuseKimlikleri = new List<long>();
+        public SpyRateLimiter(IRateLimiter inner) { ic = inner; }
+        public bool Allow(long userId, long teamKey, RateClass cls, CommandSource source, long nowUnixMs)
+        { AllowKimlikleri.Add(userId); return ic.Allow(userId, teamKey, cls, source, nowUnixMs); }
+        public bool ConsumeAbuseFlag(long userId, long nowUnixMs)
+        { AbuseKimlikleri.Add(userId); return ic.ConsumeAbuseFlag(userId, nowUnixMs); }
+    }
+
     /// <summary>Yürütücü sahtesi — kaç kez yürütüldüğünü sayar (idempotency kanıtı).</summary>
     public sealed class TestExecutor : ICommandExecutor
     {

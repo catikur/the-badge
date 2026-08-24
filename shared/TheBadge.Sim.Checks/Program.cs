@@ -1999,10 +1999,12 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     var gecerliBilet = new TheBadge.Checks.TestPayload().Set("tribun", "kuzey").Set("fiyat", 50.0);
 
     const long HostSaat = 1_700_000_000_000L;   // HOST alış saati (istemcinin IssuedAtUnixMs'i değil)
+    // Kimlik varsayılanı zarfın kendi UserId'sidir: "host bu kullanıcıyı doğruladı" hâli.
+    // Uyuşmazlık senaryosu ayrı kapıda (24h) sınanır.
     TheBadge.Sim.Commands.RejectionReason Dogrula(CommandEnvelope e, TheBadge.Checks.TestPayload pl,
-        TheBadge.Checks.TestContext c = null, IRateLimiter rl = null)
+        TheBadge.Checks.TestContext c = null, IRateLimiter rl = null, long? kimlik = null)
         => Validator.Validate(e, Catalog.Find(e.ActionType), pl, bands,
-                              c ?? new TheBadge.Checks.TestContext(), rl, HostSaat).Reason;
+                              c ?? new TheBadge.Checks.TestContext(), rl, HostSaat, kimlik ?? e.UserId).Reason;
 
     // 24b) ŞEMA SIKILIĞI — CB 3.2: eksik alan, tip hatası, FAZLADAN alan, enum dışı,
     // metin uzunluğu, kontrol karakteri; hepsi SchemaViolation.
@@ -2124,8 +2126,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                       new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen), idem);
         var id = Guid.NewGuid();
         var e1 = Env("tycoon.set_ticket_price", id: id);
-        var r1 = bus.Submit(e1, gecerliBilet.Copy(), exec, HostSaat);
-        var r2 = bus.Submit(e1, gecerliBilet.Copy(), exec, HostSaat);
+        var r1 = bus.Submit(e1, gecerliBilet.Copy(), exec, HostSaat, e1.UserId);
+        var r2 = bus.Submit(e1, gecerliBilet.Copy(), exec, HostSaat, e1.UserId);
         string hata = "";
         if (!r1.Ok || r1.Replayed) hata += "ilk komut kabul edilmedi ";
         if (!r2.Ok || !r2.Replayed) hata += "ikinci komut önceki yanıtı döndürmedi ";
@@ -2137,8 +2139,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                        new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen), idem2);
         var idR = Guid.NewGuid();
         var kotu = Env("tycoon.set_ticket_price", id: idR);
-        var k1 = bus2.Submit(kotu, gecerliBilet.Copy().Set("fiyat", 9999.0), exec2, HostSaat);
-        var k2 = bus2.Submit(kotu, gecerliBilet.Copy().Set("fiyat", 50.0), exec2, HostSaat);   // düzeltilmiş payload!
+        var k1 = bus2.Submit(kotu, gecerliBilet.Copy().Set("fiyat", 9999.0), exec2, HostSaat, kotu.UserId);
+        var k2 = bus2.Submit(kotu, gecerliBilet.Copy().Set("fiyat", 50.0), exec2, HostSaat, kotu.UserId);   // düzeltilmiş payload!
         if (k1.Reason != RejectionReason.ParamOutOfBand) hata += "bant reddi yok ";
         if (k2.Reason != RejectionReason.ParamOutOfBand || !k2.Replayed) hata += "red idempotent değil ";
         if (exec2.Executions != 0) hata += "reddedilen komut yürütüldü ";
@@ -2161,7 +2163,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                 // istemci her komutta saati 1 dk ileri atıyor — eskiden pencere sürekli sıfırlanırdı
                 var e = Env("tycoon.set_ticket_price") with { IssuedAtUnixMs = HostSaat + i * 60_000L };
                 if (Validator.Validate(e, Catalog.Find(e.ActionType), gecerliBilet.Copy(), bands,
-                        new TheBadge.Checks.TestContext(), rl, HostSaat).Ok) gecti++;
+                        new TheBadge.Checks.TestContext(), rl, HostSaat, e.UserId).Ok) gecti++;
             }
             if (gecti != 20) hata += $"istemci saati penceresi kaydırıyor ({gecti}/20) ";
         }
@@ -2177,7 +2179,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             var kilitC = new object();
             System.Threading.Tasks.Parallel.For(0, 16, _ =>
             {
-                var r = busC.Submit(Env("tycoon.set_ticket_price", id: idC), gecerliBilet.Copy(), execC, HostSaat);
+                var r = busC.Submit(Env("tycoon.set_ticket_price", id: idC), gecerliBilet.Copy(), execC, HostSaat, 7L);
                 lock (kilitC) { if (r.Ok && !r.Replayed) ok++; else if (r.Reason == RejectionReason.DuplicateCommand) dup++; }
             });
             if (execC.Executions != 1) hata += $"eşzamanlı yürütme {execC.Executions}≠1 ";
@@ -2200,7 +2202,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             var busN = new TheBadge.CommandBus.CommandBus(bands, new TheBadge.Checks.TestContext(),
                            new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen), new IdempotencyStore());
             bool patladi = false;
-            try { busN.Submit(Env("tycoon.set_ticket_price"), gecerliBilet.Copy(), null, HostSaat); }
+            try { busN.Submit(Env("tycoon.set_ticket_price"), gecerliBilet.Copy(), null, HostSaat, 7L); }
             catch (ArgumentNullException) { patladi = true; }
             if (!patladi) hata += "yürütücüsüz Submit sessizce başarı döndürdü ";
         }
@@ -2240,7 +2242,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             var busA = new TheBadge.CommandBus.CommandBus(bands, new TheBadge.Checks.TestContext(),
                            new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen), idemA);
             var e = Env("tycoon.set_ticket_price", src: CommandSource.LLM);
-            busA.Submit(e, gecerliBilet.Copy(), izleyen, HostSaat);
+            busA.Submit(e, gecerliBilet.Copy(), izleyen, HostSaat, e.UserId);
             if (!izleyen.Gordu) hata += "yürütücü denetim kaydını almadı ";
             else if (izleyen.Kayit.CommandId != e.CommandId || izleyen.Kayit.ReceivedAtUnixMs != HostSaat
                      || izleyen.Kayit.Source != CommandSource.LLM)
@@ -2276,9 +2278,9 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                            new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen), idemS);
             var idS = Guid.NewGuid();
             var e1S = Env("tycoon.set_ticket_price", id: idS);
-            busS.Submit(e1S, gecerliBilet.Copy(), execS, HostSaat);
+            busS.Submit(e1S, gecerliBilet.Copy(), execS, HostSaat, e1S.UserId);
             var e2S = e1S with { IssuedAtUnixMs = HostSaat + 48L * 3600 * 1000 };   // istemci 48 saat ileri
-            var rS = busS.Submit(e2S, gecerliBilet.Copy(), execS, HostSaat + 1);
+            var rS = busS.Submit(e2S, gecerliBilet.Copy(), execS, HostSaat + 1, e2S.UserId);
             if (!rS.Replayed || execS.Executions != 1) hata += "istemci saati dedup penceresini düşürdü ";
         }
 
@@ -2290,8 +2292,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                            new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen), idemD);
             var idD = Guid.NewGuid();
             var eD = Env("tycoon.set_ticket_price", id: idD);
-            var d1 = busD.Submit(eD, gecerliBilet.Copy(), execD, HostSaat);
-            var d2 = busD.Submit(eD, gecerliBilet.Copy(), execD, HostSaat);
+            var d1 = busD.Submit(eD, gecerliBilet.Copy(), execD, HostSaat, eD.UserId);
+            var d2 = busD.Submit(eD, gecerliBilet.Copy(), execD, HostSaat, eD.UserId);
             if (d1.Reason != RejectionReason.StateConflict || d1.Detail != "inşaat slotu dolu")
                 hata += "yürütme detayı kayboldu ";
             if (!d2.Replayed || d2.Detail != "inşaat slotu dolu") hata += "replay detayı kayboldu ";
@@ -2327,7 +2329,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         {
             var rl = new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen);
             var busV = new TheBadge.CommandBus.CommandBus(bands, new TheBadge.Checks.TestContext(), rl, new IdempotencyStore());
-            for (int i = 0; i < 50; i++) busV.Validate(Env("tycoon.set_ticket_price"), gecerliBilet.Copy(), HostSaat);
+            for (int i = 0; i < 50; i++) busV.Validate(Env("tycoon.set_ticket_price"), gecerliBilet.Copy(), HostSaat, 7L);
             if (!rl.Allow(7, 0L, RateClass.Economic, CommandSource.UI, HostSaat)) hata += "ön-doğrulama hak yiyor ";
         }
 
@@ -2356,6 +2358,112 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             hata += "bilinmeyen aksiyon en yüksek onayı istemiyor ";
         if (hata.Length > 0) failures += Fail("K1RedDeterminizmi", hata);
         else Pass("K1RedDeterminizmi(aynı girdi=aynı sebep · kapı sırası · tier kaynaktan bağımsız)");
+    }
+
+    // 24h) GÜVENLİK TURU (2026-08-24, Cursor Security Agent, 2 MEDIUM)
+    // (A) Kota kimliği zarftan okunuyordu. `IssuedAtUnixMs` ve `TeamIdx` için verilen kararın
+    //     aynısı buraya uygulanmamıştı: zarf istemci tarafından KURULUR, yani `UserId` de
+    //     istemci verisidir — her parti için yeni kimlik uydurup pencereleri döndürmek mümkündü.
+    // (B) Doğrulamada düşen komutlar 24 saatlik kayıt açıyordu ve bus depoyu HİÇ budamıyordu;
+    //     benzersiz Id'li bozuk payload seli paylaşılan belleği sınırsız büyütebilirdi.
+    {
+        string hata = "";
+        int redDk = bandKok.GetProperty("idempotencyRedDk").GetInt32();
+        int budamaDk = bandKok.GetProperty("idempotencyBudamaDk").GetInt32();
+        var semaBozuk = gecerliBilet.Copy().Set("ekstra", 1);   // fazladan alan → KAPI 1 reddi
+
+        // (A1) Zarf başka kimlik iddia ediyorsa hiçbir kapı değerlendirilmez
+        if (Dogrula(Env("tycoon.set_ticket_price", user: 99), gecerliBilet.Copy(), kimlik: 7L) != RejectionReason.NotOwned)
+            hata += "kimlik uyuşmazlığı geçti ";
+        // ...ve bu kapı 1'dedir: payload da bozuksa YİNE kimlik sebebi döner (sıra deterministik)
+        if (Dogrula(Env("tycoon.set_ticket_price", user: 99), semaBozuk.Copy(), kimlik: 7L) != RejectionReason.NotOwned)
+            hata += "kimlik denetimi şemadan sonra çalışıyor ";
+        // Kimlik tutuyorsa normal akış
+        if (Dogrula(Env("tycoon.set_ticket_price", user: 7), gecerliBilet.Copy(), kimlik: 7L) != RejectionReason.None)
+            hata += "eşleşen kimlik reddedildi ";
+
+        // (A2) KİMLİK DÖNDÜRME ARTIK İŞE YARAMIYOR. Eskiden 25 farklı `env.UserId` 25 ayrı kova
+        // alıyordu; artık oturum kimliği sabitken hepsi kapı 1'de düşer, dürüst zarflar ise
+        // TEK kovayı paylaşır (Economic = 20/dk).
+        {
+            var rlD = new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen);
+            int donduren = 0;
+            for (int i = 0; i < 25; i++)
+                if (Dogrula(Env("tycoon.set_ticket_price", user: 1000 + i), gecerliBilet.Copy(), null, rlD, kimlik: 7L)
+                    == RejectionReason.None) donduren++;
+            if (donduren != 0) hata += $"kimlik döndürme pencereyi aştı ({donduren}) ";
+            int durust = 0;
+            for (int i = 0; i < 25; i++)
+                if (Dogrula(Env("tycoon.set_ticket_price", user: 7), gecerliBilet.Copy(), null, rlD, kimlik: 7L)
+                    == RejectionReason.None) durust++;
+            if (durust != 20) hata += $"dürüst zarf tek kovada değil ({durust}/20) ";
+        }
+
+        // (A3) Kota sayacı VE AbuseFlag hangi kimlikle çağrılıyor — doğrudan casusla ölçülür.
+        // (Bus AbuseFlag'i kendisi TÜKETTİĞİ için sonradan sorgulamak yanıltıcı olurdu.)
+        {
+            var casus = new TheBadge.Checks.SpyRateLimiter(new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen));
+            var busAb = new TheBadge.CommandBus.CommandBus(bands, new TheBadge.Checks.TestContext(), casus, new IdempotencyStore());
+            var execAb = new TheBadge.Checks.TestExecutor();
+            // Zarf 4242 iddia ediyor, oturum 7 doğrulanmış → kapı 1'de düşer, limiter'a HİÇ ulaşmaz
+            busAb.Submit(Env("tycoon.set_ticket_price", user: 4242), gecerliBilet.Copy(), execAb, HostSaat, 7L);
+            if (casus.AllowKimlikleri.Count != 0) hata += "uyuşmayan zarf limiter'a ulaştı ";
+            // Dürüst zarflar: limiti aşana kadar gönder; her çağrı OTURUM kimliğiyle olmalı
+            for (int i = 0; i < 25; i++)
+                busAb.Submit(Env("tycoon.set_ticket_price", user: 7), gecerliBilet.Copy(), execAb, HostSaat, 7L);
+            if (casus.AllowKimlikleri.Count != 25) hata += $"limiter çağrı sayısı ({casus.AllowKimlikleri.Count}) ";
+            foreach (var k in casus.AllowKimlikleri) if (k != 7L) hata += $"kota kimliği {k} ";
+            if (casus.AbuseKimlikleri.Count == 0) hata += "AbuseFlag hiç sorgulanmadı ";
+            foreach (var k in casus.AbuseKimlikleri) if (k != 7L) hata += $"AbuseFlag kimliği {k} ";
+        }
+
+        // (B1) İKİ PENCERE: doğrulamada düşen kısa, YÜRÜTÜLEN uzun pencerede tutulur
+        {
+            long redMs = redDk * 60_000L;
+            var idemR = new IdempotencyStore(24L * 60 * 60 * 1000, redMs);
+            var busR = new TheBadge.CommandBus.CommandBus(bands, new TheBadge.Checks.TestContext(),
+                           new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen), idemR);
+            var execR = new TheBadge.Checks.TestExecutor();
+            var idKotu = Guid.NewGuid();
+            if (busR.Submit(Env("tycoon.set_ticket_price", id: idKotu), semaBozuk.Copy(), execR, HostSaat, 7L).Reason
+                != RejectionReason.SchemaViolation) hata += "şema reddi beklenmedi ";
+            // kısa pencere İÇİNDE hâlâ idempotent (sözleşme korunuyor)
+            if (idemR.TryReserve(idKotu, HostSaat + redMs / 2, out _, out _) != ReserveResult.Completed)
+                hata += "red kısa pencere içinde idempotent değil ";
+            // kısa pencere DIŞINDA kayıt düşer
+            if (idemR.TryReserve(idKotu, HostSaat + redMs + 1, out _, out _) != ReserveResult.Reserved)
+                hata += "red kaydı kısa pencerede düşmüyor ";
+            var idIyi = Guid.NewGuid();
+            if (!busR.Submit(Env("tycoon.set_ticket_price", id: idIyi), gecerliBilet.Copy(), execR, HostSaat, 7L).Ok)
+                hata += "geçerli komut reddedildi ";
+            // YÜRÜTÜLEN komut aynı anda hâlâ uzun pencerede
+            if (idemR.TryReserve(idIyi, HostSaat + redMs + 1, out _, out _) != ReserveResult.Completed)
+                hata += "yürütülen komut kısa pencereye yazıldı ";
+        }
+
+        // (B2) BUDAMA: benzersiz Id'li bozuk payload seli belleği süresiz büyütmemeli
+        {
+            long redMs = 60_000L, budamaMs = budamaDk * 60_000L;
+            var idemP = new IdempotencyStore(24L * 60 * 60 * 1000, redMs);
+            var busP = new TheBadge.CommandBus.CommandBus(bands, new TheBadge.Checks.TestContext(),
+                           new SlidingWindowRateLimiter(rlCfg, abuseEsik, abusePen), idemP,
+                           null, budamaMs);
+            var execP = new TheBadge.Checks.TestExecutor();
+            const int Sel = 200;
+            for (int i = 0; i < Sel; i++)
+                busP.Submit(Env("tycoon.set_ticket_price", id: Guid.NewGuid()), semaBozuk.Copy(), execP, HostSaat, 7L);
+            int dolu = idemP.Count;
+            if (dolu != Sel) hata += $"sel kaydı beklenmedik ({dolu}/{Sel}) ";
+            // saat budama aralığını VE kısa pencereyi aşınca bir sonraki komut depoyu temizler
+            long sonra = HostSaat + budamaMs + redMs + 1;
+            busP.Submit(Env("tycoon.set_ticket_price", id: Guid.NewGuid()), semaBozuk.Copy(), execP, sonra, 7L);
+            if (idemP.Count != 1) hata += $"budama çalışmadı ({idemP.Count} kayıt kaldı) ";
+            if (execP.Executions != 0) hata += "şema reddi yürütücüye ulaştı ";
+        }
+
+        if (hata.Length > 0) failures += Fail("K1GuvenlikTuru", hata);
+        else Pass($"K1GuvenlikTuru(2 MEDIUM: kota kimliği oturumdan — döndürme inert, AbuseFlag oturumda · " +
+                  $"idempotency iki pencere ({redDk} dk red / 24 sa yürütülen) + {budamaDk} dk amorti budama)");
     }
 }
 
@@ -2392,7 +2500,10 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     // testi kapı sırasını kanıtlamaz, sebebin gerçekten Kapı 3'ten geldiğini de göstermez.
     RejectionReason WDog(TheBadge.World.WorldContext wc, string action,
                          TheBadge.Checks.TestPayload pl, long user = WSahip, uint tick = 0)
-        => Validator.Validate(WEnv(action, user, tick), Catalog.Find(action), pl, wBands, wc, null, WHost).Reason;
+    {
+        var e = WEnv(action, user, tick);
+        return Validator.Validate(e, Catalog.Find(action), pl, wBands, wc, null, WHost, e.UserId).Reason;
+    }
 
     // 25a) KANONİK DURUM — hash platformlar arası eşit olacaksa dizi sırası SÖZLEŞMEdir.
     // Bozuk sıra sessizce kabul edilirse iki makine aynı durumdan farklı hash üretir.
@@ -2799,16 +2910,16 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         long kasa0 = st.Club.KasaTl;
 
         var id = Guid.NewGuid();
-        var o1 = bus.Submit(WEnv("tycoon.set_ticket_price", id: id), pl.Copy(), exec, WHost);
+        var o1 = bus.Submit(WEnv("tycoon.set_ticket_price", id: id), pl.Copy(), exec, WHost, WSahip);
         if (o1.Reason != RejectionReason.None) hata += $"bus üzerinden geçmedi({o1.Reason}) ";
         if (st.Club.KasaTl != kasa0 + 250) hata += "durum bus üzerinden değişmedi ";
-        var o2 = bus.Submit(WEnv("tycoon.set_ticket_price", id: id), pl.Copy(), exec, WHost);
+        var o2 = bus.Submit(WEnv("tycoon.set_ticket_price", id: id), pl.Copy(), exec, WHost, WSahip);
         if (!o2.Replayed) hata += "ikinci gönderim replay değil ";
         if (st.Club.KasaTl != kasa0 + 250) hata += "IDEMPOTENCY BOZUK: durum ikinci kez değişti ";
         if (exec.StateVersion != 1) hata += "replay StateVersion'ı artırdı ";
         if (sink.Kayitlar.Count != 1) hata += "replay ikinci denetim kaydı yazdı ";
         // Kapı 3 bus üzerinden de reddediyor
-        var oRed = bus.Submit(WEnv("tycoon.set_ticket_price", user: 43), pl.Copy(), exec, WHost);
+        var oRed = bus.Submit(WEnv("tycoon.set_ticket_price", user: 43), pl.Copy(), exec, WHost, 43L);
         if (oRed.Reason != RejectionReason.NotOwned) hata += "bus üzerinden sahiplik reddi gelmedi ";
         if (st.Club.KasaTl != kasa0 + 250) hata += "reddedilen komut durumu oynattı ";
 

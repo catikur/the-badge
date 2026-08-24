@@ -59,11 +59,20 @@ namespace TheBadge.CommandBus
     {
         public static ValidationResult Validate(CommandEnvelope env, ActionDef action,
             IPayloadView payload, IBandProvider bands, IValidationContext ctx, IRateLimiter rate,
-            long receivedAtUnixMs)
+            long receivedAtUnixMs, long authenticatedUserId)
         {
             if (env == null) return new ValidationResult(RejectionReason.SchemaViolation, "zarf yok");
 
             // ---- KAPI 1: katalog + şema ----
+            // KİMLİK: kota kimliği zarftan DEĞİL, oturumdan gelir (güvenlik incelemesi, 2026-08-24).
+            // `IssuedAtUnixMs` için verilen kararın aynısı: zarf istemci tarafından KURULUR, yani
+            // `UserId` de istemci verisidir. Güvenilseydi çağıran her parti için yeni bir kimlik
+            // uydurup Tactic/Economic/OnlineSocial/ModB pencerelerini döndürebilir, AbuseFlag'i
+            // başkasının kimliğine yapıştırabilirdi. Zarfın iddiası ile oturum ayrışıyorsa hiçbir
+            // şey değerlendirilmez — bu bir zarf BÜTÜNLÜĞÜ önkoşuludur, o yüzden kapı 1'dedir
+            // (sebep `NotOwned`: zarf başkasının adına konuşuyor).
+            if (env.UserId != authenticatedUserId)
+                return new ValidationResult(RejectionReason.NotOwned, "kimlik uyuşmazlığı");
             // KAYNAK denetimi (CB 2.2): AUTO v1'de KAPALIDIR ve tanımsız enum değeri kabul edilmez.
             // İnceleme düzeltmesi: kaynak hiç doğrulanmıyordu, `Auto` zarfı UI komutu gibi
             // yürüyebiliyordu — kaynağa özgü tier/rate politikası yazılana dek reddedilir.
@@ -127,11 +136,12 @@ namespace TheBadge.CommandBus
 
             // ---- KAPI 4: rate limit ----
             // Saat HOST'undur: `IssuedAtUnixMs` istemci verisidir ve ileri tarihli gönderilerek
-            // pencere sıfırlanabilirdi (inceleme düzeltmesi, P1). Takım kimliği de anahtara girer:
+            // pencere sıfırlanabilirdi (inceleme düzeltmesi, P1). KİMLİK de host'undur
+            // (`authenticatedUserId`, kapı 1'de zarfla eşliği doğrulandı). Takım kimliği anahtara girer:
             // CB 5.1 maç içi limiti "10/dk/TAKIM" der (aynı takımı paylaşan kullanıcılar tek
             // sayaçta, farklı takımları yöneten kullanıcı ayrı sayaçlarda).
             long teamKey = action.RateClass == RateClass.MatchCmd ? ctx.ResolveTeamKey(env) : 0;
-            if (rate != null && !rate.Allow(env.UserId, teamKey, action.RateClass, env.Source, receivedAtUnixMs))
+            if (rate != null && !rate.Allow(authenticatedUserId, teamKey, action.RateClass, env.Source, receivedAtUnixMs))
                 return new ValidationResult(RejectionReason.RateLimited, action.RateClass.ToString());
 
             return ValidationResult.Pass;
