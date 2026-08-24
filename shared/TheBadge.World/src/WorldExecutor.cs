@@ -1,0 +1,136 @@
+using System;
+using System.Collections.Generic;
+using TheBadge.CommandBus;
+using TheBadge.Sim.Commands;
+
+namespace TheBadge.World
+{
+    /// <summary>Aksiyon yürütücüsü — K3-K5 doldurur. Handler durumu DOĞRUDAN DEĞİŞTİRMEZ:
+    /// yazmalarını `WorldJournal`a kuyruklar ve `None` döndürürse `WorldExecutor` uygular.
+    /// Hata döndürdüğünde journal atılır; geri alınacak bir şey yoktur.</summary>
+    public interface IActionHandler
+    {
+        RejectionReason Apply(GameState st, WorldJournal journal, CommandEnvelope env,
+                              ActionDef action, IPayloadView payload, out string detail);
+    }
+
+    /// <summary>CB 9.1 denetim kaydı — durum hash'leriyle. K1'in `AuditRecord`'u zarf verisini
+    /// taşır; durum hash'lerini yalnız yürütücü bilir, bu yüzden burada sarmalanır.</summary>
+    public readonly struct WorldAuditEntry
+    {
+        public readonly AuditRecord Base;
+        public readonly RejectionReason Result;
+        public readonly ulong PreStateHash, PostStateHash;
+        public readonly ulong StateVersion;
+
+        public WorldAuditEntry(AuditRecord b, RejectionReason result, ulong pre, ulong post, ulong version)
+        { Base = b; Result = result; PreStateHash = pre; PostStateHash = post; StateVersion = version; }
+    }
+
+    /// <summary>Denetim + olay kalıcılığı. CB 5.2 "durum geçişi + event üretimi + audit kaydı ya
+    /// birlikte kalıcı olur ya hiç olmaz" sözleşmesinin host ayağı: K6'da bu çağrı veritabanı
+    /// transaction'ının İÇİNDE koşar. Fırlatırsa istisna bus'a kadar çıkar, bus rezervasyonu
+    /// bırakır ve host transaction'ı geri alır — bellek içi durum da o geri almanın parçasıdır.</summary>
+    public interface IWorldAuditSink
+    {
+        void Persist(WorldAuditEntry entry, IReadOnlyList<WorldEvent> events);
+    }
+
+    /// <summary>DÜNYA YÜRÜTÜCÜSÜ — Tek Kapı'nın yazma ucu (CLAUDE.md değişmez #1).
+    /// `GameState`i değiştiren TEK meşru yol buradan geçer.
+    ///
+    /// ATOMİKLİK (CB 5.2): handler → journal → ÖN DENETİM → uygula. Journal'ın tek bir yazması
+    /// bile geçersizse hiçbiri uygulanmaz; yani "yarım yazılmış durum" bir hata değil, yapısal
+    /// olarak ulaşılamaz bir hâldir.
+    ///
+    /// EŞZAMANLILIK (K1 inceleme dersi): bus eşzamanlı RPC'lerden çağrılır. Durum mutasyonu ve
+    /// hash hesabı tek kilit altında serileştirilir — iki komut aynı anda journal uygularsa
+    /// `StateVersion` ve hash tutarsız kalırdı.</summary>
+    public sealed class WorldExecutor : ICommandExecutor
+    {
+        readonly GameState st;
+        readonly IActionHandler[] handlers;      // katalog indeksine göre
+        readonly IWorldAuditSink audit;
+        readonly WorldJournal journal = new WorldJournal();
+        readonly object kilit = new object();
+
+        public WorldExecutor(GameState state, IWorldAuditSink auditSink = null)
+        {
+            st = state ?? throw new ArgumentNullException(nameof(state));
+            handlers = new IActionHandler[Catalog.Count];
+            audit = auditSink;
+        }
+
+        /// <summary>K3-K5 aksiyonlarını buraya bağlar.</summary>
+        public void RegisterHandler(string actionType, IActionHandler handler)
+        {
+            int i = CatalogIndex(actionType);
+            if (i < 0) throw new ArgumentException("katalogda yok: " + actionType, nameof(actionType));
+            handlers[i] = handler ?? throw new ArgumentNullException(nameof(handler));
+        }
+
+        /// <summary>Handler'ı OLMAYAN aksiyonlar. Host bunu AÇILIŞTA okur ve kablolama boşluğunu
+        /// istek anında değil kurulum anında görür (K1'in "sahte başarı" dersinin devamı).</summary>
+        public string[] UnboundActions()
+        {
+            var all = Catalog.Actions;
+            var eksik = new List<string>();
+            for (int i = 0; i < all.Count; i++) if (handlers[i] == null) eksik.Add(all[i].ActionType);
+            return eksik.ToArray();
+        }
+
+        public ulong StateHash() { lock (kilit) return WorldHash.Compute(st); }
+        public ulong StateVersion { get { lock (kilit) return st.StateVersion; } }
+
+        public RejectionReason Execute(CommandEnvelope env, ActionDef action, IPayloadView payload,
+                                       AuditRecord auditRecord, out string detail)
+        {
+            detail = null;
+            if (action == null) return RejectionReason.UnknownAction;
+
+            lock (kilit)
+            {
+                int ci = CatalogIndex(action.ActionType);
+                var h = ci >= 0 ? handlers[ci] : null;
+                if (h == null)
+                {
+                    // SESSİZ BAŞARI YOK: doğrulamayı geçmiş ama yürütücüsü olmayan aksiyon
+                    // "oldu" diye raporlanamaz — idempotency deposu o sahte başarıyı tekrar
+                    // oynatırdı (K1 P1 bulgusunun aynısı). Kullanıcı açısından aksiyon bu
+                    // sürümde mevcut değildir.
+                    detail = "yürütücü bağlı değil: " + action.ActionType;
+                    return RejectionReason.UnknownAction;
+                }
+
+                journal.Clear();
+                var r = h.Apply(st, journal, env, action, payload, out detail);
+                if (r != RejectionReason.None) return r;              // hiçbir yazma uygulanmadı
+
+                if (!journal.Validate(st, out string hata))
+                {
+                    // Handler geçersiz yazma üretti: bu bir KOD hatasıdır ama durumu bozmasına
+                    // izin verilmez. Red olarak döner ve detayı denetim loguna girer.
+                    detail = hata;
+                    return RejectionReason.StateConflict;
+                }
+
+                ulong pre = WorldHash.Compute(st);
+                journal.Apply(st);
+                ulong post = WorldHash.Compute(st);
+
+                // Denetim + olaylar YÜRÜTME TRANSACTION'ININ İÇİNDE (CB 5.2).
+                audit?.Persist(new WorldAuditEntry(auditRecord, RejectionReason.None, pre, post, st.StateVersion),
+                               journal.Events);
+                return RejectionReason.None;
+            }
+        }
+
+        static int CatalogIndex(string actionType)
+        {
+            var all = Catalog.Actions;
+            for (int i = 0; i < all.Count; i++)
+                if (string.Equals(all[i].ActionType, actionType, StringComparison.Ordinal)) return i;
+            return -1;
+        }
+    }
+}

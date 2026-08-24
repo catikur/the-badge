@@ -1008,7 +1008,76 @@ yazılsaydı ya değişmezi ihlal ederdi ya yeniden yazılırdı → K1 ilk dili
   `K1RateLimit` · `K1Idempotency` · `K1IncelemeDuzeltmeleri` (8 bulgu) · `K1RedDeterminizmi` (aynı girdi=aynı
   sebep, kapı sırası, tier kaynaktan bağımsız).
 
+### K2: Dünya durumu çekirdeği — ✅ TAMAM (2026-08-24)
+`shared/TheBadge.World` (netstandard2.1, **bağımlılıksız** — Sim ve CommandBus dışında referans
+yok). K1 kapıyı kurdu; K2 kapının ARDINDAKİ durumu kurar: kulüp, kadro, finans, takvim.
+
+**Neden Atilla'nın kararını BEKLEMEDİ (ve nesi hâlâ bekliyor):** brief §4.1 "dünya durumu nerede
+yaşar" diye sordu. Kayıtları okuyunca sorunun büyük kısmının ZATEN kapalı olduğu görüldü —
+**D3 (2026-07-30): G3, sunucu-otoriter**, gerekçesi rekabetçi bütünlük + çok oyunculu ligler;
+GDD 6.3 "maç motoru online liglerde asla oyuncunun cihazında çalışmaz"; GDD 11.2 "komut
+doğrulama .NET C# servis katmanında koşar". Üstelik CB 8.3 offline modu için "aynı doğrulama
+zinciri YEREL `IValidationContext` ile çalışır; **kod tek, davranış özdeş**" diyor. Yani
+durum çekirdeği HER İKİ seçenekte de aynıdır ve `shared/`te yaşamak zorundadır; kararın
+etkilediği şey yalnız **otorite bağlaması ve kalıcılık** (Nakama/Postgres vs yerel save) —
+o da K6'nın kapsamı. K2 mimari-nötr olanı yazdı, K6'ya ait olanı yazmadı.
+→ Atilla'ya kalan gerçek soru daralttı: **offline kuyruğun uzlaştırma politikası** (bağlantı
+dönünce yerel Tier 0 kuyruğu sunucu durumuyla çeliştiğinde ne olur). Bekleyen kararlara işlendi.
+
+- **Determinizm disiplini sim'den ithal:** kalıcı alanların TAMAMI tamsayı (para tam ₺ — ME 3.2'nin
+  mm kuralının ekonomi karşılığı; ECONOMY_MAP'in ₺K'sı SUNUM birimidir), diziler kanonik sırada
+  (oyuncular PlayerId artan), sırasız yapı (Dictionary/HashSet) yok — arama ikili arama.
+  `WorldHash` = xxHash64, açık little-endian, ME 3.2 `StateHash` deseninin dünya karşılığı.
+- **Olay logu TEK YÖNLÜ:** `WorldEvent` listesi dünya mantığı tarafından ASLA okunmaz ve hash'e
+  GİRMEZ (ME 15.1'de maç logu için kurulan kuralın aynısı). `StateVersion` de hash'e girmez:
+  aynı durumu farklı komut yollarıyla üreten iki save eşit hash'li olmalıdır — versiyon durum
+  değil MUHASEBEdir (CB 8.2 delta sync).
+- **Atomiklik journal ile (CB 5.2):** handler durumu doğrudan değiştirmez, yazmalarını
+  `WorldJournal`a kuyruklar; yürütücü önce ÖN DENETİMDEN geçirir (hedef var mı, değer aralıkta mı),
+  sonra uygular. Tek geçersiz yazma varsa HİÇBİRİ uygulanmaz. Sonuç: "yarım yazılmış durum" bir
+  hata değil, **yapısal olarak ulaşılamaz bir hâl** — geri alma koduna gerek kalmıyor.
+- **Kapı 3 sahiplik üç ayrı ilişkidir:** kendi oyuncuna rol verirsin (`Sahip`), BAŞKASININ
+  oyuncusuna teklif yaparsın (`Yabanci`), SERBEST oyuncuyla imzalarsın (`Serbest`). Tek bir
+  "oyuncu bizim mi" kuralı bu üçünü birden yanlış cevaplardı; tablo aksiyon bazında yazıldı.
+- **K3-K5 seami:** K2 yalnız DURUMA dayalı yapısal denetimleri yapar; hesaplanan bedeller
+  (inşaat maliyeti, sponsor, personel) `IActionRule`/`IActionHandler` ile modüllerden gelir.
+  **K2 bilmediği bir bedeli tahmin etmez** — kaynak denetimi yalnız payload'ın tutarı AÇIKÇA
+  bildirdiği aksiyonlarda yapılır (`tycoon.repay_loan.miktar`, `transfer.propose_offer.bedel`).
+- **K1 derslerinin taşınması:** (a) *sahte başarı yok* — doğrulamayı geçmiş ama handler'ı
+  bağlanmamış aksiyon "oldu" diye raporlanmaz (idempotency deposu o yalanı tekrar oynatırdı);
+  `UnboundActions()` kablolama boşluğunu istek anında değil AÇILIŞTA gösterir. (b) *eşzamanlılık* —
+  yürütme tek kilit altında serileştirildi; kilit kaldırılınca kapı gerçekten kırmızıya döndü
+  (`StateVersion 396≠400`), yani kapının dişi ölçülerek doğrulandı.
+- **Balance:** `balance/world.balance.json` — yapısal sınırlar (inşaat/kredi slotu, tesis sayısı,
+  kadro min/max, sezon haftası, maç başına değişiklik). **Ekonomik katsayı YOK**: maliyet/gelir/faiz
+  ECONOMY_MAP sözleşmesine göre K3 balance sprintinde gelir. Transfer penceresine tabi aksiyon
+  LİSTESİ de kodda değil bu dosyada — hangi işlemin pencereye tabi olduğu tasarım kararıdır ve
+  K5'te kesinleşir; kod değişmeden ayarlanır.
+- **Kapılar (10):** `K2DurumKanonik` · `K2HashKapsami` (30 kalıcı alanın HER BİRİ hash'i oynatıyor,
+  StateVersion oynatmıyor) · `K2Kapi3Sebepleri` (NotOwned×4 · WindowClosed · InsufficientFunds×2 ·
+  NoChargesLeft · StateConflict×5 · bağlam) · `K2KuralSeami` · `K2Atomiklik` · `K2SahteBasariYok` ·
+  `K2YurutmeDeterminizmi` (25 komut × 2 koşu bit-eşit) · `K2Eszamanlilik` (8 iş parçacığı × 50) ·
+  `K2BalanceZorlamasi` (7 bozuk yapılandırma reddi) · `K2TekKapiUctanUca` (bus→kapı 3→yürütme;
+  idempotency durumu ikinci kez DEĞİŞTİRMİYOR).
+- **Açık uç:** 32 aksiyonun hiçbirinin handler'ı yok (tasarım gereği — K3-K5'in işi). Bu bir
+  eksiklik değil sözleşme; `UnboundActions()` sayısı K3-K5 ilerledikçe düşer ve ilerlemenin
+  ölçüsüdür.
+
 ## Bekleyen kararlar
+- **Offline kuyruk uzlaştırma politikası (K2'den çıktı, 2026-08-24):** brief §4.1'in "dünya durumu
+  nerede yaşar" sorusu **D3 (G3, sunucu-otoriter) + GDD 6.3 + GDD 11.2 ile zaten kapalı**; K2 bunu
+  doğruladı ve mimari-nötr çekirdeği yazdı. Geriye tek soru kaldı: CB 8.3 offline'da Tier 0
+  komutları yerel kuyrukta bekletiyor — bağlantı dönünce yerel durum sunucu durumuyla ÇELİŞİRSE
+  ne olur? Seçenekler: (a) sunucu kazanır, yerel kuyruk sessizce düşer (basit; kullanıcı emeği
+  kaybolur); (b) sunucu kazanır ama düşen komutlar kullanıcıya rapor edilir (CB 8.2 "sessiz üzerine
+  yazma yoktur" ilkesiyle uyumlu); (c) komut bazlı birleştirme (en pahalı; Tier 0'ın geri
+  alınabilirliği bunu gereksiz kılıyor olabilir). **Öneri: (b).** Karar K6'yı (Nakama köprüsü)
+  bloklar, K3-K5'i BLOKLAMAZ.
+- **Komut bantları config_hash'e girsin mi (brief §4.2):** öneri **evet** — bantlar hangi komutun
+  kabul edildiğini belirler → komut zaman çizelgesini → replay'i. M17'nin `BalanceHash` deseni
+  ikinci dosyaya genişletilir. K6 öncesi kapanmalı.
+- **Katalog sürüm politikası (brief §4.3):** öneri aksiyon ekleme = minor, parametre/bant değişikliği
+  = major. `Catalog.Version` satırındaki yorum bu karara işaret ediyor; karar sonrası kesinleşir.
 - ~~ME 13.4 upset büyüklüğü~~ → **KARAR (2026-08-19, Atilla): (d) HİBRİT.** Dört seçenek
   sunuldu — (a) tam zincir normalizasyonu (2 dilim motor işi), (b) yalnız hedef revizyonu
   (%93 revize hedefin de üstünde kalır), (c) skor üstü yeniden örnekleme (tek-kaynak ilkesi +

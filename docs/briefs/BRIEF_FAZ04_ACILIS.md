@@ -18,8 +18,8 @@ modülleri bus'tan önce yazılırsa ya değişmezi ihlal eder ya yeniden yazıl
 
 | Sıra | Dilim | Neden burada |
 | --- | --- | --- |
-| **K1** | **Command Bus çekirdeği** (CB 3-6, 8) | Diğer her modülün geçmek zorunda olduğu kapı |
-| K2 | Dünya durumu (`GameState`): kulüp, kadro, finans, takvim | Kapı 3'ün (bağlam/sahiplik/kaynak) denetleyeceği durum |
+| **K1** ✅ | **Command Bus çekirdeği** (CB 3-6, 8) | Diğer her modülün geçmek zorunda olduğu kapı |
+| **K2** ✅ | Dünya durumu (`GameState`): kulüp, kadro, finans, takvim | Kapı 3'ün (bağlam/sahiplik/kaynak) denetleyeceği durum |
 | K3 | Tycoon Economy (CB 4.1, 9 aksiyon) | En kapalı devre modül; ekonomi bantları ECONOMY_MAP sözleşmesi |
 | K4 | Squad Management (CB 4.2) | Maç motoruna en yakın; anchor/rol/talimat zaten ME'de karşılığı var |
 | K5 | Transfer Market AI (CB 4.3) | Değerleme + pazarlık; K2 finans ve K4 kadro üstüne oturur |
@@ -51,11 +51,32 @@ JSON kütüphanesi SIZMAZ; `TheBadge.Sim` ile aynı disiplin). Hem sunucu hem Un
 (sınıf başına pencere) · idempotency (aynı Id iki kez = tek yürütme) · **red determinizmi**
 (aynı zarf + aynı bağlam = aynı red sebebi) · tier bütünlüğü (LLM kaynağı tier düşüremez).
 
-## 4. Atilla'ya karar maddeleri (K2 öncesi)
+## 3b. K2 kapsamı — dünya durumu çekirdeği (✅ tamam)
 
-1. **Dünya durumu nerede yaşar?** Sunucu-otoriter (Nakama storage) mı, istemci-otoriter + sunucu
-   doğrulaması mı? GDD 11.7 ve rekabet bütünlüğü sunucu otoritesine işaret ediyor; offline mod
-   (CB 8.3) istemci tarafında yürütme istiyor. Öneri: **sunucu otoriter + offline kuyruk**.
+**Yeni paket:** `shared/TheBadge.World` (netstandard2.1, bağımlılıksız). `GameState` (kulüp/kadro/
+finans/takvim, tamsayı + kanonik sıra), `WorldHash` (xxHash64), `WorldJournal` (atomik yazma),
+`WorldContext` (Kapı 3), `WorldExecutor` (Tek Kapı'nın yazma ucu), `balance/world.balance.json`.
+
+**Sınır — K2 nerede durdu:** 32 aksiyonun hiçbirinin handler'ı YOK, bu tasarım gereği. K2 durumu
+ve mekanizmayı verir; aksiyon semantiği K3-K5'in `IActionRule`/`IActionHandler` uygulamalarıyla
+gelir. `WorldExecutor.UnboundActions()` bağlanmamış aksiyonları listeler — sayısı K3-K5 ilerledikçe
+düşer ve **ilerlemenin ölçüsüdür**. Kalıcılık ve otorite bağlaması K6'dadır.
+
+**Kabul kapıları (K2, 10 adet):** kanonik durum · hash kapsamı (30 kalıcı alan) · Kapı 3 sebep
+tablosu · K3-K5 kural seami · atomiklik · sahte başarı yok · yürütme determinizmi · eşzamanlılık ·
+balance zorlaması · Tek Kapı uçtan uca.
+
+## 4. Atilla'ya karar maddeleri (K3-K6 öncesi)
+
+1. ~~**Dünya durumu nerede yaşar?**~~ → **ZATEN KAPALI** (K2 sırasında kayıtlar okununca görüldü):
+   **D3 (2026-07-30) = G3, sunucu-otoriter**; GDD 6.3 "maç motoru online liglerde asla oyuncunun
+   cihazında çalışmaz"; GDD 11.2 "komut doğrulama .NET C# servis katmanında koşar". CB 8.3 de
+   offline için "kod tek, davranış özdeş" diyor — yani durum çekirdeği her iki okumada da aynıdır
+   ve `shared/`te yaşar. Bu soruyu brief'e yazmam gereksizdi.
+   **Geriye kalan gerçek soru:** offline kuyruk bağlantı dönünce sunucu durumuyla çelişirse ne olur?
+   Öneri: sunucu kazanır ama düşen komutlar kullanıcıya RAPOR edilir (CB 8.2 "sessiz üzerine yazma
+   yoktur"). Bu karar **K6'yı bloklar, K3-K5'i bloklamaz** — ayrıntı `docs/DECISIONS.md` bekleyen
+   kararlar.
 2. **Komut bantları config_hash kapsamına girsin mi?** Bantlar hangi komutun kabul edildiğini
    belirler → komut zaman çizelgesini → replay'i etkiler. Öneri: **evet**, `command.bands.json`
    da config_hash'e girer (M17'nin `BalanceHash` deseni ikinci dosyaya genişletilir).
