@@ -1,0 +1,137 @@
+using System;
+using System.Collections.Generic;
+using TheBadge.Sim.Commands;
+
+namespace TheBadge.CommandBus
+{
+    /// <summary>Rate limit — CB Spec 5.1. Kayan pencere, (userId + aksiyon sınıfı) kapsamında.</summary>
+    public interface IRateLimiter
+    {
+        /// <summary>`teamKey` MatchCmd sınıfında anahtarın TEK bileşenidir — CB 5.1 maç içi
+        /// limiti "10/dk/TAKIM" der, kullanıcı başına değil: aynı takımı yöneten iki kullanıcı
+        /// TEK kovayı paylaşmalıdır. Değeri HOST üretir (`IValidationContext.ResolveTeamKey`):
+        /// zarftaki `TeamIdx` yalnız ev/deplasman'dır, kararlı bir takım kimliği DEĞİLDİR.
+        /// `nowUnixMs` HOST saatidir (istemcinin IssuedAtUnixMs'i değil).</summary>
+        bool Allow(long userId, long teamKey, RateClass cls, CommandSource source, long nowUnixMs);
+        /// <summary>İstismar sinyali — CB 5.1: 5 dk içinde 3 kez RateLimited alan kullanıcı
+        /// için denetim loguna AbuseFlag düşer (GDD 6.5 örüntü analizine girdi).</summary>
+        bool ConsumeAbuseFlag(long userId, long nowUnixMs);
+    }
+
+    /// <summary>Sınıf başına limit tanımı — DEĞERLER balance'tan gelir (CB 5.1 tablosu).</summary>
+    public sealed class RateLimitCfg
+    {
+        public readonly int Limit;        // izin verilen komut sayısı
+        public readonly long WindowMs;    // pencere uzunluğu
+        public RateLimitCfg(int limit, long windowMs) { Limit = limit; WindowMs = windowMs; }
+    }
+
+    /// <summary>Bellek içi kayan pencere sayacı. Sunucuda kalıcı depoya (Redis) taşınabilir;
+    /// mantık burada tek yerde durur ki istemci ön-doğrulaması ile sunucu doğrulaması AYNI olsun.
+    /// Zaman DIŞARIDAN verilir (`nowUnixMs`) — `DateTime.Now` yok: test edilebilirlik ve
+    /// determinizm (aynı girdi = aynı karar) TheBadge.Sim disipliniyle aynı.</summary>
+    public sealed class SlidingWindowRateLimiter : IRateLimiter
+    {
+        readonly Dictionary<RateClass, RateLimitCfg[]> cfg;   // bir sınıfın BİRDEN ÇOK penceresi olabilir
+        readonly Dictionary<long, List<long>> hits = new Dictionary<long, List<long>>();
+        readonly Dictionary<long, List<long>> redler = new Dictionary<long, List<long>>();
+        readonly int abuseEsik;
+        readonly long abusePencereMs;
+
+        public SlidingWindowRateLimiter(Dictionary<RateClass, RateLimitCfg[]> config,
+                                        int abuseEsik = 3, long abusePencereMs = 300_000)
+        {
+            cfg = config ?? throw new ArgumentNullException(nameof(config));
+            this.abuseEsik = abuseEsik; this.abusePencereMs = abusePencereMs;
+        }
+
+        /// <summary>Sayaç anahtarı. MatchCmd YALNIZ takım kapsamlıdır (CB 5.1 "10/dk/takım"):
+        /// kullanıcı kimliği anahtara GİRMEZ, yoksa aynı takımı yöneten iki kullanıcı ikişer
+        /// pencere alır. Diğer sınıflar kullanıcı kapsamlıdır. İki uzay çakışmasın diye ayrı
+        /// öneklenir. (İki turluk inceleme düzeltmesi: önce takım kimliği hiç yoktu, sonra
+        /// userId ile BİRLİKTE anahtardaydı — ikisi de spec'in "per takım" ifadesini karşılamıyor.)</summary>
+        static long Key(long userId, long teamKey, RateClass cls)
+            => cls == RateClass.MatchCmd
+               ? unchecked((teamKey * 16 + (long)cls) ^ 0x5EED_0000_0000_0000L)
+               : (userId * 64 + (long)cls);
+
+        /// <summary>ATOMİK kabul: denetim ve kayıt TEK kilit altındadır. İnceleme düzeltmesi —
+        /// "önce bak, sonra yaz" deseninde paralel istekler hepsi birden boş kapasite görüp
+        /// limiti aşabiliyordu; paylaşılan sözlükler de senkronsuzdu (RPC eşzamanlılığında
+        /// yarış/patlama riski).</summary>
+        readonly object kilit = new object();
+
+        public bool Allow(long userId, long teamKey, RateClass cls, CommandSource source, long nowUnixMs)
+        {
+            lock (kilit)
+            {
+                // LLM kaynağı ModB penceresine DE tabidir (CB 5.1): kaynak sınıfı düşürmez, EKLER.
+                if (source == CommandSource.LLM && !Izin(userId, teamKey, RateClass.ModB, nowUnixMs))
+                { Redle(userId, nowUnixMs); return false; }
+                if (!Izin(userId, teamKey, cls, nowUnixMs)) { Redle(userId, nowUnixMs); return false; }
+                Kaydet(userId, teamKey, cls, nowUnixMs);
+                if (source == CommandSource.LLM) Kaydet(userId, teamKey, RateClass.ModB, nowUnixMs);
+                return true;
+            }
+        }
+
+        bool Izin(long userId, long teamKey, RateClass cls, long now)
+        {
+            if (!cfg.TryGetValue(cls, out var pencereler) || pencereler == null) return true;
+            long k = Key(userId, teamKey, cls);
+            if (!hits.TryGetValue(k, out var list)) return true;
+            for (int i = 0; i < pencereler.Length; i++)
+            {
+                var w = pencereler[i];
+                int sayim = 0;
+                for (int j = list.Count - 1; j >= 0; j--)
+                {
+                    if (now - list[j] >= w.WindowMs) break;      // liste artan sırada
+                    sayim++;
+                }
+                if (sayim >= w.Limit) return false;
+            }
+            return true;
+        }
+
+        void Kaydet(long userId, long teamKey, RateClass cls, long now)
+        {
+            long k = Key(userId, teamKey, cls);
+            if (!hits.TryGetValue(k, out var list)) { list = new List<long>(); hits[k] = list; }
+            list.Add(now);
+            // Budama: en uzun pencerenin dışında kalanlar atılır (bellek sızıntısı olmasın)
+            long enUzun = 0;
+            if (cfg.TryGetValue(cls, out var ws) && ws != null)
+                for (int i = 0; i < ws.Length; i++) if (ws[i].WindowMs > enUzun) enUzun = ws[i].WindowMs;
+            int kes = 0;
+            while (kes < list.Count && now - list[kes] >= enUzun) kes++;
+            if (kes > 0) list.RemoveRange(0, kes);
+        }
+
+        void Redle(long userId, long now)
+        {
+            if (!redler.TryGetValue(userId, out var list)) { list = new List<long>(); redler[userId] = list; }
+            list.Add(now);
+            int kes = 0;
+            while (kes < list.Count && now - list[kes] >= abusePencereMs) kes++;
+            if (kes > 0) list.RemoveRange(0, kes);
+        }
+
+        public bool ConsumeAbuseFlag(long userId, long nowUnixMs)
+        {
+            lock (kilit)
+            {
+            if (!redler.TryGetValue(userId, out var list)) return false;
+            int sayim = 0;
+            for (int j = list.Count - 1; j >= 0; j--)
+            {
+                if (nowUnixMs - list[j] >= abusePencereMs) break;
+                sayim++;
+            }
+            if (sayim < abuseEsik) return false;
+            list.Clear();       // bayrak tüketildi (aynı seri iki kez raporlanmaz)
+            return true;
+            }
+        }
+    }
+}

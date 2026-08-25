@@ -1,0 +1,20 @@
+{
+  "surum": 1,
+  "aciklama": "FAZ 04 K2 dunya durumu yapisal parametreleri. Ekonomik katsayilar (maliyet, gelir, faiz) BU DOSYADA DEGIL; ECONOMY_MAP sozlesmesine gore K3 balance sprintinde gelir.",
+  "kapi3": {
+    "pencereGerektiren": [
+      "transfer.propose_offer",
+      "transfer.respond_offer",
+      "transfer.sign_free_agent"
+    ]
+  },
+  "yapi": {
+    "insaatSlotSayisi": 2,
+    "krediSlotSayisi": 3,
+    "tesisSayisi": 64,
+    "kadroMin": 16,
+    "kadroMax": 32,
+    "sezonHaftaSayisi": 38,
+    "macBasinaDegisiklik": 5
+  }
+}

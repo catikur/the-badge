@@ -1,0 +1,233 @@
+{
+  "surum": 1,
+  "aciklama": "IntentAction katalog v1 parametre bantlari — CB Spec 4/5. [min, max]. config_hash kapsami (BRIEF_FAZ04_ACILIS 4.2 onerisi).",
+  "bantlar": {
+    "tycoon.biletFiyat": [
+      1,
+      500
+    ],
+    "tycoon.kombineFiyat": [
+      20,
+      5000
+    ],
+    "tycoon.bufeFiyat": [
+      0.5,
+      50
+    ],
+    "tycoon.magazaFiyat": [
+      1,
+      200
+    ],
+    "tycoon.tesisId": [
+      1,
+      64
+    ],
+    "tycoon.tesisTier": [
+      1,
+      5
+    ],
+    "tycoon.insaatId": [
+      1,
+      4096
+    ],
+    "tycoon.krediMiktar": [
+      10000,
+      5000000
+    ],
+    "tycoon.krediVadeAy": [
+      12,
+      60
+    ],
+    "tycoon.krediId": [
+      1,
+      4096
+    ],
+    "tycoon.krediOdeme": [
+      1,
+      5000000
+    ],
+    "tycoon.teklifId": [
+      1,
+      4096
+    ],
+    "squad.oyuncuId": [
+      1,
+      1000000
+    ],
+    "squad.anchorX": [
+      -52500,
+      52500
+    ],
+    "squad.anchorY": [
+      -34000,
+      34000
+    ],
+    "squad.rolId": [
+      1,
+      32
+    ],
+    "squad.talimatId": [
+      1,
+      64
+    ],
+    "squad.talimatDeger": [
+      0,
+      10
+    ],
+    "squad.mentalite": [
+      -2,
+      2
+    ],
+    "squad.tempo": [
+      -2,
+      2
+    ],
+    "squad.pres": [
+      -2,
+      2
+    ],
+    "squad.hat": [
+      -2,
+      2
+    ],
+    "squad.presetSlot": [
+      1,
+      20
+    ],
+    "squad.planId": [
+      1,
+      32
+    ],
+    "squad.yogunluk": [
+      1,
+      5
+    ],
+    "match.sahaSlot": [
+      0,
+      21
+    ],
+    "match.kulubeIndeks": [
+      0,
+      9
+    ],
+    "transfer.bedel": [
+      0,
+      500000000
+    ],
+    "transfer.maas": [
+      0,
+      2000000
+    ],
+    "transfer.teklifId": [
+      1,
+      4096
+    ],
+    "transfer.sozlesmeYil": [
+      1,
+      5
+    ],
+    "staff.tip": [
+      1,
+      16
+    ],
+    "staff.tier": [
+      1,
+      5
+    ],
+    "staff.sureYil": [
+      1,
+      5
+    ],
+    "staff.envanterId": [
+      1,
+      4096
+    ],
+    "social.personaId": [
+      1,
+      4096
+    ],
+    "social.soruId": [
+      1,
+      4096
+    ],
+    "social.cevapSinifi": [
+      1,
+      8
+    ],
+    "social.userId": [
+      1,
+      1000000000
+    ],
+    "league.chaos": [
+      0,
+      2
+    ],
+    "league.hiz": [
+      1,
+      5
+    ],
+    "league.butce": [
+      100000,
+      500000000
+    ],
+    "league.saatDilimi": [
+      -12,
+      14
+    ],
+    "league.ligId": [
+      1,
+      100000000
+    ],
+    "replay.macId": [
+      1,
+      1000000000
+    ],
+    "replay.pencereSn": [
+      5,
+      30
+    ]
+  },
+  "rateLimit": {
+    "Tactic": [
+      [
+        60,
+        60
+      ]
+    ],
+    "Economic": [
+      [
+        20,
+        60
+      ],
+      [
+        200,
+        3600
+      ]
+    ],
+    "MatchCmd": [
+      [
+        10,
+        60
+      ]
+    ],
+    "OnlineSocial": [
+      [
+        10,
+        3600
+      ]
+    ],
+    "ModB": [
+      [
+        10,
+        60
+      ]
+    ]
+  },
+  "abuse": {
+    "esik": 3,
+    "pencereSn": 300
+  },
+  "idempotencySaat": 24,
+  "idempotencyRedDk": 10,
+  "idempotencyBudamaDk": 5
+}

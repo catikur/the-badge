@@ -927,7 +927,247 @@ FAZ 03'ün son dilimi. Üç parça birlikte kapandı; **FAZ 03 motor tarafı don
   LOD 2 kompozisyon hatası, Yüksek chaos). Borçların hiçbiri arayüzü değiştirmez — kapatıldıklarında
   golden set yeniden üretilir, sözleşme aynı kalır.
 
+## FAZ 04 — Core Modüller
+
+### K1: Command Bus çekirdeği — ✅ TAMAM (2026-08-23)
+FAZ 04 açıldı (`docs/briefs/BRIEF_FAZ04_ACILIS.md`). **Sıra keyfi değil:** anayasa değişmezi #1
+(Tek Kapı) gereği durumu değiştiren her eylem `CommandEnvelope` ile bus'tan geçmek zorunda;
+bugün hub tarafında bus YOKTU (yalnız maç içi ucu, ME 14.1). Squad/Transfer/Tycoon bus'tan önce
+yazılsaydı ya değişmezi ihlal ederdi ya yeniden yazılırdı → K1 ilk dilim.
+- **Yeni paket `shared/TheBadge.CommandBus`** (netstandard2.1, **bağımlılıksız**): UnityEngine
+  ve JSON kütüphanesi SIZMAZ — `TheBadge.Sim` ile aynı disiplin. Hem sunucu hem Unity AYNI
+  doğrulama kodunu çalıştırır (istemci ön-doğrular, sunucu yeniden doğrular; otorite sunucuda).
+- **Katalog v1 — 32 aksiyon** (CB 4.1-4.4, 70 parametre): her aksiyonda tier (0-2), bağlam
+  (Hub/Maç/Online bayrağı), rate-limit sınıfı ve parametre tanımları. **Tier katalogda sabittir
+  ve kaynaktan bağımsızdır** (CB 6): LLM kaynaklı komut tier'ını asla düşüremez.
+- **4 kapılı zincir** (CB 5), deterministik sırayla, ilk hatada durur: (1) katalog+şema — sıkı
+  mod: eksik alan, tip hatası, **fazladan alan**, enum dışı, metin >40, kontrol karakteri hepsi
+  `SchemaViolation`; (2) parametre bandı — 46 bant `balance/command.bands.json`'dan, **bant
+  anahtarı tanımsızsa sessizce GEÇMEZ**, yapılandırma hatası da reddir; (3) bağlam/sahiplik/
+  kaynak/hak — `IValidationContext` arayüzü (uygulamaları K2-K5 ile gelir; bus modüllere
+  bağımlı olmaz, modüller bus'a bağlanır); (4) rate limit — CB 5.1 sınıf tablosu, kayan pencere.
+- **JSON sınırı — ME 3.3 `BalanceHash` deseninin aynısı:** çekirdek JSON parse etmez; host ham
+  payload'ı ayrıştırıp `IPayloadView` (alan adları + tipli okuyucular) olarak verir, şema
+  sıkılığı çekirdekte denetlenir. Böylece "spec JSON Schema diyor ama çekirdek bağımlılıksız
+  kalmalı" gerilimi mimari değişmezi bozmadan çözülür.
+- **Rate limit:** sınıf başına ÇOKLU pencere (Economic 20/dk **ve** 200/saat), kullanıcı yalıtımı,
+  AbuseFlag (5 dk içinde 3 red → denetim loguna sinyal, CB 5.1). **LLM kaynağı sınıfı düşürmez,
+  EKLER:** LLM'den gelen komut hem kendi sınıfının hem ModB penceresinin limitindedir.
+  Zaman DIŞARIDAN verilir (`DateTime.Now` yok) — test edilebilirlik + determinizm.
+- **Idempotency (CB 8.1):** `CommandId` 24 saatlik pencerede; aynı Id ikinci kez YÜRÜTÜLMEZ,
+  önceki yanıt aynen döner. **Tasarım notu:** idempotency doğrulamadan ÖNCEdir — yeniden
+  doğrulamak, aradaki durum değişimi yüzünden aynı komuta farklı yanıt üretebilir ve retry'yi
+  güvensiz kılardı. RED de idempotenttir (düzeltilmiş payload'la aynı Id gelirse eski red döner).
+- **İnceleme düzeltmeleri (Codex, 8 bulgu — SEKİZİ DE haklı, üçü P1):**
+  (1) **İstemci saati güveniliyordu (P1).** Rate limit penceresi ve idempotency süresi zarfın
+  `IssuedAtUnixMs` alanıyla çalışıyordu; her partiyi ileri tarihli göndererek sayaç sıfırlanabilirdi.
+  Artık HOST'un alış saati (`receivedAtUnixMs`) ayrı parametredir; `IssuedAtUnixMs` yalnız metadata.
+  (2) **Idempotency atomik değildi (P1).** "Önce bak, sonra sakla" deseninde iki eşzamanlı RPC
+  aynı `CommandId`'yi birlikte yürütebiliyordu ve `Dictionary` senkronsuzdu — iddia edilen
+  exactly-once sağlanmıyordu. Artık `TryReserve → yürüt → Complete` (kilitli); ikinci eşzamanlı
+  çağrı `DuplicateCommand` alır, çöken rezervasyon uçuş süresi sonunda devralınır.
+  (3) **Rate limit kabulü atomik değildi (P1).** Paralel patlama hepsi birden boş kapasite görüp
+  limiti aşabiliyordu. Denetim+kayıt tek kilit altında.
+  (4) **Yürütücüsüz `Submit` SAHTE BAŞARI üretiyordu (P1).** Durum değişmediği hâlde "başarılı"
+  sonuç idempotency deposuna yazılıyor, gerçek yürütücüyle yapılan retry bu sahte başarıyı tekrar
+  oynatıyordu. Yürütücü artık ZORUNLU (kablolama hatası görünür patlar); yalnız doğrulama için
+  ayrı `Validate` API'si var ve o rate limit hakkını TÜKETMEZ.
+  (5) **Bağlam denetimi birleşik bayrakla yapılıyordu.** Hem hub hem maç geçerli bir aksiyon
+  (ör. `squad.set_player_role`) maç damgasıyla gelse bile "hub açık" olduğu için geçiyordu.
+  Artık zarfın seçtiği bağlamla aksiyon bayraklarının KESİŞİMİ denetlenir.
+  (6) **`CommandSource.Auto` hiç doğrulanmıyordu.** CB 2.2 "AUTO v1'de kapalı" derken `Auto`
+  zarfı UI komutu gibi yürüyebiliyordu. Artık `Auto` ve tanımsız enum değerleri reddedilir.
+  (7) **Denetim kaydı yürütmeden SONRA ayrı çağrılıyordu** — audit yazımı başarısız olursa durum
+  audit'siz kalır ve CB 5.2'nin "hep ya da hiç" sözleşmesi delinirdi. `AuditRecord` artık
+  yürütücüye geçer, yani durum/event ile AYNI transaction'da kalıcı olur; `IAuditSink` yalnız
+  durum değiştirmeyen sonuçlar (redler, tekrar oynatmalar) içindir.
+  (8) **Maç içi limit takım kapsamlı değildi.** CB 5.1 "10/dk/TAKIM" derken anahtar yalnız
+  `UserId`'ydi: takımı paylaşan kullanıcılar limiti birlikte aşabiliyor, farklı takımları yöneten
+  kullanıcı gereksiz kısılıyordu. `MatchCmd` sınıfında takım kimliği anahtara girdi.
+  Sekizi de ayrı kapıyla sınanır (`K1IncelemeDuzeltmeleri`) — eşzamanlılık bulguları gerçek
+  `Parallel.For` altında ölçülür.
+- **İKİNCİ inceleme turu (Bugbot, düzeltme commit'i üzerinde — 2 bulgu, ikisi de haklı):**
+  (9) **Maç içi limit HÂLÂ takım kapsamlı değildi.** İlk düzeltmede takım kimliğini anahtara
+  EKLEDİM ama `userId`'yi ÇIKARMADIM — yani aynı takımı yöneten iki kullanıcı yine ikişer pencere
+  alıyordu; spec "10/dk/TAKIM" diyor, "kullanıcı+takım" değil. Ayrıca zarftaki `TeamIdx` kararlı
+  bir takım kimliği DEĞİL (yalnız ev/deplasman). Çözüm: kimliği HOST üretir
+  (`IValidationContext.ResolveTeamKey`) ve MatchCmd anahtarında kullanıcı kimliği YER ALMAZ.
+  (10) **Rezervasyon devralması çift yürütmeye açıktı.** Uçuş süresi dolunca rezervasyonu
+  "çökmüş sayıp" devralıyordum; ama ilk çağrı hâlâ `Execute` içindeyse İKİ yürütme birden durum
+  değiştirebilirdi — exactly-once iddiası, tam da onu korumak için yazdığım kolda deliniyordu.
+  Ayrıca `Complete`/`Release` sahiplik denetimsizdi: gecikmiş bir çağrı başkasının sonucunu
+  ezebiliyor ya da rezervasyonunu silebiliyordu. Çözüm: **otomatik devralma KALDIRILDI**
+  (canlılık uğruna güvenlik feda edilmez; asılı rezervasyon yalnız `Prune` ile, operatör
+  denetiminde açılır) + **sahiplik jetonu** (jeton eşleşmeyen `Complete`/`Release` no-op).
+- **Ders (kayıt için):** bus'ı tek iş parçacıklı bir zihinle yazmışım; hedefi paralel RPC işleyen
+  bir sunucu. İki inceleme turunun 10 bulgusunun 6'sı doğrudan eşzamanlılık/güven sınırı
+  konusuydu. K6 (Nakama köprüsü) bu dersle başlar.
+- **Kapılar (8):** `K1KatalogTamligi` (32 aksiyon, her bantlı parametrenin bandı balance'ta VAR) ·
+  `K1SemaSikiligi` (7 senaryo) · `K1BantZorlamasi` (**59 bantlı parametrenin TAMAMI** alt sınırda
+  reddediliyor — tek tek değil, katalog taranarak) · `K1BaglamKapisi` (maç↔hub ayrımı) ·
+  `K1RateLimit` · `K1Idempotency` · `K1IncelemeDuzeltmeleri` (8 bulgu) · `K1RedDeterminizmi` (aynı girdi=aynı
+  sebep, kapı sırası, tier kaynaktan bağımsız).
+
+### K2: Dünya durumu çekirdeği — ✅ TAMAM (2026-08-24)
+`shared/TheBadge.World` (netstandard2.1, **bağımlılıksız** — Sim ve CommandBus dışında referans
+yok). K1 kapıyı kurdu; K2 kapının ARDINDAKİ durumu kurar: kulüp, kadro, finans, takvim.
+
+**Neden Atilla'nın kararını BEKLEMEDİ (ve nesi hâlâ bekliyor):** brief §4.1 "dünya durumu nerede
+yaşar" diye sordu. Kayıtları okuyunca sorunun büyük kısmının ZATEN kapalı olduğu görüldü —
+**D3 (2026-07-30): G3, sunucu-otoriter**, gerekçesi rekabetçi bütünlük + çok oyunculu ligler;
+GDD 6.3 "maç motoru online liglerde asla oyuncunun cihazında çalışmaz"; GDD 11.2 "komut
+doğrulama .NET C# servis katmanında koşar". Üstelik CB 8.3 offline modu için "aynı doğrulama
+zinciri YEREL `IValidationContext` ile çalışır; **kod tek, davranış özdeş**" diyor. Yani
+durum çekirdeği HER İKİ seçenekte de aynıdır ve `shared/`te yaşamak zorundadır; kararın
+etkilediği şey yalnız **otorite bağlaması ve kalıcılık** (Nakama/Postgres vs yerel save) —
+o da K6'nın kapsamı. K2 mimari-nötr olanı yazdı, K6'ya ait olanı yazmadı.
+→ Atilla'ya kalan gerçek soru daralttı: **offline kuyruğun uzlaştırma politikası** (bağlantı
+dönünce yerel Tier 0 kuyruğu sunucu durumuyla çeliştiğinde ne olur). Bekleyen kararlara işlendi.
+
+- **Determinizm disiplini sim'den ithal:** kalıcı alanların TAMAMI tamsayı (para tam ₺ — ME 3.2'nin
+  mm kuralının ekonomi karşılığı; ECONOMY_MAP'in ₺K'sı SUNUM birimidir), diziler kanonik sırada
+  (oyuncular PlayerId artan), sırasız yapı (Dictionary/HashSet) yok — arama ikili arama.
+  `WorldHash` = xxHash64, açık little-endian, ME 3.2 `StateHash` deseninin dünya karşılığı.
+- **Olay logu TEK YÖNLÜ:** `WorldEvent` listesi dünya mantığı tarafından ASLA okunmaz ve hash'e
+  GİRMEZ (ME 15.1'de maç logu için kurulan kuralın aynısı). `StateVersion` de hash'e girmez:
+  aynı durumu farklı komut yollarıyla üreten iki save eşit hash'li olmalıdır — versiyon durum
+  değil MUHASEBEdir (CB 8.2 delta sync).
+- **Atomiklik journal ile (CB 5.2):** handler durumu doğrudan değiştirmez, yazmalarını
+  `WorldJournal`a kuyruklar; yürütücü önce ÖN DENETİMDEN geçirir (hedef var mı, değer aralıkta mı),
+  sonra uygular. Tek geçersiz yazma varsa HİÇBİRİ uygulanmaz. Sonuç: "yarım yazılmış durum" bir
+  hata değil, **yapısal olarak ulaşılamaz bir hâl** — geri alma koduna gerek kalmıyor.
+- **Kapı 3 sahiplik üç ayrı ilişkidir:** kendi oyuncuna rol verirsin (`Sahip`), BAŞKASININ
+  oyuncusuna teklif yaparsın (`Yabanci`), SERBEST oyuncuyla imzalarsın (`Serbest`). Tek bir
+  "oyuncu bizim mi" kuralı bu üçünü birden yanlış cevaplardı; tablo aksiyon bazında yazıldı.
+- **K3-K5 seami:** K2 yalnız DURUMA dayalı yapısal denetimleri yapar; hesaplanan bedeller
+  (inşaat maliyeti, sponsor, personel) `IActionRule`/`IActionHandler` ile modüllerden gelir.
+  **K2 bilmediği bir bedeli tahmin etmez** — kaynak denetimi yalnız payload'ın tutarı AÇIKÇA
+  bildirdiği aksiyonlarda yapılır (`tycoon.repay_loan.miktar`, `transfer.propose_offer.bedel`).
+- **K1 derslerinin taşınması:** (a) *sahte başarı yok* — doğrulamayı geçmiş ama handler'ı
+  bağlanmamış aksiyon "oldu" diye raporlanmaz (idempotency deposu o yalanı tekrar oynatırdı);
+  `UnboundActions()` kablolama boşluğunu istek anında değil AÇILIŞTA gösterir. (b) *eşzamanlılık* —
+  yürütme tek kilit altında serileştirildi; kilit kaldırılınca kapı gerçekten kırmızıya döndü
+  (`StateVersion 396≠400`), yani kapının dişi ölçülerek doğrulandı.
+- **Balance:** `balance/world.balance.json` — yapısal sınırlar (inşaat/kredi slotu, tesis sayısı,
+  kadro min/max, sezon haftası, maç başına değişiklik). **Ekonomik katsayı YOK**: maliyet/gelir/faiz
+  ECONOMY_MAP sözleşmesine göre K3 balance sprintinde gelir. Transfer penceresine tabi aksiyon
+  LİSTESİ de kodda değil bu dosyada — hangi işlemin pencereye tabi olduğu tasarım kararıdır ve
+  K5'te kesinleşir; kod değişmeden ayarlanır.
+- **Kapılar (10):** `K2DurumKanonik` · `K2HashKapsami` (30 kalıcı alanın HER BİRİ hash'i oynatıyor,
+  StateVersion oynatmıyor) · `K2Kapi3Sebepleri` (NotOwned×4 · WindowClosed · InsufficientFunds×2 ·
+  NoChargesLeft · StateConflict×5 · bağlam) · `K2KuralSeami` · `K2Atomiklik` · `K2SahteBasariYok` ·
+  `K2YurutmeDeterminizmi` (25 komut × 2 koşu bit-eşit) · `K2Eszamanlilik` (8 iş parçacığı × 50) ·
+  `K2BalanceZorlamasi` (7 bozuk yapılandırma reddi) · `K2TekKapiUctanUca` (bus→kapı 3→yürütme;
+  idempotency durumu ikinci kez DEĞİŞTİRMİYOR).
+- **Açık uç:** 32 aksiyonun hiçbirinin handler'ı yok (tasarım gereği — K3-K5'in işi). Bu bir
+  eksiklik değil sözleşme; `UnboundActions()` sayısı K3-K5 ilerledikçe düşer ve ilerlemenin
+  ölçüsüdür.
+
+### K1 güvenlik turu — ✅ TAMAM (2026-08-24)
+Cursor Security Agent PR #16'da iki MEDIUM buldu; ikisi de haklı çıktı.
+
+**(A) Kota kimliği istemci zarfından okunuyordu.** Kapı 4 rate limit'i (ve AbuseFlag'i)
+`env.UserId` ile anahtarlıyordu. Bu, *kendi verdiğim kararla tutarsızdı*: `IssuedAtUnixMs`'i
+"istemci verisi, güvenilmez" diye host saatiyle değiştirmiş, `TeamIdx`'i "kararlı kimlik değil"
+diye `ResolveTeamKey`e taşımıştım — ama aynı zarfın ASIL kota kimliğini olduğu gibi bırakmıştım.
+Zarfı deserialize edip `Submit` çağıran bir host, `UserId`'yi oturumdan ezmezse çağıran her parti
+için yeni kimlik uydurup Tactic/Economic/OnlineSocial/ModB pencerelerini döndürebilir, AbuseFlag'i
+başkasının kimliğine yapıştırabilirdi.
+- **Çözüm:** `authenticatedUserId` artık `Submit`/`Validate`/`Validator.Validate`'in **ZORUNLU**
+  parametresi (`receivedAtUnixMs` deseninin aynısı — host'un unutabileceği varsayılan bırakılmaz).
+  Zarfın iddiası oturumla ayrışıyorsa **kapı 1'de** `NotOwned` ("kimlik uyuşmazlığı") ile düşer:
+  bu bir zarf BÜTÜNLÜĞÜ önkoşuludur, ondan sonrası değerlendirilmez. `env.UserId` denetim
+  metadata'sı olarak kalır — değeri, artık uyuşmazlığın YAKALANABİLİR olmasıdır.
+
+**(B) Doğrulamada düşen komutlar 24 saatlik kayıt açıyordu, bus depoyu hiç budamıyordu.**
+Rezervasyon doğrulamadan ÖNCE alınır (bilinçli: retry'yi yeniden doğrulamak aradaki durum
+değişimi yüzünden aynı komuta farklı yanıt üretirdi). Yan etkisi: şema/bant/bağlam redleri
+Kapı 4'e hiç ulaşmadığından rate limit tüketmez, ama yine de kayıt açardı; benzersiz
+`CommandId`'li bozuk payload seli paylaşılan belleği sınırsız büyütebilirdi.
+- **Çözüm iki parçalı:** (1) dedup penceresi artık kayıt başına — **YÜRÜTÜLEN** komutlar için
+  24 saat, yürütmeye ulaşmamış redler için 10 dk [KALİBRE `idempotencyRedDk`]. "Red de
+  idempotenttir" sözleşmesi gerçek retry ufkunda korunur, sel maliyeti o ufka iner. (2) bus
+  `Submit`te amorti edilmiş budama yapar [KALİBRE `idempotencyBudamaDk` = 5 dk]. Budama ASILI
+  rezervasyonlara DOKUNMAZ — devralma yasağı operatör denetiminde kalır (ikinci tur kararı).
+- **Triyaj notu:** botun aynı bulguda geçen "her kullanıcı için o Id'leri blokler" kısmı pratikte
+  önemsiz (CommandId Guid; çakışma olmaz). Gerçek risk BELLEK BÜYÜMESİdir; kapı da onu ölçüyor.
+
+- **Kapı:** `K1GuvenlikTuru`. Dişi ölçüldü — kimlik denetimi kaldırılınca 6 ayrı iddia birden
+  düştü (uyuşmazlık geçiyor · döndürme pencereyi aşıyor · uyuşmayan zarf limiter'a ulaşıyor);
+  budama + kısa pencere kaldırılınca sel 201 kayda çıktı. Kota kimliğinin OTURUMDAN geldiği
+  `SpyRateLimiter` ile doğrudan ölçülüyor (bus AbuseFlag'i kendisi tükettiği için sonradan
+  sorgulamak yanıltıcı olurdu — ilk yazdığım kapı bu yüzden yanlış kırmızı verdi, düzeltildi).
+- **Ders:** bir güven sınırı kararını verirken (istemci verisi → host verisi) o sınırdan geçen
+  TÜM alanları birlikte taramalıydım. İki alanı taşıyıp üçüncüsünü bırakmak, kararın kendisini
+  değil yalnız iki örneğini uygulamak demek.
+
+**(C) Kimlik denetimi KISA DEVRE yollarında geçerli değildi** (üçüncü MEDIUM, aynı gün, benim
+(A) düzeltmemin içinde). Denetimi kapı 1'e koymuştum; oysa `Submit` idempotency kısa devresinde
+(`Completed`/`InFlight`) `Validator.Validate`e HİÇ ulaşmadan dönüyor. Yani sözleşme tam da onu
+atlayan yollarda yoktu. Kayıt yalnız `CommandId` ile anahtarlı olduğundan sonuç bilgi sızıntısından
+ibaret de değildi: aynı Guid'i kullanan İKİNCİ kullanıcının komutu hiç çalışmadan ötekinin
+önbellekli yanıtını alıyor, yani sessizce hiçbir şey yapmadan "başarılı" görünüyordu.
+- **Çözüm iki katmanlı:** (1) depo anahtarı artık **(KULLANICI, CommandId)** — başka bir oturumun
+  kaydına erişmek yapısal olarak imkânsız, uçuş durumu da yoklanamaz; (2) kimlik denetimi
+  `Submit`in EN BAŞINA, rezervasyondan önce alındı (denetim `Validator`da DA duruyor: ön-doğrulama
+  yolu için gerekli — savunma iki katmanlı). Kendi retry'si idempotent kalıyor.
+- **Ders (öncekinin devamı):** bir denetimi "kapı 1'e koydum" demek, o kapıya ULAŞMAYAN yolların
+  denetimsiz olduğunu ölçmediğim sürece yeterli değil. Erken dönüş yolları da sözleşmenin
+  parçasıdır.
+
+### K2 inceleme turu — ✅ TAMAM (2026-08-24)
+Bugbot K2'de 5 bulgu çıkardı (3 HIGH, 2 MEDIUM); beşi de haklı. İkisi tam da raporumda en
+kendinden emin anlattığım yerlerdeydi — atomiklik garantisi ve "üç ayrı sahiplik ilişkisi" tablosu.
+
+1. **(HIGH) Journal ön denetimi zincirlemeyi atlıyordu.** `Validate` her yazmayı DEĞİŞMEMİŞ duruma
+   karşı bakıyordu, `Apply` ise sırayla zincirliyordu. Aynı alana iki delta (moral +30, +30; taban
+   60) tek tek bantta görünüp zincirde 120 yazıyordu — yani "aralık taşması sessizce kırpılmaz"
+   garantisi, tam da onu veren metnin altında deliniyordu. Artık her yazma, kendinden önceki aynı
+   hedefli yazmalar katlandıktan sonraki değere karşı denetleniyor; her ARA sonuç da bantta.
+   Tarama O(n²) — journal birkaç yazmalık (TeamSheet.Validate precedent'i).
+2. **(HIGH) Kapı 3 yürütmeyle yarışıyordu.** Bağlam durumu KİLİTSİZ okuyor, yürütücü kendi kilidi
+   altında yazıyordu: iki paralel komut aynı bakiyeyi "yeterli" görüp ikisi de yürütülebiliyordu.
+   Yürütme kilidi yazmaları serileştiriyor ama KARARI korumuyordu (klasik TOCTOU). İki parçalı
+   çözüm: (a) `WorldStore` — durum ve onu koruyan kilit tek sahipte, okuyanla yazanın aynı kilidi
+   paylaşması konvansiyon değil YAPISAL zorunluluk; (b) yürütücü kilit içinde Kapı 3'ü YENİDEN
+   denetliyor. Bu, projenin "istemci ön-doğrular, sunucu yeniden doğrular" ilkesinin bir katman
+   aşağıya uygulanmasıdır. `gate3` zorunlu parametre — unutulabilir varsayılan bırakılmıyor.
+3. **(HIGH) `OwnerNeed.Yabanci` serbest oyuncuyu geçiriyordu.** Kural "bizim değilse geçer" diye
+   yazılmıştı; serbest oyuncunun (ClubId 0) bedel teklif edilecek bir kulübü yok, yolu
+   `sign_free_agent`. Üç ilişkiyi ayırdığımı yazmışım ama üçüncüsünü ikincinin içinden
+   çıkarmamışım. Artık `Yabanci` = BAŞKA BİR KULÜBÜN oyuncusu.
+4. **(MEDIUM) `kadroMax` hiç zorlanmıyordu.** Yükleme anında doğrulanıp kullanılmıyordu; hiçbir şey
+   yapmayan bir yapılandırma anahtarı, olmayan anahtardan daha kötüdür — var sanılır.
+   `transfer.sign_free_agent` artık tavanı denetliyor.
+5. **(MEDIUM) Audit fırlarsa bellek ilerlemiş kalıyordu.** Yorumum bunu host'un veritabanı
+   rollback'ine havale ediyordu ama bellek o rollback'in parçası değildi: "hep ya da hiç" bir
+   MEKANİZMAYA değil bir VARSAYIMA dayanıyordu. `WorldJournal.Geri` eklendi (Apply öncesi değerler
+   saklanır, ters sırayla geri yazılır, `StateVersion` geri alınır); sink fırlarsa geri alınıp
+   istisna yukarı bırakılıyor.
+
+- **Kapılar:** `K2ZincirlemeYazma` · `K2AuditGeriAlma` · `K2Kapi3Yarisi` + `K2Kapi3Sebepleri`
+  genişletildi (NotOwned×5, StateConflict×7).
+- **Kendi testimin dişsiz çıkması (kayda değer):** ilk yazdığım `K2Kapi3Yarisi` yarışı ŞANSA
+  bırakıyordu — tekrar denetimini kaldırdığımda kapı YEŞİL kaldı, yani hatayı yakalamıyordu.
+  `BarrierContext` ile 8 komutun Kapı 3'ü BİRLİKTE geçmesi garanti edildi; şimdi tekrar denetimi
+  kaldırılınca her koşuda kırmızı (8 komut geçiyor, kasa **-700**). **Ders: eşzamanlılık kapısının
+  dişi ölçülmeden yazılmış sayılmaz** — zamanlamaya bağlı bir test, hata varken de yeşil kalar.
+
 ## Bekleyen kararlar
+- **Offline kuyruk uzlaştırma politikası (K2'den çıktı, 2026-08-24):** brief §4.1'in "dünya durumu
+  nerede yaşar" sorusu **D3 (G3, sunucu-otoriter) + GDD 6.3 + GDD 11.2 ile zaten kapalı**; K2 bunu
+  doğruladı ve mimari-nötr çekirdeği yazdı. Geriye tek soru kaldı: CB 8.3 offline'da Tier 0
+  komutları yerel kuyrukta bekletiyor — bağlantı dönünce yerel durum sunucu durumuyla ÇELİŞİRSE
+  ne olur? Seçenekler: (a) sunucu kazanır, yerel kuyruk sessizce düşer (basit; kullanıcı emeği
+  kaybolur); (b) sunucu kazanır ama düşen komutlar kullanıcıya rapor edilir (CB 8.2 "sessiz üzerine
+  yazma yoktur" ilkesiyle uyumlu); (c) komut bazlı birleştirme (en pahalı; Tier 0'ın geri
+  alınabilirliği bunu gereksiz kılıyor olabilir). **Öneri: (b).** Karar K6'yı (Nakama köprüsü)
+  bloklar, K3-K5'i BLOKLAMAZ.
+- **Komut bantları config_hash'e girsin mi (brief §4.2):** öneri **evet** — bantlar hangi komutun
+  kabul edildiğini belirler → komut zaman çizelgesini → replay'i. M17'nin `BalanceHash` deseni
+  ikinci dosyaya genişletilir. K6 öncesi kapanmalı.
+- **Katalog sürüm politikası (brief §4.3):** öneri aksiyon ekleme = minor, parametre/bant değişikliği
+  = major. `Catalog.Version` satırındaki yorum bu karara işaret ediyor; karar sonrası kesinleşir.
 - ~~ME 13.4 upset büyüklüğü~~ → **KARAR (2026-08-19, Atilla): (d) HİBRİT.** Dört seçenek
   sunuldu — (a) tam zincir normalizasyonu (2 dilim motor işi), (b) yalnız hedef revizyonu
   (%93 revize hedefin de üstünde kalır), (c) skor üstü yeniden örnekleme (tek-kaynak ilkesi +
