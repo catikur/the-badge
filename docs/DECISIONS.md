@@ -1292,6 +1292,19 @@ Codex, PR #17 incelemeye açılınca dört bulgu çıkardı (2 P1, 2 P2); dörd�
 
 - **Kapı:** `K3IncelemeBulgulari` + `K3TycoonMutluYol`a sponsor olay tipi denetimi. Dördü de
   ters çevrilip ölçüldü; her biri kendi iddiasını kırmızıya döndürüyor.
+
+**5. (Bugbot) `K2HashKapsami` kendi iddiasını yanlışlamıştı.** Kapı "30 kalıcı alanın HER BİRİ
+hash'i oynatıyor" diyordu; K3 yedi yeni kalıcı alan ekledi (Form, sponsor haftalık/kalan hafta,
+dönem inşaat gideri, fiyat dizileri, teklif alanları) ve mutasyon listesi elle bakımlı olduğu için
+GERİDE KALDI — kapı yeşil raporlamayı sürdürürken kapsam iddiası artık doğru değildi. Alanlar
+hash'te vardı, ama kapı onları ÖLÇMÜYORDU: yarın biri hash'ten çıkarsa kimse fark etmezdi.
+- **Çözüm listeyi uzatmak DEĞİL:** beklenen alan kümesi artık YANSIMAYLA türetiliyor (kalıcı durum
+  tiplerinin tüm public alanları; `StateVersion` bilerek dışarıda). Mutasyonu olmayan bir alan
+  kapıyı DÜŞÜRÜYOR, fazladan bir mutasyon da. Kapsamı hatırlamak insana bırakılmadı. 30 → **46 alan**.
+- **Diş ölçümü:** mutasyonsuz yeni bir alan eklendi → kapı düştü ("MUTASYONU YOK"); mevcut bir alan
+  hash'ten çıkarıldı → kapı düştü ("hash oynamadı"). İkisi de doğru mesajla.
+- **Ders:** "her X" diyen bir kapı, X'in listesini elle tutuyorsa iddiası zamanla yanlışlanır.
+  Liste türetilebiliyorsa türetilmeli; bu, bu turda öğrenilen en genellenebilir şey.
 - **Kapsam notu:** referans kulüp senaryosu inşaatsız kaldı (bilinçli). ECONOMY_MAP'in 1,05-1,15
   bandı SÜREKLİ işletme dengesi hakkında; inşaat yığınsal sermaye harcamasıdır ve 10 sezonluk
   ortalamaya karıştırmak bandın anlamını değiştirir. Ledger artık her senaryoyu doğru ölçüyor;

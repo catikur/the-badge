@@ -2595,64 +2595,116 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     }
 
     // 25b) HASH KAPSAMI — ME 3.2 StateHash deseninin dünya karşılığı.
-    // Kalıcı HER alan hash'i oynatmalı; olay logu ve StateVersion oynatMAMALI (log tek yönlü
-    // çıktıdır, versiyon muhasebedir — aynı durumu farklı yoldan üreten iki save eşit hash'lidir).
+    // Kalıcı HER alan hash'i oynatmalı; olay logu ve StateVersion oynatMAMALI.
+    //
+    // BEKLENEN ALAN LİSTESİ YANSIMAYLA TÜRETİLİR (inceleme bulgusu, 2026-08-29): liste elle
+    // yazıldığında K3'ün eklediği alanlar (Form, sponsor, fiyatlar, dönem inşaat gideri) kapsam
+    // dışında kaldı ve kapı "30 alanın hepsi" diye YEŞİL raporlamayı sürdürdü — yani kapının
+    // iddiası sessizce yanlışlandı. Artık yeni bir kalıcı alan eklenip mutasyonu yazılmazsa
+    // kapı DÜŞER; kapsamı hatırlamak insana bırakılmaz.
     {
-        string hata = "";
-        var mutasyonlar = new (string ad, Action<TheBadge.World.GameState> uygula)[]
+        var mutasyonlar = new (string alan, Action<TheBadge.World.GameState> uygula)[]
         {
-            ("kasa",            s => s.Club.KasaTl += 1),
-            ("clubId",          s => s.Club.ClubId += 1),
-            ("sahipUser",       s => s.Club.OwnerUserId += 1),
-            ("kapasite",        s => s.Club.StadyumKapasite += 1),
-            ("maasGideri",      s => s.Club.HaftalikMaasGiderTl += 1),
-            ("tesisTier",       s => s.Club.TesisTier[3] += 1),
-            ("insaatId",        s => s.Club.InsaatSlot[0].InsaatId += 1),
-            ("insaatTesis",     s => s.Club.InsaatSlot[0].TesisId += 1),
-            ("insaatHedefTier", s => s.Club.InsaatSlot[0].HedefTier += 1),
-            ("insaatKalanHafta",s => s.Club.InsaatSlot[0].KalanHafta += 1),
-            ("insaatMaliyet",   s => s.Club.InsaatSlot[0].ToplamMaliyetTl += 1),
-            ("krediId",         s => s.Club.Krediler[0].KrediId += 1),
-            ("krediAnapara",    s => s.Club.Krediler[0].AnaparaTl += 1),
-            ("krediKalanAy",    s => s.Club.Krediler[0].KalanAy += 1),
-            ("krediFaiz",       s => s.Club.Krediler[0].FaizBp += 1),
-            ("oyuncuKulup",     s => s.Oyuncular[0].ClubId += 1),
-            ("oyuncuMaas",      s => s.Oyuncular[0].HaftalikMaasTl += 1),
-            ("oyuncuSozlesme",  s => s.Oyuncular[0].SozlesmeKalanHafta += 1),
-            ("oyuncuMoral",     s => s.Oyuncular[0].Moral += 1),
-            ("oyuncuKondisyon", s => s.Oyuncular[0].Kondisyon += 1),
-            ("oyuncuSakatlik",  s => s.Oyuncular[0].SakatlikHafta += 1),
-            ("oyuncuRol",       s => s.Oyuncular[0].RolId += 1),
-            ("oyuncuAnchorX",   s => s.Oyuncular[0].AnchorXmm += 1),
-            ("oyuncuAnchorY",   s => s.Oyuncular[0].AnchorYmm += 1),
-            ("oyuncuListede",   s => s.Oyuncular[0].ListedeMi = !s.Oyuncular[0].ListedeMi),
-            ("oyuncuKimlik",    s => s.Oyuncular[0].PlayerId -= 1),
-            ("sezon",           s => s.Takvim.Sezon += 1),
-            ("hafta",           s => s.Takvim.Hafta += 1),
-            ("pencere",         s => s.Takvim.Pencere = TheBadge.World.TransferWindow.Yaz),
-            ("degisiklikHakki", s => s.KalanDegisiklikHakki += 1),
+            ("GameState.KalanDegisiklikHakki", s => s.KalanDegisiklikHakki += 1),
+            ("ClubState.ClubId",              s => s.Club.ClubId += 1),
+            ("ClubState.OwnerUserId",         s => s.Club.OwnerUserId += 1),
+            ("ClubState.KasaTl",              s => s.Club.KasaTl += 1),
+            ("ClubState.StadyumKapasite",     s => s.Club.StadyumKapasite += 1),
+            ("ClubState.TesisTier",           s => s.Club.TesisTier[3] += 1),
+            ("ClubState.InsaatSlot",          s => s.Club.InsaatSlot[0].InsaatId += 1),
+            ("ClubState.Krediler",            s => s.Club.Krediler[0].KrediId += 1),
+            ("ClubState.HaftalikMaasGiderTl", s => s.Club.HaftalikMaasGiderTl += 1),
+            ("ClubState.SponsorHaftalikTl",   s => s.Club.SponsorHaftalikTl += 1),
+            ("ClubState.SponsorKalanHafta",   s => s.Club.SponsorKalanHafta += 1),
+            ("ClubState.DonemInsaatGideriTl", s => s.Club.DonemInsaatGideriTl += 1),
+            ("ClubState.Form",                s => s.Club.Form += 1),
+            ("ClubState.SponsorTeklifleri",   s => s.Club.SponsorTeklifleri[0].TeklifId += 1),
+            ("Construction.InsaatId",         s => s.Club.InsaatSlot[1].InsaatId += 1),
+            ("Construction.TesisId",          s => s.Club.InsaatSlot[0].TesisId += 1),
+            ("Construction.HedefTier",        s => s.Club.InsaatSlot[0].HedefTier += 1),
+            ("Construction.KalanHafta",       s => s.Club.InsaatSlot[0].KalanHafta += 1),
+            ("Construction.ToplamMaliyetTl",  s => s.Club.InsaatSlot[0].ToplamMaliyetTl += 1),
+            ("Loan.KrediId",                  s => s.Club.Krediler[1].KrediId += 1),
+            ("Loan.AnaparaTl",                s => s.Club.Krediler[0].AnaparaTl += 1),
+            ("Loan.KalanAy",                  s => s.Club.Krediler[0].KalanAy += 1),
+            ("Loan.FaizBp",                   s => s.Club.Krediler[0].FaizBp += 1),
+            ("SponsorOffer.TeklifId",         s => s.Club.SponsorTeklifleri[1].TeklifId += 1),
+            ("SponsorOffer.HaftalikTl",       s => s.Club.SponsorTeklifleri[0].HaftalikTl += 1),
+            ("SponsorOffer.SureHafta",        s => s.Club.SponsorTeklifleri[0].SureHafta += 1),
+            ("SponsorOffer.SonGecerlilikSezon", s => s.Club.SponsorTeklifleri[0].SonGecerlilikSezon += 1),
+            ("SponsorOffer.SonGecerlilikHafta", s => s.Club.SponsorTeklifleri[0].SonGecerlilikHafta += 1),
+            ("PlayerState.PlayerId",          s => s.Oyuncular[0].PlayerId -= 1),
+            ("PlayerState.ClubId",            s => s.Oyuncular[0].ClubId += 1),
+            ("PlayerState.HaftalikMaasTl",    s => s.Oyuncular[0].HaftalikMaasTl += 1),
+            ("PlayerState.SozlesmeKalanHafta", s => s.Oyuncular[0].SozlesmeKalanHafta += 1),
+            ("PlayerState.Moral",             s => s.Oyuncular[0].Moral += 1),
+            ("PlayerState.Kondisyon",         s => s.Oyuncular[0].Kondisyon += 1),
+            ("PlayerState.SakatlikHafta",     s => s.Oyuncular[0].SakatlikHafta += 1),
+            ("PlayerState.RolId",             s => s.Oyuncular[0].RolId += 1),
+            ("PlayerState.AnchorXmm",         s => s.Oyuncular[0].AnchorXmm += 1),
+            ("PlayerState.AnchorYmm",         s => s.Oyuncular[0].AnchorYmm += 1),
+            ("PlayerState.ListedeMi",         s => s.Oyuncular[0].ListedeMi = !s.Oyuncular[0].ListedeMi),
+            ("CalendarState.Sezon",           s => s.Takvim.Sezon += 1),
+            ("CalendarState.Hafta",           s => s.Takvim.Hafta += 1),
+            ("CalendarState.Pencere",         s => s.Takvim.Pencere = TheBadge.World.TransferWindow.Yaz),
+            ("PricingState.BiletKurus",       s => s.Fiyat.BiletKurus[2] += 1),
+            ("PricingState.KombineKurus",     s => s.Fiyat.KombineKurus += 1),
+            ("PricingState.BufeKurus",        s => s.Fiyat.BufeKurus[1] += 1),
+            ("PricingState.MagazaKurus",      s => s.Fiyat.MagazaKurus[2] += 1),
         };
+
+        // Beklenen küme: kalıcı durum tiplerinin TÜM public alanları (yansıma).
+        // `StateVersion` bilerek DIŞARIDA: muhasebedir, durum değildir (hash'e girmemeli).
+        var kapsamDisi = new HashSet<string> { "GameState.StateVersion" };
+        var beklenen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var t in new[] { typeof(TheBadge.World.GameState), typeof(TheBadge.World.ClubState),
+                                  typeof(TheBadge.World.PlayerState), typeof(TheBadge.World.CalendarState),
+                                  typeof(TheBadge.World.PricingState), typeof(TheBadge.World.Construction),
+                                  typeof(TheBadge.World.Loan), typeof(TheBadge.World.SponsorOffer) })
+            foreach (var f in t.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+            {
+                // Alt nesne referansları (Club/Oyuncular/Takvim/Fiyat) kendileri alan değil, KAPSAYICIdır
+                if (f.FieldType == typeof(TheBadge.World.ClubState) || f.FieldType == typeof(TheBadge.World.CalendarState)
+                    || f.FieldType == typeof(TheBadge.World.PricingState) || f.FieldType == typeof(TheBadge.World.PlayerState[]))
+                    continue;
+                string ad = t.Name + "." + f.Name;
+                if (!kapsamDisi.Contains(ad)) beklenen.Add(ad);
+            }
+
+        string hata = "";
+        var kapsanan = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var m in mutasyonlar) if (!kapsanan.Add(m.alan)) hata += $"{m.alan}(tekrarlı) ";
+        foreach (var b in beklenen) if (!kapsanan.Contains(b)) hata += $"{b}(MUTASYONU YOK — hash kapsamı ölçülmüyor) ";
+        foreach (var k in kapsanan) if (!beklenen.Contains(k)) hata += $"{k}(artık kalıcı alan değil) ";
+
         var taban = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
-        ulong h0 = TheBadge.World.WorldHash.Compute(taban);
+        taban.Club.InsaatSlot[0] = new TheBadge.World.Construction { InsaatId = 1, TesisId = 2, HedefTier = 1, KalanHafta = 3, ToplamMaliyetTl = 100 };
+        taban.Club.Krediler[0] = new TheBadge.World.Loan { KrediId = 1, AnaparaTl = 100, KalanAy = 3, FaizBp = 100 };
+        taban.Club.SponsorTeklifleri[0] = new TheBadge.World.SponsorOffer { TeklifId = 1, HaftalikTl = 100, SureHafta = 3, SonGecerlilikSezon = 1, SonGecerlilikHafta = 5 };
+        TheBadge.World.GameState Kur2()
+        {
+            var g = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
+            g.Club.InsaatSlot[0] = taban.Club.InsaatSlot[0];
+            g.Club.Krediler[0] = taban.Club.Krediler[0];
+            g.Club.SponsorTeklifleri[0] = taban.Club.SponsorTeklifleri[0];
+            return g;
+        }
+        ulong h0 = TheBadge.World.WorldHash.Compute(Kur2());
         var gorulen = new HashSet<ulong>();
         foreach (var m in mutasyonlar)
         {
-            var s = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
-            m.uygula(s);
-            ulong h = TheBadge.World.WorldHash.Compute(s);
-            if (h == h0) hata += m.ad + "(hash oynamadı) ";
-            if (!gorulen.Add(h)) hata += m.ad + "(hash çakıştı) ";
+            var g = Kur2();
+            m.uygula(g);
+            ulong h = TheBadge.World.WorldHash.Compute(g);
+            if (h == h0) hata += m.alan + "(hash oynamadı) ";
+            if (!gorulen.Add(h)) hata += m.alan + "(hash çakıştı) ";
         }
-        // Aynı durum → aynı hash (tekrar hesap kararlı)
-        if (TheBadge.World.WorldHash.Compute(taban) != h0) hata += "hash kararsız ";
-        var ikiz = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
-        if (TheBadge.World.WorldHash.Compute(ikiz) != h0) hata += "aynı kurulum farklı hash ";
-        // StateVersion hash'e GİRMEZ
-        ikiz.StateVersion += 7;
+        if (TheBadge.World.WorldHash.Compute(Kur2()) != h0) hata += "hash kararsız ";
+        var ikiz = Kur2(); ikiz.StateVersion += 7;
         if (TheBadge.World.WorldHash.Compute(ikiz) != h0) hata += "StateVersion hash'e girdi ";
 
         if (hata.Length > 0) failures += Fail("K2HashKapsami", hata);
-        else Pass($"K2HashKapsami({mutasyonlar.Length} kalıcı alan hash'i oynatıyor · StateVersion girmiyor · tekrar kararlı)");
+        else Pass($"K2HashKapsami({mutasyonlar.Length} kalıcı alan — liste YANSIMAYLA doğrulandı, elle bakım yok · StateVersion girmiyor)");
     }
 
     // 25c) KAPI 3 SEBEP TABLOSU — CB 5 "bağlam, sahiplik, kaynak, hak" + CB 11.1 sebep kataloğu.
