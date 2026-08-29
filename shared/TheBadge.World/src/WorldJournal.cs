@@ -4,9 +4,17 @@ using System.Collections.Generic;
 namespace TheBadge.World
 {
     /// <summary>Mutasyon hedefi — journal girdisinin hangi durum parçasına yazdığı.</summary>
-    public enum MutTarget : byte { Kulup = 0, Oyuncu = 1, Takvim = 2, Insaat = 3, Kredi = 4, Tesis = 5, Mac = 6 }
+    public enum MutTarget : byte { Kulup = 0, Oyuncu = 1, Takvim = 2, Insaat = 3, Kredi = 4, Tesis = 5, Mac = 6, Fiyat = 7 }
 
-    public static class ClubField { public const byte Kasa = 1, StadyumKapasite = 2, HaftalikMaasGider = 3; }
+    public static class ClubField
+    {
+        public const byte Kasa = 1, StadyumKapasite = 2, HaftalikMaasGider = 3,
+                          SponsorHaftalik = 4, Form = 5;
+    }
+
+    /// <summary>Fiyat alanları — `Index` slot (tribün 0-4 / ürün 0-2), değer KURUŞ.
+    /// `Kombine` slot kullanmaz.</summary>
+    public static class PriceField { public const byte Bilet = 1, Kombine = 2, Bufe = 3, Magaza = 4; }
     public static class PlayerField
     {
         public const byte ClubId = 1, HaftalikMaas = 2, SozlesmeKalanHafta = 3, Moral = 4,
@@ -146,6 +154,23 @@ namespace TheBadge.World
                         case ClubField.Kasa: mevcut = st.Club.KasaTl; return true;
                         case ClubField.StadyumKapasite: mevcut = st.Club.StadyumKapasite; min = 0; max = int.MaxValue; return true;
                         case ClubField.HaftalikMaasGider: mevcut = st.Club.HaftalikMaasGiderTl; min = 0; return true;
+                        case ClubField.SponsorHaftalik: mevcut = st.Club.SponsorHaftalikTl; min = 0; return true;
+                        case ClubField.Form: mevcut = st.Club.Form; min = 0; max = 100; return true;
+                    }
+                    break;
+                case MutTarget.Fiyat:
+                    switch (m.Field)
+                    {
+                        case PriceField.Bilet:
+                            if (m.Index < 0 || m.Index >= st.Fiyat.BiletKurus.Length) { hata = "tribün indeksi kapsam dışı"; return false; }
+                            mevcut = st.Fiyat.BiletKurus[m.Index]; min = 0; max = int.MaxValue; return true;
+                        case PriceField.Kombine: mevcut = st.Fiyat.KombineKurus; min = 0; max = int.MaxValue; return true;
+                        case PriceField.Bufe:
+                            if (m.Index < 0 || m.Index >= st.Fiyat.BufeKurus.Length) { hata = "büfe ürün indeksi kapsam dışı"; return false; }
+                            mevcut = st.Fiyat.BufeKurus[m.Index]; min = 0; max = int.MaxValue; return true;
+                        case PriceField.Magaza:
+                            if (m.Index < 0 || m.Index >= st.Fiyat.MagazaKurus.Length) { hata = "mağaza ürün indeksi kapsam dışı"; return false; }
+                            mevcut = st.Fiyat.MagazaKurus[m.Index]; min = 0; max = int.MaxValue; return true;
                     }
                     break;
                 case MutTarget.Oyuncu:
@@ -212,7 +237,15 @@ namespace TheBadge.World
                 case MutTarget.Kulup:
                     if (m.Field == ClubField.Kasa) st.Club.KasaTl = v;
                     else if (m.Field == ClubField.StadyumKapasite) st.Club.StadyumKapasite = (int)v;
-                    else st.Club.HaftalikMaasGiderTl = v;
+                    else if (m.Field == ClubField.HaftalikMaasGider) st.Club.HaftalikMaasGiderTl = v;
+                    else if (m.Field == ClubField.SponsorHaftalik) st.Club.SponsorHaftalikTl = v;
+                    else st.Club.Form = (byte)v;
+                    break;
+                case MutTarget.Fiyat:
+                    if (m.Field == PriceField.Bilet) st.Fiyat.BiletKurus[m.Index] = (int)v;
+                    else if (m.Field == PriceField.Kombine) st.Fiyat.KombineKurus = (int)v;
+                    else if (m.Field == PriceField.Bufe) st.Fiyat.BufeKurus[m.Index] = (int)v;
+                    else st.Fiyat.MagazaKurus[m.Index] = (int)v;
                     break;
                 case MutTarget.Oyuncu:
                     switch (m.Field)

@@ -38,6 +38,8 @@ namespace TheBadge.World
         public Construction[] InsaatSlot;   // eşzamanlı inşaat slotları [KALİBRE: world.balance]
         public Loan[] Krediler;             // eşzamanlı kredi slotları [KALİBRE]
         public long HaftalikMaasGiderTl;    // türetilmiş değil, YAZILAN alan (hash içi)
+        public long SponsorHaftalikTl;      // aktif sponsor sözleşmesi (K3-B `sign_sponsor` yazar)
+        public byte Form;                   // 0-100 — seyirci modelinin form ayağı (maç sonuçları besler)
     }
 
     /// <summary>Oyuncu durumu — GDD 3 (kadro) + ME 5.2 (TeamSheet'e beslenen taban).
@@ -54,6 +56,18 @@ namespace TheBadge.World
         public byte RolId;                  // GDD 3.2 bireysel rol
         public int AnchorXmm, AnchorYmm;    // GDD 3.1 serbest pozisyonlama (ME 5.3 birimi)
         public bool ListedeMi;              // transfer listesi
+    }
+
+    /// <summary>Fiyat durumu — GDD 4.2 gelir kaynakları. TÜM fiyatlar KURUŞ cinsindendir
+    /// (1 ₺ = 100 kuruş): `command.bands.json` büfe fiyatını [0,5 - 50] ₺ bandıyla tanımlıyor,
+    /// yani kesirli fiyat meşru; kalıcı durum ise tamsayı olmak zorunda (ME 3.2 disiplini).
+    /// Tek birim seçildi — bilet tam ₺, büfe kuruş olsaydı dönüşüm hatası kaçınılmazdı.</summary>
+    public sealed class PricingState
+    {
+        public int[] BiletKurus;    // [5] kuzey, guney, dogu, bati, vip
+        public int KombineKurus;
+        public int[] BufeKurus;     // [3] yiyecek, icecek, atistirmalik
+        public int[] MagazaKurus;   // [3] forma, atki, hatira
     }
 
     /// <summary>Takvim — sezon/hafta ve transfer penceresi. Maç fikstürü K6'da (online) bağlanır;
@@ -80,6 +94,7 @@ namespace TheBadge.World
         public ClubState Club;
         public PlayerState[] Oyuncular;     // PlayerId'ye göre ARTAN sıralı (kanonik)
         public CalendarState Takvim;
+        public PricingState Fiyat;
 
         /// <summary>CB 8.2: her yanıt `newStateVersion` döndürür; istemci eski versiyonla ekran
         /// gösteriyorsa delta sync tetiklenir. Yalnız `ApplyJournal` artırır.</summary>
@@ -94,7 +109,11 @@ namespace TheBadge.World
             Club = new ClubState { TesisTier = new byte[0], InsaatSlot = new Construction[0], Krediler = new Loan[0] },
             Oyuncular = new PlayerState[0],
             Takvim = new CalendarState(),
+            Fiyat = BosFiyat(),
         };
+
+        static PricingState BosFiyat() => new PricingState
+        { BiletKurus = new int[5], KombineKurus = 0, BufeKurus = new int[3], MagazaKurus = new int[3] };
 
         /// <summary>Boyutları YAPILANDIRMADAN alan kurulum — slot sayıları kodda sabit değildir
         /// (`world.balance.json` → yapi.*). Kadro ve kasa çağıran tarafından doldurulur.</summary>
@@ -114,6 +133,7 @@ namespace TheBadge.World
                 },
                 Oyuncular = new PlayerState[0],
                 Takvim = new CalendarState { Sezon = 1, Hafta = 1, Pencere = TransferWindow.Kapali },
+                Fiyat = BosFiyat(),
                 KalanDegisiklikHakki = (byte)rules.yapi.macBasinaDegisiklik,
             };
         }
@@ -125,6 +145,10 @@ namespace TheBadge.World
             if (Club == null) throw new ArgumentException("GameState: Club boş.");
             if (Oyuncular == null) throw new ArgumentException("GameState: Oyuncular boş.");
             if (Takvim == null) throw new ArgumentException("GameState: Takvim boş.");
+            if (Fiyat == null || Fiyat.BiletKurus == null || Fiyat.BiletKurus.Length != 5
+                || Fiyat.BufeKurus == null || Fiyat.BufeKurus.Length != 3
+                || Fiyat.MagazaKurus == null || Fiyat.MagazaKurus.Length != 3)
+                throw new ArgumentException("GameState: Fiyat dizileri eksik (5 tribün / 3 büfe / 3 mağaza).");
             if (Club.TesisTier == null || Club.InsaatSlot == null || Club.Krediler == null)
                 throw new ArgumentException("GameState: kulüp dizileri boş.");
             for (int i = 1; i < Oyuncular.Length; i++)

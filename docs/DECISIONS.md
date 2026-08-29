@@ -1191,7 +1191,55 @@ katalog PARAMETRE değişikliği (`fiyat` required true→false) ayrı ayrı den
 kapısını kırmızıya döndürdü (parametre değişikliğini ayrıca `K1SemaSikiligi` ve `K1BantZorlamasi`
 da bağımsız yakaladı — savunma derinliği çalışıyor).
 
+### K3-A: Tycoon ekonomi çekirdeği — ✅ TAMAM (2026-08-25)
+`shared/TheBadge.World/src/Economy/` + `balance/economy.balance.json`. GDD 4.2/4.4'ün ekonomisi,
+sözleşmesi `docs/ECONOMY_MAP.md`.
+
+- **Haftalık tick:** seyirci → bilet/büfe/mağaza; sezon başı kombine (peşin); yayın + sponsor +
+  maç primi; maaş/bakım/personel/işletme; kredi (4 haftada bir); inşaat ilerlemesi. TEK KAPI'ya
+  uyar — tick durumu doğrudan değiştirmez, `WorldJournal`a yazar.
+- **Kredi muhasebesi:** FAİZ sink'tir, ANAPARA değildir — anapara bilanço aktarımıdır, para
+  yaratmaz. ECONOMY_MAP yalnız "kredi faizi"ni sink sayıyor; anapara sink'e girseydi kredi çekmek
+  source/sink oranını yapay olarak bozardı. `WeekLedger` bunu ayrı alanda tutuyor.
+- **Kalibrasyon (tek tur):** ilk ölçüm source/sink **1,548** ve maaş payı **%70,2** ile bant
+  dışıydı. Maaş sabit tutulup maaş-dışı sink'ler yükseltildi (bakım 26k→45k, personel 165k→420k,
+  işletme 210k→570k ₺/hafta). Sonuç: **source/sink 1,133 ∈ [1,05-1,15]** · **maaş payı %51,2 ∈
+  [%45-60]**. Referans kulüp (30k kapasite, 22 kişilik kadro, tier 3 stadyum) fixture'dır; kalibre
+  edilen balance dosyasıdır — fixture'ı oynatarak bant tutturmak ölçümü anlamsız kılardı.
+- **Kapılar (7):** `K3EkonomiSozlesmesi` (10 sezon, iki bant) · `K3EkonomiDeterminizmi` ·
+  `K3SeyirciModeli` (fiyat/form yönü + kapasite ve min doluluk sınırları) · `K3InsaatIlerlemesi` ·
+  `K3KrediAmortismani` · `K3IflasEgrisi` (kötü yönetim sezon 2 ∈ [2,3]; iyi yönetim 6 sezon ayakta) ·
+  `K3RngGauss01Borcu` (aşağıdaki bulgunun gözcüsü).
+
+### 🔴 BULGU: `Rng.Gauss01` komşu tick'lerde ve bit-0 farklı seed'lerde AYNI değeri üretiyor
+K3'ün seyirci varyansı seed'e duyarlı çıkmayınca ortaya çıktı; kök sebep FAZ 03 kodunda.
+
+- **Mekanizma:** `Gauss01` 12 çekilişi `[16·salt, 16·salt+12)` salt aralığında topluyor. Bu küme
+  bit-0 ve bit-1 çevirmeleri altında **kapalı**: `z = seed ^ … ^ (tick<<1) ^ salt` olduğu için
+  seed'in bit-0'ını veya tick'in ilgili bitini çevirmek, salt'ları yalnız kendi aralarında yer
+  değiştiriyor. Çokluk kümesi aynı kalıyor → toplam aynı (yalnız toplama sırası değişiyor).
+- **Ölçüm (2000 örnek):** aynı çekiliş kümesi — **komşu tick %50,0**, **bit-0 farklı seed %100,0**.
+  (Tam kayan nokta eşitliği %26,9 / %55,3; toplama sırası son bitleri ayırdığı için tam eşitlik
+  gerçek bağımsızlık kaybını OLDUĞUNDAN KÜÇÜK gösteriyor.) `Rand01`'de çarpışma **sıfır** —
+  kusur toplama deseninde, çekirdek hash'te değil.
+- **Etki alanı:** maç motorunda **13 çağrı yeri** (fizik, karar, düello, şut nişanı), hepsi
+  `st.Tick` anahtarlı. Determinizm bozulmuyor (sonuç hâlâ tekrarlanabilir) ama gürültü
+  tasarlandığından çok daha bağımlı: ardışık tick'lerin yarısı aynı Gauss değerini alıyor.
+- **DÜZELTİLMEDİ (bilinçli):** düzeltme 50 golden replay'i ve M16-E'nin 12 metriğini kaydırır →
+  ayrı dilim + yeniden kalibrasyon. K3 kendi gürültüsünü `Rand01` tabanlı simetrik üniformdan
+  alıyor (genlik `sigma·√3`, sd korunur) ve `K3RngGauss01Borcu` kapısı borcu ekranda tutup
+  KÖTÜLEŞMESİNİ engelliyor (M15 kompozisyon borcunda kurulan desen).
+- **Öneri:** salt aralığını çarpışmayan bir dizilime taşımak (ör. `salt*16 + i` yerine
+  `salt*0x9E3779B1 + i*0x85EBCA6B` gibi tek sayı adımlı bir yayılım). Tek satırlık değişiklik,
+  maliyeti düzeltmenin kendisi değil ARDINDAN gelen yeniden kalibrasyon. Kararı Atilla verir.
+
 ## Bekleyen kararlar
+- **`Rng.Gauss01` çarpışması ne zaman düzeltilsin? (K3 bulgusu, 2026-08-25)** Ölçüm ve mekanizma
+  yukarıdaki bulgu kaydında. Seçenekler: (a) ŞİMDİ düzelt → golden set yeniden üretilir, M16-E'nin
+  12 metriği yeniden ölçülür ve muhtemelen yeniden kalibre edilir (1-2 dilim); (b) FAZ 04 sonunda,
+  K7 bittikten sonra tek seferde; (c) FAZ 05 öncesi, cihaz testlerinden önce. **Öneri: (b)** —
+  gürültü kalitesi bugün hiçbir kapıyı düşürmüyor, ama FAZ 05'e taşınırsa kalibrasyon borcu asset
+  üretimiyle aynı sprinte biner. Gözcü kapı bu arada borcu görünür tutuyor.
 - ~~ME 13.4 upset büyüklüğü~~ → **KARAR (2026-08-19, Atilla): (d) HİBRİT.** Dört seçenek
   sunuldu — (a) tam zincir normalizasyonu (2 dilim motor işi), (b) yalnız hedef revizyonu
   (%93 revize hedefin de üstünde kalır), (c) skor üstü yeniden örnekleme (tek-kaynak ilkesi +

@@ -3148,5 +3148,204 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     }
 }
 
+// 26) FAZ 04 K3-A — TYCOON EKONOMİ ÇEKİRDEĞİ (GDD 4.2/4.4, sözleşme docs/ECONOMY_MAP.md)
+{
+    var eOpts = new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true };
+    string ecoPath = System.IO.Path.Combine(
+        System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json")), "economy.balance.json");
+    var eco = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.EconomyBalance>(
+        System.IO.File.ReadAllText(ecoPath), eOpts);
+    eco.Validate();
+    string wPath = System.IO.Path.Combine(
+        System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json")), "world.balance.json");
+    var eRules = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.WorldRules>(
+        System.IO.File.ReadAllText(wPath), eOpts);
+
+    // 26a) EKONOMİ SÖZLEŞMESİ — ECONOMY_MAP: sezon source/sink 1,05-1,15 · maaş payı %45-60
+    {
+        const int Sezon = 10;
+        var st = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+        var T = TheBadge.Checks.EkonomiKosu.Kos(st, eco, eRules, 0xEC0A0D1CUL, Sezon, out _);
+        double oran = T.ToplamGider == 0 ? 0 : (double)T.ToplamGelir / T.ToplamGider;
+        double maasPayi = T.ToplamGider == 0 ? 0 : (double)T.MaasTl / T.ToplamGider;
+        Console.WriteLine($"[info] K3 ekonomi ({Sezon} sezon, referans kulüp): source/sink {oran:F3} · " +
+                          $"maaş payı %{maasPayi * 100:F1} · ort. seyirci {T.Seyirci / (Sezon * eRules.yapi.sezonHaftaSayisi / 2):N0}");
+        Console.WriteLine($"[info] K3 kalem (sezon başına ₺M): bilet {T.BiletTl / Sezon / 1e6:F1} · kombine {T.KombineTl / Sezon / 1e6:F1} · " +
+                          $"büfe {T.BufeTl / Sezon / 1e6:F1} · mağaza {T.MagazaTl / Sezon / 1e6:F1} · sponsor {T.SponsorTl / Sezon / 1e6:F1} · " +
+                          $"yayın {T.YayinTl / Sezon / 1e6:F1} · prim {T.PrimTl / Sezon / 1e6:F1} || maaş {T.MaasTl / Sezon / 1e6:F1} · " +
+                          $"bakım {T.BakimTl / Sezon / 1e6:F1} · personel {T.PersonelTl / Sezon / 1e6:F1} · işletme {T.IsletmeTl / Sezon / 1e6:F1} · faiz {T.FaizTl / Sezon / 1e6:F1}");
+        string hata = "";
+        if (oran < 1.05 || oran > 1.15) hata += $"source/sink {oran:F3} bant dışı [1,05-1,15] ";
+        if (maasPayi < 0.45 || maasPayi > 0.60) hata += $"maaş payı %{maasPayi * 100:F1} bant dışı [%45-60] ";
+        if (hata.Length > 0) failures += Fail("K3EkonomiSozlesmesi", hata);
+        else Pass($"K3EkonomiSozlesmesi(source/sink {oran:F3} ∈ [1,05-1,15] · maaş payı %{maasPayi * 100:F1} ∈ [%45-60])");
+    }
+
+    // 26b) DETERMİNİZM — CB 5.2 "aynı durum + aynı komut = aynı sonuç". Ekonomi tick'i
+    // rastgelelik KULLANIR (seyirci varyansı); o yüzden bu kapı, rastgeleliğin sayaç-RNG'den
+    // geldiğini ve save seed'e bağlı olduğunu ölçer.
+    {
+        string hata = "";
+        (ulong hash, long kasa, long gelir) Kos(ulong seed)
+        {
+            var g = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+            var T = TheBadge.Checks.EkonomiKosu.Kos(g, eco, eRules, seed, 3, out _);
+            return (TheBadge.World.WorldHash.Compute(g), g.Club.KasaTl, T.ToplamGelir);
+        }
+        var a = Kos(0xEC0A0D1CUL); var b = Kos(0xEC0A0D1CUL);
+        if (a != b) hata += "aynı seed farklı sonuç ";
+        var c = Kos(0xEC0A0D1DUL);
+        if (c.hash == a.hash) hata += "farklı seed aynı hash (varyans seed'e bağlı değil) ";
+        if (hata.Length > 0) failures += Fail("K3EkonomiDeterminizmi", hata);
+        else Pass($"K3EkonomiDeterminizmi(3 sezon × 2 koşu bit-eşit → 0x{a.hash:X16} · farklı seed ayrışıyor)");
+    }
+
+    // 26c) SEYİRCİ MODELİ — GDD 4.2: "doluluk takım başarısına ve bilet fiyatına duyarlıdır".
+    // Yön doğru mu ve sınırlar tutuyor mu.
+    {
+        string hata = "";
+        int Olc(Action<TheBadge.World.GameState> ayar)
+        {
+            var g = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+            ayar?.Invoke(g);
+            return TheBadge.World.EconomyTick.Seyirci(g, eco, 0xEC0A0D1CUL, 1001);
+        }
+        int taban = Olc(null);
+        int pahali = Olc(g => { for (int t = 0; t < 5; t++) g.Fiyat.BiletKurus[t] *= 2; });
+        int ucuz = Olc(g => { for (int t = 0; t < 5; t++) g.Fiyat.BiletKurus[t] /= 2; });
+        int formYuksek = Olc(g => g.Club.Form = 100);
+        int formDusuk = Olc(g => g.Club.Form = 0);
+        if (!(pahali < taban && taban < ucuz)) hata += $"fiyat yönü bozuk ({pahali}/{taban}/{ucuz}) ";
+        if (!(formDusuk < taban && taban < formYuksek)) hata += $"form yönü bozuk ({formDusuk}/{taban}/{formYuksek}) ";
+        // Sınırlar: kapasiteyi aşmamalı, min dolulukun altına düşmemeli
+        int cokPahali = Olc(g => { for (int t = 0; t < 5; t++) g.Fiyat.BiletKurus[t] *= 20; });
+        int bedava = Olc(g => { for (int t = 0; t < 5; t++) g.Fiyat.BiletKurus[t] = 0; g.Club.Form = 100; });
+        int minSeyirci = (int)(TheBadge.Checks.EkonomiFixture.Kapasite * eco.seyirci.minDoluluk);
+        if (cokPahali < minSeyirci - 1) hata += $"min doluluk altına düştü ({cokPahali} < {minSeyirci}) ";
+        if (bedava > TheBadge.Checks.EkonomiFixture.Kapasite) hata += $"kapasite aşıldı ({bedava}) ";
+        Console.WriteLine($"[info] K3 seyirci: ucuz {ucuz:N0} · taban {taban:N0} · pahalı {pahali:N0} · " +
+                          $"form0 {formDusuk:N0} · form100 {formYuksek:N0} · tavan {bedava:N0} · taban-sınır {cokPahali:N0}");
+        if (hata.Length > 0) failures += Fail("K3SeyirciModeli", hata);
+        else Pass("K3SeyirciModeli(fiyat ↑→seyirci ↓ · form ↑→seyirci ↑ · min doluluk ve kapasite sınırları tutuyor)");
+    }
+
+    // 26d) İNŞAAT İLERLEMESİ — bitince tier yükselir, stadyum ise kapasite yeni tier'a çıkar.
+    {
+        string hata = "";
+        var g = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+        g.Club.InsaatSlot[0] = new TheBadge.World.Construction
+        { InsaatId = 1, TesisId = TheBadge.World.EconomyTick.StadyumTesisId, HedefTier = 4, KalanHafta = 3, ToplamMaliyetTl = 1000 };
+        int kap0 = g.Club.StadyumKapasite;
+        var j = new TheBadge.World.WorldJournal();
+        for (int h = 0; h < 3; h++)
+        {
+            j.Clear();
+            TheBadge.World.EconomyTick.Hafta(g, eco, eRules, 0xEC0A0D1CUL, TheBadge.World.WeekResult.Beraberlik, false, j);
+            if (!j.Validate(g, out string hj)) { hata += "journal geçersiz: " + hj + " "; break; }
+            j.Apply(g);
+        }
+        if (g.Club.TesisTier[TheBadge.World.EconomyTick.StadyumTesisId] != 4) hata += "tier yükselmedi ";
+        if (g.Club.StadyumKapasite != eco.insaat.kapasiteTier[4]) hata += $"kapasite güncellenmedi ({g.Club.StadyumKapasite}) ";
+        if (g.Club.InsaatSlot[0].InsaatId != 0) hata += "slot boşalmadı ";
+        if (kap0 == g.Club.StadyumKapasite) hata += "kapasite hiç değişmedi ";
+        if (hata.Length > 0) failures += Fail("K3InsaatIlerlemesi", hata);
+        else Pass($"K3InsaatIlerlemesi(3 hafta → tier 4, kapasite {kap0:N0}→{g.Club.StadyumKapasite:N0}, slot boşaldı)");
+    }
+
+    // 26e) KREDİ AMORTİSMANI — faiz SINK, anapara BİLANÇO AKTARIMI (WeekLedger notu).
+    {
+        string hata = "";
+        var g = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+        g.Club.Krediler[0] = new TheBadge.World.Loan
+        { KrediId = 7, AnaparaTl = 2_400_000, KalanAy = 24, FaizBp = (ushort)eco.kredi.yillikFaizBp };
+        var T = TheBadge.Checks.EkonomiKosu.Kos(g, eco, eRules, 0xEC0A0D1CUL, 3, out _);
+        if (g.Club.Krediler[0].AnaparaTl != 0) hata += $"kredi kapanmadı (kalan {g.Club.Krediler[0].AnaparaTl}) ";
+        if (g.Club.Krediler[0].KrediId != 0) hata += "kredi slotu boşalmadı ";
+        if (T.FaizTl <= 0) hata += "faiz hiç işlenmedi ";
+        if (T.AnaparaOdemeTl < 2_400_000) hata += $"anapara eksik ödendi ({T.AnaparaOdemeTl}) ";
+        // Anapara source/sink'e GİRMEMELİ
+        var kontrol = new TheBadge.World.WeekLedger { AnaparaOdemeTl = 999 };
+        if (kontrol.ToplamGider != 0) hata += "anapara sink'e girdi ";
+        Console.WriteLine($"[info] K3 kredi: 2,4M ₺ / 24 ay → toplam faiz {T.FaizTl:N0} ₺, anapara {T.AnaparaOdemeTl:N0} ₺");
+        if (hata.Length > 0) failures += Fail("K3KrediAmortismani", hata);
+        else Pass($"K3KrediAmortismani(kredi kapandı · faiz {T.FaizTl:N0} ₺ sink · anapara sink'e girmiyor)");
+    }
+
+    // 26f) İFLAS EĞRİSİ — ECONOMY_MAP: "bilinçli kötü yönetimde 2-3 sezonda tetiklenir".
+    // Senaryo: kadroya aşırı harcama (maaş ×1,5) + doluluğu düşüren açgözlü fiyatlama (×1,4).
+    {
+        string hata = "";
+        var g = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+        g.Club.HaftalikMaasGiderTl = (long)(g.Club.HaftalikMaasGiderTl * 1.5);
+        for (int t = 0; t < 5; t++) g.Fiyat.BiletKurus[t] = (int)(g.Fiyat.BiletKurus[t] * 1.4);
+        TheBadge.Checks.EkonomiKosu.Kos(g, eco, eRules, 0xEC0A0D1CUL, 6, out int iflas);
+        Console.WriteLine($"[info] K3 iflas senaryosu (maaş ×1,5 · bilet ×1,4): sezon {iflas} · son kasa {g.Club.KasaTl / 1e6:F1}M ₺");
+        if (iflas < 2 || iflas > 3) hata += $"iflas sezonu {iflas} — ECONOMY_MAP 2-3 sezon diyor ";
+        // İyi yönetilen kulüp AYNI eşikte iflas ETMEMELİ (eşik her kulübü batırmıyor)
+        var iyi = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+        TheBadge.Checks.EkonomiKosu.Kos(iyi, eco, eRules, 0xEC0A0D1CUL, 6, out int iyiIflas);
+        if (iyiIflas > 0) hata += $"iyi yönetilen kulüp de battı (sezon {iyiIflas}) ";
+        if (hata.Length > 0) failures += Fail("K3IflasEgrisi", hata);
+        else Pass($"K3IflasEgrisi(kötü yönetim → sezon {iflas} ∈ [2,3] · iyi yönetim 6 sezon ayakta)");
+    }
+
+    // 26g) BORÇ GÖZCÜSÜ — `Rng.Gauss01` çarpışması (K3 sırasında bulundu, FAZ 03 kodu).
+    // Gauss01 12 çekilişi [16·salt, 16·salt+12) aralığında topluyor; bu küme bit-0 ve bit-1
+    // çevirmeleri altında KAPALI, yani seed'in/tick'in o bitini çevirmek salt'ları yalnız kendi
+    // aralarında yer değiştiriyor ve toplam DEĞİŞMİYOR. Sonuç: komşu tick'ler ve bit-0 farklı
+    // seed'ler AYNI gauss değerini alıyor. Maç motorunda 13 çağrı yeri var (fizik/karar/düello/
+    // nişan), hepsi st.Tick anahtarlı — gürültü tasarlandığından çok daha bağımlı.
+    //
+    // DÜZELTİLMEDİ (bilinçli): düzeltme 50 golden replay'i ve M16-E'nin 12 metriğini kaydırır,
+    // yani ayrı bir dilim + yeniden kalibrasyon işidir. Bu kapı borcu GÖRÜNÜR tutar ve
+    // KÖTÜLEŞMESİNİ engeller; hedef sıfırdır. Karar `docs/DECISIONS.md` bekleyen kararlarda.
+    {
+        const int N = 2000;
+        // Gauss01'in İÇİNİ ölç: 12 çekilişin ÇOKLUK KÜMESİ aynıysa gauss değeri de aynıdır
+        // (yalnız toplama sırası değişir → kayan noktada son bitler ayrışabilir). Asıl bağımsızlık
+        // kaybı budur; tam eşitlik oranı onu OLDUĞUNDAN KÜÇÜK gösterir.
+        double[] Kume(ulong sd, uint tick)
+        {
+            var a = new double[12];
+            for (uint i = 0; i < 12; i++)
+                a[i] = TheBadge.Sim.Determinism.Rng.Rand01(sd, TheBadge.Sim.Determinism.Domain.Physics, 5, tick, 16 + i);
+            Array.Sort(a);
+            return a;
+        }
+        bool Ayni(double[] x, double[] y)
+        { for (int i = 0; i < 12; i++) if (x[i] != y[i]) return false; return true; }
+
+        int kumeTick = 0, kumeSeed = 0, tamTick = 0, tamSeed = 0;
+        for (uint t = 1; t <= N; t++)
+        {
+            if (Ayni(Kume(999UL, t), Kume(999UL, t + 1))) kumeTick++;
+            if (TheBadge.Sim.Determinism.Rng.Gauss01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t, 1)
+                == TheBadge.Sim.Determinism.Rng.Gauss01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t + 1, 1)) tamTick++;
+        }
+        for (ulong sd = 1000; sd < 3000; sd += 2)
+        {
+            if (Ayni(Kume(sd, 77), Kume(sd + 1, 77))) kumeSeed++;
+            if (TheBadge.Sim.Determinism.Rng.Gauss01(sd, TheBadge.Sim.Determinism.Domain.Physics, 5, 77, 1)
+                == TheBadge.Sim.Determinism.Rng.Gauss01(sd + 1, TheBadge.Sim.Determinism.Domain.Physics, 5, 77, 1)) tamSeed++;
+        }
+        double kt = kumeTick * 100.0 / N, ks = kumeSeed * 100.0 / 1000;
+        // Rand01 karşılaştırması: kusur TOPLAMA desenindedir, çekirdek hash'te DEĞİL
+        int rndKomsu = 0;
+        for (uint t = 1; t <= N; t++)
+            if (TheBadge.Sim.Determinism.Rng.Rand01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t, 1)
+                == TheBadge.Sim.Determinism.Rng.Rand01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t + 1, 1))
+                rndKomsu++;
+        Console.WriteLine($"[info] K3 RNG borcu: Gauss01 aynı çekiliş kümesi — komşu tick %{kt:F1} · bit0-seed %{ks:F1} " +
+                          $"(tam eşitlik %{tamTick * 100.0 / N:F1} / %{tamSeed * 100.0 / 1000:F1}) · Rand01 %{rndKomsu * 100.0 / N:F1}");
+        string hata = "";
+        if (rndKomsu != 0) hata += "Rand01 çarpışıyor (çekirdek hash bozuk — bu borç DEĞİL, REGRESYON) ";
+        if (kt > 50.0) hata += $"Gauss01 komşu tick bağımsızlığı KÖTÜLEŞTİ (%{kt:F1} > %50) ";
+        if (ks > 100.0) hata += $"Gauss01 bit0-seed bağımsızlığı KÖTÜLEŞTİ (%{ks:F1}) ";
+        if (hata.Length > 0) failures += Fail("K3RngGauss01Borcu", hata);
+        else Pass($"K3RngGauss01Borcu(aynı çekiliş kümesi: komşu tick %{kt:F1} · bit0-seed %{ks:F1} — HEDEF %0; " +
+                  $"düzeltme 50 golden replay + M16-E kalibrasyonunu kaydırır, ayrı dilim · Rand01 temiz)");
+    }
+}
+
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");
 return failures == 0 ? 0 : 1;
