@@ -52,6 +52,9 @@ namespace TheBadge.World
             ctx.RegisterRule("squad.set_player_role", new MacKarsiligiKurali(null));
             ctx.RegisterRule("squad.set_instruction", new MacKarsiligiKurali(new TalimatKurali()));
 
+            // Kuyruk YÜRÜTÜCÜye bağlanır: yayınlama commit'in parçasıdır (inceleme bulgusu, P1).
+            exec.MacKuyruguBagla(macKuyrugu);
+
             exec.RegisterHandler("squad.set_player_anchor", new AnchorHandler());
             exec.RegisterHandler("squad.set_player_role", new RolHandler());
             exec.RegisterHandler("squad.set_instruction", new TalimatHandler());
@@ -168,7 +171,11 @@ namespace TheBadge.World
                 if (i < 0) return RejectionReason.NotOwned;
                 int yuva = st.InstructionSlot(i, (byte)tid);
                 if (yuva < 0) { detail = "talimat yuvası dolu"; return RejectionReason.StateConflict; }
-                int adres = i * st.Oyuncular[i].Talimatlar.Length + yuva;
+                // ADRES ŞERİDİ TEK KAYNAK: journal çözerken `Oyuncular[0].Talimatlar.Length`
+                // kullanıyor; burada oyuncunun KENDİ uzunluğunu kullanmak, diziler bir gün
+                // ayrışırsa yazmayı sessizce BAŞKA oyuncuya düşürürdü. Aynı ifadeyi kullan.
+                int serit = st.Oyuncular[0].Talimatlar.Length;
+                int adres = i * serit + yuva;
                 j.Set(MutTarget.Talimat, adres, InstructionField.TalimatId, tid);
                 j.Set(MutTarget.Talimat, adres, InstructionField.Deger, deger);
                 j.Emit(new WorldEvent(WorldEventType.TaktikGuncellendi, (int)pid, (tid << 8) ^ deger, st.Takvim.Sezon, st.Takvim.Hafta));
@@ -193,7 +200,7 @@ namespace TheBadge.World
                 if (env.MatchTick > 0)
                 {
                     if (kuyruk == null) { detail = "maç kuyruğu bağlı değil"; return RejectionReason.StateConflict; }
-                    kuyruk.Enqueue(new TacticChangeCmd(env.MatchTick, env.TeamIdx,
+                    j.MacKomutu(new TacticChangeCmd(env.MatchTick, env.TeamIdx,
                         new TacticDelta((sbyte)men, (sbyte)tem, (sbyte)pres, (sbyte)hat)));
                     return RejectionReason.None;
                 }
@@ -261,7 +268,9 @@ namespace TheBadge.World
             }
         }
 
-        /// <summary>Oyuncu değişikliği — YALNIZ maç kuyruğuna gider; kalıcı durum değişmez.
+        /// <summary>Oyuncu değişikliği — komut journal'da BEKLETİLİR, kuyruğa yürütücü yazar.
+        /// `kuyruk` alanı burada YALNIZ "bağlı mı" denetimi içindir; yayınlama commit'in parçası.
+        /// (Değişiklik hakkı kalıcı durumda azalır, o yüzden bu handler yazma da üretir.)
         /// `cikanId` SAHA SLOTU (0-21), `girenId` KULÜBE İNDEKSİdir (0-9) — M17 replay
         /// incelemesinde bu sözleşme bir kez yanlış kurulmuştu, bir daha kurulmasın diye
         /// bant adları (`match.sahaSlot`, `match.kulubeIndeks`) da bunu söylüyor.</summary>
@@ -275,7 +284,7 @@ namespace TheBadge.World
                 if (!p.TryGetInt("cikanId", out long cikan) || !p.TryGetInt("girenId", out long giren))
                     return RejectionReason.SchemaViolation;
                 if (kuyruk == null) { detail = "maç kuyruğu bağlı değil"; return RejectionReason.StateConflict; }
-                kuyruk.Enqueue(new SubstitutionCmd(env.MatchTick, env.TeamIdx, (short)cikan, (short)giren));
+                j.MacKomutu(new SubstitutionCmd(env.MatchTick, env.TeamIdx, (short)cikan, (short)giren));
                 // Değişiklik HAKKI kalıcı durumda azalır (Kapı 3 `NoChargesLeft` bunu okuyor)
                 j.Set(MutTarget.Mac, 0, MatchField.KalanDegisiklikHakki, st.KalanDegisiklikHakki - 1);
                 return RejectionReason.None;
@@ -293,7 +302,7 @@ namespace TheBadge.World
                 int idx = TycoonActions.EnumIndex(TonEnum, ton);
                 if (idx < 0) { detail = "ton: " + ton; return RejectionReason.SchemaViolation; }
                 if (kuyruk == null) { detail = "maç kuyruğu bağlı değil"; return RejectionReason.StateConflict; }
-                kuyruk.Enqueue(new MotivationCmd(env.MatchTick, env.TeamIdx, (ToneType)idx));
+                j.MacKomutu(new MotivationCmd(env.MatchTick, env.TeamIdx, (ToneType)idx));
                 return RejectionReason.None;
             }
         }

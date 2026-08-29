@@ -208,9 +208,22 @@ namespace TheBadge.World
             if (Takvim == null) throw new ArgumentException("GameState: Takvim boş.");
             if (Taktik == null || Presetler == null)
                 throw new ArgumentException("GameState: Taktik/Presetler boş.");
+            // TALİMAT YUVASI TEK ŞERİT: journal adresi `oyuncuIndeksi * şerit + yuva` ile
+            // düzleştiriliyor ve şerit `Oyuncular[0]`dan okunuyor. Diziler farklı uzunlukta
+            // olursa yazma SESSİZCE başka oyuncunun yuvasına düşer (inceleme bulgusu, P2).
+            // Yüklenen durumun tekdüzeliği burada zorunlu kılınır — çözücü varsayımı artık
+            // doğrulanmış bir değişmezdir.
             for (int i = 0; i < Oyuncular.Length; i++)
                 if (Oyuncular[i].Talimatlar == null)
                     throw new ArgumentException($"GameState: Oyuncular[{i}].Talimatlar boş.");
+            if (Oyuncular.Length > 0)
+            {
+                int serit = Oyuncular[0].Talimatlar.Length;
+                for (int i = 1; i < Oyuncular.Length; i++)
+                    if (Oyuncular[i].Talimatlar.Length != serit)
+                        throw new ArgumentException(
+                            $"GameState: Oyuncular[{i}].Talimatlar uzunluğu {Oyuncular[i].Talimatlar.Length}, beklenen {serit} (tekdüze yuva sayısı zorunlu).");
+            }
             if (Fiyat == null || Fiyat.BiletKurus == null || Fiyat.BiletKurus.Length != 5
                 || Fiyat.BufeKurus == null || Fiyat.BufeKurus.Length != 3
                 || Fiyat.MagazaKurus == null || Fiyat.MagazaKurus.Length != 3)

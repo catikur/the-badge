@@ -1366,6 +1366,50 @@ dönüştürülünce `faz04/squad` dalı (henüz itilmemişti) ve tüm K4 kayna�
 da kurulu değildi. Kaynak oturum transkriptinden geri kazanıldı, SDK `packages.microsoft.com`
 deposundan kuruldu. **Ders: yeşil kapıya ulaşan her dilim BEKLETMEDEN itilir** — yerel dal yedek değildir.
 
+### K4 inceleme turu — ✅ TAMAM (2026-08-29)
+PR #18 incelemeye açılınca **iki bağımsız inceleyici** (Codex + Bugbot) dört bulgu çıkardı; dördü de
+haklı, ikisini ikisi birden gördü. Ayrıca kendi ters-okumamda çıkan iki şeyden biri (talimat şeridi)
+Codex'inkiyle aynı çıktı — bağımsız iki yoldan aynı yere varmak bulgunun gerçekliğini pekiştirdi.
+
+1. **(P1 ×2) Değişiklik hakkı maç başına DOLMUYORDU.** `KalanDegisiklikHakki` yalnız dünya
+   kurulumunda doluyor, sonra YALNIZ azalıyordu. Alanın kaynağı `macBasinaDegisiklik`, yani adı
+   "her maç" diyor — ama hiçbir yol hakkı geri doldurmuyordu: bir save'de toplam N değişiklikten
+   sonra HER maç `NoChargesLeft` ile reddedilirdi. Çözüm: `MacTick.Basla(st, kural, j)` — maç
+   yaşam döngüsü kancası, `EconomyTick` ile AYNI sözleşme (durumu doğrudan değiştirmez, journal'a
+   yazar, host `Validate` + `Apply` yapar). Bunu önce gözcü kapı olarak yazmıştım; inceleme
+   "belgele" değil "düzelt" dedi ve haklıydı — borç değil, hatanın kendisiydi.
+2. **(P1 ×2) Maç komutu yürütme işleminin DIŞINDAydı.** Handler `Apply` içinde doğrudan
+   `kuyruk.Enqueue` yapıyordu; sonraki journal doğrulaması ya da denetim sink'i patladığında
+   `Geri` yalnız `GameState`i geri alıyor, komut kuyrukta KALIYORDU — ve tekrar denemede İKİNCİ
+   kopya giriyordu. Çözüm: komutlar `WorldJournal`da BEKLETİLİR (`MacKomutu`), yürütücü denetim de
+   geçtikten SONRA boşaltır (`MacKuyruguBagla`). Yayınlama artık commit'in parçası; her erken dönüş
+   ve her `Geri` yolu komutları yayınlanmamış bırakır. Bu, K2'nin "yarım yazılmış durum yapısal
+   olarak erişilemez" ilkesinin maç kuyruğuna uzatılmasıdır.
+3. **(High) Bus, motorun reddedeceği değişikliği kabul ediyordu.** Balance 5 hak veriyordu ama
+   `MatchEngine.MaxSubs` **3**'tür (derleme zamanı sabiti — `PendingSubs` dizisini boyutlandırıyor,
+   yani balance'tan okunması determinizm etkili bir motor değişikliğidir). Dünya "oldu" der, motor
+   sessizce `RejectedCommands++` yapardı. Çözüm: `macBasinaDegisiklik` 5 → **3** ve
+   `MacTick.HakTavaniTutarli` + kapı ikisinin eşitliğini zorunlu tutuyor. Bu bir balance KALİBRASYONU
+   değil düzeltmedir: 5 bugün fiziksel olarak onurlandırılamıyordu.
+4. **(P2) Ayrışık talimat şeridi sessizce başka oyuncuya yazardı.** `TalimatHandler` adresi
+   oyuncunun KENDİ dizi uzunluğuyla düzleştiriyor, `WorldJournal` ise `Oyuncular[0]`ın uzunluğuyla
+   çözüyordu. Diziler bir gün ayrışırsa yazma başka oyuncunun yuvasına düşerdi. Çözüm İKİ yönlü:
+   handler artık çözücüyle AYNI şeridi kullanıyor **ve** `GameState.Validate` tekdüze yuva sayısını
+   zorunlu kılıyor — çözücünün varsayımı artık doğrulanmış bir değişmez.
+
+- **Kapı:** `K4IncelemeBulgulari` (4 bulgu tek kapıda). Dördü de ters çevrilip ölçüldü; her biri
+  kendi iddiasını kırmızıya döndürüyor — reset kapatılınca "sonraki maçta değişiklik reddedildi
+  (NoChargesLeft)", tavan 5'e çekilince "hak tavanı ayrışık(balance 5 vs motor 3)", `Enqueue`
+  işleme geri alınınca "geri alınan komut kuyrukta KALDI(1)", şerit denetimi kapatılınca ayrışık
+  dizi kabul ediliyor.
+
+**Açık kalan (K6'ya):** motor, değişikliği kendi kurallarıyla da reddedebilir (kulübe indeksi,
+kırmızı kart görmüş oyuncu, yanlış taraf, aynı oyuncu iki kez) ve bu redler yalnız
+`RejectedCommands`'ı artırır — istemciye "oldu" denmiş olur. Hak tavanı artık tek kaynak olduğu için
+en sık yol kapandı, ama motor sonucunun host üzerinden istemciye geri akması (komut sonucu geri
+bildirimi) K6 maç yaşam döngüsünün işidir. Dünya katmanının motorun tüm kurallarını kopyalaması
+yanlış çözüm olurdu: iki kaynak, iki ayrışma.
+
 ## Bekleyen kararlar
 - **CB 4.2 tablosu ile ME komut kümesi çelişiyor (K4 bulgusu, 2026-08-29):** spec `squad.set_player_anchor`/
   `set_player_role`/`set_instruction`'ı "Hub + Maç" sayıyor; motorda anchor/rol maç komutu yok,

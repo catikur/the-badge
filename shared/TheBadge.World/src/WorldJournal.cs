@@ -67,7 +67,16 @@ namespace TheBadge.World
         public IReadOnlyList<Mutation> Mutations => yazmalar;
         public IReadOnlyList<WorldEvent> Events => olaylar;
 
-        public void Clear() { yazmalar.Clear(); olaylar.Clear(); geriDegerler.Clear(); adYazmalari.Clear(); adGeri.Clear(); }
+        /// <summary>Maç motoruna gidecek komutlar — journal'da BEKLETİLİR, doğrudan kuyruğa
+        /// YAZILMAZ (inceleme bulgusu, P1). Handler `Apply` içinde kuyruğa yazsaydı, sonraki
+        /// journal doğrulaması ya da denetim sink'i patladığında `Geri` yalnız `GameState`i
+        /// geri alır; komut kuyrukta KALIR ve tekrar denemede İKİNCİ kopya girerdi. Artık
+        /// yayınlama commit'in parçası: yürütücü, denetim de geçtikten SONRA boşaltır.</summary>
+        readonly List<TheBadge.Sim.Match.MatchCommand> macKomutlari = new List<TheBadge.Sim.Match.MatchCommand>();
+        public IReadOnlyList<TheBadge.Sim.Match.MatchCommand> MacKomutlari => macKomutlari;
+        public void MacKomutu(TheBadge.Sim.Match.MatchCommand cmd) => macKomutlari.Add(cmd);
+
+        public void Clear() { yazmalar.Clear(); olaylar.Clear(); geriDegerler.Clear(); adYazmalari.Clear(); adGeri.Clear(); macKomutlari.Clear(); }
 
         /// <summary>Preset ADI yazması — journal TAMSAYI taşıyıcısıdır, metin ayrı listede taşınır.
         /// Aralık denetimi yok (uzunluk kapı 1'de doğrulandı); geri alma için eski ad saklanır.</summary>

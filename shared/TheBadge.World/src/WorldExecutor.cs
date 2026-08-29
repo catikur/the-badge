@@ -53,6 +53,7 @@ namespace TheBadge.World
         readonly IActionHandler[] handlers;      // katalog indeksine göre
         readonly IWorldAuditSink audit;
         readonly WorldJournal journal = new WorldJournal();
+        IMatchCommandSink macKuyrugu;
 
         GameState st => depo.State;
 
@@ -65,6 +66,15 @@ namespace TheBadge.World
             kapi3 = gate3 ?? throw new ArgumentNullException(nameof(gate3));
             handlers = new IActionHandler[Catalog.Count];
             audit = auditSink;
+        }
+
+        /// <summary>Maç komut kuyruğu YÜRÜTÜCÜye bağlanır, handler'a değil: yayınlama commit'in
+        /// parçasıdır (aşağıda, denetimden SONRA boşaltılır). Handler kuyruğa doğrudan yazsaydı
+        /// geri alma onu toplayamazdı (inceleme bulgusu, P1).</summary>
+        public void MacKuyruguBagla(IMatchCommandSink sink)
+        {
+            if (macKuyrugu != null) throw new InvalidOperationException("maç kuyruğu zaten bağlı");
+            macKuyrugu = sink;
         }
 
         /// <summary>K3-K5 aksiyonlarını buraya bağlar.</summary>
@@ -151,6 +161,22 @@ namespace TheBadge.World
                                       journal.Events);
                     }
                     catch { journal.Geri(st); throw; }
+                }
+
+                // MAÇ KOMUTLARI EN SONDA YAYINLANIR — journal doğrulaması, uygulama ve denetim
+                // hepsi geçtikten sonra. Buraya kadar gelen her yol "işlem tamamlandı" demektir;
+                // yukarıdaki her erken dönüş ve `Geri` yolu komutları YAYINLANMAMIŞ bırakır.
+                if (journal.MacKomutlari.Count > 0)
+                {
+                    if (macKuyrugu == null)
+                    {
+                        // Buraya düşmek kablolama hatasıdır: handler maç komutu üretti ama kuyruk yok.
+                        // Sessiz başarı YOK — durum zaten uygulandı, o yüzden geri al ve reddet.
+                        journal.Geri(st);
+                        detail = "maç kuyruğu bağlı değil";
+                        return RejectionReason.StateConflict;
+                    }
+                    for (int i = 0; i < journal.MacKomutlari.Count; i++) macKuyrugu.Enqueue(journal.MacKomutlari[i]);
                 }
                 return RejectionReason.None;
             }

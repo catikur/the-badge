@@ -3788,13 +3788,14 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         };
 
     (TheBadge.World.WorldStore depo, TheBadge.World.WorldContext ctx, TheBadge.World.WorldExecutor exec,
-     TheBadge.CommandBus.CommandBus bus, TheBadge.Checks.SpyMatchSink kuyruk) K4Kur(bool kuyrukVar = true)
+     TheBadge.CommandBus.CommandBus bus, TheBadge.Checks.SpyMatchSink kuyruk) K4Kur(bool kuyrukVar = true, bool patlayanDenetim = false)
     {
         var g = TheBadge.Checks.EkonomiFixture.Kur(k4Rules, k4Eco, 500L, K4User);
         var depo = new TheBadge.World.WorldStore(g);
         var ctx = new TheBadge.World.WorldContext(depo, k4Rules)
         { Active = TheBadge.CommandBus.Context.Hub | TheBadge.CommandBus.Context.Match | TheBadge.CommandBus.Context.Online };
-        var exec = new TheBadge.World.WorldExecutor(depo, ctx);
+        var exec = new TheBadge.World.WorldExecutor(depo, ctx,
+            patlayanDenetim ? new TheBadge.Checks.ThrowingAuditSink() : null);
         var kuyruk = kuyrukVar ? new TheBadge.Checks.SpyMatchSink() : null;
         TheBadge.World.SquadActions.Baglan(ctx, exec, k4Rules, kuyruk);
         var bus = new TheBadge.CommandBus.CommandBus(k4Bands, ctx,
@@ -3946,6 +3947,71 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         catch (InvalidOperationException) { }
         if (hata.Length > 0) failures += Fail("K4CifteKayit", hata);
         else Pass("K4CifteKayit(aynı aksiyona ikinci kural/yürütücü kurulumda patlıyor)");
+    }
+
+    // 28f) İNCELEME BULGULARI — 4 bulgu, 2 bağımsız inceleyici (P1 ×2, P2, High)
+    {
+        string hata = "";
+
+        // (1) DEĞİŞİKLİK HAKKI MAÇ BAŞINA DOLUYOR — eskiden yalnız kurulumda doluyordu ve
+        //     tükenince HER maç NoChargesLeft'e düşüyordu.
+        {
+            var w = K4Kur();
+            byte tavan = w.depo.State.KalanDegisiklikHakki;
+            for (int n = 0; n < tavan; n++)
+                w.bus.Submit(K4Env("match.substitution", tick: (uint)(3600 + n)),
+                    new TheBadge.Checks.TestPayload().Set("cikanId", 5L).Set("girenId", 2L), w.exec, K4Host, K4User);
+            if (w.depo.State.KalanDegisiklikHakki != 0) hata += "hak tükenmedi ";
+            var tukenmis = w.bus.Submit(K4Env("match.substitution", tick: 9000),
+                new TheBadge.Checks.TestPayload().Set("cikanId", 6L).Set("girenId", 3L), w.exec, K4Host, K4User);
+            if (tukenmis.Ok || tukenmis.Reason != RejectionReason.NoChargesLeft) hata += "tükenince reddetmedi ";
+
+            // SONRAKİ MAÇ: yaşam döngüsü hakkı tazeler
+            var j = new TheBadge.World.WorldJournal();
+            TheBadge.World.MacTick.Basla(w.depo.State, k4Rules, j);
+            if (!j.Validate(w.depo.State, out string mhata)) hata += $"maç başı journal geçersiz({mhata}) ";
+            j.Apply(w.depo.State);
+            if (w.depo.State.KalanDegisiklikHakki != tavan) hata += "maç başı hak tazelenmedi ";
+            var yeniMac = w.bus.Submit(K4Env("match.substitution", tick: 100),
+                new TheBadge.Checks.TestPayload().Set("cikanId", 7L).Set("girenId", 4L), w.exec, K4Host, K4User);
+            if (!yeniMac.Ok) hata += $"sonraki maçta değişiklik reddedildi({yeniMac.Reason}) ";
+        }
+
+        // (2) HAK TAVANI TEK KAYNAK — balance motorun onurlandırdığından FAZLA hak veremez,
+        //     yoksa dünya "oldu" der, motor sessizce reddeder.
+        if (k4Rules.yapi.macBasinaDegisiklik != TheBadge.Sim.Match.MatchEngine.MaxSubs)
+            hata += $"hak tavanı ayrışık(balance {k4Rules.yapi.macBasinaDegisiklik} vs motor {TheBadge.Sim.Match.MatchEngine.MaxSubs}) ";
+        if (!TheBadge.World.MacTick.HakTavaniTutarli(k4Rules)) hata += "HakTavaniTutarli yanlış rapor ediyor ";
+
+        // (3) MAÇ KOMUTU İŞLEMİN İÇİNDE — denetim sink'i patlarsa komut kuyrukta KALMAZ
+        {
+            var w = K4Kur(patlayanDenetim: true);
+            byte hak0 = w.depo.State.KalanDegisiklikHakki;
+            ulong h0 = w.depo.Hash();
+            bool firladi = false;
+            try
+            {
+                w.bus.Submit(K4Env("match.substitution", tick: 3600),
+                    new TheBadge.Checks.TestPayload().Set("cikanId", 5L).Set("girenId", 2L), w.exec, K4Host, K4User);
+            }
+            catch (InvalidOperationException) { firladi = true; }
+            if (!firladi) hata += "denetim patlaması yukarı çıkmadı ";
+            if (w.kuyruk.Komutlar.Count != 0) hata += $"geri alınan komut kuyrukta KALDI({w.kuyruk.Komutlar.Count}) ";
+            if (w.depo.State.KalanDegisiklikHakki != hak0) hata += "geri alınan hak düşük kaldı ";
+            if (w.depo.Hash() != h0) hata += "geri alma durumu tam toparlamadı ";
+        }
+
+        // (4) TEKDÜZE TALİMAT ŞERİDİ — farklı uzunlukta dizi yüklenirse yazma başka oyuncuya düşerdi
+        {
+            var g = TheBadge.Checks.EkonomiFixture.Kur(k4Rules, k4Eco, 500L, K4User);
+            g.Oyuncular[1].Talimatlar = new TheBadge.World.Instruction[g.Oyuncular[0].Talimatlar.Length + 1];
+            bool yakalandi = false;
+            try { g.Validate(); } catch (ArgumentException) { yakalandi = true; }
+            if (!yakalandi) hata += "ayrışık talimat şeridi kabul edildi ";
+        }
+
+        if (hata.Length > 0) failures += Fail("K4IncelemeBulgulari", hata);
+        else Pass($"K4IncelemeBulgulari(4 bulgu: maç başı hak tazeleniyor · tavan motorla tek kaynak ({TheBadge.Sim.Match.MatchEngine.MaxSubs}) · maç komutu işlemin içinde · tekdüze talimat şeridi zorunlu)");
     }
 }
 
