@@ -1410,6 +1410,76 @@ en sık yol kapandı, ama motor sonucunun host üzerinden istemciye geri akması
 bildirimi) K6 maç yaşam döngüsünün işidir. Dünya katmanının motorun tüm kurallarını kopyalaması
 yanlış çözüm olurdu: iki kaynak, iki ayrışma.
 
+### K5: Transfer pazarı — 5 aksiyon + değerleme + pazarlık — ✅ TAMAM (2026-08-29)
+GDD 17 FAZ 04'ün "Valuation algoritması, negotiation logic, kontrat sistemi" kalemi. **5 aksiyon**
+bağlandı (`transfer.list_player`, `propose_offer`, `respond_offer`, `sign_free_agent`,
+`release_player`). K5 kapısı yalnız transfer modülünü bağladığı için orada 27/32 bağlanmamış
+görünür; K4 ile birlikte bağlayan bir host'ta kalan **18**'dir (32 − 9 kadro − 5 transfer).
+Kalanı K6-K7'nin işi.
+
+- **Durum:** `PlayerState`'e değerleme girdileri (`Guc`, `Potansiyel`, `Yas`, `IstenenBedelTl`) ve
+  `ClubState`'e `TransferOffer[8]` [KALİBRE]. Maç motoru bu alanları HENÜZ okumuyor (ME ajan
+  durumunda karşılıkları yok) — transfer değerlemesinin girdisidirler, ama kalıcı durumun parçası
+  oldukları için hash kapsamındadırlar.
+- **Değerleme:** dışbükey güç eğrisi × potansiyel primi × yaş çarpanı × sözleşme çarpanı, hepsi
+  `balance/transfer.balance.json` [KALİBRE]. Sözleşmesi biten oyuncu ucuzlar (yakında bedelsiz);
+  yaş çarpanının ALT sınırı var (yaşlı oyuncunun değeri sıfıra inmez — devredilebilir bir varlıktır);
+  potansiyel < güç ise prim 0'dır, CEZA değil (tavanına ulaşmış oyuncu cezalandırılmaz).
+- **Pazarlık:** `Rng.Rand01` + `Domain.Decision`. Domain gerekçesi: bu bir AJAN KARARIdır (satıcı
+  kulübün tutumu), fiziksel olay değil; `Chaos` reddedildi çünkü kaos akışı maç içi sapma içindir ve
+  transferi oraya bağlamak iki alanı aynı sayaç uzayında çakıştırırdı. `Gauss01` KULLANILMADI —
+  çakışma borcu açık (bekleyen kararlar), K3 ekonomi tick'iyle aynı gerekçe.
+- **Kontrat:** fesih bedeli = kalan hafta × maaş × çarpan, asgari tabanlı. Oyuncu göndermek bedava
+  değildir; aksi hâlde maaş yükü sıfır maliyetle atılırdı (GDD 4.2).
+
+**Kadro sınırları: otoritenin YERİNİ yanlış sandım, diş ölçümü düzeltti.** Önce "K2'nin
+kullanılmayan `kadroMax`ı K5'te gerçek oluyor" diye yazmıştım — **yanlış**. K2 inceleme turunda o
+bulgu ZATEN kapatılmış: `WorldContext` (5a) `sign_free_agent` için tavanı, (5b) `release_player`
+için tabanı uyguluyor. Bunu, kadro tabanı kuralımı kaldırıp kapının kırmızıya dönmesini
+beklerken buldum — **dönmedi**, çünkü fesih döngüsünü durduran benim kuralım değil K2'ydi.
+Sonuç: `SerbestKurali` tamamen, `FesihKurali`'nin taban denetimi de kaldırıldı (ölü koddu);
+`FesihKurali`'de yalnız K2'nin BİLEMEYECEĞİ şey kaldı — payload'da bildirilmeyen, HESAPLANAN
+fesih bedelinin karşılanabilirliği (K3-K5 seami).
+
+**Gerçek boşluk bu arayışta çıktı:** K2 sınırları `sign_free_agent` ve `release_player` için
+koyuyor ama **`respond_offer` için KOYMUYOR** — oysa teklif kabulü de kadroyu büyütür (alış) ve
+küçültür (satış). O sınır K5'in kendi işi ve artık `CevapHandler`'da; `K5PazarlikDongusu` iki yönü
+de ölçüyor. Tavan senaryosu standart fikstüre sığmadığı için (26 oyuncu, kadroMax 32) kendi
+fikstürünü kuruyor.
+
+**Ölü kod bulgusu — kendi kuralımı K2 maskeliyordu.** `TeklifKurali`/`ListeKurali`/`SerbestKurali`
+içine sahiplik denetimleri yazmıştım; `WorldContext`'in K2'den gelen üç ilişkili sahiplik katmanı
+(`OwnerNeed.Sahip/Yabanci/Serbest`) bunları ZATEN eliyor ve KAPI 3'te benden ÖNCE koşuyor. Yani
+yazdığım denetimler erişilemezdi. `ListeKurali` tamamen kaldırıldı, diğer ikisinden sahiplik
+kısımları çıkarıldı; kapılar da artık otoritenin verdiği sebebi (`NotOwned`) ölçüyor, benim
+kopyamı değil. Bu, K3-B'de öğrenilen "derin katmanın maskelediği kural" tuzağının aynısı.
+
+**Kapı yazarken kendi hatamı buldum, ama kapı onu YAKALAMIYORDU.** `CevapEnum` sırası
+{kabul, ret, karsiTeklif}, `PazarlikKarari` sırası {Ret, Kabul, KarsiTeklif} — AYNI DEĞİL; indeksi
+doğrudan enum'a cast etmek **kabul ile reddi takas ediyordu** (ret oyuncuyu satıyor, kabul hiçbir şey
+yapmıyordu). Hatayı okurken yakalayıp düzelttim, sonra diş ölçümünde geri koyduğumda **suite yeşil
+kaldı**: `K5MutluYol` yalnız sıra denetimini ölçüyordu, transferin KENDİSİNİ değil. `K5PazarlikDongusu`
+bu boşluğu kapatmak için yazıldı — kabul gerçekten oyuncuyu gönderiyor mu, ret gerçekten kapatıyor mu.
+Geri koyunca artık kırmızı: "RET oyuncuyu GÖNDERDİ(kulüp 900)". **Ders: en kritik yolu ölçmeyen
+kapı, o yolda yapılan hatayı da ölçmez — sıra denetimini test etmek transferi test etmek değildir.**
+
+**Maaş muhasebesi hatası (kendi okumamda bulundu).** Alış yolunda kulübün maaş yüküne
+`yeniMaas - eskiMaas` ekliyordum; oyuncu bizim DEĞİLDİ, eski maaşı başka kulübün gider kaleminde
+duruyordu. Pahalı kulüpten ucuz maaşa alınan oyuncuda gider yükü EKSİK görünürdü. Tam maaş eklenir.
+Diş ölçümü: geri koyunca `alışta maaş yükü TAM maaş kadar artmadı(80000≠120000)`.
+
+- **Kapılar (7):** `K5Baglanti` · `K5DegerlemeMonotonlugu` · `K5PazarlikDeterminizmi` (100 tekrar
+  bit-eşit, seed ayrıştırıyor) · `K5MutluYol` · `K5SahiplikVeKadro` · `K5PazarlikDongusu` ·
+  `K5NegatifMatris` (CB 10.1: şema·bant·kapı3·rate).
+- **Diş ölçümü (5):** maaş muhasebesi · kabul yolunun kadro sınırları · sıra denetimi · potansiyel
+  primi · kabul/ret eşlemesi — beşi de ters çevrildiğinde kendi iddiasını kırmızıya döndürüyor.
+- `K2HashKapsami` yine yeni alanları mutasyonsuz yakaladı (5 alan) — üçüncü dilim üst üste.
+
+**Bu dilimin taşınacak dersi:** ÜÇ kez aynı tuzağa düştüm — kendi kuralımı yazdım, daha derin bir
+katman (K2) onu zaten yapıyordu, ve kural ÖLÜ kaldı. Üçünde de fark ettiren şey aynı: **kapıyı ters
+çevirip kırmızıya dönmesini beklemek.** Dönmediğinde kapı zayıf değil, kural gereksizdi. Bundan
+sonra yeni bir `IActionRule` yazmadan önce `WorldContext`'in o aksiyon için ne yaptığına bakılır.
+
 ## Bekleyen kararlar
 - **CB 4.2 tablosu ile ME komut kümesi çelişiyor (K4 bulgusu, 2026-08-29):** spec `squad.set_player_anchor`/
   `set_player_role`/`set_instruction`'ı "Hub + Maç" sayıyor; motorda anchor/rol maç komutu yok,

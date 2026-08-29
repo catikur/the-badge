@@ -29,6 +29,25 @@ namespace TheBadge.World
 
     /// <summary>Sponsor teklifi — GDD 4.2 "Sponsorluk Anlaşmaları". `tycoon.sign_sponsor`
     /// bunlardan birini seçer. Teklifler K5/LiveOps tarafından doldurulur; K3 imzalamayı yürütür.</summary>
+    /// <summary>Transfer teklifi — CB 4.3 `transfer.propose_offer` / `respond_offer`.
+    /// `TeklifId` 0 = boş yuva. Teklif KİMDEN kime: `TeklifEdenClubId` her zaman teklifi
+    /// AÇAN kulüptür; hedef oyuncunun sahibi cevabı verir. Karşı teklifte bedel güncellenir
+    /// ve sıra karşı tarafa geçer (`SiraTeklifEdende`).</summary>
+    public struct TransferOffer
+    {
+        public int TeklifId;              // 0 = boş yuva
+        public int OyuncuId;
+        public long TeklifEdenClubId;
+        public long BedelTl;
+        public long HaftalikMaasTl;
+        public ushort SonGecerlilikSezon;
+        public ushort SonGecerlilikHafta;
+        /// <summary>true = top teklif edende (karşı teklif geldi, cevaplaması gereken O);
+        /// false = top hedef kulüpte (ilk teklif ya da karşı-karşı teklif).</summary>
+        public bool SiraTeklifEdende;
+        public byte TurSayisi;            // pazarlık turu — [KALİBRE] tavana takılır
+    }
+
     public struct SponsorOffer
     {
         public int TeklifId;          // 0 = boş slot
@@ -62,6 +81,10 @@ namespace TheBadge.World
         /// "inşaat + tesis bakımı"nı açıkça sink sayıyor.</summary>
         public long DonemInsaatGideriTl;
         public SponsorOffer[] SponsorTeklifleri;
+        /// <summary>Bu kulübü ilgilendiren AÇIK transfer teklifleri [KALİBRE
+        /// `yapi.transferTeklifSlotSayisi`]. Hem verilen hem alınan teklifler burada durur;
+        /// yön `TeklifEdenClubId`den okunur.</summary>
+        public TransferOffer[] TransferTeklifleri;
         public int KaptanPlayerId;          // GDD 3.2 — 0 = kaptan yok
         public byte AntrenmanPlanId, AntrenmanYogunluk;   // GDD 4.3 / CB 4.2
         public byte Form;                   // 0-100 — seyirci modelinin form ayağı (maç sonuçları besler)
@@ -77,10 +100,18 @@ namespace TheBadge.World
         public ushort SozlesmeKalanHafta;
         public byte Moral;                  // 0-100
         public byte Kondisyon;              // 0-100
+        /// <summary>Değerleme girdileri — GDD 17 FAZ 04 "Valuation algoritması". `Guc` bugünkü
+        /// seviye, `Potansiyel` tavan (Guc ≤ Potansiyel), `Yas` yıl. Maç motoru bunları HENÜZ
+        /// okumuyor (ME ajan durumunda karşılıkları yok); transfer değerlemesinin girdisidirler
+        /// ve kalıcı durumun parçası oldukları için hash kapsamındadırlar.</summary>
+        public byte Guc;                    // 0-100
+        public byte Potansiyel;             // 0-100, Guc'ten küçük olamaz
+        public byte Yas;                    // yıl
         public byte SakatlikHafta;          // 0 = sağlam
         public byte RolId;                  // GDD 3.2 bireysel rol
         public int AnchorXmm, AnchorYmm;    // GDD 3.1 serbest pozisyonlama (ME 5.3 birimi)
         public bool ListedeMi;              // transfer listesi
+        public long IstenenBedelTl;         // CB 4.3 transfer.list_player; 0 = listede değil/pazarlığa açık
         /// <summary>Bireysel talimatlar — sabit yuva sayısı [KALİBRE `yapi.talimatYuvaSayisi`].
         /// Sözlük DEĞİL: sırasız yapı yasağı (ME 3.2) ve hash kanonikliği için dizi.</summary>
         public Instruction[] Talimatlar;
@@ -162,7 +193,8 @@ namespace TheBadge.World
         public static GameState Bos() => new GameState
         {
             Club = new ClubState { TesisTier = new byte[0], InsaatSlot = new Construction[0], Krediler = new Loan[0],
-                                   SponsorTeklifleri = new SponsorOffer[0] },
+                                   SponsorTeklifleri = new SponsorOffer[0],
+                                   TransferTeklifleri = new TransferOffer[0] },
             Oyuncular = new PlayerState[0],
             Takvim = new CalendarState(),
             Fiyat = BosFiyat(),
@@ -189,6 +221,7 @@ namespace TheBadge.World
                     InsaatSlot = new Construction[rules.yapi.insaatSlotSayisi],
                     Krediler = new Loan[rules.yapi.krediSlotSayisi],
                     SponsorTeklifleri = new SponsorOffer[rules.yapi.sponsorTeklifSlotSayisi],
+                    TransferTeklifleri = new TransferOffer[rules.yapi.transferTeklifSlotSayisi],
                 },
                 Oyuncular = new PlayerState[0],
                 Takvim = new CalendarState { Sezon = 1, Hafta = 1, Pencere = TransferWindow.Kapali },
@@ -229,7 +262,7 @@ namespace TheBadge.World
                 || Fiyat.MagazaKurus == null || Fiyat.MagazaKurus.Length != 3)
                 throw new ArgumentException("GameState: Fiyat dizileri eksik (5 tribün / 3 büfe / 3 mağaza).");
             if (Club.TesisTier == null || Club.InsaatSlot == null || Club.Krediler == null
-                || Club.SponsorTeklifleri == null)
+                || Club.SponsorTeklifleri == null || Club.TransferTeklifleri == null)
                 throw new ArgumentException("GameState: kulüp dizileri boş.");
             for (int i = 1; i < Oyuncular.Length; i++)
             {

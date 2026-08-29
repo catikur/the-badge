@@ -115,6 +115,15 @@ namespace TheBadge.Checks
             for (int i = 0; i < st.Oyuncular.Length; i++)
                 if (st.Oyuncular[i].ClubId == clubId) st.Oyuncular[i].HaftalikMaasTl = OyuncuHaftalikMaas;
             st.Club.HaftalikMaasGiderTl = KadroSayisi * OyuncuHaftalikMaas;
+            // K5 değerleme girdileri: güç/potansiyel/yaş DETERMİNİSTİK dağıtılır (indeksten
+            // türetilir, RNG yok) — böylece transfer kapıları sabit bir kadro üzerinde ölçer.
+            for (int i = 0; i < st.Oyuncular.Length; i++)
+            {
+                st.Oyuncular[i].Guc = (byte)(45 + (i * 7) % 45);          // 45-89
+                st.Oyuncular[i].Potansiyel = (byte)System.Math.Min(99, st.Oyuncular[i].Guc + (i * 3) % 12);
+                st.Oyuncular[i].Yas = (byte)(19 + (i * 5) % 17);          // 19-35
+                st.Oyuncular[i].SozlesmeKalanHafta = (ushort)(26 + (i * 11) % 130);
+            }
             // Fiyatlar referans seviyesinde (kuruş)
             for (int t = 0; t < 5; t++) st.Fiyat.BiletKurus[t] = eco.tribun.referansFiyat[t] * 100;
             st.Fiyat.KombineKurus = (int)(eco.kombine.referansFiyat * 100);

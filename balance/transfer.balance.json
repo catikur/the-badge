@@ -1,0 +1,30 @@
+{
+  "surum": 1,
+  "aciklama": "FAZ 04 K5 transfer pazari katsayilari. Degerleme ve pazarlik esikleri; config_hash ICI (sezon icinde donuk). GDD 17 FAZ 04 'Valuation algoritmasi + negotiation logic'.",
+  "degerleme": {
+    "tabanTl": 250000,
+    "gucUsteli": 3.2,
+    "gucOlcek": 40.0,
+    "potansiyelPrimOran": 0.9,
+    "zirveYas": 27,
+    "gencPrimYilBasina": 0.045,
+    "yasliCezaYilBasina": 0.075,
+    "yasTabanCarpan": 0.25,
+    "sozlesmeTamYilHafta": 52,
+    "sozlesmeBitisTabanOran": 0.35,
+    "tavanTl": 500000000
+  },
+  "pazarlik": {
+    "kabulEsigiOran": 0.95,
+    "redEsigiOran": 0.55,
+    "karsiTeklifHedefOran": 1.12,
+    "kisilikSalinimOran": 0.08,
+    "maasTalepOran": 0.021,
+    "maxTur": 4,
+    "teklifGecerlilikHafta": 2
+  },
+  "fesih": {
+    "kalanHaftaCarpani": 0.6,
+    "asgariTl": 50000
+  }
+}

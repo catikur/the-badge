@@ -21,9 +21,10 @@ namespace TheBadge.World
             int talimatYuva = st.Oyuncular.Length > 0 && st.Oyuncular[0].Talimatlar != null
                               ? st.Oyuncular[0].Talimatlar.Length : 0;
             var b = new Buf(160 + st.Presetler.Length * 16
-                            + st.Oyuncular.Length * (52 + talimatYuva * 2) + st.Club.InsaatSlot.Length * 24
+                            + st.Oyuncular.Length * (64 + talimatYuva * 2) + st.Club.InsaatSlot.Length * 24
                             + st.Club.Krediler.Length * 20 + st.Club.TesisTier.Length
                             + st.Club.SponsorTeklifleri.Length * 20
+                            + st.Club.TransferTeklifleri.Length * 40
                             + (st.Fiyat.BiletKurus.Length + st.Fiyat.BufeKurus.Length
                                + st.Fiyat.MagazaKurus.Length + 1) * 4);
 
@@ -68,9 +69,20 @@ namespace TheBadge.World
                 b.I32(p.PlayerId); b.I64(p.ClubId); b.I64(p.HaftalikMaasTl);
                 b.U16(p.SozlesmeKalanHafta); b.U8(p.Moral); b.U8(p.Kondisyon); b.U8(p.SakatlikHafta);
                 b.U8(p.RolId); b.I32(p.AnchorXmm); b.I32(p.AnchorYmm); b.U8(p.ListedeMi ? (byte)1 : (byte)0);
+                b.U8(p.Guc); b.U8(p.Potansiyel); b.U8(p.Yas); b.I64(p.IstenenBedelTl);
                 b.I32(p.Talimatlar.Length);
                 for (int k = 0; k < p.Talimatlar.Length; k++)
                 { b.U8(p.Talimatlar[k].TalimatId); b.U8(p.Talimatlar[k].Deger); }
+            }
+
+            b.I32(st.Club.TransferTeklifleri.Length);
+            for (int i = 0; i < st.Club.TransferTeklifleri.Length; i++)
+            {
+                var to = st.Club.TransferTeklifleri[i];
+                b.I32(to.TeklifId); b.I32(to.OyuncuId); b.I64(to.TeklifEdenClubId);
+                b.I64(to.BedelTl); b.I64(to.HaftalikMaasTl);
+                b.U16(to.SonGecerlilikSezon); b.U16(to.SonGecerlilikHafta);
+                b.U8(to.SiraTeklifEdende ? (byte)1 : (byte)0); b.U8(to.TurSayisi);
             }
 
             b.I32(st.Club.SponsorTeklifleri.Length);

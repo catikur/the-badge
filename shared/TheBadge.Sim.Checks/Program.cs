@@ -2669,6 +2669,20 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             ("TacticPreset.Hat",              s => s.Presetler[0].Hat += 1),
             ("Instruction.TalimatId",         s => s.Oyuncular[1].Talimatlar[0].TalimatId += 1),
             ("Instruction.Deger",             s => s.Oyuncular[0].Talimatlar[0].Deger += 1),
+            ("PlayerState.Guc",               s => s.Oyuncular[0].Guc += 1),
+            ("PlayerState.Potansiyel",        s => s.Oyuncular[0].Potansiyel += 1),
+            ("PlayerState.Yas",               s => s.Oyuncular[0].Yas += 1),
+            ("PlayerState.IstenenBedelTl",    s => s.Oyuncular[0].IstenenBedelTl += 1),
+            ("ClubState.TransferTeklifleri",  s => s.Club.TransferTeklifleri[0].TeklifId += 1),
+            ("TransferOffer.TeklifId",        s => s.Club.TransferTeklifleri[1].TeklifId += 1),
+            ("TransferOffer.OyuncuId",        s => s.Club.TransferTeklifleri[0].OyuncuId += 1),
+            ("TransferOffer.TeklifEdenClubId",s => s.Club.TransferTeklifleri[0].TeklifEdenClubId += 1),
+            ("TransferOffer.BedelTl",         s => s.Club.TransferTeklifleri[0].BedelTl += 1),
+            ("TransferOffer.HaftalikMaasTl",  s => s.Club.TransferTeklifleri[0].HaftalikMaasTl += 1),
+            ("TransferOffer.SonGecerlilikSezon", s => s.Club.TransferTeklifleri[0].SonGecerlilikSezon += 1),
+            ("TransferOffer.SonGecerlilikHafta", s => s.Club.TransferTeklifleri[0].SonGecerlilikHafta += 1),
+            ("TransferOffer.SiraTeklifEdende",s => s.Club.TransferTeklifleri[0].SiraTeklifEdende = !s.Club.TransferTeklifleri[0].SiraTeklifEdende),
+            ("TransferOffer.TurSayisi",       s => s.Club.TransferTeklifleri[0].TurSayisi += 1),
         };
 
         // Beklenen küme: kalıcı durum tiplerinin TÜM public alanları (yansıma).
@@ -2680,7 +2694,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                                   typeof(TheBadge.World.PricingState), typeof(TheBadge.World.Construction),
                                   typeof(TheBadge.World.Loan), typeof(TheBadge.World.SponsorOffer),
                                   typeof(TheBadge.World.TacticState), typeof(TheBadge.World.TacticPreset),
-                                  typeof(TheBadge.World.Instruction) })
+                                  typeof(TheBadge.World.Instruction), typeof(TheBadge.World.TransferOffer) })
             foreach (var f in t.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
             {
                 // Alt nesne referansları (Club/Oyuncular/Takvim/Fiyat) kendileri alan değil, KAPSAYICIdır
@@ -2707,6 +2721,14 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         taban.Presetler[1] = new TheBadge.World.TacticPreset { Slot = 2, Ad = "ikinci", Mentalite = 44, Tempo = 45, Pres = 46, Hat = 47 };
         taban.Oyuncular[0].Talimatlar[0] = new TheBadge.World.Instruction { TalimatId = 3, Deger = 2 };
         taban.Oyuncular[1].Talimatlar[0] = new TheBadge.World.Instruction { TalimatId = 4, Deger = 5 };
+        taban.Club.TransferTeklifleri[0] = new TheBadge.World.TransferOffer { TeklifId = 5, OyuncuId = 3,
+            TeklifEdenClubId = 900, BedelTl = 1_000_000, HaftalikMaasTl = 50_000,
+            SonGecerlilikSezon = 1, SonGecerlilikHafta = 9, SiraTeklifEdende = false, TurSayisi = 1 };
+        taban.Club.TransferTeklifleri[1] = new TheBadge.World.TransferOffer { TeklifId = 6, OyuncuId = 4,
+            TeklifEdenClubId = 901, BedelTl = 2_000_000, HaftalikMaasTl = 60_000,
+            SonGecerlilikSezon = 1, SonGecerlilikHafta = 9, SiraTeklifEdende = true, TurSayisi = 2 };
+        taban.Oyuncular[0].Guc = 70; taban.Oyuncular[0].Potansiyel = 80; taban.Oyuncular[0].Yas = 24;
+        taban.Oyuncular[0].IstenenBedelTl = 3_000_000;
         TheBadge.World.GameState Kur2()
         {
             var g = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
@@ -2717,6 +2739,12 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             g.Presetler[1] = taban.Presetler[1];
             g.Oyuncular[0].Talimatlar[0] = taban.Oyuncular[0].Talimatlar[0];
             g.Oyuncular[1].Talimatlar[0] = taban.Oyuncular[1].Talimatlar[0];
+            g.Club.TransferTeklifleri[0] = taban.Club.TransferTeklifleri[0];
+            g.Club.TransferTeklifleri[1] = taban.Club.TransferTeklifleri[1];
+            g.Oyuncular[0].Guc = taban.Oyuncular[0].Guc;
+            g.Oyuncular[0].Potansiyel = taban.Oyuncular[0].Potansiyel;
+            g.Oyuncular[0].Yas = taban.Oyuncular[0].Yas;
+            g.Oyuncular[0].IstenenBedelTl = taban.Oyuncular[0].IstenenBedelTl;
             return g;
         }
         ulong h0 = TheBadge.World.WorldHash.Compute(Kur2());
@@ -4012,6 +4040,536 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
 
         if (hata.Length > 0) failures += Fail("K4IncelemeBulgulari", hata);
         else Pass($"K4IncelemeBulgulari(4 bulgu: maç başı hak tazeleniyor · tavan motorla tek kaynak ({TheBadge.Sim.Match.MatchEngine.MaxSubs}) · maç komutu işlemin içinde · tekdüze talimat şeridi zorunlu)");
+    }
+}
+
+// ============================================================================================
+// 29) FAZ 04 K5 — TRANSFER PAZARI (5 aksiyon + değerleme + pazarlık)
+// ============================================================================================
+{
+    // Bölüm 28'in değişkenleri kendi bloğunda kaldı; bu bölüm KENDİ kurulumunu yapar.
+    var k5Opts = new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true };
+    string k5BalDir = System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json"));
+    var k4Rules = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.WorldRules>(
+        System.IO.File.ReadAllText(System.IO.Path.Combine(k5BalDir, "world.balance.json")), k5Opts);
+    k4Rules.Validate();
+    var k4Eco = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.EconomyBalance>(
+        System.IO.File.ReadAllText(System.IO.Path.Combine(k5BalDir, "economy.balance.json")), k5Opts);
+    var k4Bands = new TheBadge.Checks.TestBands();
+    var k4RlCfg = new Dictionary<RateClass, RateLimitCfg[]>();
+    {
+        using var bd = System.Text.Json.JsonDocument.Parse(
+            System.IO.File.ReadAllText(System.IO.Path.Combine(k5BalDir, "command.bands.json")));
+        foreach (var b in bd.RootElement.GetProperty("bantlar").EnumerateObject())
+            k4Bands.Add(b.Name, b.Value[0].GetDouble(), b.Value[1].GetDouble());
+        foreach (var r in bd.RootElement.GetProperty("rateLimit").EnumerateObject())
+        {
+            var list = new List<RateLimitCfg>();
+            foreach (var w in r.Value.EnumerateArray()) list.Add(new RateLimitCfg(w[0].GetInt32(), w[1].GetInt64() * 1000));
+            k4RlCfg[(RateClass)Enum.Parse(typeof(RateClass), r.Name)] = list.ToArray();
+        }
+    }
+    const long K4Host = 1_700_000_000_000L, K4User = 42L;
+    CommandEnvelope K4Env(string act, long user = K4User, uint tick = 0, Guid? id = null)
+        => new CommandEnvelope
+        {
+            CommandId = id ?? Guid.NewGuid(), CatalogVersion = Catalog.Version, Source = CommandSource.UI,
+            ActionType = act, IssuedAtUnixMs = K4Host, MatchTick = tick, UserId = user,
+            SaveSlotId = 1, TeamIdx = 0, PayloadJson = new byte[0]
+        };
+
+    var k5Tb = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.TransferBalance>(
+        System.IO.File.ReadAllText(System.IO.Path.Combine(k5BalDir, "transfer.balance.json")), k5Opts);
+    k5Tb.Validate();
+    const ulong K5Seed = 0x7A5F3E11UL;
+
+    (TheBadge.World.WorldStore depo, TheBadge.World.WorldContext ctx, TheBadge.World.WorldExecutor exec,
+     TheBadge.CommandBus.CommandBus bus) K5Kur(bool pencereAcik = true)
+    {
+        var g = TheBadge.Checks.EkonomiFixture.Kur(k4Rules, k4Eco, 500L, K4User);
+        g.Takvim.Pencere = pencereAcik ? TheBadge.World.TransferWindow.Yaz : TheBadge.World.TransferWindow.Kapali;
+        // Yabancı ve serbest oyuncu: sahiplik ÜÇ ilişkisini de ölçebilmek için.
+        g.Oyuncular[0].ClubId = 900L;    // başka kulüp
+        g.Oyuncular[1].ClubId = 0L;      // serbest
+        var depo = new TheBadge.World.WorldStore(g);
+        var ctx = new TheBadge.World.WorldContext(depo, k4Rules) { Active = TheBadge.CommandBus.Context.Hub };
+        var exec = new TheBadge.World.WorldExecutor(depo, ctx);
+        TheBadge.World.TransferActions.Baglan(ctx, exec, k4Rules, k5Tb, K5Seed);
+        var bus = new TheBadge.CommandBus.CommandBus(k4Bands, ctx,
+            new SlidingWindowRateLimiter(k4RlCfg, 3, 300_000), new IdempotencyStore());
+        return (depo, ctx, exec, bus);
+    }
+
+    // Verilen durumla kurulum — kadro tavanı gibi senaryolar standart fikstüre SIĞMIYOR
+    // (fikstürde 26 oyuncu var, kadroMax 32).
+    (TheBadge.World.WorldStore depo, TheBadge.World.WorldContext ctx, TheBadge.World.WorldExecutor exec,
+     TheBadge.CommandBus.CommandBus bus) K5KurOzel(TheBadge.World.GameState g)
+    {
+        g.Takvim.Pencere = TheBadge.World.TransferWindow.Yaz;
+        var depo = new TheBadge.World.WorldStore(g);
+        var ctx = new TheBadge.World.WorldContext(depo, k4Rules) { Active = TheBadge.CommandBus.Context.Hub };
+        var exec = new TheBadge.World.WorldExecutor(depo, ctx);
+        TheBadge.World.TransferActions.Baglan(ctx, exec, k4Rules, k5Tb, K5Seed);
+        var bus = new TheBadge.CommandBus.CommandBus(k4Bands, ctx,
+            new SlidingWindowRateLimiter(k4RlCfg, 3, 300_000), new IdempotencyStore());
+        return (depo, ctx, exec, bus);
+    }
+
+    // 29a) BAĞLANTI
+    {
+        var w = K5Kur();
+        int kalan = 0;
+        foreach (var a in w.exec.UnboundActions()) if (a.StartsWith("transfer.", StringComparison.Ordinal)) kalan++;
+        Console.WriteLine($"[info] K5 bağlantı: bağlanmamış {w.exec.UnboundActions().Length}/{Catalog.Count} (transfer: {kalan})");
+        if (kalan != 0) failures += Fail("K5Baglanti", $"{kalan} transfer aksiyonu bağlanmamış");
+        else Pass($"K5Baglanti(5 transfer aksiyonu bağlı · kalan {w.exec.UnboundActions().Length} aksiyon K6-K7'nin işi)");
+    }
+
+    // 29b) DEĞERLEME MONOTONLUĞU — sözleşmedeki iddia bu: güç ↑ → değer ↑ (kesin),
+    //      potansiyel ↑ ve sözleşme kalanı ↑ → değer azalMAZ, yaş zirveden uzaklaşınca ↓.
+    {
+        string hata = "";
+        TheBadge.World.PlayerState Oyuncu(byte guc, byte pot, byte yas, ushort hafta)
+            => new TheBadge.World.PlayerState { PlayerId = 1, Guc = guc, Potansiyel = pot, Yas = yas,
+                                                SozlesmeKalanHafta = hafta, Talimatlar = new TheBadge.World.Instruction[4] };
+        long onceki = -1;
+        for (byte g = 40; g <= 95; g += 5)
+        {
+            long d = TheBadge.World.Valuation.PiyasaDegeri(Oyuncu(g, g, 27, 104), k5Tb);
+            if (d <= onceki) hata += $"güç {g} değeri artmadı({d}≤{onceki}) ";
+            onceki = d;
+        }
+        long potDusuk = TheBadge.World.Valuation.PiyasaDegeri(Oyuncu(70, 70, 24, 104), k5Tb);
+        long potYuksek = TheBadge.World.Valuation.PiyasaDegeri(Oyuncu(70, 90, 24, 104), k5Tb);
+        if (potYuksek <= potDusuk) hata += "potansiyel primi yok ";
+        long sozKisa = TheBadge.World.Valuation.PiyasaDegeri(Oyuncu(70, 70, 27, 4), k5Tb);
+        long sozUzun = TheBadge.World.Valuation.PiyasaDegeri(Oyuncu(70, 70, 27, 156), k5Tb);
+        if (sozKisa >= sozUzun) hata += "sözleşme kalanı değeri etkilemiyor ";
+        long genc = TheBadge.World.Valuation.PiyasaDegeri(Oyuncu(70, 70, 22, 104), k5Tb);
+        long yasli = TheBadge.World.Valuation.PiyasaDegeri(Oyuncu(70, 70, 35, 104), k5Tb);
+        if (genc <= yasli) hata += "yaş eğrisi ters ";
+        // Tavan: bant tavanını aşmaz
+        long tavanTest = TheBadge.World.Valuation.PiyasaDegeri(Oyuncu(100, 100, 20, 520), k5Tb);
+        if (tavanTest > k5Tb.degerleme.tavanTl) hata += $"tavan aşıldı({tavanTest}) ";
+        Console.WriteLine($"[info] K5 değerleme (₺M): g40 {TheBadge.World.Valuation.PiyasaDegeri(Oyuncu(40,40,27,104), k5Tb)/1e6:F1} · g70 {potDusuk/1e6:F1} · g90 {TheBadge.World.Valuation.PiyasaDegeri(Oyuncu(90,90,27,104), k5Tb)/1e6:F1} · 22 yaş {genc/1e6:F1} · 35 yaş {yasli/1e6:F1}");
+        if (hata.Length > 0) failures += Fail("K5DegerlemeMonotonlugu", hata);
+        else Pass("K5DegerlemeMonotonlugu(güç kesin artan · potansiyel primi · sözleşme ve yaş eğrisi · tavan tutuyor)");
+    }
+
+    // 29c) PAZARLIK DETERMİNİZMİ + eşik davranışı
+    {
+        string hata = "";
+        var p = new TheBadge.World.PlayerState { PlayerId = 7, Guc = 75, Potansiyel = 80, Yas = 25,
+                                                 SozlesmeKalanHafta = 104, Talimatlar = new TheBadge.World.Instruction[4] };
+        long deger = TheBadge.World.Valuation.PiyasaDegeri(p, k5Tb);
+        // Aynı girdi = aynı karar, 100 tekrar
+        var ilk = TheBadge.World.Valuation.Karar(p, deger, 1, k5Tb, K5Seed, out long ilkKarsi);
+        for (int n = 0; n < 100; n++)
+        {
+            var k = TheBadge.World.Valuation.Karar(p, deger, 1, k5Tb, K5Seed, out long kk);
+            if (k != ilk || kk != ilkKarsi) { hata += "aynı girdi farklı karar "; break; }
+        }
+        // Farklı seed AYRIŞIYOR (salınım gerçekten çalışıyor)
+        bool ayristi = false;
+        for (ulong sd = 1; sd < 40 && !ayristi; sd++)
+        {
+            TheBadge.World.Valuation.Karar(p, deger, 1, k5Tb, sd, out long kk);
+            if (kk != ilkKarsi) ayristi = true;
+        }
+        if (!ayristi) hata += "seed değişimi pazarlığı oynatmıyor ";
+        // Cömert teklif KABUL, sefil teklif RET
+        if (TheBadge.World.Valuation.Karar(p, deger * 2, 1, k5Tb, K5Seed, out _) != TheBadge.World.PazarlikKarari.Kabul)
+            hata += "cömert teklif kabul edilmedi ";
+        if (TheBadge.World.Valuation.Karar(p, deger / 10, 1, k5Tb, K5Seed, out _) != TheBadge.World.PazarlikKarari.Ret)
+            hata += "sefil teklif reddedilmedi ";
+        // Orta teklif KARŞI TEKLİF, ve karşı teklif TEKLİFTEN düşük olamaz
+        var orta = TheBadge.World.Valuation.Karar(p, (long)(deger * 0.75), 1, k5Tb, K5Seed, out long ortaKarsi);
+        if (orta != TheBadge.World.PazarlikKarari.KarsiTeklif) hata += $"orta teklif pazarlığa girmedi({orta}) ";
+        else if (ortaKarsi < (long)(deger * 0.75)) hata += "karşı teklif tekliften düşük ";
+        // Tur tavanı: son turda pazarlık YOK
+        if (TheBadge.World.Valuation.Karar(p, (long)(deger * 0.75), (byte)k5Tb.pazarlik.maxTur, k5Tb, K5Seed, out _) != TheBadge.World.PazarlikKarari.Ret)
+            hata += "tur tavanında pazarlık sürüyor ";
+        // İstenen bedel HESAPLANAN değerin YERİNE geçer
+        var listeli = p; listeli.IstenenBedelTl = deger * 3;
+        if (TheBadge.World.Valuation.Karar(listeli, deger, 1, k5Tb, K5Seed, out _) == TheBadge.World.PazarlikKarari.Kabul)
+            hata += "istenen bedel yok sayıldı ";
+        if (hata.Length > 0) failures += Fail("K5PazarlikDeterminizmi", hata);
+        else Pass($"K5PazarlikDeterminizmi(100 tekrar bit-eşit · seed ayrıştırıyor · kabul/ret/karşı eşikleri · tur tavanı · istenen bedel önceliği)");
+    }
+
+    // 29d) MUTLU YOL — 5 aksiyon kalıcı durumu doğru düzenliyor
+    {
+        string hata = "";
+        // (1) listeleme
+        {
+            var w = K5Kur();
+            int pid = w.depo.State.Oyuncular[5].PlayerId;
+            var o = w.bus.Submit(K4Env("transfer.list_player"),
+                new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)pid).Set("istenenBedel", 12_000_000d), w.exec, K4Host, K4User);
+            if (!o.Ok) hata += $"listeleme reddedildi({o.Reason}/{o.Detail}) ";
+            int i = w.depo.State.IndexOfPlayer(pid);
+            if (!w.depo.State.Oyuncular[i].ListedeMi) hata += "listede işaretlenmedi ";
+            if (w.depo.State.Oyuncular[i].IstenenBedelTl != 12_000_000) hata += "istenen bedel yazılmadı ";
+        }
+        // (2) teklif → (3) karşı teklif → kabul
+        {
+            var w = K5Kur();
+            int hedef = w.depo.State.Oyuncular[0].PlayerId;   // yabancı kulüpte
+            var o1 = w.bus.Submit(K4Env("transfer.propose_offer"),
+                new TheBadge.Checks.TestPayload().Set("hedefOyuncuId", (long)hedef).Set("bedel", 3_000_000d).Set("maas", 60_000d),
+                w.exec, K4Host, K4User);
+            if (!o1.Ok) hata += $"teklif reddedildi({o1.Reason}/{o1.Detail}) ";
+            var t = w.depo.State.Club.TransferTeklifleri[0];
+            if (t.TeklifId == 0) hata += "teklif yuvaya yazılmadı ";
+            if (t.SiraTeklifEdende) hata += "sıra yanlış tarafta ";
+            if (t.TurSayisi != 1) hata += "tur sayısı yanlış ";
+            // Sıra karşı tarafta: teklif eden cevaplayamaz
+            var reddedilmeli = w.bus.Submit(K4Env("transfer.respond_offer"),
+                new TheBadge.Checks.TestPayload().Set("teklifId", (long)t.TeklifId).Set("cevap", "kabul"),
+                w.exec, K4Host, K4User);
+            if (reddedilmeli.Ok) hata += "sıra karşıdayken cevap kabul edildi ";
+        }
+        // (4) serbest oyuncu imzası
+        {
+            var w = K5Kur();
+            int serbest = w.depo.State.Oyuncular[1].PlayerId;
+            long maasOnce = w.depo.State.Club.HaftalikMaasGiderTl;
+            var o = w.bus.Submit(K4Env("transfer.sign_free_agent"),
+                new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)serbest).Set("maas", 55_000d).Set("sureYil", 3L),
+                w.exec, K4Host, K4User);
+            if (!o.Ok) hata += $"serbest imza reddedildi({o.Reason}/{o.Detail}) ";
+            int i = w.depo.State.IndexOfPlayer(serbest);
+            if (w.depo.State.Oyuncular[i].ClubId != 500L) hata += "serbest oyuncu kulübe katılmadı ";
+            if (w.depo.State.Oyuncular[i].SozlesmeKalanHafta != 156) hata += "sözleşme süresi yanlış ";
+            if (w.depo.State.Club.HaftalikMaasGiderTl != maasOnce + 55_000) hata += "maaş gideri güncellenmedi ";
+        }
+        // (5) fesih — kasadan düşer, oyuncu serbest kalır, maaş yükü iner
+        {
+            var w = K5Kur();
+            int pid = w.depo.State.Oyuncular[6].PlayerId;
+            int i0 = w.depo.State.IndexOfPlayer(pid);
+            long bedel = TheBadge.World.Valuation.FesihBedeli(w.depo.State.Oyuncular[i0], k5Tb);
+            long kasaOnce = w.depo.State.Club.KasaTl, maasOnce = w.depo.State.Club.HaftalikMaasGiderTl;
+            long oyuncuMaas = w.depo.State.Oyuncular[i0].HaftalikMaasTl;
+            var o = w.bus.Submit(K4Env("transfer.release_player"),
+                new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)pid), w.exec, K4Host, K4User);
+            if (!o.Ok) hata += $"fesih reddedildi({o.Reason}/{o.Detail}) ";
+            int i = w.depo.State.IndexOfPlayer(pid);
+            if (w.depo.State.Oyuncular[i].ClubId != 0) hata += "oyuncu serbest kalmadı ";
+            if (w.depo.State.Club.KasaTl != kasaOnce - bedel) hata += "fesih bedeli kasadan düşmedi ";
+            if (w.depo.State.Club.HaftalikMaasGiderTl != maasOnce - oyuncuMaas) hata += "maaş yükü inmedi ";
+        }
+        if (hata.Length > 0) failures += Fail("K5MutluYol", hata);
+        else Pass("K5MutluYol(5 aksiyon: listeleme · teklif ve sıra · serbest imza · fesih bedeli ve maaş yükü)");
+    }
+
+    // 29e) SAHİPLİK ÜÇLÜSÜ + KADRO SINIRLARI — K2'nin kullanılmayan kadroMax'ı burada gerçek
+    {
+        string hata = "";
+        var w = K5Kur();
+        var st = w.depo.State;
+        // Kendi oyuncuna teklif YOK
+        var kendi = w.bus.Submit(K4Env("transfer.propose_offer"),
+            new TheBadge.Checks.TestPayload().Set("hedefOyuncuId", (long)st.Oyuncular[5].PlayerId).Set("bedel", 1_000_000d).Set("maas", 50_000d),
+            w.exec, K4Host, K4User);
+        // K2 sahiplik katmanı (`OwnerNeed.Yabanci`) hem kendi oyuncunu hem serbesti NotOwned ile
+        // eliyor — otorite ORASI. Bu kapı o sözleşmeyi ölçer, kendi kuralımın kopyasını değil.
+        if (kendi.Ok || kendi.Reason != RejectionReason.NotOwned) hata += $"kendi oyuncusuna teklif geçti({kendi.Reason}) ";
+        // Serbest oyuncuya TEKLİF yanlış kapı
+        var serbestTeklif = w.bus.Submit(K4Env("transfer.propose_offer"),
+            new TheBadge.Checks.TestPayload().Set("hedefOyuncuId", (long)st.Oyuncular[1].PlayerId).Set("bedel", 1_000_000d).Set("maas", 50_000d),
+            w.exec, K4Host, K4User);
+        if (serbestTeklif.Ok || serbestTeklif.Reason != RejectionReason.NotOwned) hata += $"serbest oyuncuya teklif geçti({serbestTeklif.Reason}) ";
+        // Başkasının oyuncusunu listeleyemezsin
+        var yabanciListe = w.bus.Submit(K4Env("transfer.list_player"),
+            new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)st.Oyuncular[0].PlayerId).Set("istenenBedel", 1_000_000d),
+            w.exec, K4Host, K4User);
+        if (yabanciListe.Ok || yabanciListe.Reason != RejectionReason.NotOwned) hata += $"yabancı oyuncu listelendi({yabanciListe.Reason}) ";
+
+        // KADRO TABANI (fesih yolu): OTORİTE K2'DİR — `WorldContext` (5b) `release_player` için
+        // tabanı zaten uyguluyor. Bu kapı o SÖZLEŞMEYİ ölçer; K5 tarafında ayrı bir taban kuralı
+        // YOKTUR (yazmıştım, ölü koddu, kaldırıldı).
+        // BÜTÇE BİLEREK SINIRSIZ: ilk yazımda kasa tükenmesi durdurucu oluyordu — kapı doğru
+        // sayıyı yanlış mekanizmayla elde ediyordu.
+        {
+            var w2 = K5Kur();
+            w2.depo.State.Club.KasaTl = 500_000_000_000L;
+            int red = 0, gecen = 0;
+            for (int n = 0; n < 40; n++)
+            {
+                int? aday = null;
+                for (int i = 0; i < w2.depo.State.Oyuncular.Length; i++)
+                    if (w2.depo.State.Oyuncular[i].ClubId == 500L) { aday = w2.depo.State.Oyuncular[i].PlayerId; break; }
+                if (aday == null) break;
+                var o = w2.bus.Submit(K4Env("transfer.release_player"),
+                    new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)aday.Value), w2.exec, K4Host, K4User);
+                if (o.Ok) gecen++;
+                else
+                {
+                    red++;
+                    // Kasa sınırsız: TEK meşru red sebebi kadro tabanıdır. `InsufficientFunds`
+                    // artık kabul EDİLMEZ — ederse kapı yanlış mekanizmayı ölçüyor demektir.
+                    if (o.Reason != RejectionReason.StateConflict) hata += $"fesih yanlış sebeple reddedildi({o.Reason}) ";
+                    break;
+                }
+            }
+            int kalanKadro = TheBadge.World.TransferActions.KadroSayisiPublic(w2.depo.State);
+            // TAM EŞİTLİK: taban çalışıyorsa kadro tabanda DURUR. ">=" yazmak, hiç durmayan
+            // bir kuralı da geçirirdi (kadro 0'a inseydi bile red sebebi başka olabilirdi).
+            if (kalanKadro != k4Rules.yapi.kadroMin) hata += $"kadro tabanda durmadı({kalanKadro}≠{k4Rules.yapi.kadroMin}) ";
+            if (red == 0) hata += "kadro tabanı hiç devreye girmedi ";
+            Console.WriteLine($"[info] K5 kadro tabanı: {gecen} fesih geçti, kadro {kalanKadro} (taban {k4Rules.yapi.kadroMin})");
+        }
+        if (hata.Length > 0) failures += Fail("K5SahiplikVeKadro", hata);
+        else Pass("K5SahiplikVeKadro(kendi/yabancı/serbest üç ilişki ayrı · kadro tabanı fesihi durduruyor)");
+    }
+
+    // 29g) PAZARLIK TAM DÖNGÜSÜ — kabul GERÇEKTEN transfer ediyor, ret GERÇEKTEN kapatıyor.
+    //      Bu kapı, kabul/ret eşlemesinin TERS kurulmasını yakalamak için var: `CevapEnum`
+    //      sırası {kabul, ret, ...} ile `PazarlikKarari` sırası {Ret, Kabul, ...} AYNI DEĞİL,
+    //      indeksi doğrudan enum'a cast etmek ikisini takas ediyordu (yazarken yapılan hata).
+    //      Sıra denetimini ölçmek transferin KENDİSİNİ ölçmez — o boşluk buradan kapanıyor.
+    {
+        string hata = "";
+        // Gelen teklif kur: 900 nolu kulüp BİZİM oyuncumuzu istiyor, top BİZDE.
+        (TheBadge.World.WorldStore depo, TheBadge.CommandBus.CommandBus bus, TheBadge.World.WorldExecutor exec, int pid, int tid)
+        GelenTeklif(long bedel = 8_000_000, long maas = 90_000)
+        {
+            var w = K5Kur();
+            int pid = w.depo.State.Oyuncular[7].PlayerId;
+            w.depo.State.Club.TransferTeklifleri[0] = new TheBadge.World.TransferOffer
+            {
+                TeklifId = 11, OyuncuId = pid, TeklifEdenClubId = 900L, BedelTl = bedel, HaftalikMaasTl = maas,
+                SonGecerlilikSezon = w.depo.State.Takvim.Sezon, SonGecerlilikHafta = (ushort)(w.depo.State.Takvim.Hafta + 2),
+                SiraTeklifEdende = false, TurSayisi = 1
+            };
+            return (w.depo, w.bus, w.exec, pid, 11);
+        }
+
+        // (1) KABUL → oyuncu gidiyor, kasa ARTIYOR, maaş yükü İNİYOR, yuva boşalıyor
+        {
+            var g = GelenTeklif();
+            long kasaOnce = g.depo.State.Club.KasaTl, maasOnce = g.depo.State.Club.HaftalikMaasGiderTl;
+            long oyuncuMaas = g.depo.State.Oyuncular[g.depo.State.IndexOfPlayer(g.pid)].HaftalikMaasTl;
+            var o = g.bus.Submit(K4Env("transfer.respond_offer"),
+                new TheBadge.Checks.TestPayload().Set("teklifId", (long)g.tid).Set("cevap", "kabul"),
+                g.exec, K4Host, K4User);
+            if (!o.Ok) hata += $"kabul reddedildi({o.Reason}/{o.Detail}) ";
+            int i = g.depo.State.IndexOfPlayer(g.pid);
+            if (g.depo.State.Oyuncular[i].ClubId != 900L) hata += $"KABUL oyuncuyu göndermedi(kulüp {g.depo.State.Oyuncular[i].ClubId}) ";
+            if (g.depo.State.Club.KasaTl != kasaOnce + 8_000_000) hata += "kabul bedeli kasaya girmedi ";
+            if (g.depo.State.Club.HaftalikMaasGiderTl != maasOnce - oyuncuMaas) hata += "kabulde maaş yükü inmedi ";
+            if (g.depo.State.Club.TransferTeklifleri[0].TeklifId != 0) hata += "kabulde yuva boşalmadı ";
+        }
+        // (2) RET → oyuncu KALIYOR, kasa DEĞİŞMİYOR, yuva boşalıyor
+        {
+            var g = GelenTeklif();
+            long kasaOnce = g.depo.State.Club.KasaTl;
+            var o = g.bus.Submit(K4Env("transfer.respond_offer"),
+                new TheBadge.Checks.TestPayload().Set("teklifId", (long)g.tid).Set("cevap", "ret"),
+                g.exec, K4Host, K4User);
+            if (!o.Ok) hata += $"ret reddedildi({o.Reason}/{o.Detail}) ";
+            int i = g.depo.State.IndexOfPlayer(g.pid);
+            if (g.depo.State.Oyuncular[i].ClubId != 500L) hata += $"RET oyuncuyu GÖNDERDİ(kulüp {g.depo.State.Oyuncular[i].ClubId}) ";
+            if (g.depo.State.Club.KasaTl != kasaOnce) hata += "rette kasa oynadı ";
+            if (g.depo.State.Club.TransferTeklifleri[0].TeklifId != 0) hata += "rette yuva boşalmadı ";
+        }
+        // (3) KARŞI TEKLİF → oyuncu kalıyor, sıra ÇEVRİLİYOR, tur ARTIYOR, bedel güncelleniyor
+        {
+            var g = GelenTeklif();
+            var o = g.bus.Submit(K4Env("transfer.respond_offer"),
+                new TheBadge.Checks.TestPayload().Set("teklifId", (long)g.tid).Set("cevap", "karsiTeklif").Set("karsiBedel", 12_000_000d),
+                g.exec, K4Host, K4User);
+            if (!o.Ok) hata += $"karşı teklif reddedildi({o.Reason}/{o.Detail}) ";
+            var t = g.depo.State.Club.TransferTeklifleri[0];
+            if (t.TeklifId != g.tid) hata += "karşı teklifte yuva kapandı ";
+            if (t.BedelTl != 12_000_000) hata += $"karşı bedel yazılmadı({t.BedelTl}) ";
+            if (!t.SiraTeklifEdende) hata += "sıra çevrilmedi ";
+            if (t.TurSayisi != 2) hata += $"tur artmadı({t.TurSayisi}) ";
+            int i = g.depo.State.IndexOfPlayer(g.pid);
+            if (g.depo.State.Oyuncular[i].ClubId != 500L) hata += "karşı teklif oyuncuyu gönderdi ";
+            // Sıra çevrildi: aynı taraf tekrar cevaplayamaz
+            var tekrar = g.bus.Submit(K4Env("transfer.respond_offer"),
+                new TheBadge.Checks.TestPayload().Set("teklifId", (long)g.tid).Set("cevap", "kabul"),
+                g.exec, K4Host, K4User);
+            if (tekrar.Ok) hata += "sıra çevrildikten sonra aynı taraf cevapladı ";
+        }
+        // (3b) ALIŞ YOLU — biz teklif ettik, karşı teklif geldi, BİZ kabul ediyoruz.
+        //      Satış yolunun aynadaki hâli ve muhasebesi FARKLI: alırken kasa AZALIR ve maaş
+        //      yükü TAM maaş kadar ARTAR (fark kadar değil — oyuncu bizim değildi, eski maaşı
+        //      başka kulübün gider kaleminde duruyordu).
+        {
+            var w = K5Kur();
+            int hedef = w.depo.State.Oyuncular[0].PlayerId;      // 900 nolu kulüpte
+            long eskiMaas = 40_000;
+            w.depo.State.Oyuncular[0].HaftalikMaasTl = eskiMaas;
+            // Biz teklif ettik, onlar karşı teklif verdi → sıra BİZDE (teklif eden biziz).
+            w.depo.State.Club.TransferTeklifleri[0] = new TheBadge.World.TransferOffer
+            {
+                TeklifId = 21, OyuncuId = hedef, TeklifEdenClubId = 500L,
+                BedelTl = 2_000_000, HaftalikMaasTl = 120_000,
+                SonGecerlilikSezon = w.depo.State.Takvim.Sezon, SonGecerlilikHafta = (ushort)(w.depo.State.Takvim.Hafta + 2),
+                SiraTeklifEdende = true, TurSayisi = 2
+            };
+            long kasaOnce = w.depo.State.Club.KasaTl, maasOnce = w.depo.State.Club.HaftalikMaasGiderTl;
+            int kadroOnce = TheBadge.World.TransferActions.KadroSayisiPublic(w.depo.State);
+            var o = w.bus.Submit(K4Env("transfer.respond_offer"),
+                new TheBadge.Checks.TestPayload().Set("teklifId", 21L).Set("cevap", "kabul"),
+                w.exec, K4Host, K4User);
+            if (!o.Ok) hata += $"alış kabulü reddedildi({o.Reason}/{o.Detail}) ";
+            int i = w.depo.State.IndexOfPlayer(hedef);
+            if (w.depo.State.Oyuncular[i].ClubId != 500L) hata += $"alışta oyuncu gelmedi(kulüp {w.depo.State.Oyuncular[i].ClubId}) ";
+            if (w.depo.State.Club.KasaTl != kasaOnce - 2_000_000) hata += "alış bedeli kasadan düşmedi ";
+            if (w.depo.State.Club.HaftalikMaasGiderTl != maasOnce + 120_000)
+                hata += $"alışta maaş yükü TAM maaş kadar artmadı({w.depo.State.Club.HaftalikMaasGiderTl - maasOnce}≠120000) ";
+            if (w.depo.State.Oyuncular[i].HaftalikMaasTl != 120_000) hata += "yeni maaş yazılmadı ";
+            if (TheBadge.World.TransferActions.KadroSayisiPublic(w.depo.State) != kadroOnce + 1) hata += "kadro büyümedi ";
+        }
+        // (3c) KABUL YOLUNUN KADRO SINIRLARI — bu sınırlar K5'in KENDİ işidir. K2 katmanı
+        //      `sign_free_agent` (tavan, 5a) ve `release_player` (taban, 5b) için sınır koyuyor
+        //      ama `respond_offer` için KOYMUYOR: teklif kabulü de kadroyu büyütür/küçültür.
+        //      Bu boşluk, kadro sınırlarını fesih döngüsüyle ölçerken fark edildi — o döngüyü
+        //      durduran K2'ydi, benim kuralım değil (diş ölçümü gösterdi).
+        {
+            // Taban: kadro tam tabandayken SATIŞ kabulü reddedilir
+            var w = K5Kur();
+            w.depo.State.Club.KasaTl = 500_000_000_000L;
+            int hedef = -1;
+            for (int i = 0; i < w.depo.State.Oyuncular.Length && TheBadge.World.TransferActions.KadroSayisiPublic(w.depo.State) > k4Rules.yapi.kadroMin; i++)
+                if (w.depo.State.Oyuncular[i].ClubId == 500L) { w.depo.State.Oyuncular[i].ClubId = 901L; }
+            for (int i = 0; i < w.depo.State.Oyuncular.Length; i++)
+                if (w.depo.State.Oyuncular[i].ClubId == 500L) { hedef = w.depo.State.Oyuncular[i].PlayerId; break; }
+            if (TheBadge.World.TransferActions.KadroSayisiPublic(w.depo.State) != k4Rules.yapi.kadroMin)
+                hata += "fikstür tabana ayarlanamadı ";
+            w.depo.State.Club.TransferTeklifleri[0] = new TheBadge.World.TransferOffer
+            {
+                TeklifId = 31, OyuncuId = hedef, TeklifEdenClubId = 900L, BedelTl = 5_000_000, HaftalikMaasTl = 80_000,
+                SonGecerlilikSezon = w.depo.State.Takvim.Sezon, SonGecerlilikHafta = (ushort)(w.depo.State.Takvim.Hafta + 2),
+                SiraTeklifEdende = false, TurSayisi = 1
+            };
+            var o = w.bus.Submit(K4Env("transfer.respond_offer"),
+                new TheBadge.Checks.TestPayload().Set("teklifId", 31L).Set("cevap", "kabul"), w.exec, K4Host, K4User);
+            if (o.Ok || o.Reason != RejectionReason.StateConflict)
+                hata += $"tabandayken satış kabulü geçti({o.Reason}) ";
+            if (TheBadge.World.TransferActions.KadroSayisiPublic(w.depo.State) != k4Rules.yapi.kadroMin)
+                hata += "reddedilen satış kadroyu oynattı ";
+        }
+        {
+            // Tavan: kadro tam tavandayken ALIŞ kabulü reddedilir. Standart fikstür 26 oyunculu,
+            // kadroMax 32 — tavana ULAŞILAMIYOR, o yüzden bu senaryo kendi fikstürünü kurar.
+            var g = TheBadge.Checks.WorldFixture.Kur(k4Rules, 500L, K4User, k4Rules.yapi.kadroMax, 1, 0, 500_000_000_000L);
+            var w = K5KurOzel(g);
+            int hedef = -1;
+            for (int i = 0; i < g.Oyuncular.Length; i++)
+                if (g.Oyuncular[i].ClubId != 500L) { hedef = g.Oyuncular[i].PlayerId; break; }
+            if (TheBadge.World.TransferActions.KadroSayisiPublic(g) != k4Rules.yapi.kadroMax)
+                hata += $"tavan fikstürü kurulamadı({TheBadge.World.TransferActions.KadroSayisiPublic(g)}) ";
+            g.Club.TransferTeklifleri[0] = new TheBadge.World.TransferOffer
+            {
+                TeklifId = 32, OyuncuId = hedef, TeklifEdenClubId = 500L, BedelTl = 5_000_000, HaftalikMaasTl = 80_000,
+                SonGecerlilikSezon = g.Takvim.Sezon, SonGecerlilikHafta = (ushort)(g.Takvim.Hafta + 2),
+                SiraTeklifEdende = true, TurSayisi = 2
+            };
+            var o = w.bus.Submit(K4Env("transfer.respond_offer"),
+                new TheBadge.Checks.TestPayload().Set("teklifId", 32L).Set("cevap", "kabul"), w.exec, K4Host, K4User);
+            if (o.Ok || o.Reason != RejectionReason.StateConflict)
+                hata += $"tavandayken alış kabulü geçti({o.Reason}) ";
+            if (TheBadge.World.TransferActions.KadroSayisiPublic(g) != k4Rules.yapi.kadroMax)
+                hata += "reddedilen alış kadroyu oynattı ";
+        }
+        // (4) TUR TAVANI — pazarlık sonsuz sürmez
+        {
+            var g = GelenTeklif();
+            g.depo.State.Club.TransferTeklifleri[0].TurSayisi = (byte)k5Tb.pazarlik.maxTur;
+            var o = g.bus.Submit(K4Env("transfer.respond_offer"),
+                new TheBadge.Checks.TestPayload().Set("teklifId", (long)g.tid).Set("cevap", "karsiTeklif").Set("karsiBedel", 9_000_000d),
+                g.exec, K4Host, K4User);
+            if (o.Ok || o.Reason != RejectionReason.StateConflict) hata += $"tur tavanı tutmadı({o.Reason}) ";
+        }
+        // (5) SÜRESİ DOLMUŞ teklif cevaplanamaz
+        {
+            var g = GelenTeklif();
+            g.depo.State.Club.TransferTeklifleri[0].SonGecerlilikHafta = (ushort)(g.depo.State.Takvim.Hafta - 1);
+            var o = g.bus.Submit(K4Env("transfer.respond_offer"),
+                new TheBadge.Checks.TestPayload().Set("teklifId", (long)g.tid).Set("cevap", "kabul"),
+                g.exec, K4Host, K4User);
+            if (o.Ok || o.Reason != RejectionReason.StateConflict) hata += $"süresi dolmuş teklif cevaplandı({o.Reason}) ";
+        }
+        if (hata.Length > 0) failures += Fail("K5PazarlikDongusu", hata);
+        else Pass("K5PazarlikDongusu(satış ve alış yolları · kabul yolunun kadro sınırları K5'in kendi işi · ret · sıra · tur tavanı · süre dolumu)");
+    }
+
+    // 29f) CB 10.1 NEGATİF MATRİSİ — 5 aksiyon × 4 senaryo
+    {
+        string hata = ""; int senaryo = 0;
+        void Bekle(string ad, RejectionReason bekl, TheBadge.CommandBus.CommandOutcome o)
+        {
+            senaryo++;
+            if (o.Ok) hata += $"{ad}: kabul edildi ";
+            else if (o.Reason != bekl) hata += $"{ad}: {o.Reason}≠{bekl} ";
+        }
+        // (a) ŞEMA — zorunlu alan eksik
+        foreach (var (act, pl) in new (string, TheBadge.Checks.TestPayload)[]
+        {
+            ("transfer.list_player", new TheBadge.Checks.TestPayload()),
+            ("transfer.propose_offer", new TheBadge.Checks.TestPayload().Set("bedel", 1d)),
+            ("transfer.respond_offer", new TheBadge.Checks.TestPayload()),
+            ("transfer.sign_free_agent", new TheBadge.Checks.TestPayload().Set("maas", 1d)),
+            ("transfer.release_player", new TheBadge.Checks.TestPayload()),
+        })
+        {
+            var w = K5Kur();
+            Bekle($"şema/{act}", RejectionReason.SchemaViolation, w.bus.Submit(K4Env(act), pl, w.exec, K4Host, K4User));
+        }
+        // (b) BANT — bedel/maaş/süre tavan üstü
+        {
+            var w = K5Kur();
+            Bekle("bant/list", RejectionReason.ParamOutOfBand, w.bus.Submit(K4Env("transfer.list_player"),
+                new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)w.depo.State.Oyuncular[5].PlayerId).Set("istenenBedel", 9e14), w.exec, K4Host, K4User));
+            Bekle("bant/teklif", RejectionReason.ParamOutOfBand, w.bus.Submit(K4Env("transfer.propose_offer"),
+                new TheBadge.Checks.TestPayload().Set("hedefOyuncuId", (long)w.depo.State.Oyuncular[0].PlayerId).Set("bedel", 9e14).Set("maas", 60_000d), w.exec, K4Host, K4User));
+            Bekle("bant/cevap", RejectionReason.ParamOutOfBand, w.bus.Submit(K4Env("transfer.respond_offer"),
+                new TheBadge.Checks.TestPayload().Set("teklifId", 999_999L).Set("cevap", "kabul"), w.exec, K4Host, K4User));
+            Bekle("bant/serbest", RejectionReason.ParamOutOfBand, w.bus.Submit(K4Env("transfer.sign_free_agent"),
+                new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)w.depo.State.Oyuncular[1].PlayerId).Set("maas", 60_000d).Set("sureYil", 99L), w.exec, K4Host, K4User));
+            Bekle("bant/fesih", RejectionReason.ParamOutOfBand, w.bus.Submit(K4Env("transfer.release_player"),
+                new TheBadge.Checks.TestPayload().Set("oyuncuId", 9_999_999L), w.exec, K4Host, K4User));
+        }
+        // (c) KAPI 3 — pencere kapalı / sahiplik / yok olan teklif
+        {
+            var wk = K5Kur(pencereAcik: false);
+            Bekle("kapı3/pencere-teklif", RejectionReason.WindowClosed, wk.bus.Submit(K4Env("transfer.propose_offer"),
+                new TheBadge.Checks.TestPayload().Set("hedefOyuncuId", (long)wk.depo.State.Oyuncular[0].PlayerId).Set("bedel", 1_000_000d).Set("maas", 50_000d), wk.exec, K4Host, K4User));
+            Bekle("kapı3/pencere-serbest", RejectionReason.WindowClosed, wk.bus.Submit(K4Env("transfer.sign_free_agent"),
+                new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)wk.depo.State.Oyuncular[1].PlayerId).Set("maas", 50_000d).Set("sureYil", 2L), wk.exec, K4Host, K4User));
+            var w = K5Kur();
+            Bekle("kapı3/yabancı-liste", RejectionReason.NotOwned, w.bus.Submit(K4Env("transfer.list_player"),
+                new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)w.depo.State.Oyuncular[0].PlayerId).Set("istenenBedel", 1_000_000d), w.exec, K4Host, K4User));
+            Bekle("kapı3/yabancı-fesih", RejectionReason.NotOwned, w.bus.Submit(K4Env("transfer.release_player"),
+                new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)w.depo.State.Oyuncular[0].PlayerId), w.exec, K4Host, K4User));
+            Bekle("kapı3/olmayan-teklif", RejectionReason.StateConflict, w.bus.Submit(K4Env("transfer.respond_offer"),
+                new TheBadge.Checks.TestPayload().Set("teklifId", 4000L).Set("cevap", "kabul"), w.exec, K4Host, K4User));
+            // Bütçe: kasadan büyük teklif
+            Bekle("kapı3/bütçe", RejectionReason.InsufficientFunds, w.bus.Submit(K4Env("transfer.propose_offer"),
+                new TheBadge.Checks.TestPayload().Set("hedefOyuncuId", (long)w.depo.State.Oyuncular[0].PlayerId).Set("bedel", 4e8).Set("maas", 60_000d), w.exec, K4Host, K4User));
+        }
+        // (d) RATE LIMIT — yalnız DOĞRULAMA döngüsü (durum değiştirmeden), K3-B dersi
+        {
+            var w = K5Kur();
+            var pl = new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)w.depo.State.Oyuncular[5].PlayerId).Set("istenenBedel", 1_000_000d);
+            // Durumlu aksiyonda Submit döngüsü kapı 4'e ULAŞMAZ (2. denemede meşru bir
+            // StateConflict çıkar) ve `bus.Validate` sayacı TÜKETMEZ — K3-B dersi. Sayacı
+            // bilerek tüketen `Validator` doğrudan çağrılır.
+            var def = Catalog.Find("transfer.list_player");
+            var rl = new SlidingWindowRateLimiter(k4RlCfg, 3, 300_000);
+            RejectionReason son = RejectionReason.None;
+            for (int i = 0; i < 21; i++)
+                son = Validator.Validate(K4Env("transfer.list_player"), def, pl, k4Bands, w.ctx, rl, K4Host, K4User).Reason;
+            senaryo++;
+            if (son != RejectionReason.RateLimited) hata += $"rate limit devreye girmedi({son}) ";
+        }
+        if (hata.Length > 0) failures += Fail("K5NegatifMatris", hata);
+        else Pass($"K5NegatifMatris(CB 10.1: {senaryo} senaryo · şema·bant·kapı3·rate)");
     }
 }
 
