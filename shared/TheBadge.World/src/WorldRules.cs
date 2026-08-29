@@ -31,6 +31,7 @@ namespace TheBadge.World
             public int kadroMax;              // [KALİBRE]
             public int sezonHaftaSayisi;      // [KALİBRE]
             public int macBasinaDegisiklik;   // [KALİBRE] ME 14.2 değişiklik hakkı
+            public int sponsorTeklifSlotSayisi;  // [KALİBRE] eşzamanlı sponsor teklifi
         }
 
         /// <summary>Aksiyon transfer penceresi istiyor mu. Liste küçüktür (tek haneli); sırasız
@@ -55,6 +56,7 @@ namespace TheBadge.World
                 throw new ArgumentException("world.balance: 0 < kadroMin ≤ kadroMax olmalı.");
             if (yapi.sezonHaftaSayisi <= 0) throw new ArgumentException("world.balance: yapi.sezonHaftaSayisi > 0 olmalı.");
             if (yapi.macBasinaDegisiklik < 0) throw new ArgumentException("world.balance: yapi.macBasinaDegisiklik ≥ 0 olmalı.");
+            if (yapi.sponsorTeklifSlotSayisi <= 0) throw new ArgumentException("world.balance: yapi.sponsorTeklifSlotSayisi > 0 olmalı.");
         }
     }
 }

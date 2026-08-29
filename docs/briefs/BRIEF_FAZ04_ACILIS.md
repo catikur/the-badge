@@ -20,7 +20,7 @@ modülleri bus'tan önce yazılırsa ya değişmezi ihlal eder ya yeniden yazıl
 | --- | --- | --- |
 | **K1** ✅ | **Command Bus çekirdeği** (CB 3-6, 8) | Diğer her modülün geçmek zorunda olduğu kapı |
 | **K2** ✅ | Dünya durumu (`GameState`): kulüp, kadro, finans, takvim | Kapı 3'ün (bağlam/sahiplik/kaynak) denetleyeceği durum |
-| K3 | Tycoon Economy (CB 4.1, 9 aksiyon) | En kapalı devre modül; ekonomi bantları ECONOMY_MAP sözleşmesi |
+| **K3** ✅ | Tycoon Economy (CB 4.1, 9 aksiyon) | En kapalı devre modül; ekonomi bantları ECONOMY_MAP sözleşmesi |
 | K4 | Squad Management (CB 4.2) | Maç motoruna en yakın; anchor/rol/talimat zaten ME'de karşılığı var |
 | K5 | Transfer Market AI (CB 4.3) | Değerleme + pazarlık; K2 finans ve K4 kadro üstüne oturur |
 | K6 | Online (Nakama RPC) + SimWorker | Sunucu otoritesi; K1-K5 tamamlanmadan sözleşme donmaz |

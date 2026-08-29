@@ -3345,6 +3345,220 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         else Pass($"K3RngGauss01Borcu(aynı çekiliş kümesi: komşu tick %{kt:F1} · bit0-seed %{ks:F1} — HEDEF %0; " +
                   $"düzeltme 50 golden replay + M16-E kalibrasyonunu kaydırır, ayrı dilim · Rand01 temiz)");
     }
+
+    // ===================== K3-B — 9 TYCOON AKSİYONU (CB 4.1) =====================
+    var k3Bands = new TheBadge.Checks.TestBands();
+    {
+        string bp = System.IO.Path.Combine(
+            System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json")), "command.bands.json");
+        using var bd = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(bp));
+        foreach (var b in bd.RootElement.GetProperty("bantlar").EnumerateObject())
+            k3Bands.Add(b.Name, b.Value[0].GetDouble(), b.Value[1].GetDouble());
+    }
+    var k3RlCfg = new Dictionary<RateClass, RateLimitCfg[]>();
+    {
+        string bp = System.IO.Path.Combine(
+            System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json")), "command.bands.json");
+        using var bd = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(bp));
+        foreach (var r in bd.RootElement.GetProperty("rateLimit").EnumerateObject())
+        {
+            var list = new List<RateLimitCfg>();
+            foreach (var w in r.Value.EnumerateArray()) list.Add(new RateLimitCfg(w[0].GetInt32(), w[1].GetInt64() * 1000));
+            k3RlCfg[(RateClass)Enum.Parse(typeof(RateClass), r.Name)] = list.ToArray();
+        }
+    }
+    const long K3Host = 1_700_000_000_000L, K3User = 42L;
+    CommandEnvelope K3Env(string act, long user = K3User, Guid? id = null)
+        => new CommandEnvelope
+        {
+            CommandId = id ?? Guid.NewGuid(), CatalogVersion = Catalog.Version, Source = CommandSource.UI,
+            ActionType = act, IssuedAtUnixMs = K3Host, MatchTick = 0, UserId = user,
+            SaveSlotId = 1, TeamIdx = 0, PayloadJson = new byte[0]
+        };
+
+    // Tycoon senaryo tablosu: geçerli payload + aksiyona ÖZGÜ kapı 3 ihlali reçetesi.
+    // Kapı 3 ihlali üç biçimde kurulabilir: BAŞKA kullanıcı, durum kurulumu, ya da farklı payload.
+    var tycoon = new (string aksiyon, Func<TheBadge.Checks.TestPayload> gecerli,
+                      long kapi3User, Action<TheBadge.World.GameState> kapi3Kur,
+                      Func<TheBadge.Checks.TestPayload> kapi3Pl, RejectionReason kapi3Sebep)[]
+    {
+        ("tycoon.set_ticket_price",        () => new TheBadge.Checks.TestPayload().Set("tribun", "kuzey").Set("fiyat", 55.0),
+                                           4343L, null, null, RejectionReason.NotOwned),
+        ("tycoon.set_season_ticket_price", () => new TheBadge.Checks.TestPayload().Set("fiyat", 1300.0),
+                                           4343L, null, null, RejectionReason.NotOwned),
+        ("tycoon.set_concession_price",    () => new TheBadge.Checks.TestPayload().Set("urun", "icecek").Set("fiyat", 14.0),
+                                           4343L, null, null, RejectionReason.NotOwned),
+        ("tycoon.set_merch_price",         () => new TheBadge.Checks.TestPayload().Set("urun", "forma").Set("fiyat", 60.0),
+                                           4343L, null, null, RejectionReason.NotOwned),
+        // tesis 6 fixture'da tier 0 ve inşaatsız → hedefTier 1 meşru; kasa sıfırlanınca bedel düşer
+        ("tycoon.start_construction",      () => new TheBadge.Checks.TestPayload().Set("tesisId", 6L).Set("hedefTier", 1L),
+                                           0L, g => g.Club.KasaTl = 0, null, RejectionReason.InsufficientFunds),
+        ("tycoon.cancel_construction",     () => new TheBadge.Checks.TestPayload().Set("insaatId", 5L),
+                                           0L, null, () => new TheBadge.Checks.TestPayload().Set("insaatId", 55L),
+                                           RejectionReason.StateConflict),
+        ("tycoon.take_loan",               () => new TheBadge.Checks.TestPayload().Set("miktar", 500_000.0).Set("vadeAy", 24L),
+                                           0L, g => { for (int i = 0; i < g.Club.Krediler.Length; i++)
+                                                          g.Club.Krediler[i] = new TheBadge.World.Loan { KrediId = 900 + i, AnaparaTl = 1000, KalanAy = 5, FaizBp = 100 }; },
+                                           null, RejectionReason.StateConflict),
+        // kalan anapara 1M; 5M bant İÇİNDE ama borçtan büyük → StateConflict
+        ("tycoon.repay_loan",              () => new TheBadge.Checks.TestPayload().Set("krediId", 7L).Set("miktar", 400_000.0),
+                                           0L, null, () => new TheBadge.Checks.TestPayload().Set("krediId", 7L).Set("miktar", 5_000_000.0),
+                                           RejectionReason.StateConflict),
+        ("tycoon.sign_sponsor",            () => new TheBadge.Checks.TestPayload().Set("teklifId", 3L),
+                                           0L, g => { g.Club.SponsorTeklifleri[0].SonGecerlilikHafta = 1; g.Takvim.Hafta = 9; },
+                                           null, RejectionReason.WindowClosed),
+    };
+
+    // Tam kurulu bir dünya: tycoon aksiyonlarının hepsi bağlı.
+    (TheBadge.World.WorldStore depo, TheBadge.World.WorldContext ctx, TheBadge.World.WorldExecutor exec,
+     TheBadge.CommandBus.CommandBus bus, TheBadge.Checks.CollectingAuditSink sink) K3Kur()
+    {
+        var g = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, K3User);
+        g.Club.InsaatSlot[0] = new TheBadge.World.Construction
+        { InsaatId = 5, TesisId = 9, HedefTier = 1, KalanHafta = 4, ToplamMaliyetTl = 4_200_000 };
+        g.Club.Krediler[0] = new TheBadge.World.Loan { KrediId = 7, AnaparaTl = 1_000_000, KalanAy = 12, FaizBp = 2400 };
+        g.Club.SponsorTeklifleri[0] = new TheBadge.World.SponsorOffer
+        { TeklifId = 3, HaftalikTl = 410_000, SureHafta = 76, SonGecerlilikHafta = 0 };
+        var depo = new TheBadge.World.WorldStore(g);
+        var ctx = new TheBadge.World.WorldContext(depo, eRules);
+        var sink = new TheBadge.Checks.CollectingAuditSink();
+        var exec = new TheBadge.World.WorldExecutor(depo, ctx, sink);
+        TheBadge.World.TycoonActions.Baglan(ctx, exec, eco);
+        var bus = new TheBadge.CommandBus.CommandBus(k3Bands, ctx,
+            new SlidingWindowRateLimiter(k3RlCfg, 3, 300_000), new IdempotencyStore());
+        return (depo, ctx, exec, bus, sink);
+    }
+
+    // 27a) BAĞLANTI — 9 tycoon aksiyonu artık "yürütücü bağlı değil" demiyor.
+    {
+        var w = K3Kur();
+        var bagsiz = w.exec.UnboundActions();
+        int tycoonBagsiz = 0;
+        foreach (var a in bagsiz) if (a.StartsWith("tycoon.", StringComparison.Ordinal)) tycoonBagsiz++;
+        Console.WriteLine($"[info] K3 bağlantı: bağlanmamış aksiyon {bagsiz.Length}/{Catalog.Count} (tycoon: {tycoonBagsiz})");
+        if (tycoonBagsiz != 0) failures += Fail("K3TycoonBaglanti", $"{tycoonBagsiz} tycoon aksiyonu bağlanmamış");
+        else if (bagsiz.Length != Catalog.Count - 9) failures += Fail("K3TycoonBaglanti", $"beklenmeyen bağlantı sayısı ({bagsiz.Length})");
+        else Pass($"K3TycoonBaglanti(9 aksiyon bağlı · kalan {bagsiz.Length} aksiyon K4-K7'nin işi)");
+    }
+
+    // 27b) MUTLU YOL — her aksiyon durumu BEKLENEN yönde değiştiriyor mu.
+    {
+        string hata = "";
+        void Dene(string ad, string aksiyon, TheBadge.Checks.TestPayload pl,
+                  Func<TheBadge.World.GameState, bool> beklenen)
+        {
+            var w = K3Kur();
+            var o = w.bus.Submit(K3Env(aksiyon), pl, w.exec, K3Host, K3User);
+            if (!o.Ok) { hata += $"{ad}({o.Reason}/{o.Detail}) "; return; }
+            if (!beklenen(w.depo.State)) hata += $"{ad}(durum beklenen gibi değil) ";
+        }
+        Dene("bilet", "tycoon.set_ticket_price",
+             new TheBadge.Checks.TestPayload().Set("tribun", "dogu").Set("fiyat", 123.5),
+             g => g.Fiyat.BiletKurus[2] == 12350);
+        Dene("kombine", "tycoon.set_season_ticket_price",
+             new TheBadge.Checks.TestPayload().Set("fiyat", 1450.0), g => g.Fiyat.KombineKurus == 145000);
+        Dene("büfe", "tycoon.set_concession_price",
+             new TheBadge.Checks.TestPayload().Set("urun", "atistirmalik").Set("fiyat", 7.25),
+             g => g.Fiyat.BufeKurus[2] == 725);
+        Dene("mağaza", "tycoon.set_merch_price",
+             new TheBadge.Checks.TestPayload().Set("urun", "atki").Set("fiyat", 88.0),
+             g => g.Fiyat.MagazaKurus[1] == 8800);
+        Dene("inşaat başlat", "tycoon.start_construction",
+             new TheBadge.Checks.TestPayload().Set("tesisId", 6L).Set("hedefTier", 1L),
+             g => { int i = g.FreeConstructionSlot() == 1 ? -1 : 1;
+                    return g.Club.InsaatSlot[1].TesisId == 6 && g.Club.InsaatSlot[1].KalanHafta > 0
+                           && g.Club.KasaTl < 20_000_000 && i != 0; });
+        Dene("inşaat iptal", "tycoon.cancel_construction",
+             new TheBadge.Checks.TestPayload().Set("insaatId", 5L),
+             g => g.Club.InsaatSlot[0].InsaatId == 0 && g.Club.KasaTl > 20_000_000);
+        Dene("kredi al", "tycoon.take_loan",
+             new TheBadge.Checks.TestPayload().Set("miktar", 750_000.0).Set("vadeAy", 36L),
+             g => g.Club.Krediler[1].AnaparaTl == 750_000 && g.Club.KasaTl == 20_750_000);
+        Dene("kredi öde", "tycoon.repay_loan",
+             new TheBadge.Checks.TestPayload().Set("krediId", 7L).Set("miktar", 400_000.0),
+             g => g.Club.Krediler[0].AnaparaTl == 600_000 && g.Club.KasaTl == 19_600_000);
+        Dene("sponsor", "tycoon.sign_sponsor",
+             new TheBadge.Checks.TestPayload().Set("teklifId", 3L),
+             g => g.Club.SponsorHaftalikTl == 410_000 && g.Club.SponsorTeklifleri[0].TeklifId == 0);
+        if (hata.Length > 0) failures += Fail("K3TycoonMutluYol", hata);
+        else Pass("K3TycoonMutluYol(9 aksiyon: fiyatlar kuruşa yazılıyor · inşaat/kredi/sponsor durumu ve kasa doğru)");
+    }
+
+    // 27c) CB 10.1 NEGATİF MATRİSİ — aksiyon başına 4 zorunlu senaryo.
+    // Senaryolar KATALOGDAN mekanik türetilir: elle yazılmış 36 vaka bir aksiyonu sessizce
+    // atlayabilir, tarama atlayamaz. (32 aksiyonun tamamı CB 10.3'ün hedefi; K3 tycoon 9'unu verir.)
+    {
+        string hata = "";
+        int senaryo = 0;
+        foreach (var (aksiyon, gecerli, kapi3User, kapi3Kur, kapi3Pl, kapi3Sebep) in tycoon)
+        {
+            var def = Catalog.Find(aksiyon);
+            if (def == null) { hata += aksiyon + "(katalogda yok) "; continue; }
+
+            // (1) KAPI 1 — şema bozulması: fazladan alan
+            {
+                var w = K3Kur();
+                var o = w.bus.Submit(K3Env(aksiyon), gecerli().Set("ekstra", 1), w.exec, K3Host, K3User);
+                senaryo++;
+                if (o.Reason != RejectionReason.SchemaViolation) hata += $"{aksiyon}/şema({o.Reason}) ";
+            }
+            // (2) KAPI 2 — bant dışı: ilk bantlı parametre alt sınırın ALTINA çekilir
+            {
+                string bantli = null; double min = 0;
+                foreach (var pd in def.Params)
+                    if (pd.BandKey != null && k3Bands.TryGetBand(pd.BandKey, out min, out _)) { bantli = pd.Name; break; }
+                if (bantli == null) hata += aksiyon + "(bantlı parametre yok) ";
+                else
+                {
+                    var w = K3Kur();
+                    var pd2 = Array.Find(def.Params, x => x.Name == bantli);
+                    object altDeger = pd2.Type == ParamType.Int ? (object)(long)(min - 1) : (object)(min - 0.1);
+                    var o = w.bus.Submit(K3Env(aksiyon), gecerli().Set(bantli, altDeger), w.exec, K3Host, K3User);
+                    senaryo++;
+                    if (o.Reason != RejectionReason.ParamOutOfBand) hata += $"{aksiyon}/bant({o.Reason}) ";
+                }
+            }
+            // (3) KAPI 3 — sahiplik/bağlam/kaynak ihlali (aksiyona özgü reçete).
+            //
+            // Reddin GERÇEKTEN kapı 3'ten geldiği ayrıca doğrulanır: yalnız sebep koduna bakmak
+            // yetmiyor, çünkü daha DERİN katmanlar (handler'ın kendi denetimi, journal'ın aralık
+            // koruması) aynı `StateConflict`i üretebiliyor. Kapı dişi ölçülünce görüldü: kredi
+            // slot ve fazla ödeme kuralları kapatıldığı hâlde kapı yeşil kalıyordu — savunma
+            // derinliği çalışıyordu ama KAPI 3 sınanmıyordu. `Validate` yürütmeye hiç gitmez,
+            // yani aynı sebebi vermesi reddin doğrulama zincirinden çıktığının kanıtıdır.
+            {
+                var w = K3Kur();
+                kapi3Kur?.Invoke(w.depo.State);
+                long u = kapi3User != 0 ? kapi3User : K3User;
+                var pl3 = (kapi3Pl ?? gecerli)();
+                var o = w.bus.Submit(K3Env(aksiyon, user: u), pl3.Copy(), w.exec, K3Host, u);
+                senaryo++;
+                if (o.Reason != kapi3Sebep) hata += $"{aksiyon}/kapı3({o.Reason}≠{kapi3Sebep}) ";
+                var w2 = K3Kur();
+                kapi3Kur?.Invoke(w2.depo.State);
+                var v = w2.bus.Validate(K3Env(aksiyon, user: u), pl3.Copy(), K3Host, u);
+                if (v.Reason != kapi3Sebep)
+                    hata += $"{aksiyon}/kapı3-DOĞRULAMA({v.Reason}≠{kapi3Sebep}: red kapı 3'ten değil, daha derinden geliyor) ";
+            }
+            // (4) KAPI 4 — rate limit aşımı. YÜRÜTMEDEN doğrulanır: aynı komutu 21 kez yürütmek
+            // durumlu aksiyonlarda (inşaat/kredi/sponsor) 2. denemede MEŞRU bir StateConflict
+            // üretir ve kapı 4'e hiç ulaşılmaz. Rate limit'i sınamak için durumu sabit tutmak
+            // gerekir — `Validate` tam olarak bunu yapar (ve sayacı da tüketmez demiştik:
+            // burada sayacı BİLEREK tüketen `Validator`ı doğrudan çağırıyoruz).
+            {
+                var w = K3Kur();
+                var rl = new SlidingWindowRateLimiter(k3RlCfg, 3, 300_000);
+                RejectionReason son = RejectionReason.None;
+                for (int i = 0; i < 21; i++)
+                    son = Validator.Validate(K3Env(aksiyon), def, gecerli(), k3Bands, w.ctx, rl, K3Host, K3User).Reason;
+                senaryo++;
+                if (son != RejectionReason.RateLimited) hata += $"{aksiyon}/rate({son}) ";
+            }
+        }
+        if (senaryo != tycoon.Length * 4) hata += $"senaryo sayısı {senaryo} ≠ {tycoon.Length * 4} ";
+        if (hata.Length > 0) failures += Fail("K3NegatifMatris", hata);
+        else Pass($"K3NegatifMatris(CB 10.1: {tycoon.Length} aksiyon × 4 senaryo = {senaryo} · şema·bant·kapı3·rate)");
+    }
 }
 
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace TheBadge.World
 {
     /// <summary>Mutasyon hedefi — journal girdisinin hangi durum parçasına yazdığı.</summary>
-    public enum MutTarget : byte { Kulup = 0, Oyuncu = 1, Takvim = 2, Insaat = 3, Kredi = 4, Tesis = 5, Mac = 6, Fiyat = 7 }
+    public enum MutTarget : byte { Kulup = 0, Oyuncu = 1, Takvim = 2, Insaat = 3, Kredi = 4, Tesis = 5, Mac = 6, Fiyat = 7, Sponsor = 8 }
 
     public static class ClubField
     {
@@ -24,6 +24,7 @@ namespace TheBadge.World
     public static class ConstructionField { public const byte InsaatId = 1, TesisId = 2, HedefTier = 3, KalanHafta = 4, ToplamMaliyet = 5; }
     public static class LoanField { public const byte KrediId = 1, Anapara = 2, KalanAy = 3, FaizBp = 4; }
     public static class FacilityField { public const byte Tier = 1; }
+    public static class SponsorField { public const byte TeklifId = 1, Haftalik = 2, Sure = 3, SonGecerlilik = 4; }
     public static class MatchField { public const byte KalanDegisiklikHakki = 1; }
 
     /// <summary>Tek bir durum yazması. Journal girdileri TİPLİdir (kapanış/closure değil) ki
@@ -222,6 +223,16 @@ namespace TheBadge.World
                     if (m.Index < 0 || m.Index >= st.Club.TesisTier.Length) { hata = "tesis indeksi kapsam dışı"; return false; }
                     if (m.Field == FacilityField.Tier) { mevcut = st.Club.TesisTier[m.Index]; min = 0; max = byte.MaxValue; return true; }
                     break;
+                case MutTarget.Sponsor:
+                    if (m.Index < 0 || m.Index >= st.Club.SponsorTeklifleri.Length) { hata = "sponsor teklif slotu kapsam dışı"; return false; }
+                    switch (m.Field)
+                    {
+                        case SponsorField.TeklifId: mevcut = st.Club.SponsorTeklifleri[m.Index].TeklifId; min = 0; max = int.MaxValue; return true;
+                        case SponsorField.Haftalik: mevcut = st.Club.SponsorTeklifleri[m.Index].HaftalikTl; min = 0; return true;
+                        case SponsorField.Sure: mevcut = st.Club.SponsorTeklifleri[m.Index].SureHafta; min = 0; max = ushort.MaxValue; return true;
+                        case SponsorField.SonGecerlilik: mevcut = st.Club.SponsorTeklifleri[m.Index].SonGecerlilikHafta; min = 0; max = ushort.MaxValue; return true;
+                    }
+                    break;
                 case MutTarget.Mac:
                     if (m.Field == MatchField.KalanDegisiklikHakki) { mevcut = st.KalanDegisiklikHakki; min = 0; max = byte.MaxValue; return true; }
                     break;
@@ -287,6 +298,15 @@ namespace TheBadge.World
                     }
                     break;
                 case MutTarget.Tesis: st.Club.TesisTier[m.Index] = (byte)v; break;
+                case MutTarget.Sponsor:
+                    switch (m.Field)
+                    {
+                        case SponsorField.TeklifId: st.Club.SponsorTeklifleri[m.Index].TeklifId = (int)v; break;
+                        case SponsorField.Haftalik: st.Club.SponsorTeklifleri[m.Index].HaftalikTl = v; break;
+                        case SponsorField.Sure: st.Club.SponsorTeklifleri[m.Index].SureHafta = (ushort)v; break;
+                        case SponsorField.SonGecerlilik: st.Club.SponsorTeklifleri[m.Index].SonGecerlilikHafta = (ushort)v; break;
+                    }
+                    break;
                 case MutTarget.Mac: st.KalanDegisiklikHakki = (byte)v; break;
             }
         }

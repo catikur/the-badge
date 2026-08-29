@@ -20,6 +20,7 @@ namespace TheBadge.World
             if (st == null) return 0UL;
             var b = new Buf(128 + st.Oyuncular.Length * 48 + st.Club.InsaatSlot.Length * 24
                             + st.Club.Krediler.Length * 20 + st.Club.TesisTier.Length
+                            + st.Club.SponsorTeklifleri.Length * 20
                             + (st.Fiyat.BiletKurus.Length + st.Fiyat.BufeKurus.Length
                                + st.Fiyat.MagazaKurus.Length + 1) * 4);
 
@@ -57,6 +58,13 @@ namespace TheBadge.World
                 b.I32(p.PlayerId); b.I64(p.ClubId); b.I64(p.HaftalikMaasTl);
                 b.U16(p.SozlesmeKalanHafta); b.U8(p.Moral); b.U8(p.Kondisyon); b.U8(p.SakatlikHafta);
                 b.U8(p.RolId); b.I32(p.AnchorXmm); b.I32(p.AnchorYmm); b.U8(p.ListedeMi ? (byte)1 : (byte)0);
+            }
+
+            b.I32(st.Club.SponsorTeklifleri.Length);
+            for (int i = 0; i < st.Club.SponsorTeklifleri.Length; i++)
+            {
+                var so = st.Club.SponsorTeklifleri[i];
+                b.I32(so.TeklifId); b.I64(so.HaftalikTl); b.U16(so.SureHafta); b.U16(so.SonGecerlilikHafta);
             }
 
             // --- Fiyatlar (kuruş) ---

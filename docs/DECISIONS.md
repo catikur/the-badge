@@ -1233,6 +1233,40 @@ K3'ün seyirci varyansı seed'e duyarlı çıkmayınca ortaya çıktı; kök seb
   `salt*0x9E3779B1 + i*0x85EBCA6B` gibi tek sayı adımlı bir yayılım). Tek satırlık değişiklik,
   maliyeti düzeltmenin kendisi değil ARDINDAN gelen yeniden kalibrasyon. Kararı Atilla verir.
 
+### K3-B: 9 tycoon aksiyonu — ✅ TAMAM (2026-08-25)
+CB 4.1'in dokuz aksiyonu bağlandı: fiyatlar (bilet/kombine/büfe/mağaza), inşaat başlat/iptal,
+kredi al/öde, sponsor imzala. `WorldExecutor.UnboundActions()` 32'den **23**'e düştü — kalan 23
+K4-K7'nin işi ve sayı ilerlemenin ölçüsü olmayı sürdürüyor.
+
+- **K2'nin bıraktığı boşluk kapandı:** K2 "bilmediği bedeli tahmin etmez" deyip hesaplanan
+  maliyetleri seame bırakmıştı. K3 onları `economy.balance.json`tan getirip Kapı 3'e bağladı:
+  inşaat maliyeti + `hedefTier = mevcut+1` (CB 4.1 tablosu), kredi slot doluluğu, sponsor teklif
+  geçerliliği, fazla ödeme.
+- **Fiyat birimi KURUŞ:** `command.bands.json` büfe fiyatını [0,5 - 50] ₺ ile tanımlıyor, yani
+  kesirli fiyat meşru; kalıcı durum ise tamsayı olmak zorunda (ME 3.2). Tek birim seçildi —
+  bilet tam ₺, büfe kuruş olsaydı dönüşüm hatası kaçınılmazdı.
+- **Kimlik üretimi deterministik:** yeni inşaat/kredi kimliği "mevcut en büyük + 1"dir; sayaç ya
+  da `Guid` kullanılmaz — aynı durumdan aynı komut aynı kimliği üretmeli (CB 5.2).
+
+**CB 10.1 negatif matrisi — 9 aksiyon × 4 senaryo = 36.** Senaryolar KATALOGDAN mekanik türetiliyor
+(bant dışı değer, ilk bantlı parametreden hesaplanıyor); elle yazılmış 36 vaka bir aksiyonu sessizce
+atlayabilirdi, tarama atlayamaz.
+
+**Kapı yazarken iki ders çıktı, ikisi de ölçümle:**
+1. **Rate limit senaryosu durumlu aksiyonlarda Kapı 4'e hiç ulaşmıyordu.** Aynı komutu 21 kez
+   YÜRÜTÜNCE inşaat/kredi/sponsor 2. denemede meşru bir `StateConflict` veriyor ve kapı 4 hiç
+   çalışmıyor. Rate limit'i sınamak durumu sabit tutmayı gerektiriyor → senaryo yürütmeden
+   doğrulamaya çevrildi.
+2. **Kapı 3 senaryosu yalnız sebep koduna bakıyordu ve bu YETMİYORDU.** Dişini ölçerken görüldü:
+   kredi slot ve fazla ödeme kuralları KAPATILDIĞI HÂLDE kapı yeşil kalıyordu — çünkü daha derin
+   katmanlar (handler'ın kendi denetimi, journal'ın aralık koruması) aynı `StateConflict`i
+   üretiyordu. Savunma derinliği çalışıyordu ama sınanmak istenen kapı sınanmıyordu. Çözüm:
+   her Kapı 3 senaryosu ayrıca `Validate` (yürütmesiz) ile doğrulanıyor — aynı sebebi vermesi,
+   reddin doğrulama zincirinden çıktığının kanıtı. Dört kural da kapatılıp yeniden ölçüldü;
+   şimdi dördü de yakalanıyor.
+- **Kapılar (3):** `K3TycoonBaglanti` · `K3TycoonMutluYol` (9 aksiyonun durum etkisi) ·
+  `K3NegatifMatris` (36 senaryo + kapı 3 köken denetimi).
+
 ## Bekleyen kararlar
 - **`Rng.Gauss01` çarpışması ne zaman düzeltilsin? (K3 bulgusu, 2026-08-25)** Ölçüm ve mekanizma
   yukarıdaki bulgu kaydında. Seçenekler: (a) ŞİMDİ düzelt → golden set yeniden üretilir, M16-E'nin

@@ -15,6 +15,7 @@
     "kadroMin": 16,
     "kadroMax": 32,
     "sezonHaftaSayisi": 38,
-    "macBasinaDegisiklik": 5
+    "macBasinaDegisiklik": 5,
+    "sponsorTeklifSlotSayisi": 4
   }
 }

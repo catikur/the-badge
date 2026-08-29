@@ -12,5 +12,9 @@ namespace TheBadge.World
         /// yuvarlaması (varsayılan) 0,5'i çift sayıya çeker ve para bağlamında kullanıcıya
         /// açıklanamaz; ayrıca tek bir kural her platformda aynı sonucu verir.</summary>
         public static long ToTl(double v) => (long)Math.Round(v, MidpointRounding.AwayFromZero);
+
+        /// <summary>Payload fiyatını KURUŞ'a çevirir (1 ₺ = 100 kuruş). Fiyatlar kesirli olabilir
+        /// (`command.bands.json` büfe bandı [0,5 - 50] ₺); kalıcı durum tamsayı olmak zorunda.</summary>
+        public static int ToKurus(double v) => (int)Math.Round(v * 100.0, MidpointRounding.AwayFromZero);
     }
 }
