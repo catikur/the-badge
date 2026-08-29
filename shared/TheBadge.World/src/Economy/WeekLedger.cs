@@ -13,20 +13,28 @@ namespace TheBadge.World
         public long BiletTl, KombineTl, BufeTl, MagazaTl, SponsorTl, YayinTl, PrimTl;
         // --- SINK ---
         public long MaasTl, BakimTl, PersonelTl, IsletmeTl, FaizTl;
+        /// <summary>KOMUTLA yapılan inşaat harcaması (iptal iadesi negatif). ECONOMY_MAP "inşaat +
+        /// tesis bakımı"nı sink sayıyor; ilk sürümde yalnız bakım vardı, inşaat hiçbir kaleme
+        /// girmiyordu ve inşaat içeren bir sezonun oranı olduğundan İYİ görünüyordu
+        /// (inceleme bulgusu, P1).</summary>
+        public long InsaatTl;
         // --- bilgi ---
         public int Seyirci;
         public long AnaparaOdemeTl;   // bilanço aktarımı — source/sink'e GİRMEZ
 
         public long ToplamGelir => BiletTl + KombineTl + BufeTl + MagazaTl + SponsorTl + YayinTl + PrimTl;
-        public long ToplamGider => MaasTl + BakimTl + PersonelTl + IsletmeTl + FaizTl;
-        public long NetTl => ToplamGelir - ToplamGider - AnaparaOdemeTl;
+        public long ToplamGider => MaasTl + BakimTl + PersonelTl + IsletmeTl + FaizTl + InsaatTl;
+        /// <summary>Haftalık KASA hareketi. `InsaatTl` buraya GİRMEZ: inşaat bedeli komut anında
+        /// kasadan zaten düşüldü; burada ikinci kez düşmek çift muhasebe olurdu. `InsaatTl`
+        /// yalnız SINK RAPORUdur (ECONOMY_MAP oranı için).</summary>
+        public long NetTl => ToplamGelir - (ToplamGider - InsaatTl) - AnaparaOdemeTl;
 
         public void Topla(in WeekLedger o)
         {
             BiletTl += o.BiletTl; KombineTl += o.KombineTl; BufeTl += o.BufeTl; MagazaTl += o.MagazaTl;
             SponsorTl += o.SponsorTl; YayinTl += o.YayinTl; PrimTl += o.PrimTl;
             MaasTl += o.MaasTl; BakimTl += o.BakimTl; PersonelTl += o.PersonelTl;
-            IsletmeTl += o.IsletmeTl; FaizTl += o.FaizTl;
+            IsletmeTl += o.IsletmeTl; FaizTl += o.FaizTl; InsaatTl += o.InsaatTl;
             Seyirci += o.Seyirci; AnaparaOdemeTl += o.AnaparaOdemeTl;
         }
     }

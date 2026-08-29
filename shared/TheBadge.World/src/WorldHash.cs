@@ -31,6 +31,8 @@ namespace TheBadge.World
             b.I32(st.Club.StadyumKapasite);
             b.I64(st.Club.HaftalikMaasGiderTl);
             b.I64(st.Club.SponsorHaftalikTl);
+            b.U16(st.Club.SponsorKalanHafta);
+            b.I64(st.Club.DonemInsaatGideriTl);
             b.U8(st.Club.Form);
 
             b.I32(st.Club.TesisTier.Length);
@@ -64,7 +66,8 @@ namespace TheBadge.World
             for (int i = 0; i < st.Club.SponsorTeklifleri.Length; i++)
             {
                 var so = st.Club.SponsorTeklifleri[i];
-                b.I32(so.TeklifId); b.I64(so.HaftalikTl); b.U16(so.SureHafta); b.U16(so.SonGecerlilikHafta);
+                b.I32(so.TeklifId); b.I64(so.HaftalikTl); b.U16(so.SureHafta);
+                b.U16(so.SonGecerlilikSezon); b.U16(so.SonGecerlilikHafta);
             }
 
             // --- Fiyatlar (kuruş) ---

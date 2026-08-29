@@ -1267,7 +1267,44 @@ atlayabilirdi, tarama atlayamaz.
 - **Kapılar (3):** `K3TycoonBaglanti` · `K3TycoonMutluYol` (9 aksiyonun durum etkisi) ·
   `K3NegatifMatris` (36 senaryo + kapı 3 köken denetimi).
 
+### K3 inceleme turu — ✅ TAMAM (2026-08-29)
+Codex, PR #17 incelemeye açılınca dört bulgu çıkardı (2 P1, 2 P2); dördü de haklı.
+
+1. **(P1) İnşaat harcaması hiçbir sink kalemine girmiyordu.** Handler kasadan düşüyordu ama
+   `WeekLedger.ToplamGider`'in inşaat bileşeni yoktu — oysa ECONOMY_MAP "inşaat + tesis bakımı"nı
+   açıkça sink sayıyor. Sonuç: inşaat İÇEREN bir sezonun source/sink oranı olduğundan İYİ
+   görünürdü ve kalibrasyon kapısı sözleşmeyi ihlal eden bir balance'ı onaylayabilirdi.
+   Çözüm: `ClubState.DonemInsaatGideriTl` biriktiricisi — komut harcamayı biriktirir, haftalık tick
+   `WeekLedger.InsaatTl`e boşaltıp sıfırlar; iptal iadesi biriktiriciyi geri çeker.
+   **Çift muhasebe tuzağı:** bedel komut anında kasadan zaten düşüyor, bu yüzden `InsaatTl`
+   `NetTl`e GİRMEZ — yalnız SINK RAPORUdur. (Kredi anaparasında verilen kararın kardeşi.)
+2. **(P1) Sponsor sözleşme süresi imzada siliniyordu.** `SureHafta` teklifle birlikte temizleniyor,
+   tick ise `SponsorHaftalikTl`i her hafta süresiz ödüyordu: 1 haftalık anlaşma sonsuza dek gelir
+   yazıyordu. Çözüm: `ClubState.SponsorKalanHafta` — imzada taşınır, tick'te azalır, sıfırlanınca
+   gelir temizlenir ve `SponsorSonaErdi` olayı basılır (taban sponsora dönülür).
+3. **(P2) Teklif geçerliliği sezon dönüşünü aşıyordu.** Karşılaştırma yalnız HAFTAydı; tick sezon
+   sonunda haftayı 1'e sardığı için S1H10'da biten teklif S2H1-H10 arasında yeniden geçerli
+   oluyordu. Çözüm: `SonGecerlilikSezon` eklendi, karşılaştırma (sezon, hafta) çiftiyle.
+4. **(P2) Sponsor imzası `FiyatGuncellendi` olayı basıyordu.** Hiçbir fiyat değişmiyor; tip 8'i
+   fiyat bildirimine yönlendiren tüketiciler aksiyonu yanlış raporlar ve sözleşme güncellemesini
+   hiç almazdı. Çözüm: `SponsorImzalandi` (11) ve `SponsorSonaErdi` (12) eklendi — kendi kuralıma
+   uyarak SONA, mevcut değerler yeniden kullanılmadan.
+
+- **Kapı:** `K3IncelemeBulgulari` + `K3TycoonMutluYol`a sponsor olay tipi denetimi. Dördü de
+  ters çevrilip ölçüldü; her biri kendi iddiasını kırmızıya döndürüyor.
+- **Kapsam notu:** referans kulüp senaryosu inşaatsız kaldı (bilinçli). ECONOMY_MAP'in 1,05-1,15
+  bandı SÜREKLİ işletme dengesi hakkında; inşaat yığınsal sermaye harcamasıdır ve 10 sezonluk
+  ortalamaya karıştırmak bandın anlamını değiştirir. Ledger artık her senaryoyu doğru ölçüyor;
+  bandın capex'i kapsayıp kapsamayacağı balance sprintinin sorusu (bekleyen kararlara işlendi).
+
 ## Bekleyen kararlar
+- **ECONOMY_MAP source/sink bandı sermaye harcamasını (inşaat) kapsasın mı? (K3 inceleme turu,
+  2026-08-29)** Ledger artık inşaatı sink sayıyor, ama referans kalibrasyon senaryosu inşaatsız:
+  1,05-1,15 bandı SÜREKLİ işletme dengesini ölçüyor. Seçenekler: (a) bant işletme dengesi olarak
+  kalsın, capex ayrı bir kapıyla ölçülsün (ör. "sezon başına capex ≤ gelirin %X'i"); (b) bant
+  capex dahil yeniden tanımlansın ve yeniden kalibre edilsin. **Öneri: (a)** — yığınsal harcamayı
+  sürekli dengeye karıştırmak bandı bulanıklaştırır ve kulübün yatırım yapmasını cezalandırır gibi
+  okunur. Karar balance sprintine ait, K4-K5'i bloklamaz.
 - **`Rng.Gauss01` çarpışması ne zaman düzeltilsin? (K3 bulgusu, 2026-08-25)** Ölçüm ve mekanizma
   yukarıdaki bulgu kaydında. Seçenekler: (a) ŞİMDİ düzelt → golden set yeniden üretilir, M16-E'nin
   12 metriği yeniden ölçülür ve muhtemelen yeniden kalibre edilir (1-2 dilim); (b) FAZ 04 sonunda,

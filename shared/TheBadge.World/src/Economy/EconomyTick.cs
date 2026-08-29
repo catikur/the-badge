@@ -56,13 +56,32 @@ namespace TheBadge.World
 
             // ---------- GELİR: DÜZENLİ ----------
             L.YayinTl = eco.gelir.yayinHaftalik;
-            L.SponsorTl = st.Club.SponsorHaftalikTl > 0 ? st.Club.SponsorHaftalikTl : eco.gelir.sponsorHaftalikTaban;
+            // SPONSOR SÜRESİ (inceleme bulgusu, P1): imzalı sözleşme SÜRELİdir. Önceki sürümde
+            // `SureHafta` imzada siliniyordu ve tick her hafta ödemeye devam ediyordu — 1 haftalık
+            // anlaşma sonsuza dek gelir yazıyordu. Süre bitince taban sponsora dönülür.
+            bool sozlesmeliVar = st.Club.SponsorHaftalikTl > 0 && st.Club.SponsorKalanHafta > 0;
+            L.SponsorTl = sozlesmeliVar ? st.Club.SponsorHaftalikTl : eco.gelir.sponsorHaftalikTaban;
+            if (sozlesmeliVar)
+            {
+                int kalan = st.Club.SponsorKalanHafta - 1;
+                j.Set(MutTarget.Kulup, 0, ClubField.SponsorKalanHafta, kalan);
+                if (kalan == 0)
+                {
+                    j.Set(MutTarget.Kulup, 0, ClubField.SponsorHaftalik, 0);
+                    j.Emit(new WorldEvent(WorldEventType.SponsorSonaErdi, 0, st.Club.SponsorHaftalikTl,
+                                          st.Takvim.Sezon, st.Takvim.Hafta));
+                }
+            }
             if (sonuc == WeekResult.Galibiyet) L.PrimTl = eco.gelir.galibiyetPrimi;
             else if (sonuc == WeekResult.Beraberlik) L.PrimTl = eco.gelir.beraberlikPrimi;
 
             // ---------- GİDER ----------
             L.MaasTl = st.Club.HaftalikMaasGiderTl;
             L.BakimTl = BakimGideri(st, eco);
+            // İNŞAAT: komutla yapılan harcama biriktiricisi bu haftanın sink'ine boşaltılır.
+            // Kasadan komut anında düşüldüğü için `NetTl`e girmez (WeekLedger notu).
+            L.InsaatTl = st.Club.DonemInsaatGideriTl;
+            if (L.InsaatTl != 0) j.Set(MutTarget.Kulup, 0, ClubField.DonemInsaatGideri, 0);
             L.PersonelTl = eco.gider.personelHaftalik;
             L.IsletmeTl = eco.gider.genelIsletmeHaftalik;
 

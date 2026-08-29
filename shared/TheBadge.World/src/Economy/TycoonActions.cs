@@ -111,8 +111,16 @@ namespace TheBadge.World
                 int i = st.IndexOfSponsorOffer((int)tid);
                 if (i < 0) { detail = "teklif yok"; return RejectionReason.StateConflict; }
                 var o = st.Club.SponsorTeklifleri[i];
-                if (o.SonGecerlilikHafta != 0 && st.Takvim.Hafta > o.SonGecerlilikHafta)
-                { detail = $"teklif süresi doldu (hafta {o.SonGecerlilikHafta})"; return RejectionReason.WindowClosed; }
+                // Geçerlilik (SEZON, HAFTA) çiftiyle karşılaştırılır. Yalnız haftaya bakmak,
+                // sezon dönüşünde takvim 1'e sarınca süresi geçmiş teklifi YENİDEN geçerli
+                // kılıyordu (inceleme bulgusu): S1H10'da biten teklif S2H1'de kabul ediliyordu.
+                if (o.SonGecerlilikHafta != 0 || o.SonGecerlilikSezon != 0)
+                {
+                    long sonAnahtar = (long)o.SonGecerlilikSezon * 100000 + o.SonGecerlilikHafta;
+                    long simdi = (long)st.Takvim.Sezon * 100000 + st.Takvim.Hafta;
+                    if (simdi > sonAnahtar)
+                    { detail = $"teklif süresi doldu (S{o.SonGecerlilikSezon}H{o.SonGecerlilikHafta})"; return RejectionReason.WindowClosed; }
+                }
                 return RejectionReason.None;
             }
         }
@@ -197,6 +205,7 @@ namespace TheBadge.World
                 j.Set(MutTarget.Insaat, slot, ConstructionField.KalanHafta, sure);
                 j.Set(MutTarget.Insaat, slot, ConstructionField.ToplamMaliyet, maliyet);
                 j.KasaDelta(-maliyet);
+                j.Add(MutTarget.Kulup, 0, ClubField.DonemInsaatGideri, maliyet);   // sink raporuna girsin
                 j.Emit(new WorldEvent(WorldEventType.InsaatBasladi, (int)tesis, maliyet, st.Takvim.Sezon, st.Takvim.Hafta));
                 return RejectionReason.None;
             }
@@ -221,6 +230,7 @@ namespace TheBadge.World
                 j.Set(MutTarget.Insaat, slot, ConstructionField.KalanHafta, 0);
                 j.Set(MutTarget.Insaat, slot, ConstructionField.ToplamMaliyet, 0);
                 j.KasaDelta(iade);
+                j.Add(MutTarget.Kulup, 0, ClubField.DonemInsaatGideri, -iade);     // iade sink'i geri çeker
                 j.Emit(new WorldEvent(WorldEventType.InsaatIptal, c.TesisId, iade, st.Takvim.Sezon, st.Takvim.Hafta));
                 return RejectionReason.None;
             }
@@ -286,11 +296,17 @@ namespace TheBadge.World
                 if (slot < 0) { detail = "teklif yok"; return RejectionReason.StateConflict; }
                 var o = st.Club.SponsorTeklifleri[slot];
                 j.Set(MutTarget.Kulup, 0, ClubField.SponsorHaftalik, o.HaftalikTl);
+                // SÜRE KORUNUR: teklifin `SureHafta`sı aktif sözleşmeye taşınır, yoksa sözleşme
+                // süresiz olurdu (inceleme bulgusu). 0 süreli teklif imzalanmış sayılmaz.
+                j.Set(MutTarget.Kulup, 0, ClubField.SponsorKalanHafta, o.SureHafta);
                 j.Set(MutTarget.Sponsor, slot, SponsorField.TeklifId, 0);
                 j.Set(MutTarget.Sponsor, slot, SponsorField.Haftalik, 0);
                 j.Set(MutTarget.Sponsor, slot, SponsorField.Sure, 0);
                 j.Set(MutTarget.Sponsor, slot, SponsorField.SonGecerlilik, 0);
-                j.Emit(new WorldEvent(WorldEventType.FiyatGuncellendi, (int)tid, o.HaftalikTl, st.Takvim.Sezon, st.Takvim.Hafta));
+                j.Set(MutTarget.Sponsor, slot, SponsorField.SonGecerlilikSezon, 0);
+                // Sponsor imzası bir FİYAT olayı değildir: tip 8'i fiyat bildirimine yönlendiren
+                // tüketiciler bunu yanlış raporlardı (inceleme bulgusu).
+                j.Emit(new WorldEvent(WorldEventType.SponsorImzalandi, (int)tid, o.HaftalikTl, st.Takvim.Sezon, st.Takvim.Hafta));
                 return RejectionReason.None;
             }
         }

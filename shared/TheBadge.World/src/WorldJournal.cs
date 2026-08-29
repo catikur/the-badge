@@ -9,7 +9,7 @@ namespace TheBadge.World
     public static class ClubField
     {
         public const byte Kasa = 1, StadyumKapasite = 2, HaftalikMaasGider = 3,
-                          SponsorHaftalik = 4, Form = 5;
+                          SponsorHaftalik = 4, Form = 5, SponsorKalanHafta = 6, DonemInsaatGideri = 7;
     }
 
     /// <summary>Fiyat alanları — `Index` slot (tribün 0-4 / ürün 0-2), değer KURUŞ.
@@ -24,7 +24,7 @@ namespace TheBadge.World
     public static class ConstructionField { public const byte InsaatId = 1, TesisId = 2, HedefTier = 3, KalanHafta = 4, ToplamMaliyet = 5; }
     public static class LoanField { public const byte KrediId = 1, Anapara = 2, KalanAy = 3, FaizBp = 4; }
     public static class FacilityField { public const byte Tier = 1; }
-    public static class SponsorField { public const byte TeklifId = 1, Haftalik = 2, Sure = 3, SonGecerlilik = 4; }
+    public static class SponsorField { public const byte TeklifId = 1, Haftalik = 2, Sure = 3, SonGecerlilik = 4, SonGecerlilikSezon = 5; }
     public static class MatchField { public const byte KalanDegisiklikHakki = 1; }
 
     /// <summary>Tek bir durum yazması. Journal girdileri TİPLİdir (kapanış/closure değil) ki
@@ -157,6 +157,8 @@ namespace TheBadge.World
                         case ClubField.HaftalikMaasGider: mevcut = st.Club.HaftalikMaasGiderTl; min = 0; return true;
                         case ClubField.SponsorHaftalik: mevcut = st.Club.SponsorHaftalikTl; min = 0; return true;
                         case ClubField.Form: mevcut = st.Club.Form; min = 0; max = 100; return true;
+                        case ClubField.SponsorKalanHafta: mevcut = st.Club.SponsorKalanHafta; min = 0; max = ushort.MaxValue; return true;
+                        case ClubField.DonemInsaatGideri: mevcut = st.Club.DonemInsaatGideriTl; return true;
                     }
                     break;
                 case MutTarget.Fiyat:
@@ -231,6 +233,7 @@ namespace TheBadge.World
                         case SponsorField.Haftalik: mevcut = st.Club.SponsorTeklifleri[m.Index].HaftalikTl; min = 0; return true;
                         case SponsorField.Sure: mevcut = st.Club.SponsorTeklifleri[m.Index].SureHafta; min = 0; max = ushort.MaxValue; return true;
                         case SponsorField.SonGecerlilik: mevcut = st.Club.SponsorTeklifleri[m.Index].SonGecerlilikHafta; min = 0; max = ushort.MaxValue; return true;
+                        case SponsorField.SonGecerlilikSezon: mevcut = st.Club.SponsorTeklifleri[m.Index].SonGecerlilikSezon; min = 0; max = ushort.MaxValue; return true;
                     }
                     break;
                 case MutTarget.Mac:
@@ -250,6 +253,8 @@ namespace TheBadge.World
                     else if (m.Field == ClubField.StadyumKapasite) st.Club.StadyumKapasite = (int)v;
                     else if (m.Field == ClubField.HaftalikMaasGider) st.Club.HaftalikMaasGiderTl = v;
                     else if (m.Field == ClubField.SponsorHaftalik) st.Club.SponsorHaftalikTl = v;
+                    else if (m.Field == ClubField.SponsorKalanHafta) st.Club.SponsorKalanHafta = (ushort)v;
+                    else if (m.Field == ClubField.DonemInsaatGideri) st.Club.DonemInsaatGideriTl = v;
                     else st.Club.Form = (byte)v;
                     break;
                 case MutTarget.Fiyat:
@@ -305,6 +310,7 @@ namespace TheBadge.World
                         case SponsorField.Haftalik: st.Club.SponsorTeklifleri[m.Index].HaftalikTl = v; break;
                         case SponsorField.Sure: st.Club.SponsorTeklifleri[m.Index].SureHafta = (ushort)v; break;
                         case SponsorField.SonGecerlilik: st.Club.SponsorTeklifleri[m.Index].SonGecerlilikHafta = (ushort)v; break;
+                        case SponsorField.SonGecerlilikSezon: st.Club.SponsorTeklifleri[m.Index].SonGecerlilikSezon = (ushort)v; break;
                     }
                     break;
                 case MutTarget.Mac: st.KalanDegisiklikHakki = (byte)v; break;

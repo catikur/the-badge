@@ -34,7 +34,11 @@ namespace TheBadge.World
         public int TeklifId;          // 0 = boş slot
         public long HaftalikTl;
         public ushort SureHafta;      // sözleşme süresi
-        public ushort SonGecerlilikHafta;  // bu sezon haftasından sonra geçersiz (0 = süresiz)
+        /// <summary>Son geçerlilik (sezon, hafta). SEZON de tutulur: yalnız hafta karşılaştırmak
+        /// sezon dönüşünde takvim 1'e sarınca süresi geçmiş teklifi YENİDEN geçerli kılıyordu
+        /// (inceleme bulgusu, 2026-08-29). 0 = süresiz.</summary>
+        public ushort SonGecerlilikSezon;
+        public ushort SonGecerlilikHafta;
     }
 
     /// <summary>Kulüp durumu — GDD 4 (Tycoon) + 4.4 (finans). TÜM kalıcı alanlar tamsayıdır.</summary>
@@ -49,6 +53,14 @@ namespace TheBadge.World
         public Loan[] Krediler;             // eşzamanlı kredi slotları [KALİBRE]
         public long HaftalikMaasGiderTl;    // türetilmiş değil, YAZILAN alan (hash içi)
         public long SponsorHaftalikTl;      // aktif sponsor sözleşmesi (K3-B `sign_sponsor` yazar)
+        /// <summary>Aktif sponsor sözleşmesinin KALAN haftası. Olmadan sözleşme süresi imzada
+        /// kayboluyor ve 1 haftalık anlaşma sonsuza dek ödeme yapıyordu (inceleme bulgusu).</summary>
+        public ushort SponsorKalanHafta;
+        /// <summary>Bu haftaya ait, KOMUTLA yapılmış inşaat harcaması (iptal iadesi negatif).
+        /// Haftalık tick bunu `WeekLedger.InsaatTl`e boşaltır ve sıfırlar. Olmadan inşaat
+        /// harcaması hiçbir sink kalemine girmiyordu (inceleme bulgusu, P1) — oysa ECONOMY_MAP
+        /// "inşaat + tesis bakımı"nı açıkça sink sayıyor.</summary>
+        public long DonemInsaatGideriTl;
         public SponsorOffer[] SponsorTeklifleri;
         public byte Form;                   // 0-100 — seyirci modelinin form ayağı (maç sonuçları besler)
     }

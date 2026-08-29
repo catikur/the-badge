@@ -3479,9 +3479,111 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
              g => g.Club.Krediler[0].AnaparaTl == 600_000 && g.Club.KasaTl == 19_600_000);
         Dene("sponsor", "tycoon.sign_sponsor",
              new TheBadge.Checks.TestPayload().Set("teklifId", 3L),
-             g => g.Club.SponsorHaftalikTl == 410_000 && g.Club.SponsorTeklifleri[0].TeklifId == 0);
+             g => g.Club.SponsorHaftalikTl == 410_000 && g.Club.SponsorTeklifleri[0].TeklifId == 0
+                  && g.Club.SponsorKalanHafta == 76);
+        // Sponsor imzası SPONSOR olayı basmalı, fiyat olayı değil (inceleme bulgusu)
+        {
+            var w = K3Kur();
+            var o = w.bus.Submit(K3Env("tycoon.sign_sponsor"),
+                        new TheBadge.Checks.TestPayload().Set("teklifId", 3L), w.exec, K3Host, K3User);
+            bool sponsorOlayi = false, fiyatOlayi = false;
+            foreach (var e in w.sink.Olaylar)
+            {
+                if (e.Type == TheBadge.World.WorldEventType.SponsorImzalandi) sponsorOlayi = true;
+                if (e.Type == TheBadge.World.WorldEventType.FiyatGuncellendi) fiyatOlayi = true;
+            }
+            if (!o.Ok) hata += "sponsor imzası geçmedi ";
+            if (!sponsorOlayi) hata += "SponsorImzalandi olayı basılmadı ";
+            if (fiyatOlayi) hata += "sponsor imzası FİYAT olayı bastı ";
+        }
         if (hata.Length > 0) failures += Fail("K3TycoonMutluYol", hata);
-        else Pass("K3TycoonMutluYol(9 aksiyon: fiyatlar kuruşa yazılıyor · inşaat/kredi/sponsor durumu ve kasa doğru)");
+        else Pass("K3TycoonMutluYol(9 aksiyon: fiyatlar kuruşa yazılıyor · inşaat/kredi/sponsor durumu ve kasa doğru · sponsor olayı doğru tipte)");
+    }
+
+    // 27d) İNCELEME BULGULARI (Codex, 2026-08-29) — dördü de kapıyla korunuyor.
+    {
+        string hata = "";
+
+        // (1) P1 — İNŞAAT HARCAMASI SINK'E GİRİYOR (ECONOMY_MAP "inşaat + tesis bakımı")
+        {
+            var w = K3Kur();
+            var g = w.depo.State;
+            long kasa0 = g.Club.KasaTl;
+            var o = w.bus.Submit(K3Env("tycoon.start_construction"),
+                        new TheBadge.Checks.TestPayload().Set("tesisId", 6L).Set("hedefTier", 1L),
+                        w.exec, K3Host, K3User);
+            if (!o.Ok) hata += $"inşaat başlamadı({o.Reason}) ";
+            long maliyet = kasa0 - g.Club.KasaTl;
+            if (g.Club.DonemInsaatGideriTl != maliyet) hata += "dönem inşaat gideri birikmedi ";
+            // Haftalık tick biriktiriciyi sink'e boşaltmalı ve sıfırlamalı
+            var j = new TheBadge.World.WorldJournal();
+            var L = TheBadge.World.EconomyTick.Hafta(g, eco, eRules, 1UL, TheBadge.World.WeekResult.Beraberlik, false, j);
+            if (!j.Validate(g, out string hj)) hata += "tick journal geçersiz: " + hj + " ";
+            else j.Apply(g);
+            if (L.InsaatTl != maliyet) hata += $"inşaat sink'e girmedi ({L.InsaatTl}≠{maliyet}) ";
+            if (L.ToplamGider < maliyet) hata += "ToplamGider inşaatı saymıyor ";
+            if (g.Club.DonemInsaatGideriTl != 0) hata += "biriktirici sıfırlanmadı ";
+            // ÇİFT MUHASEBE YOK: kasa tick'te ikinci kez düşmemeli
+            long kasaTickOncesi = kasa0 - maliyet;
+            if (g.Club.KasaTl > kasaTickOncesi + L.ToplamGelir) hata += "kasa hesabı tutmuyor ";
+        }
+        // (1b) İPTAL İADESİ sink'i geri çeker
+        {
+            var w = K3Kur();
+            var g = w.depo.State;
+            w.bus.Submit(K3Env("tycoon.cancel_construction"),
+                new TheBadge.Checks.TestPayload().Set("insaatId", 5L), w.exec, K3Host, K3User);
+            if (g.Club.DonemInsaatGideriTl >= 0) hata += $"iptal iadesi sink'i azaltmadı ({g.Club.DonemInsaatGideriTl}) ";
+        }
+
+        // (2) P1 — SPONSOR SÖZLEŞME SÜRESİ: 3 haftalık anlaşma 3 hafta sonra BİTER
+        {
+            var w = K3Kur();
+            var g = w.depo.State;
+            g.Club.SponsorTeklifleri[1] = new TheBadge.World.SponsorOffer
+            { TeklifId = 11, HaftalikTl = 900_000, SureHafta = 3, SonGecerlilikSezon = 0, SonGecerlilikHafta = 0 };
+            var o = w.bus.Submit(K3Env("tycoon.sign_sponsor"),
+                        new TheBadge.Checks.TestPayload().Set("teklifId", 11L), w.exec, K3Host, K3User);
+            if (!o.Ok) hata += $"süreli sponsor imzalanmadı({o.Reason}) ";
+            if (g.Club.SponsorKalanHafta != 3) hata += "süre taşınmadı ";
+            var j = new TheBadge.World.WorldJournal();
+            long[] gelir = new long[5];
+            for (int h = 0; h < 5; h++)
+            {
+                j.Clear();
+                var L = TheBadge.World.EconomyTick.Hafta(g, eco, eRules, 1UL, TheBadge.World.WeekResult.Beraberlik, false, j);
+                if (!j.Validate(g, out string hj2)) { hata += "sponsor tick journal geçersiz: " + hj2 + " "; break; }
+                j.Apply(g);
+                gelir[h] = L.SponsorTl;
+            }
+            if (!(gelir[0] == 900_000 && gelir[1] == 900_000 && gelir[2] == 900_000))
+                hata += $"sözleşme süresince ödenmedi ({gelir[0]}/{gelir[1]}/{gelir[2]}) ";
+            if (gelir[3] != eco.gelir.sponsorHaftalikTaban || gelir[4] != eco.gelir.sponsorHaftalikTaban)
+                hata += $"süre bitince taban sponsora dönülmedi ({gelir[3]}/{gelir[4]}) ";
+            if (g.Club.SponsorHaftalikTl != 0) hata += "biten sözleşme temizlenmedi ";
+        }
+
+        // (3) P2 — TEKLİF GEÇERLİLİĞİ SEZON DÖNÜŞÜNÜ AŞMAZ
+        {
+            var w = K3Kur();
+            var g = w.depo.State;
+            g.Club.SponsorTeklifleri[2] = new TheBadge.World.SponsorOffer
+            { TeklifId = 21, HaftalikTl = 500_000, SureHafta = 20, SonGecerlilikSezon = 1, SonGecerlilikHafta = 10 };
+            var pl = new TheBadge.Checks.TestPayload().Set("teklifId", 21L);
+            g.Takvim.Sezon = 1; g.Takvim.Hafta = 5;
+            if (w.bus.Validate(K3Env("tycoon.sign_sponsor"), pl.Copy(), K3Host, K3User).Reason != RejectionReason.None)
+                hata += "geçerli teklif S1H5'te reddedildi ";
+            g.Takvim.Hafta = 20;
+            if (w.bus.Validate(K3Env("tycoon.sign_sponsor"), pl.Copy(), K3Host, K3User).Reason != RejectionReason.WindowClosed)
+                hata += "süresi geçmiş teklif S1H20'de kabul edildi ";
+            g.Takvim.Sezon = 2; g.Takvim.Hafta = 1;   // sezon döndü, hafta 1'e sardı
+            if (w.bus.Validate(K3Env("tycoon.sign_sponsor"), pl.Copy(), K3Host, K3User).Reason != RejectionReason.WindowClosed)
+                hata += "SEZON DÖNÜŞÜ süresi geçmiş teklifi yeniden geçerli kıldı ";
+        }
+
+        if (hata.Length > 0) failures += Fail("K3IncelemeBulgulari", hata);
+        else Pass("K3IncelemeBulgulari(4 bulgu: inşaat sink'e girdi + iptal geri çekiyor · sponsor süresi bitiyor · " +
+                  "geçerlilik sezon dönüşünü aşmıyor · sponsor olayı doğru tipte)");
     }
 
     // 27c) CB 10.1 NEGATİF MATRİSİ — aksiyon başına 4 zorunlu senaryo.
