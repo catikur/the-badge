@@ -3575,9 +3575,19 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             if (L.InsaatTl != maliyet) hata += $"inşaat sink'e girmedi ({L.InsaatTl}≠{maliyet}) ";
             if (L.ToplamGider < maliyet) hata += "ToplamGider inşaatı saymıyor ";
             if (g.Club.DonemInsaatGideriTl != 0) hata += "biriktirici sıfırlanmadı ";
-            // ÇİFT MUHASEBE YOK: kasa tick'te ikinci kez düşmemeli
+            // ÇİFT MUHASEBE YOK — TAM EŞİTLİKLE. İlk sürüm `kasa > taban + gelir` diye BEKLİYORDU;
+            // oysa inşaat `NetTl`e girseydi kasa DÜŞERDİ, yani o karşılaştırma korumak istediği
+            // hata için hiç ateşlenemezdi (inceleme bulgusu — koruma yazıp korumayan bir iddia).
+            // Doğru kontrol bağımsız hesaptır: beklenen kasa hareketi ledger kalemlerinden
+            // `NetTl` KULLANILMADAN kurulur; `InsaatTl` kasıtlı olarak dışarıdadır (komut anında
+            // düşüldü). Biri `InsaatTl`i `NetTl`e eklerse kasa `InsaatTl` kadar sapar ve düşer.
             long kasaTickOncesi = kasa0 - maliyet;
-            if (g.Club.KasaTl > kasaTickOncesi + L.ToplamGelir) hata += "kasa hesabı tutmuyor ";
+            long beklenenDelta = L.ToplamGelir
+                                 - (L.MaasTl + L.BakimTl + L.PersonelTl + L.IsletmeTl + L.FaizTl)
+                                 - L.AnaparaOdemeTl;
+            if (g.Club.KasaTl - kasaTickOncesi != beklenenDelta)
+                hata += $"kasa hareketi ledger'la tutmuyor ({g.Club.KasaTl - kasaTickOncesi} ≠ {beklenenDelta}; " +
+                        $"inşaat {L.InsaatTl} çift sayılmış olabilir) ";
         }
         // (1b) İPTAL İADESİ sink'i geri çeker
         {

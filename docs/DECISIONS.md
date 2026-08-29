@@ -1305,6 +1305,20 @@ hash'te vardı, ama kapı onları ÖLÇMÜYORDU: yarın biri hash'ten çıkarsa 
   hash'ten çıkarıldı → kapı düştü ("hash oynamadı"). İkisi de doğru mesajla.
 - **Ders:** "her X" diyen bir kapı, X'in listesini elle tutuyorsa iddiası zamanla yanlışlanır.
   Liste türetilebiliyorsa türetilmeli; bu, bu turda öğrenilen en genellenebilir şey.
+
+**6. (Bugbot) Çift muhasebe koruması ATEŞLENEMİYORDU.** İnşaat bulgusunu düzeltirken yazdığım
+"kasa çift düşmesin" iddiası `kasa > taban + gelir` biçimindeydi. Oysa inşaat `NetTl`e girseydi
+kasa DÜŞERDİ — yani iddia, korumak için yazıldığı hatanın yönüne bakmıyordu ve hiçbir koşulda
+ateşlenemezdi. Bulguyu düzeltirken ölü bir koruma yazmışım.
+- **Çözüm:** beklenen kasa hareketi ledger kalemlerinden `NetTl` KULLANILMADAN kuruluyor
+  (`ToplamGelir - opex - anapara`; `InsaatTl` kasıtlı dışarıda) ve TAM EŞİTLİKLE karşılaştırılıyor.
+  Bağımsız hesap olduğu için `NetTl`in tanımı bozulursa sapma görünür.
+- **Diş ölçümü:** `NetTl` kasten çift muhasebeye çevrildi → kapı doğru teşhisle düştü:
+  `kasa hareketi ledger'la tutmuyor (6129600 ≠ 10329600; inşaat 4200000 çift sayılmış olabilir)`.
+- **Ders:** bir koruma yazarken "hangi YÖNDE sapar?" sorusunu sormadan eşitsizlik kurmak, ölü
+  iddia üretiyor. Belirsizlikte eşitsizlik değil TAM EŞİTLİK kur; tam eşitlik yanlış yöne de
+  duyarlıdır. (Bu turda kapıların kendi zayıflığı ÜÇÜNCÜ kez bulundu: zamanlamaya bağlı yarış
+  kapısı, derin katmanlarca maskelenen Kapı 3 kapısı, ve şimdi ölü eşitsizlik.)
 - **Kapsam notu:** referans kulüp senaryosu inşaatsız kaldı (bilinçli). ECONOMY_MAP'in 1,05-1,15
   bandı SÜREKLİ işletme dengesi hakkında; inşaat yığınsal sermaye harcamasıdır ve 10 sezonluk
   ortalamaya karıştırmak bandın anlamını değiştirir. Ledger artık her senaryoyu doğru ölçüyor;
