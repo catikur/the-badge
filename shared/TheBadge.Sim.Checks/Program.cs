@@ -169,7 +169,7 @@ if (args.Length > 0 && args[0] == "calib10k")
 
 // Replay kurulumu TEK KAYNAKTAN türetilir: üretici ve kapı AYNI fonksiyonu çağırır, böylece
 // "üretici ile kapı farklı evreni ölçer" hatası yapısal olarak imkansızdır.
-static (MatchConfig cfg, CommandQueue q) BuildReplay(int idx, ulong balanceHash)
+static (MatchConfig cfg, CommandQueue q) BuildReplay(int idx, ulong balanceHash, ulong bandsHash)
 {
     ulong sd = 0x5EED0000UL + (ulong)idx * 7919UL;
     // Kurulum çeşitliliği tohumdan TÜRETİLİR: 50 replay hava/zemin/rüzgar/chaos/hakem
@@ -179,6 +179,7 @@ static (MatchConfig cfg, CommandQueue q) BuildReplay(int idx, ulong balanceHash)
         Seed = sd,
         EngineVersion = "m17-golden-v1",
         BalanceHash = balanceHash,
+        CommandBandsHash = bandsHash,
         Home = BuildSheetSide(300, 7, home: true, offset: (idx % 5) * 6 - 12),
         Away = BuildSheetSide(300, 7, home: false, idEntity: 8, offset: ((idx / 5) % 5) * 6 - 12),
         Weather = (WeatherKind)(idx % 4),
@@ -190,7 +191,7 @@ static (MatchConfig cfg, CommandQueue q) BuildReplay(int idx, ulong balanceHash)
         Referee = new RefereeProfile
         { Strictness = (byte)(35 + idx % 40), AdvantageTendency = 50, Consistency = 60 }
     };
-    cfg.ConfigHash = TheBadge.Sim.Config.ConfigHash.Compute(cfg, balanceHash);
+    cfg.ConfigHash = TheBadge.Sim.Config.ConfigHash.Compute(cfg, balanceHash, bandsHash);
 
     // KOMUT ZAMAN ÇİZELGESİ — dörtlünün dördüncü üyesi. Üç komut ailesi de temsil edilir
     // (taktik / motivasyon / değişiklik) ki replay yalnız fizik değil MÜDAHALE yolunu da pinlesin.
@@ -210,9 +211,9 @@ static (MatchConfig cfg, CommandQueue q) BuildReplay(int idx, ulong balanceHash)
 
 // Bir replay'i oynatır ve KİMLİK ALANLARINI döndürür (bit-eşitlik bunlarla denetlenir).
 static (ulong cfgHash, ulong stateHash, int gh, int ga, uint ticks, ulong trace, uint applied, uint red, uint subs)
-    RunReplay(int idx, ulong balanceHash, TheBadge.Sim.Config.SimBalance bal)
+    RunReplay(int idx, ulong balanceHash, ulong bandsHash, TheBadge.Sim.Config.SimBalance bal)
 {
-    var (cfg, q) = BuildReplay(idx, balanceHash);
+    var (cfg, q) = BuildReplay(idx, balanceHash, bandsHash);
     var e = new MatchEngine(cfg.Seed, q, cfg, bal) { AutoManage = true };
     var st = MatchEngine.CreateInitialState(cfg);
     var r = e.Run(ref st);
@@ -230,13 +231,17 @@ if (args.Length > 0 && args[0] == "gen-replays")
         System.IO.File.ReadAllText(balPath), gOpts);
     // Balance HAM BAYT özeti — host işi (çekirdek JSON parse etmez; ME 3.3 sapma notu)
     ulong balHash = TheBadge.Sim.Core.XxHash64.Hash(System.IO.File.ReadAllBytes(balPath));
+    // Komut bantları da config_hash kapsamında (Atilla kararı, 2026-08-25) → sete PİNLENİR
+    string gBandPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(balPath), "command.bands.json");
+    ulong gBandsHash = TheBadge.Sim.Core.XxHash64.Hash(System.IO.File.ReadAllBytes(gBandPath));
 
     var sb = new System.Text.StringBuilder();
     sb.Append("{\n  \"surum\": \"m17-golden-v1\",\n  \"balanceHash\": \"0x");
-    sb.Append(balHash.ToString("X16")).Append("\",\n  \"replayler\": [\n");
+    sb.Append(balHash.ToString("X16")).Append("\",\n  \"bandsHash\": \"0x");
+    sb.Append(gBandsHash.ToString("X16")).Append("\",\n  \"replayler\": [\n");
     for (int i = 0; i < ReplaySetN; i++)
     {
-        var g = RunReplay(i, balHash, gBal);
+        var g = RunReplay(i, balHash, gBandsHash, gBal);
         sb.Append("    { \"idx\": ").Append(i)
           .Append(", \"configHash\": \"0x").Append(g.cfgHash.ToString("X16"))
           .Append("\", \"stateHash\": \"0x").Append(g.stateHash.ToString("X16"))
@@ -255,7 +260,7 @@ if (args.Length > 0 && args[0] == "gen-replays")
     System.IO.Directory.CreateDirectory(outPath);
     string file = System.IO.Path.Combine(outPath, "replay_set_v1.json");
     System.IO.File.WriteAllText(file, sb.ToString());
-    Console.WriteLine($"[gen] {ReplaySetN} golden replay üretildi (balanceHash 0x{balHash:X16}) → {file}");
+    Console.WriteLine($"[gen] {ReplaySetN} golden replay üretildi (balanceHash 0x{balHash:X16} · bandsHash 0x{gBandsHash:X16}) → {file}");
     return 0;
 }
 
@@ -1845,6 +1850,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
 {
     string balPathR = FindRepoFile("balance/sim.balance.json");
     ulong balHashR = TheBadge.Sim.Core.XxHash64.Hash(System.IO.File.ReadAllBytes(balPathR));
+    string bandPathR = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(balPathR), "command.bands.json");
+    ulong bandsHashR = TheBadge.Sim.Core.XxHash64.Hash(System.IO.File.ReadAllBytes(bandPathR));
     string setPath = System.IO.Path.Combine(
         System.IO.Path.GetDirectoryName(balPathR), "..",
         "shared", "TheBadge.Sim.Checks", "goldens", "replay_set_v1.json");
@@ -1856,12 +1863,19 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         using var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(setPath));
         var kok = doc.RootElement;
         ulong setBal = Convert.ToUInt64(kok.GetProperty("balanceHash").GetString().Substring(2), 16);
+        // Komut bantları da kimliğin parçası: bant DEĞERİ değişince set bayatlar ve yeniden
+        // üretim istenir. Sürüm politikasının VERİ ayağı budur (Catalog.Version notu).
+        ulong setBands = kok.TryGetProperty("bandsHash", out var bh)
+            ? Convert.ToUInt64(bh.GetString().Substring(2), 16) : 0UL;
         if (setBal != balHashR)
             failures += Fail("M17ReplaySetiGuncel",
                 $"balance değişmiş (set 0x{setBal:X16} ≠ dosya 0x{balHashR:X16}) — `-- gen-replays` ile YENİDEN ÜRET");
+        else if (setBands != bandsHashR)
+            failures += Fail("M17ReplaySetiGuncel",
+                $"komut bantları değişmiş (set 0x{setBands:X16} ≠ dosya 0x{bandsHashR:X16}) — `-- gen-replays` ile YENİDEN ÜRET");
         else
         {
-            Pass($"M17ReplaySetiGuncel(balanceHash 0x{balHashR:X16})");
+            Pass($"M17ReplaySetiGuncel(balanceHash 0x{balHashR:X16} · bandsHash 0x{bandsHashR:X16})");
             var kayitlar = kok.GetProperty("replayler");
             int sapan = 0; string ilkSapma = "";
             // İNDEKS KAPSAMI (inceleme bulgusu, Codex): döngü yalnız DOSYADAKİ kayıtları
@@ -1875,7 +1889,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                 if (idx < 0 || idx >= ReplaySetN) { bandDisi++; continue; }
                 if (gorulen[idx]) yinelenen++;
                 gorulen[idx] = true;
-                var g = RunReplay(idx, balHashR, simBal);
+                var g = RunReplay(idx, balHashR, bandsHashR, simBal);
                 ulong bekCfg = Convert.ToUInt64(kayit.GetProperty("configHash").GetString().Substring(2), 16);
                 ulong bekSt = Convert.ToUInt64(kayit.GetProperty("stateHash").GetString().Substring(2), 16);
                 ulong bekIz = Convert.ToUInt64(kayit.GetProperty("komutIz").GetString().Substring(2), 16);
@@ -1908,8 +1922,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             // config_hash AYIRT EDİCİ mi: kurulumun tek alanı değişince hash değişmeli (3.3'ün
             // "eski replay yeni parametrelerle sessizce oynamaz" güvencesi). Hava/zemin/rüzgar/
             // chaos M17'de kimliğe EKLENDİ — bu kapı o eklemenin gerçekten bağlı olduğunu ölçer.
-            var (baseCfg, _) = BuildReplay(0, balHashR);
-            ulong h0 = TheBadge.Sim.Config.ConfigHash.Compute(baseCfg, balHashR);
+            var (baseCfg, _) = BuildReplay(0, balHashR, bandsHashR);
+            ulong h0 = TheBadge.Sim.Config.ConfigHash.Compute(baseCfg, balHashR, bandsHashR);
             var varyantlar = new (string ad, Action<MatchConfig> uygula)[]
             {
                 ("hava",    c => c.Weather = c.Weather == WeatherKind.Kuru ? WeatherKind.Kar : WeatherKind.Kuru),
@@ -1925,14 +1939,15 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             string kor = "";
             foreach (var (ad, uygula) in varyantlar)
             {
-                var (v, _) = BuildReplay(0, balHashR);
+                var (v, _) = BuildReplay(0, balHashR, bandsHashR);
                 uygula(v);
-                if (TheBadge.Sim.Config.ConfigHash.Compute(v, balHashR) == h0) kor += ad + " ";
+                if (TheBadge.Sim.Config.ConfigHash.Compute(v, balHashR, bandsHashR) == h0) kor += ad + " ";
             }
-            // Balance özetinin kendisi de kimliğe girmeli
-            if (TheBadge.Sim.Config.ConfigHash.Compute(baseCfg, balHashR ^ 1UL) == h0) kor += "balance ";
+            // Balance ve KOMUT BANTLARI özetlerinin kendisi de kimliğe girmeli
+            if (TheBadge.Sim.Config.ConfigHash.Compute(baseCfg, balHashR ^ 1UL, bandsHashR) == h0) kor += "balance ";
+            if (TheBadge.Sim.Config.ConfigHash.Compute(baseCfg, balHashR, bandsHashR ^ 1UL) == h0) kor += "komutBantları ";
             if (kor.Length > 0) failures += Fail("M17ConfigHashAyirtEdici", $"şu alanlar hash'i DEĞİŞTİRMİYOR: {kor}");
-            else Pass("M17ConfigHashAyirtEdici(9 alan: sürüm·lod·balance·chaos·hava·zemin·rüzgar·hakem·kadro)");
+            else Pass("M17ConfigHashAyirtEdici(10 alan: sürüm·lod·balance·komutBantları·chaos·hava·zemin·rüzgar·hakem·kadro)");
         }
     }
 }
@@ -1976,6 +1991,21 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         else if (eksikBant.Length > 0 || bosBaglam.Length > 0)
             failures += Fail("K1KatalogTamligi", $"eksik bant: {eksikBant}· boş bağlam: {bosBaglam}");
         else Pass($"K1KatalogTamligi(32 aksiyon, {paramSayisi} parametre, bant/enum tanımları tam)");
+    }
+
+    // 24a2) KATALOG SÜRÜM KİLİDİ — Atilla kararı (2026-08-25): aksiyon ekleme MINOR,
+    // parametre/bant değişikliği MAJOR. Politikanın KOD ayağı burada zorlanır: katalogun şekil
+    // özeti pinlenir, değişince kapı düşer ve sürüm kararını yüzünüze çıkarır. (VERİ ayağı ayrı:
+    // bant DEĞERLERİ config_hash'te olduğu için golden replay setini geçersiz kılar.)
+    {
+        const ulong PinliSekil = 0xF8AF5B0053B59B80UL;   // katalog v1 (32 aksiyon, 70 parametre)
+        ulong sekil = Catalog.ShapeHash();
+        if (sekil != PinliSekil)
+            failures += Fail("K1KatalogSurumKilidi",
+                $"katalog şekli değişti (0x{sekil:X16} ≠ pinli 0x{PinliSekil:X16}). " +
+                "Aksiyon EKLENDİYSE Catalog.Version'ı MINOR, parametre/bant DEĞİŞTİYSE MAJOR " +
+                "artır ve bu sabiti yeni değerle güncelle — sessiz geçiş YOK.");
+        else Pass($"K1KatalogSurumKilidi(v{Catalog.Version} · şekil 0x{sekil:X16})");
     }
 
     // Ortak kurulum

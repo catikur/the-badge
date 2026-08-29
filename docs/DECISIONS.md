@@ -1153,21 +1153,45 @@ kendinden emin anlattığım yerlerdeydi — atomiklik garantisi ve "üç ayrı 
   kaldırılınca her koşuda kırmızı (8 komut geçiyor, kasa **-700**). **Ders: eşzamanlılık kapısının
   dişi ölçülmeden yazılmış sayılmaz** — zamanlamaya bağlı bir test, hata varken de yeşil kalar.
 
+### FAZ 04 açık kararları — ✅ KAPANDI (2026-08-25, Atilla: "önerilerini kabul ediyorum")
+Üç madde de önerilen biçimde karara bağlandı. İkisinin KOD karşılığı vardı; ikisi de uygulandı.
+
+**1. Offline kuyruk uzlaştırma → sunucu kazanır, düşen komutlar RAPOR EDİLİR.**
+Bağlantı dönünce yerel Tier 0 kuyruğu sunucu durumuyla çelişirse sunucu otoritedir (D3/G3), ama
+düşen komutlar sessizce yutulmaz — kullanıcıya hangi komutun neden düştüğü gösterilir. Gerekçe
+CB 8.2'nin kendi ilkesi: "sessiz üzerine yazma YOKTUR; kullanıcı her zaman net sonuç görür."
+Elenen (a) sunucu kazanır + sessiz düşer → kullanıcının emeğini görünmez şekilde siliyordu;
+elenen (c) komut bazlı birleştirme → Tier 0 zaten geri alınabilir olduğu için maliyetini hak
+etmiyor. **Bu bir K6 politikasıdır** (Nakama köprüsü); K2-K5'te kod karşılığı yok, K3-K5'i
+bloklamıyor. Uygulaması K6 diliminde.
+
+**2. Komut bantları config_hash kapsamına girer → UYGULANDI.**
+`balance/command.bands.json` ham bayt özeti artık `ConfigHash.Compute`'un ZORUNLU üçüncü
+parametresi (`MatchConfig.CommandBandsHash`). Gerekçe: bantlar hangi komutun KABUL edildiğini
+belirler → replay dörtlüsünün dördüncü üyesi olan komut zaman çizelgesini belirler. Bant değişip
+hash sabit kalsaydı aynı çizelge farklı oynar ve 3.3'ün "eski replay yeni parametrelerle sessizce
+oynamaz" güvencesi delinirdi. M17'nin `BalanceHash` deseni (özeti host hesaplar, çekirdek JSON
+parse etmez) ikinci dosyaya birebir genişletildi. **Varsayılan parametre BIRAKILMADI** — unutulabilir
+bir varsayılan, bant değişikliğinin kimliğe sessizce girmemesi demekti (bu oturumun tekrar eden dersi).
+- **Sonucu:** kapsam genişleyince golden replay seti geçersizleşti ve YENİDEN ÜRETİLDİ (50 replay;
+  `bandsHash 0x03BEA30B618B4B08` sete pinlendi). Bu bir yan hasar değil, config_hash'in var olma sebebi.
+- **Kapılar:** `M17ReplaySetiGuncel` iki özeti birden denetliyor; `M17ConfigHashAyirtEdici` 10 alana çıktı.
+
+**3. Katalog sürüm politikası → aksiyon ekleme MINOR, parametre/bant değişikliği MAJOR.**
+`Catalog.Version` notu kesinleşti. Politika TEMENNİ değil, iki mekanizmayla ZORLANIYOR:
+- **KOD ayağı:** `Catalog.ShapeHash()` — aksiyon sayısı, her aksiyonun adı/tier/bağlam/sınıfı, her
+  parametrenin adı/tipi/zorunluluğu/bant anahtarı/uzunluğu/enum değerleri. `K1KatalogSurumKilidi`
+  pinli sabitle karşılaştırır; değişince kapı düşer ve "MINOR mu MAJOR mu" kararını yüzünüze çıkarır.
+- **VERİ ayağı:** bant DEĞERLERİ katalogda değil `command.bands.json`'da; o dosya da 2. karar
+  sayesinde config_hash kapsamında → değer değişikliği golden seti bayatlatıyor.
+  **İki karar birbirini tamamladı:** 2. maddenin uygulaması, 3. maddeye veri tarafında diş verdi.
+
+**Dişler ölçüldü:** gerçek bir bant DEĞERİ değişikliği (`tycoon.biletFiyat` 500→600) ve gerçek bir
+katalog PARAMETRE değişikliği (`fiyat` required true→false) ayrı ayrı denendi; her biri kendi
+kapısını kırmızıya döndürdü (parametre değişikliğini ayrıca `K1SemaSikiligi` ve `K1BantZorlamasi`
+da bağımsız yakaladı — savunma derinliği çalışıyor).
+
 ## Bekleyen kararlar
-- **Offline kuyruk uzlaştırma politikası (K2'den çıktı, 2026-08-24):** brief §4.1'in "dünya durumu
-  nerede yaşar" sorusu **D3 (G3, sunucu-otoriter) + GDD 6.3 + GDD 11.2 ile zaten kapalı**; K2 bunu
-  doğruladı ve mimari-nötr çekirdeği yazdı. Geriye tek soru kaldı: CB 8.3 offline'da Tier 0
-  komutları yerel kuyrukta bekletiyor — bağlantı dönünce yerel durum sunucu durumuyla ÇELİŞİRSE
-  ne olur? Seçenekler: (a) sunucu kazanır, yerel kuyruk sessizce düşer (basit; kullanıcı emeği
-  kaybolur); (b) sunucu kazanır ama düşen komutlar kullanıcıya rapor edilir (CB 8.2 "sessiz üzerine
-  yazma yoktur" ilkesiyle uyumlu); (c) komut bazlı birleştirme (en pahalı; Tier 0'ın geri
-  alınabilirliği bunu gereksiz kılıyor olabilir). **Öneri: (b).** Karar K6'yı (Nakama köprüsü)
-  bloklar, K3-K5'i BLOKLAMAZ.
-- **Komut bantları config_hash'e girsin mi (brief §4.2):** öneri **evet** — bantlar hangi komutun
-  kabul edildiğini belirler → komut zaman çizelgesini → replay'i. M17'nin `BalanceHash` deseni
-  ikinci dosyaya genişletilir. K6 öncesi kapanmalı.
-- **Katalog sürüm politikası (brief §4.3):** öneri aksiyon ekleme = minor, parametre/bant değişikliği
-  = major. `Catalog.Version` satırındaki yorum bu karara işaret ediyor; karar sonrası kesinleşir.
 - ~~ME 13.4 upset büyüklüğü~~ → **KARAR (2026-08-19, Atilla): (d) HİBRİT.** Dört seçenek
   sunuldu — (a) tam zincir normalizasyonu (2 dilim motor işi), (b) yalnız hedef revizyonu
   (%93 revize hedefin de üstünde kalır), (c) skor üstü yeniden örnekleme (tek-kaynak ilkesi +

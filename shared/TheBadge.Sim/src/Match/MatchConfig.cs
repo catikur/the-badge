@@ -33,6 +33,14 @@ namespace TheBadge.Sim.Match
         /// CLAUDE.md bağımlılıksızlık kuralı). config_hash'in girdisi; ME 3.3 sapma notu
         /// `Config/ConfigHash.cs` başlığındadır.</summary>
         public ulong BalanceHash;
+
+        /// <summary>`balance/command.bands.json` ham bayt özeti — config_hash İÇİ
+        /// (Atilla kararı, 2026-08-25). Gerekçe: bantlar hangi komutun KABUL edildiğini belirler
+        /// → komut zaman çizelgesini → replay'i. Bant değişip hash sabit kalsaydı, aynı zaman
+        /// çizelgesi farklı oynar ve "eski replay yeni parametrelerle sessizce oynamaz" güvencesi
+        /// delinirdi. `BalanceHash` deseninin ikinci dosyaya genişletilmesi (ME 3.3 sapma notu
+        /// burada da geçerli: özeti host hesaplar, çekirdek JSON parse etmez).</summary>
+        public ulong CommandBandsHash;
         public string EngineVersion;
         public TeamSheet Home, Away;
         public RefereeProfile Referee = RefereeProfile.Default;
