@@ -4,9 +4,17 @@ using System.Collections.Generic;
 namespace TheBadge.World
 {
     /// <summary>Mutasyon hedefi — journal girdisinin hangi durum parçasına yazdığı.</summary>
-    public enum MutTarget : byte { Kulup = 0, Oyuncu = 1, Takvim = 2, Insaat = 3, Kredi = 4, Tesis = 5, Mac = 6 }
+    public enum MutTarget : byte { Kulup = 0, Oyuncu = 1, Takvim = 2, Insaat = 3, Kredi = 4, Tesis = 5, Mac = 6, Fiyat = 7, Sponsor = 8 }
 
-    public static class ClubField { public const byte Kasa = 1, StadyumKapasite = 2, HaftalikMaasGider = 3; }
+    public static class ClubField
+    {
+        public const byte Kasa = 1, StadyumKapasite = 2, HaftalikMaasGider = 3,
+                          SponsorHaftalik = 4, Form = 5, SponsorKalanHafta = 6, DonemInsaatGideri = 7;
+    }
+
+    /// <summary>Fiyat alanları — `Index` slot (tribün 0-4 / ürün 0-2), değer KURUŞ.
+    /// `Kombine` slot kullanmaz.</summary>
+    public static class PriceField { public const byte Bilet = 1, Kombine = 2, Bufe = 3, Magaza = 4; }
     public static class PlayerField
     {
         public const byte ClubId = 1, HaftalikMaas = 2, SozlesmeKalanHafta = 3, Moral = 4,
@@ -16,6 +24,7 @@ namespace TheBadge.World
     public static class ConstructionField { public const byte InsaatId = 1, TesisId = 2, HedefTier = 3, KalanHafta = 4, ToplamMaliyet = 5; }
     public static class LoanField { public const byte KrediId = 1, Anapara = 2, KalanAy = 3, FaizBp = 4; }
     public static class FacilityField { public const byte Tier = 1; }
+    public static class SponsorField { public const byte TeklifId = 1, Haftalik = 2, Sure = 3, SonGecerlilik = 4, SonGecerlilikSezon = 5; }
     public static class MatchField { public const byte KalanDegisiklikHakki = 1; }
 
     /// <summary>Tek bir durum yazması. Journal girdileri TİPLİdir (kapanış/closure değil) ki
@@ -146,6 +155,25 @@ namespace TheBadge.World
                         case ClubField.Kasa: mevcut = st.Club.KasaTl; return true;
                         case ClubField.StadyumKapasite: mevcut = st.Club.StadyumKapasite; min = 0; max = int.MaxValue; return true;
                         case ClubField.HaftalikMaasGider: mevcut = st.Club.HaftalikMaasGiderTl; min = 0; return true;
+                        case ClubField.SponsorHaftalik: mevcut = st.Club.SponsorHaftalikTl; min = 0; return true;
+                        case ClubField.Form: mevcut = st.Club.Form; min = 0; max = 100; return true;
+                        case ClubField.SponsorKalanHafta: mevcut = st.Club.SponsorKalanHafta; min = 0; max = ushort.MaxValue; return true;
+                        case ClubField.DonemInsaatGideri: mevcut = st.Club.DonemInsaatGideriTl; return true;
+                    }
+                    break;
+                case MutTarget.Fiyat:
+                    switch (m.Field)
+                    {
+                        case PriceField.Bilet:
+                            if (m.Index < 0 || m.Index >= st.Fiyat.BiletKurus.Length) { hata = "tribün indeksi kapsam dışı"; return false; }
+                            mevcut = st.Fiyat.BiletKurus[m.Index]; min = 0; max = int.MaxValue; return true;
+                        case PriceField.Kombine: mevcut = st.Fiyat.KombineKurus; min = 0; max = int.MaxValue; return true;
+                        case PriceField.Bufe:
+                            if (m.Index < 0 || m.Index >= st.Fiyat.BufeKurus.Length) { hata = "büfe ürün indeksi kapsam dışı"; return false; }
+                            mevcut = st.Fiyat.BufeKurus[m.Index]; min = 0; max = int.MaxValue; return true;
+                        case PriceField.Magaza:
+                            if (m.Index < 0 || m.Index >= st.Fiyat.MagazaKurus.Length) { hata = "mağaza ürün indeksi kapsam dışı"; return false; }
+                            mevcut = st.Fiyat.MagazaKurus[m.Index]; min = 0; max = int.MaxValue; return true;
                     }
                     break;
                 case MutTarget.Oyuncu:
@@ -197,6 +225,17 @@ namespace TheBadge.World
                     if (m.Index < 0 || m.Index >= st.Club.TesisTier.Length) { hata = "tesis indeksi kapsam dışı"; return false; }
                     if (m.Field == FacilityField.Tier) { mevcut = st.Club.TesisTier[m.Index]; min = 0; max = byte.MaxValue; return true; }
                     break;
+                case MutTarget.Sponsor:
+                    if (m.Index < 0 || m.Index >= st.Club.SponsorTeklifleri.Length) { hata = "sponsor teklif slotu kapsam dışı"; return false; }
+                    switch (m.Field)
+                    {
+                        case SponsorField.TeklifId: mevcut = st.Club.SponsorTeklifleri[m.Index].TeklifId; min = 0; max = int.MaxValue; return true;
+                        case SponsorField.Haftalik: mevcut = st.Club.SponsorTeklifleri[m.Index].HaftalikTl; min = 0; return true;
+                        case SponsorField.Sure: mevcut = st.Club.SponsorTeklifleri[m.Index].SureHafta; min = 0; max = ushort.MaxValue; return true;
+                        case SponsorField.SonGecerlilik: mevcut = st.Club.SponsorTeklifleri[m.Index].SonGecerlilikHafta; min = 0; max = ushort.MaxValue; return true;
+                        case SponsorField.SonGecerlilikSezon: mevcut = st.Club.SponsorTeklifleri[m.Index].SonGecerlilikSezon; min = 0; max = ushort.MaxValue; return true;
+                    }
+                    break;
                 case MutTarget.Mac:
                     if (m.Field == MatchField.KalanDegisiklikHakki) { mevcut = st.KalanDegisiklikHakki; min = 0; max = byte.MaxValue; return true; }
                     break;
@@ -212,7 +251,17 @@ namespace TheBadge.World
                 case MutTarget.Kulup:
                     if (m.Field == ClubField.Kasa) st.Club.KasaTl = v;
                     else if (m.Field == ClubField.StadyumKapasite) st.Club.StadyumKapasite = (int)v;
-                    else st.Club.HaftalikMaasGiderTl = v;
+                    else if (m.Field == ClubField.HaftalikMaasGider) st.Club.HaftalikMaasGiderTl = v;
+                    else if (m.Field == ClubField.SponsorHaftalik) st.Club.SponsorHaftalikTl = v;
+                    else if (m.Field == ClubField.SponsorKalanHafta) st.Club.SponsorKalanHafta = (ushort)v;
+                    else if (m.Field == ClubField.DonemInsaatGideri) st.Club.DonemInsaatGideriTl = v;
+                    else st.Club.Form = (byte)v;
+                    break;
+                case MutTarget.Fiyat:
+                    if (m.Field == PriceField.Bilet) st.Fiyat.BiletKurus[m.Index] = (int)v;
+                    else if (m.Field == PriceField.Kombine) st.Fiyat.KombineKurus = (int)v;
+                    else if (m.Field == PriceField.Bufe) st.Fiyat.BufeKurus[m.Index] = (int)v;
+                    else st.Fiyat.MagazaKurus[m.Index] = (int)v;
                     break;
                 case MutTarget.Oyuncu:
                     switch (m.Field)
@@ -254,6 +303,16 @@ namespace TheBadge.World
                     }
                     break;
                 case MutTarget.Tesis: st.Club.TesisTier[m.Index] = (byte)v; break;
+                case MutTarget.Sponsor:
+                    switch (m.Field)
+                    {
+                        case SponsorField.TeklifId: st.Club.SponsorTeklifleri[m.Index].TeklifId = (int)v; break;
+                        case SponsorField.Haftalik: st.Club.SponsorTeklifleri[m.Index].HaftalikTl = v; break;
+                        case SponsorField.Sure: st.Club.SponsorTeklifleri[m.Index].SureHafta = (ushort)v; break;
+                        case SponsorField.SonGecerlilik: st.Club.SponsorTeklifleri[m.Index].SonGecerlilikHafta = (ushort)v; break;
+                        case SponsorField.SonGecerlilikSezon: st.Club.SponsorTeklifleri[m.Index].SonGecerlilikSezon = (ushort)v; break;
+                    }
+                    break;
                 case MutTarget.Mac: st.KalanDegisiklikHakki = (byte)v; break;
             }
         }

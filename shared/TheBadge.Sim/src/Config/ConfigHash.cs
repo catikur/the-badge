@@ -17,6 +17,9 @@ namespace TheBadge.Sim.Config
     /// Kapsam 3.3'ün listesinden GENİŞTİR (M17): hava/zemin/rüzgar (12.4) ve chaos seviyesi
     /// (13.2) sonucu doğrudan değiştirir — kimliğe girmezlerse iki farklı kurulum aynı hash'i
     /// paylaşır ve "eski replay yeni parametrelerle sessizce oynamaz" güvencesi delinirdi.
+    /// FAZ 04'te bir üye daha eklendi: KOMUT BANTLARI (`balance/command.bands.json`) — bantlar
+    /// hangi komutun kabul edildiğini belirler, o da replay dörtlüsünün dördüncü üyesi olan
+    /// komut zaman çizelgesini belirler (Atilla kararı, 2026-08-25).
     /// </summary>
     public static class ConfigHash
     {
@@ -61,9 +64,13 @@ namespace TheBadge.Sim.Config
             }
         }
 
-        /// <summary>config_hash hesabı. `balanceBytesHash`: balance dosyasının HAM bayt özeti
-        /// (host hesaplar — yukarıdaki sapma notu). Kadro özeti kurulumdan türetilir.</summary>
-        public static ulong Compute(MatchConfig cfg, ulong balanceBytesHash)
+        /// <summary>config_hash hesabı. `balanceBytesHash` ve `commandBandsBytesHash`: ilgili
+        /// balance dosyalarının HAM bayt özetleri (host hesaplar — yukarıdaki sapma notu).
+        /// Kadro özeti kurulumdan türetilir.
+        ///
+        /// `commandBandsBytesHash` ZORUNLU parametredir (varsayılan yok): unutulabilir bir
+        /// varsayılan, bant değişikliğinin kimliğe sessizce girmemesi demek olurdu.</summary>
+        public static ulong Compute(MatchConfig cfg, ulong balanceBytesHash, ulong commandBandsBytesHash)
         {
             if (cfg == null) throw new ArgumentNullException(nameof(cfg));
             Span<byte> buf = stackalloc byte[256];
@@ -79,6 +86,9 @@ namespace TheBadge.Sim.Config
             W32(buf, ref o, (uint)MatchEngine.TicksPerSecond);
             // Balance ham bayt özeti (3.3 "balanceJson_kanonik_bytes")
             W64(buf, ref o, balanceBytesHash);
+            // Komut bantları ham bayt özeti — config_hash İÇİ (Atilla kararı, 2026-08-25):
+            // bantlar hangi komutun kabul edildiğini, o da komut zaman çizelgesini belirler.
+            W64(buf, ref o, commandBandsBytesHash);
             // Chaos (3.3) + M17 genişletmesi: hava/zemin/rüzgar (12.4) ve hakem profili
             buf[o++] = (byte)cfg.Chaos;
             buf[o++] = (byte)cfg.Weather;

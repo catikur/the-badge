@@ -1,0 +1,82 @@
+{
+  "surum": 1,
+  "aciklama": "FAZ 04 K3 Tycoon ekonomi katsayilari [KALIBRE]. Sozlesme: docs/ECONOMY_MAP.md — sezon source/sink orani 1,05-1,15; maas sink'i toplam sink'in %45-60'i. Tutarlar TAM TL.",
+  "tribun": {
+    "aciklama": "Kapasite paylari binde (toplam 1000). Sira: kuzey, guney, dogu, bati, vip.",
+    "kapasitePayiBinde": [
+      280,
+      280,
+      190,
+      190,
+      60
+    ],
+    "referansFiyat": [
+      60,
+      60,
+      90,
+      90,
+      400
+    ]
+  },
+  "seyirci": {
+    "tabanDoluluk": 0.72,
+    "minDoluluk": 0.18,
+    "fiyatElastikiyet": 0.55,
+    "formEtkisi": 0.3,
+    "tesisEtkisi": 0.04,
+    "varyansSigma": 0.045
+  },
+  "macGunu": {
+    "bufeHarcamaTaban": 38.0,
+    "bufeReferansFiyat": 12.0,
+    "bufeElastikiyet": 0.45,
+    "magazaHarcamaTaban": 21.0,
+    "magazaReferansFiyat": 45.0,
+    "magazaElastikiyet": 0.4,
+    "evMacOrani": 0.5
+  },
+  "kombine": {
+    "referansFiyat": 1200,
+    "elastikiyet": 0.5,
+    "kapasiteOrani": 0.34
+  },
+  "gelir": {
+    "yayinHaftalik": 780000,
+    "sponsorHaftalikTaban": 240000,
+    "galibiyetPrimi": 320000,
+    "beraberlikPrimi": 110000
+  },
+  "gider": {
+    "tesisBakimHaftalikTierBasi": 45000,
+    "personelHaftalik": 420000,
+    "genelIsletmeHaftalik": 570000
+  },
+  "kredi": {
+    "yillikFaizBp": 2400,
+    "aylikTaksitBolen": 1.0
+  },
+  "insaat": {
+    "tierMaliyetTaban": 4200000,
+    "tierMaliyetCarpan": 1.85,
+    "tierSureHafta": [
+      0,
+      6,
+      9,
+      13,
+      18,
+      24
+    ],
+    "iptalIadeOrani": 0.55,
+    "kapasiteTier": [
+      0,
+      5000,
+      15000,
+      30000,
+      60000,
+      90000
+    ]
+  },
+  "iflas": {
+    "esikTl": -25000000
+  }
+}

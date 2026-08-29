@@ -93,6 +93,70 @@ namespace TheBadge.Checks
         { Cagrilar++; throw new InvalidOperationException("denetim deposu erişilemez"); }
     }
 
+    /// <summary>K3 REFERANS KULÜP — ekonomi sözleşmesinin (ECONOMY_MAP) ölçüldüğü senaryo.
+    /// "İyi yönetilen orta ölçekli kulüp": tier 3 stadyum (30.000), 22 kişilik kadro, tesisler
+    /// makul seviyede, fiyatlar referans bandında. Katsayılar bu kulübü 1,05-1,15 bandında
+    /// TUTMALIDIR — fixture sabit, kalibre edilen `economy.balance.json`tır.</summary>
+    public static class EkonomiFixture
+    {
+        public const int Kapasite = 30000;
+        public const int KadroSayisi = 22;
+        public const long OyuncuHaftalikMaas = 70_700;
+
+        public static GameState Kur(WorldRules rules, EconomyBalance eco, long clubId, long ownerUserId)
+        {
+            var st = WorldFixture.Kur(rules, clubId, ownerUserId, KadroSayisi, 2, 2, 20_000_000);
+            st.Club.StadyumKapasite = Kapasite;
+            st.Club.Form = 50;
+            // Tesisler: stadyum tier 3 + dört tesis tier 2 (bakım gideri tier toplamına bağlı)
+            st.Club.TesisTier[EconomyTick.StadyumTesisId] = 3;
+            for (int i = 2; i <= 5; i++) st.Club.TesisTier[i] = 2;
+            // Maaş gideri kadroyla tutarlı
+            for (int i = 0; i < st.Oyuncular.Length; i++)
+                if (st.Oyuncular[i].ClubId == clubId) st.Oyuncular[i].HaftalikMaasTl = OyuncuHaftalikMaas;
+            st.Club.HaftalikMaasGiderTl = KadroSayisi * OyuncuHaftalikMaas;
+            // Fiyatlar referans seviyesinde (kuruş)
+            for (int t = 0; t < 5; t++) st.Fiyat.BiletKurus[t] = eco.tribun.referansFiyat[t] * 100;
+            st.Fiyat.KombineKurus = (int)(eco.kombine.referansFiyat * 100);
+            for (int i = 0; i < 3; i++) st.Fiyat.BufeKurus[i] = (int)(eco.macGunu.bufeReferansFiyat * 100);
+            for (int i = 0; i < 3; i++) st.Fiyat.MagazaKurus[i] = (int)(eco.macGunu.magazaReferansFiyat * 100);
+            return st;
+        }
+    }
+
+    /// <summary>Sezon simülatörü — haftalık tick'i TEK KAPI'dan geçirerek koşturur (doğrudan
+    /// durum mutasyonu yok). Sonuç dizisi ECONOMY_MAP sözleşmesinin ölçüldüğü veridir.</summary>
+    public static class EkonomiKosu
+    {
+        /// <summary>`sezon` sezon boyunca haftalık tick. Maç sonuçları DETERMİNİSTİK bir
+        /// örüntüden gelir (rastgelelik ekonomiyi değil, ölçümü bulanıklaştırırdı): sırayla
+        /// G-B-M-G-B-M... → %33 galibiyet, %33 beraberlik, %33 mağlubiyet.</summary>
+        public static WeekLedger Kos(GameState st, EconomyBalance eco, WorldRules kural,
+                                     ulong saveSeed, int sezon, out int iflasSezonu)
+        {
+            var toplam = new WeekLedger();
+            var j = new WorldJournal();
+            iflasSezonu = -1;
+            int hafta = 0;
+            for (int s = 0; s < sezon; s++)
+            {
+                for (int h = 0; h < kural.yapi.sezonHaftaSayisi; h++, hafta++)
+                {
+                    var sonuc = (WeekResult)(byte)(1 + (hafta % 3));      // G, B, M döngüsü
+                    bool evMaci = (hafta % 2) == 0;
+                    j.Clear();
+                    var L = EconomyTick.Hafta(st, eco, kural, saveSeed, sonuc, evMaci, j);
+                    if (!j.Validate(st, out string hata))
+                        throw new InvalidOperationException("ekonomi journal geçersiz: " + hata);
+                    j.Apply(st);
+                    toplam.Topla(L);
+                    if (iflasSezonu < 0 && st.Club.KasaTl <= eco.iflas.esikTl) iflasSezonu = s + 1;
+                }
+            }
+            return toplam;
+        }
+    }
+
     /// <summary>K2 dünya durumu kurulum yardımcıları.</summary>
     public static class WorldFixture
     {

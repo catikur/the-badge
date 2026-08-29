@@ -20,7 +20,7 @@ modülleri bus'tan önce yazılırsa ya değişmezi ihlal eder ya yeniden yazıl
 | --- | --- | --- |
 | **K1** ✅ | **Command Bus çekirdeği** (CB 3-6, 8) | Diğer her modülün geçmek zorunda olduğu kapı |
 | **K2** ✅ | Dünya durumu (`GameState`): kulüp, kadro, finans, takvim | Kapı 3'ün (bağlam/sahiplik/kaynak) denetleyeceği durum |
-| K3 | Tycoon Economy (CB 4.1, 9 aksiyon) | En kapalı devre modül; ekonomi bantları ECONOMY_MAP sözleşmesi |
+| **K3** ✅ | Tycoon Economy (CB 4.1, 9 aksiyon) | En kapalı devre modül; ekonomi bantları ECONOMY_MAP sözleşmesi |
 | K4 | Squad Management (CB 4.2) | Maç motoruna en yakın; anchor/rol/talimat zaten ME'de karşılığı var |
 | K5 | Transfer Market AI (CB 4.3) | Değerleme + pazarlık; K2 finans ve K4 kadro üstüne oturur |
 | K6 | Online (Nakama RPC) + SimWorker | Sunucu otoritesi; K1-K5 tamamlanmadan sözleşme donmaz |
@@ -66,22 +66,20 @@ düşer ve **ilerlemenin ölçüsüdür**. Kalıcılık ve otorite bağlaması K
 tablosu · K3-K5 kural seami · atomiklik · sahte başarı yok · yürütme determinizmi · eşzamanlılık ·
 balance zorlaması · Tek Kapı uçtan uca.
 
-## 4. Atilla'ya karar maddeleri (K3-K6 öncesi)
+## 4. Karar maddeleri — ✅ HEPSİ KAPANDI (2026-08-25, Atilla onayı)
 
-1. ~~**Dünya durumu nerede yaşar?**~~ → **ZATEN KAPALI** (K2 sırasında kayıtlar okununca görüldü):
-   **D3 (2026-07-30) = G3, sunucu-otoriter**; GDD 6.3 "maç motoru online liglerde asla oyuncunun
-   cihazında çalışmaz"; GDD 11.2 "komut doğrulama .NET C# servis katmanında koşar". CB 8.3 de
-   offline için "kod tek, davranış özdeş" diyor — yani durum çekirdeği her iki okumada da aynıdır
-   ve `shared/`te yaşar. Bu soruyu brief'e yazmam gereksizdi.
-   **Geriye kalan gerçek soru:** offline kuyruk bağlantı dönünce sunucu durumuyla çelişirse ne olur?
-   Öneri: sunucu kazanır ama düşen komutlar kullanıcıya RAPOR edilir (CB 8.2 "sessiz üzerine yazma
-   yoktur"). Bu karar **K6'yı bloklar, K3-K5'i bloklamaz** — ayrıntı `docs/DECISIONS.md` bekleyen
-   kararlar.
-2. **Komut bantları config_hash kapsamına girsin mi?** Bantlar hangi komutun kabul edildiğini
-   belirler → komut zaman çizelgesini → replay'i etkiler. Öneri: **evet**, `command.bands.json`
-   da config_hash'e girer (M17'nin `BalanceHash` deseni ikinci dosyaya genişletilir).
-3. **Katalog sürümü nasıl ilerler?** Öneri: aksiyon ekleme minor, parametre/bant değişikliği
-   major; istemci desteklenmeyen sürümde `UnsupportedCatalogVersion` alır (CB 3.2 zaten böyle).
+1. ~~**Dünya durumu nerede yaşar?**~~ → **D3 (G3, sunucu-otoriter) ile zaten kapalıydı**; K2
+   sırasında kayıtlar okununca görüldü. Bu soruyu brief'e yazmam gereksizdi. Ondan türeyen gerçek
+   soru — **offline kuyruk uzlaştırması** — şöyle karara bağlandı: **sunucu kazanır, düşen komutlar
+   kullanıcıya RAPOR EDİLİR** (CB 8.2 "sessiz üzerine yazma yoktur"). K6 politikası; K3-K5'i bloklamaz.
+2. ~~**Komut bantları config_hash'e girsin mi?**~~ → **EVET, uygulandı.**
+   `MatchConfig.CommandBandsHash` + `ConfigHash.Compute`'un zorunlu üçüncü parametresi. Golden
+   replay seti yeniden üretildi (kapsam genişlemesinin doğal sonucu).
+3. ~~**Katalog sürümü nasıl ilerler?**~~ → **Aksiyon ekleme MINOR, parametre/bant değişikliği MAJOR.**
+   Politika iki mekanizmayla zorlanıyor: `Catalog.ShapeHash()` + `K1KatalogSurumKilidi` (kod ayağı)
+   ve bantların config_hash'te olması (veri ayağı).
+
+Ayrıntılı gerekçeler `docs/DECISIONS.md` → "FAZ 04 açık kararları".
 
 ## 5. Bu fazda taşınan FAZ 03 borçları (arayüzü DEĞİŞTİRMEZ)
 

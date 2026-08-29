@@ -56,8 +56,16 @@ namespace TheBadge.CommandBus
     /// Bant DEĞERLERİ balance dosyasındadır; burada yalnız anahtarları durur.</summary>
     public static class Catalog
     {
-        /// <summary>Katalog sürümü. Aksiyon EKLEME minor, parametre/bant değişikliği major
-        /// (BRIEF_FAZ04_ACILIS §4.3 önerisi; Atilla kararı sonrası bu satır kesinleşir).</summary>
+        /// <summary>Katalog sürümü. **KARAR (Atilla, 2026-08-25):** aksiyon EKLEME minor,
+        /// parametre/bant değişikliği MAJOR. İstemci desteklenmeyen sürümde
+        /// `UnsupportedCatalogVersion` alır (CB 3.2).
+        ///
+        /// Politika ZORLANIR, temenni değildir — iki ayrı mekanizmayla:
+        /// • KOD tarafı: `ShapeHash()` katalogun şeklini pinler; aksiyon/parametre değişince
+        ///   `K1KatalogSurumKilidi` kapısı düşer ve sürüm kararını yüzünüze çıkarır.
+        /// • VERİ tarafı: bant DEĞERLERİ `command.bands.json`'dadır ve o dosya artık config_hash
+        ///   kapsamındadır — değer değişikliği golden replay setini geçersiz kılar
+        ///   (`M17ReplaySetiGuncel`).</summary>
         public const ushort Version = 1;
 
         static readonly string[] TribunEnum = { "kuzey", "guney", "dogu", "bati", "vip" };
@@ -198,5 +206,41 @@ namespace TheBadge.CommandBus
             => actionType != null && Map.TryGetValue(actionType, out var a) ? a : null;
 
         public static bool SupportsVersion(ushort version) => version == Version;
+
+        /// <summary>Katalogun ŞEKİL özeti — aksiyon sayısı, her aksiyonun adı/tier/bağlam/sınıfı
+        /// ve her parametrenin adı/tipi/zorunluluğu/bant anahtarı/uzunluğu/enum değerleri.
+        /// Bant DEĞERLERİ burada değildir (onlar `command.bands.json`'da ve config_hash'te).
+        ///
+        /// Amacı sürüm politikasını (yukarıda) zorlamak: bu özet değiştiğinde kapı düşer, yani
+        /// katalog değişikliği ancak sürümün ne olacağına BİLİNÇLİ karar verilerek geçebilir.</summary>
+        public static ulong ShapeHash()
+        {
+            var b = new List<byte>(4096);
+            void U8(byte v) => b.Add(v);
+            void U16(int v) { b.Add((byte)v); b.Add((byte)(v >> 8)); }
+            void Str(string s)
+            {
+                if (s == null) { U16(0xFFFF); return; }
+                U16(s.Length);
+                for (int i = 0; i < s.Length; i++) U16(s[i]);
+            }
+            U16(All.Length);
+            for (int i = 0; i < All.Length; i++)
+            {
+                var a = All[i];
+                Str(a.ActionType); U8((byte)a.Tier); U8((byte)a.Context); U8((byte)a.RateClass);
+                U16(a.Params.Length);
+                for (int j = 0; j < a.Params.Length; j++)
+                {
+                    var p = a.Params[j];
+                    Str(p.Name); U8((byte)p.Type); U8(p.Required ? (byte)1 : (byte)0);
+                    Str(p.BandKey); U16(p.MaxLength);
+                    var ev = p.EnumValues;
+                    U16(ev == null ? 0xFFFF : ev.Length);
+                    if (ev != null) for (int k = 0; k < ev.Length; k++) Str(ev[k]);
+                }
+            }
+            return TheBadge.Sim.Core.XxHash64.Hash(b.ToArray());
+        }
     }
 }

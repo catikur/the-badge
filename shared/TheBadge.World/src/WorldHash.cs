@@ -18,8 +18,11 @@ namespace TheBadge.World
         public static ulong Compute(GameState st)
         {
             if (st == null) return 0UL;
-            var b = new Buf(64 + st.Oyuncular.Length * 48 + st.Club.InsaatSlot.Length * 24
-                            + st.Club.Krediler.Length * 20 + st.Club.TesisTier.Length);
+            var b = new Buf(128 + st.Oyuncular.Length * 48 + st.Club.InsaatSlot.Length * 24
+                            + st.Club.Krediler.Length * 20 + st.Club.TesisTier.Length
+                            + st.Club.SponsorTeklifleri.Length * 20
+                            + (st.Fiyat.BiletKurus.Length + st.Fiyat.BufeKurus.Length
+                               + st.Fiyat.MagazaKurus.Length + 1) * 4);
 
             // --- Kulüp ---
             b.I64(st.Club.ClubId);
@@ -27,6 +30,10 @@ namespace TheBadge.World
             b.I64(st.Club.KasaTl);
             b.I32(st.Club.StadyumKapasite);
             b.I64(st.Club.HaftalikMaasGiderTl);
+            b.I64(st.Club.SponsorHaftalikTl);
+            b.U16(st.Club.SponsorKalanHafta);
+            b.I64(st.Club.DonemInsaatGideriTl);
+            b.U8(st.Club.Form);
 
             b.I32(st.Club.TesisTier.Length);
             for (int i = 0; i < st.Club.TesisTier.Length; i++) b.U8(st.Club.TesisTier[i]);
@@ -54,6 +61,20 @@ namespace TheBadge.World
                 b.U16(p.SozlesmeKalanHafta); b.U8(p.Moral); b.U8(p.Kondisyon); b.U8(p.SakatlikHafta);
                 b.U8(p.RolId); b.I32(p.AnchorXmm); b.I32(p.AnchorYmm); b.U8(p.ListedeMi ? (byte)1 : (byte)0);
             }
+
+            b.I32(st.Club.SponsorTeklifleri.Length);
+            for (int i = 0; i < st.Club.SponsorTeklifleri.Length; i++)
+            {
+                var so = st.Club.SponsorTeklifleri[i];
+                b.I32(so.TeklifId); b.I64(so.HaftalikTl); b.U16(so.SureHafta);
+                b.U16(so.SonGecerlilikSezon); b.U16(so.SonGecerlilikHafta);
+            }
+
+            // --- Fiyatlar (kuruş) ---
+            for (int i = 0; i < st.Fiyat.BiletKurus.Length; i++) b.I32(st.Fiyat.BiletKurus[i]);
+            b.I32(st.Fiyat.KombineKurus);
+            for (int i = 0; i < st.Fiyat.BufeKurus.Length; i++) b.I32(st.Fiyat.BufeKurus[i]);
+            for (int i = 0; i < st.Fiyat.MagazaKurus.Length; i++) b.I32(st.Fiyat.MagazaKurus[i]);
 
             // --- Takvim + maç hakları ---
             b.U16(st.Takvim.Sezon); b.U16(st.Takvim.Hafta); b.U8((byte)st.Takvim.Pencere);

@@ -16,6 +16,8 @@ namespace TheBadge.World
         FiyatGuncellendi = 8,
         TaktikGuncellendi = 9,
         HaftaIlerledi = 10,
+        SponsorImzalandi = 11,
+        SponsorSonaErdi = 12,
     }
 
     /// <summary>Dünya olayı — TEK YÖNLÜ: dünya mantığı bu kaydı ASLA OKUMAZ ve `WorldHash`e

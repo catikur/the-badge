@@ -1153,21 +1153,191 @@ kendinden emin anlattığım yerlerdeydi — atomiklik garantisi ve "üç ayrı 
   kaldırılınca her koşuda kırmızı (8 komut geçiyor, kasa **-700**). **Ders: eşzamanlılık kapısının
   dişi ölçülmeden yazılmış sayılmaz** — zamanlamaya bağlı bir test, hata varken de yeşil kalar.
 
+### FAZ 04 açık kararları — ✅ KAPANDI (2026-08-25, Atilla: "önerilerini kabul ediyorum")
+Üç madde de önerilen biçimde karara bağlandı. İkisinin KOD karşılığı vardı; ikisi de uygulandı.
+
+**1. Offline kuyruk uzlaştırma → sunucu kazanır, düşen komutlar RAPOR EDİLİR.**
+Bağlantı dönünce yerel Tier 0 kuyruğu sunucu durumuyla çelişirse sunucu otoritedir (D3/G3), ama
+düşen komutlar sessizce yutulmaz — kullanıcıya hangi komutun neden düştüğü gösterilir. Gerekçe
+CB 8.2'nin kendi ilkesi: "sessiz üzerine yazma YOKTUR; kullanıcı her zaman net sonuç görür."
+Elenen (a) sunucu kazanır + sessiz düşer → kullanıcının emeğini görünmez şekilde siliyordu;
+elenen (c) komut bazlı birleştirme → Tier 0 zaten geri alınabilir olduğu için maliyetini hak
+etmiyor. **Bu bir K6 politikasıdır** (Nakama köprüsü); K2-K5'te kod karşılığı yok, K3-K5'i
+bloklamıyor. Uygulaması K6 diliminde.
+
+**2. Komut bantları config_hash kapsamına girer → UYGULANDI.**
+`balance/command.bands.json` ham bayt özeti artık `ConfigHash.Compute`'un ZORUNLU üçüncü
+parametresi (`MatchConfig.CommandBandsHash`). Gerekçe: bantlar hangi komutun KABUL edildiğini
+belirler → replay dörtlüsünün dördüncü üyesi olan komut zaman çizelgesini belirler. Bant değişip
+hash sabit kalsaydı aynı çizelge farklı oynar ve 3.3'ün "eski replay yeni parametrelerle sessizce
+oynamaz" güvencesi delinirdi. M17'nin `BalanceHash` deseni (özeti host hesaplar, çekirdek JSON
+parse etmez) ikinci dosyaya birebir genişletildi. **Varsayılan parametre BIRAKILMADI** — unutulabilir
+bir varsayılan, bant değişikliğinin kimliğe sessizce girmemesi demekti (bu oturumun tekrar eden dersi).
+- **Sonucu:** kapsam genişleyince golden replay seti geçersizleşti ve YENİDEN ÜRETİLDİ (50 replay;
+  `bandsHash 0x03BEA30B618B4B08` sete pinlendi). Bu bir yan hasar değil, config_hash'in var olma sebebi.
+- **Kapılar:** `M17ReplaySetiGuncel` iki özeti birden denetliyor; `M17ConfigHashAyirtEdici` 10 alana çıktı.
+
+**3. Katalog sürüm politikası → aksiyon ekleme MINOR, parametre/bant değişikliği MAJOR.**
+`Catalog.Version` notu kesinleşti. Politika TEMENNİ değil, iki mekanizmayla ZORLANIYOR:
+- **KOD ayağı:** `Catalog.ShapeHash()` — aksiyon sayısı, her aksiyonun adı/tier/bağlam/sınıfı, her
+  parametrenin adı/tipi/zorunluluğu/bant anahtarı/uzunluğu/enum değerleri. `K1KatalogSurumKilidi`
+  pinli sabitle karşılaştırır; değişince kapı düşer ve "MINOR mu MAJOR mu" kararını yüzünüze çıkarır.
+- **VERİ ayağı:** bant DEĞERLERİ katalogda değil `command.bands.json`'da; o dosya da 2. karar
+  sayesinde config_hash kapsamında → değer değişikliği golden seti bayatlatıyor.
+  **İki karar birbirini tamamladı:** 2. maddenin uygulaması, 3. maddeye veri tarafında diş verdi.
+
+**Dişler ölçüldü:** gerçek bir bant DEĞERİ değişikliği (`tycoon.biletFiyat` 500→600) ve gerçek bir
+katalog PARAMETRE değişikliği (`fiyat` required true→false) ayrı ayrı denendi; her biri kendi
+kapısını kırmızıya döndürdü (parametre değişikliğini ayrıca `K1SemaSikiligi` ve `K1BantZorlamasi`
+da bağımsız yakaladı — savunma derinliği çalışıyor).
+
+### K3-A: Tycoon ekonomi çekirdeği — ✅ TAMAM (2026-08-25)
+`shared/TheBadge.World/src/Economy/` + `balance/economy.balance.json`. GDD 4.2/4.4'ün ekonomisi,
+sözleşmesi `docs/ECONOMY_MAP.md`.
+
+- **Haftalık tick:** seyirci → bilet/büfe/mağaza; sezon başı kombine (peşin); yayın + sponsor +
+  maç primi; maaş/bakım/personel/işletme; kredi (4 haftada bir); inşaat ilerlemesi. TEK KAPI'ya
+  uyar — tick durumu doğrudan değiştirmez, `WorldJournal`a yazar.
+- **Kredi muhasebesi:** FAİZ sink'tir, ANAPARA değildir — anapara bilanço aktarımıdır, para
+  yaratmaz. ECONOMY_MAP yalnız "kredi faizi"ni sink sayıyor; anapara sink'e girseydi kredi çekmek
+  source/sink oranını yapay olarak bozardı. `WeekLedger` bunu ayrı alanda tutuyor.
+- **Kalibrasyon (tek tur):** ilk ölçüm source/sink **1,548** ve maaş payı **%70,2** ile bant
+  dışıydı. Maaş sabit tutulup maaş-dışı sink'ler yükseltildi (bakım 26k→45k, personel 165k→420k,
+  işletme 210k→570k ₺/hafta). Sonuç: **source/sink 1,133 ∈ [1,05-1,15]** · **maaş payı %51,2 ∈
+  [%45-60]**. Referans kulüp (30k kapasite, 22 kişilik kadro, tier 3 stadyum) fixture'dır; kalibre
+  edilen balance dosyasıdır — fixture'ı oynatarak bant tutturmak ölçümü anlamsız kılardı.
+- **Kapılar (7):** `K3EkonomiSozlesmesi` (10 sezon, iki bant) · `K3EkonomiDeterminizmi` ·
+  `K3SeyirciModeli` (fiyat/form yönü + kapasite ve min doluluk sınırları) · `K3InsaatIlerlemesi` ·
+  `K3KrediAmortismani` · `K3IflasEgrisi` (kötü yönetim sezon 2 ∈ [2,3]; iyi yönetim 6 sezon ayakta) ·
+  `K3RngGauss01Borcu` (aşağıdaki bulgunun gözcüsü).
+
+### 🔴 BULGU: `Rng.Gauss01` komşu tick'lerde ve bit-0 farklı seed'lerde AYNI değeri üretiyor
+K3'ün seyirci varyansı seed'e duyarlı çıkmayınca ortaya çıktı; kök sebep FAZ 03 kodunda.
+
+- **Mekanizma:** `Gauss01` 12 çekilişi `[16·salt, 16·salt+12)` salt aralığında topluyor. Bu küme
+  bit-0 ve bit-1 çevirmeleri altında **kapalı**: `z = seed ^ … ^ (tick<<1) ^ salt` olduğu için
+  seed'in bit-0'ını veya tick'in ilgili bitini çevirmek, salt'ları yalnız kendi aralarında yer
+  değiştiriyor. Çokluk kümesi aynı kalıyor → toplam aynı (yalnız toplama sırası değişiyor).
+- **Ölçüm (2000 örnek):** aynı çekiliş kümesi — **komşu tick %50,0**, **bit-0 farklı seed %100,0**.
+  (Tam kayan nokta eşitliği %26,9 / %55,3; toplama sırası son bitleri ayırdığı için tam eşitlik
+  gerçek bağımsızlık kaybını OLDUĞUNDAN KÜÇÜK gösteriyor.) `Rand01`'de çarpışma **sıfır** —
+  kusur toplama deseninde, çekirdek hash'te değil.
+- **Etki alanı:** maç motorunda **13 çağrı yeri** (fizik, karar, düello, şut nişanı), hepsi
+  `st.Tick` anahtarlı. Determinizm bozulmuyor (sonuç hâlâ tekrarlanabilir) ama gürültü
+  tasarlandığından çok daha bağımlı: ardışık tick'lerin yarısı aynı Gauss değerini alıyor.
+- **DÜZELTİLMEDİ (bilinçli):** düzeltme 50 golden replay'i ve M16-E'nin 12 metriğini kaydırır →
+  ayrı dilim + yeniden kalibrasyon. K3 kendi gürültüsünü `Rand01` tabanlı simetrik üniformdan
+  alıyor (genlik `sigma·√3`, sd korunur) ve `K3RngGauss01Borcu` kapısı borcu ekranda tutup
+  KÖTÜLEŞMESİNİ engelliyor (M15 kompozisyon borcunda kurulan desen).
+- **Öneri:** salt aralığını çarpışmayan bir dizilime taşımak (ör. `salt*16 + i` yerine
+  `salt*0x9E3779B1 + i*0x85EBCA6B` gibi tek sayı adımlı bir yayılım). Tek satırlık değişiklik,
+  maliyeti düzeltmenin kendisi değil ARDINDAN gelen yeniden kalibrasyon. Kararı Atilla verir.
+
+### K3-B: 9 tycoon aksiyonu — ✅ TAMAM (2026-08-25)
+CB 4.1'in dokuz aksiyonu bağlandı: fiyatlar (bilet/kombine/büfe/mağaza), inşaat başlat/iptal,
+kredi al/öde, sponsor imzala. `WorldExecutor.UnboundActions()` 32'den **23**'e düştü — kalan 23
+K4-K7'nin işi ve sayı ilerlemenin ölçüsü olmayı sürdürüyor.
+
+- **K2'nin bıraktığı boşluk kapandı:** K2 "bilmediği bedeli tahmin etmez" deyip hesaplanan
+  maliyetleri seame bırakmıştı. K3 onları `economy.balance.json`tan getirip Kapı 3'e bağladı:
+  inşaat maliyeti + `hedefTier = mevcut+1` (CB 4.1 tablosu), kredi slot doluluğu, sponsor teklif
+  geçerliliği, fazla ödeme.
+- **Fiyat birimi KURUŞ:** `command.bands.json` büfe fiyatını [0,5 - 50] ₺ ile tanımlıyor, yani
+  kesirli fiyat meşru; kalıcı durum ise tamsayı olmak zorunda (ME 3.2). Tek birim seçildi —
+  bilet tam ₺, büfe kuruş olsaydı dönüşüm hatası kaçınılmazdı.
+- **Kimlik üretimi deterministik:** yeni inşaat/kredi kimliği "mevcut en büyük + 1"dir; sayaç ya
+  da `Guid` kullanılmaz — aynı durumdan aynı komut aynı kimliği üretmeli (CB 5.2).
+
+**CB 10.1 negatif matrisi — 9 aksiyon × 4 senaryo = 36.** Senaryolar KATALOGDAN mekanik türetiliyor
+(bant dışı değer, ilk bantlı parametreden hesaplanıyor); elle yazılmış 36 vaka bir aksiyonu sessizce
+atlayabilirdi, tarama atlayamaz.
+
+**Kapı yazarken iki ders çıktı, ikisi de ölçümle:**
+1. **Rate limit senaryosu durumlu aksiyonlarda Kapı 4'e hiç ulaşmıyordu.** Aynı komutu 21 kez
+   YÜRÜTÜNCE inşaat/kredi/sponsor 2. denemede meşru bir `StateConflict` veriyor ve kapı 4 hiç
+   çalışmıyor. Rate limit'i sınamak durumu sabit tutmayı gerektiriyor → senaryo yürütmeden
+   doğrulamaya çevrildi.
+2. **Kapı 3 senaryosu yalnız sebep koduna bakıyordu ve bu YETMİYORDU.** Dişini ölçerken görüldü:
+   kredi slot ve fazla ödeme kuralları KAPATILDIĞI HÂLDE kapı yeşil kalıyordu — çünkü daha derin
+   katmanlar (handler'ın kendi denetimi, journal'ın aralık koruması) aynı `StateConflict`i
+   üretiyordu. Savunma derinliği çalışıyordu ama sınanmak istenen kapı sınanmıyordu. Çözüm:
+   her Kapı 3 senaryosu ayrıca `Validate` (yürütmesiz) ile doğrulanıyor — aynı sebebi vermesi,
+   reddin doğrulama zincirinden çıktığının kanıtı. Dört kural da kapatılıp yeniden ölçüldü;
+   şimdi dördü de yakalanıyor.
+- **Kapılar (3):** `K3TycoonBaglanti` · `K3TycoonMutluYol` (9 aksiyonun durum etkisi) ·
+  `K3NegatifMatris` (36 senaryo + kapı 3 köken denetimi).
+
+### K3 inceleme turu — ✅ TAMAM (2026-08-29)
+Codex, PR #17 incelemeye açılınca dört bulgu çıkardı (2 P1, 2 P2); dördü de haklı.
+
+1. **(P1) İnşaat harcaması hiçbir sink kalemine girmiyordu.** Handler kasadan düşüyordu ama
+   `WeekLedger.ToplamGider`'in inşaat bileşeni yoktu — oysa ECONOMY_MAP "inşaat + tesis bakımı"nı
+   açıkça sink sayıyor. Sonuç: inşaat İÇEREN bir sezonun source/sink oranı olduğundan İYİ
+   görünürdü ve kalibrasyon kapısı sözleşmeyi ihlal eden bir balance'ı onaylayabilirdi.
+   Çözüm: `ClubState.DonemInsaatGideriTl` biriktiricisi — komut harcamayı biriktirir, haftalık tick
+   `WeekLedger.InsaatTl`e boşaltıp sıfırlar; iptal iadesi biriktiriciyi geri çeker.
+   **Çift muhasebe tuzağı:** bedel komut anında kasadan zaten düşüyor, bu yüzden `InsaatTl`
+   `NetTl`e GİRMEZ — yalnız SINK RAPORUdur. (Kredi anaparasında verilen kararın kardeşi.)
+2. **(P1) Sponsor sözleşme süresi imzada siliniyordu.** `SureHafta` teklifle birlikte temizleniyor,
+   tick ise `SponsorHaftalikTl`i her hafta süresiz ödüyordu: 1 haftalık anlaşma sonsuza dek gelir
+   yazıyordu. Çözüm: `ClubState.SponsorKalanHafta` — imzada taşınır, tick'te azalır, sıfırlanınca
+   gelir temizlenir ve `SponsorSonaErdi` olayı basılır (taban sponsora dönülür).
+3. **(P2) Teklif geçerliliği sezon dönüşünü aşıyordu.** Karşılaştırma yalnız HAFTAydı; tick sezon
+   sonunda haftayı 1'e sardığı için S1H10'da biten teklif S2H1-H10 arasında yeniden geçerli
+   oluyordu. Çözüm: `SonGecerlilikSezon` eklendi, karşılaştırma (sezon, hafta) çiftiyle.
+4. **(P2) Sponsor imzası `FiyatGuncellendi` olayı basıyordu.** Hiçbir fiyat değişmiyor; tip 8'i
+   fiyat bildirimine yönlendiren tüketiciler aksiyonu yanlış raporlar ve sözleşme güncellemesini
+   hiç almazdı. Çözüm: `SponsorImzalandi` (11) ve `SponsorSonaErdi` (12) eklendi — kendi kuralıma
+   uyarak SONA, mevcut değerler yeniden kullanılmadan.
+
+- **Kapı:** `K3IncelemeBulgulari` + `K3TycoonMutluYol`a sponsor olay tipi denetimi. Dördü de
+  ters çevrilip ölçüldü; her biri kendi iddiasını kırmızıya döndürüyor.
+
+**5. (Bugbot) `K2HashKapsami` kendi iddiasını yanlışlamıştı.** Kapı "30 kalıcı alanın HER BİRİ
+hash'i oynatıyor" diyordu; K3 yedi yeni kalıcı alan ekledi (Form, sponsor haftalık/kalan hafta,
+dönem inşaat gideri, fiyat dizileri, teklif alanları) ve mutasyon listesi elle bakımlı olduğu için
+GERİDE KALDI — kapı yeşil raporlamayı sürdürürken kapsam iddiası artık doğru değildi. Alanlar
+hash'te vardı, ama kapı onları ÖLÇMÜYORDU: yarın biri hash'ten çıkarsa kimse fark etmezdi.
+- **Çözüm listeyi uzatmak DEĞİL:** beklenen alan kümesi artık YANSIMAYLA türetiliyor (kalıcı durum
+  tiplerinin tüm public alanları; `StateVersion` bilerek dışarıda). Mutasyonu olmayan bir alan
+  kapıyı DÜŞÜRÜYOR, fazladan bir mutasyon da. Kapsamı hatırlamak insana bırakılmadı. 30 → **46 alan**.
+- **Diş ölçümü:** mutasyonsuz yeni bir alan eklendi → kapı düştü ("MUTASYONU YOK"); mevcut bir alan
+  hash'ten çıkarıldı → kapı düştü ("hash oynamadı"). İkisi de doğru mesajla.
+- **Ders:** "her X" diyen bir kapı, X'in listesini elle tutuyorsa iddiası zamanla yanlışlanır.
+  Liste türetilebiliyorsa türetilmeli; bu, bu turda öğrenilen en genellenebilir şey.
+
+**6. (Bugbot) Çift muhasebe koruması ATEŞLENEMİYORDU.** İnşaat bulgusunu düzeltirken yazdığım
+"kasa çift düşmesin" iddiası `kasa > taban + gelir` biçimindeydi. Oysa inşaat `NetTl`e girseydi
+kasa DÜŞERDİ — yani iddia, korumak için yazıldığı hatanın yönüne bakmıyordu ve hiçbir koşulda
+ateşlenemezdi. Bulguyu düzeltirken ölü bir koruma yazmışım.
+- **Çözüm:** beklenen kasa hareketi ledger kalemlerinden `NetTl` KULLANILMADAN kuruluyor
+  (`ToplamGelir - opex - anapara`; `InsaatTl` kasıtlı dışarıda) ve TAM EŞİTLİKLE karşılaştırılıyor.
+  Bağımsız hesap olduğu için `NetTl`in tanımı bozulursa sapma görünür.
+- **Diş ölçümü:** `NetTl` kasten çift muhasebeye çevrildi → kapı doğru teşhisle düştü:
+  `kasa hareketi ledger'la tutmuyor (6129600 ≠ 10329600; inşaat 4200000 çift sayılmış olabilir)`.
+- **Ders:** bir koruma yazarken "hangi YÖNDE sapar?" sorusunu sormadan eşitsizlik kurmak, ölü
+  iddia üretiyor. Belirsizlikte eşitsizlik değil TAM EŞİTLİK kur; tam eşitlik yanlış yöne de
+  duyarlıdır. (Bu turda kapıların kendi zayıflığı ÜÇÜNCÜ kez bulundu: zamanlamaya bağlı yarış
+  kapısı, derin katmanlarca maskelenen Kapı 3 kapısı, ve şimdi ölü eşitsizlik.)
+- **Kapsam notu:** referans kulüp senaryosu inşaatsız kaldı (bilinçli). ECONOMY_MAP'in 1,05-1,15
+  bandı SÜREKLİ işletme dengesi hakkında; inşaat yığınsal sermaye harcamasıdır ve 10 sezonluk
+  ortalamaya karıştırmak bandın anlamını değiştirir. Ledger artık her senaryoyu doğru ölçüyor;
+  bandın capex'i kapsayıp kapsamayacağı balance sprintinin sorusu (bekleyen kararlara işlendi).
+
 ## Bekleyen kararlar
-- **Offline kuyruk uzlaştırma politikası (K2'den çıktı, 2026-08-24):** brief §4.1'in "dünya durumu
-  nerede yaşar" sorusu **D3 (G3, sunucu-otoriter) + GDD 6.3 + GDD 11.2 ile zaten kapalı**; K2 bunu
-  doğruladı ve mimari-nötr çekirdeği yazdı. Geriye tek soru kaldı: CB 8.3 offline'da Tier 0
-  komutları yerel kuyrukta bekletiyor — bağlantı dönünce yerel durum sunucu durumuyla ÇELİŞİRSE
-  ne olur? Seçenekler: (a) sunucu kazanır, yerel kuyruk sessizce düşer (basit; kullanıcı emeği
-  kaybolur); (b) sunucu kazanır ama düşen komutlar kullanıcıya rapor edilir (CB 8.2 "sessiz üzerine
-  yazma yoktur" ilkesiyle uyumlu); (c) komut bazlı birleştirme (en pahalı; Tier 0'ın geri
-  alınabilirliği bunu gereksiz kılıyor olabilir). **Öneri: (b).** Karar K6'yı (Nakama köprüsü)
-  bloklar, K3-K5'i BLOKLAMAZ.
-- **Komut bantları config_hash'e girsin mi (brief §4.2):** öneri **evet** — bantlar hangi komutun
-  kabul edildiğini belirler → komut zaman çizelgesini → replay'i. M17'nin `BalanceHash` deseni
-  ikinci dosyaya genişletilir. K6 öncesi kapanmalı.
-- **Katalog sürüm politikası (brief §4.3):** öneri aksiyon ekleme = minor, parametre/bant değişikliği
-  = major. `Catalog.Version` satırındaki yorum bu karara işaret ediyor; karar sonrası kesinleşir.
+- **ECONOMY_MAP source/sink bandı sermaye harcamasını (inşaat) kapsasın mı? (K3 inceleme turu,
+  2026-08-29)** Ledger artık inşaatı sink sayıyor, ama referans kalibrasyon senaryosu inşaatsız:
+  1,05-1,15 bandı SÜREKLİ işletme dengesini ölçüyor. Seçenekler: (a) bant işletme dengesi olarak
+  kalsın, capex ayrı bir kapıyla ölçülsün (ör. "sezon başına capex ≤ gelirin %X'i"); (b) bant
+  capex dahil yeniden tanımlansın ve yeniden kalibre edilsin. **Öneri: (a)** — yığınsal harcamayı
+  sürekli dengeye karıştırmak bandı bulanıklaştırır ve kulübün yatırım yapmasını cezalandırır gibi
+  okunur. Karar balance sprintine ait, K4-K5'i bloklamaz.
+- **`Rng.Gauss01` çarpışması ne zaman düzeltilsin? (K3 bulgusu, 2026-08-25)** Ölçüm ve mekanizma
+  yukarıdaki bulgu kaydında. Seçenekler: (a) ŞİMDİ düzelt → golden set yeniden üretilir, M16-E'nin
+  12 metriği yeniden ölçülür ve muhtemelen yeniden kalibre edilir (1-2 dilim); (b) FAZ 04 sonunda,
+  K7 bittikten sonra tek seferde; (c) FAZ 05 öncesi, cihaz testlerinden önce. **Öneri: (b)** —
+  gürültü kalitesi bugün hiçbir kapıyı düşürmüyor, ama FAZ 05'e taşınırsa kalibrasyon borcu asset
+  üretimiyle aynı sprinte biner. Gözcü kapı bu arada borcu görünür tutuyor.
 - ~~ME 13.4 upset büyüklüğü~~ → **KARAR (2026-08-19, Atilla): (d) HİBRİT.** Dört seçenek
   sunuldu — (a) tam zincir normalizasyonu (2 dilim motor işi), (b) yalnız hedef revizyonu
   (%93 revize hedefin de üstünde kalır), (c) skor üstü yeniden örnekleme (tek-kaynak ilkesi +

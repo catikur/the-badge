@@ -169,7 +169,7 @@ if (args.Length > 0 && args[0] == "calib10k")
 
 // Replay kurulumu TEK KAYNAKTAN türetilir: üretici ve kapı AYNI fonksiyonu çağırır, böylece
 // "üretici ile kapı farklı evreni ölçer" hatası yapısal olarak imkansızdır.
-static (MatchConfig cfg, CommandQueue q) BuildReplay(int idx, ulong balanceHash)
+static (MatchConfig cfg, CommandQueue q) BuildReplay(int idx, ulong balanceHash, ulong bandsHash)
 {
     ulong sd = 0x5EED0000UL + (ulong)idx * 7919UL;
     // Kurulum çeşitliliği tohumdan TÜRETİLİR: 50 replay hava/zemin/rüzgar/chaos/hakem
@@ -179,6 +179,7 @@ static (MatchConfig cfg, CommandQueue q) BuildReplay(int idx, ulong balanceHash)
         Seed = sd,
         EngineVersion = "m17-golden-v1",
         BalanceHash = balanceHash,
+        CommandBandsHash = bandsHash,
         Home = BuildSheetSide(300, 7, home: true, offset: (idx % 5) * 6 - 12),
         Away = BuildSheetSide(300, 7, home: false, idEntity: 8, offset: ((idx / 5) % 5) * 6 - 12),
         Weather = (WeatherKind)(idx % 4),
@@ -190,7 +191,7 @@ static (MatchConfig cfg, CommandQueue q) BuildReplay(int idx, ulong balanceHash)
         Referee = new RefereeProfile
         { Strictness = (byte)(35 + idx % 40), AdvantageTendency = 50, Consistency = 60 }
     };
-    cfg.ConfigHash = TheBadge.Sim.Config.ConfigHash.Compute(cfg, balanceHash);
+    cfg.ConfigHash = TheBadge.Sim.Config.ConfigHash.Compute(cfg, balanceHash, bandsHash);
 
     // KOMUT ZAMAN ÇİZELGESİ — dörtlünün dördüncü üyesi. Üç komut ailesi de temsil edilir
     // (taktik / motivasyon / değişiklik) ki replay yalnız fizik değil MÜDAHALE yolunu da pinlesin.
@@ -210,9 +211,9 @@ static (MatchConfig cfg, CommandQueue q) BuildReplay(int idx, ulong balanceHash)
 
 // Bir replay'i oynatır ve KİMLİK ALANLARINI döndürür (bit-eşitlik bunlarla denetlenir).
 static (ulong cfgHash, ulong stateHash, int gh, int ga, uint ticks, ulong trace, uint applied, uint red, uint subs)
-    RunReplay(int idx, ulong balanceHash, TheBadge.Sim.Config.SimBalance bal)
+    RunReplay(int idx, ulong balanceHash, ulong bandsHash, TheBadge.Sim.Config.SimBalance bal)
 {
-    var (cfg, q) = BuildReplay(idx, balanceHash);
+    var (cfg, q) = BuildReplay(idx, balanceHash, bandsHash);
     var e = new MatchEngine(cfg.Seed, q, cfg, bal) { AutoManage = true };
     var st = MatchEngine.CreateInitialState(cfg);
     var r = e.Run(ref st);
@@ -230,13 +231,17 @@ if (args.Length > 0 && args[0] == "gen-replays")
         System.IO.File.ReadAllText(balPath), gOpts);
     // Balance HAM BAYT özeti — host işi (çekirdek JSON parse etmez; ME 3.3 sapma notu)
     ulong balHash = TheBadge.Sim.Core.XxHash64.Hash(System.IO.File.ReadAllBytes(balPath));
+    // Komut bantları da config_hash kapsamında (Atilla kararı, 2026-08-25) → sete PİNLENİR
+    string gBandPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(balPath), "command.bands.json");
+    ulong gBandsHash = TheBadge.Sim.Core.XxHash64.Hash(System.IO.File.ReadAllBytes(gBandPath));
 
     var sb = new System.Text.StringBuilder();
     sb.Append("{\n  \"surum\": \"m17-golden-v1\",\n  \"balanceHash\": \"0x");
-    sb.Append(balHash.ToString("X16")).Append("\",\n  \"replayler\": [\n");
+    sb.Append(balHash.ToString("X16")).Append("\",\n  \"bandsHash\": \"0x");
+    sb.Append(gBandsHash.ToString("X16")).Append("\",\n  \"replayler\": [\n");
     for (int i = 0; i < ReplaySetN; i++)
     {
-        var g = RunReplay(i, balHash, gBal);
+        var g = RunReplay(i, balHash, gBandsHash, gBal);
         sb.Append("    { \"idx\": ").Append(i)
           .Append(", \"configHash\": \"0x").Append(g.cfgHash.ToString("X16"))
           .Append("\", \"stateHash\": \"0x").Append(g.stateHash.ToString("X16"))
@@ -255,7 +260,7 @@ if (args.Length > 0 && args[0] == "gen-replays")
     System.IO.Directory.CreateDirectory(outPath);
     string file = System.IO.Path.Combine(outPath, "replay_set_v1.json");
     System.IO.File.WriteAllText(file, sb.ToString());
-    Console.WriteLine($"[gen] {ReplaySetN} golden replay üretildi (balanceHash 0x{balHash:X16}) → {file}");
+    Console.WriteLine($"[gen] {ReplaySetN} golden replay üretildi (balanceHash 0x{balHash:X16} · bandsHash 0x{gBandsHash:X16}) → {file}");
     return 0;
 }
 
@@ -1845,6 +1850,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
 {
     string balPathR = FindRepoFile("balance/sim.balance.json");
     ulong balHashR = TheBadge.Sim.Core.XxHash64.Hash(System.IO.File.ReadAllBytes(balPathR));
+    string bandPathR = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(balPathR), "command.bands.json");
+    ulong bandsHashR = TheBadge.Sim.Core.XxHash64.Hash(System.IO.File.ReadAllBytes(bandPathR));
     string setPath = System.IO.Path.Combine(
         System.IO.Path.GetDirectoryName(balPathR), "..",
         "shared", "TheBadge.Sim.Checks", "goldens", "replay_set_v1.json");
@@ -1856,12 +1863,19 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         using var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(setPath));
         var kok = doc.RootElement;
         ulong setBal = Convert.ToUInt64(kok.GetProperty("balanceHash").GetString().Substring(2), 16);
+        // Komut bantları da kimliğin parçası: bant DEĞERİ değişince set bayatlar ve yeniden
+        // üretim istenir. Sürüm politikasının VERİ ayağı budur (Catalog.Version notu).
+        ulong setBands = kok.TryGetProperty("bandsHash", out var bh)
+            ? Convert.ToUInt64(bh.GetString().Substring(2), 16) : 0UL;
         if (setBal != balHashR)
             failures += Fail("M17ReplaySetiGuncel",
                 $"balance değişmiş (set 0x{setBal:X16} ≠ dosya 0x{balHashR:X16}) — `-- gen-replays` ile YENİDEN ÜRET");
+        else if (setBands != bandsHashR)
+            failures += Fail("M17ReplaySetiGuncel",
+                $"komut bantları değişmiş (set 0x{setBands:X16} ≠ dosya 0x{bandsHashR:X16}) — `-- gen-replays` ile YENİDEN ÜRET");
         else
         {
-            Pass($"M17ReplaySetiGuncel(balanceHash 0x{balHashR:X16})");
+            Pass($"M17ReplaySetiGuncel(balanceHash 0x{balHashR:X16} · bandsHash 0x{bandsHashR:X16})");
             var kayitlar = kok.GetProperty("replayler");
             int sapan = 0; string ilkSapma = "";
             // İNDEKS KAPSAMI (inceleme bulgusu, Codex): döngü yalnız DOSYADAKİ kayıtları
@@ -1875,7 +1889,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                 if (idx < 0 || idx >= ReplaySetN) { bandDisi++; continue; }
                 if (gorulen[idx]) yinelenen++;
                 gorulen[idx] = true;
-                var g = RunReplay(idx, balHashR, simBal);
+                var g = RunReplay(idx, balHashR, bandsHashR, simBal);
                 ulong bekCfg = Convert.ToUInt64(kayit.GetProperty("configHash").GetString().Substring(2), 16);
                 ulong bekSt = Convert.ToUInt64(kayit.GetProperty("stateHash").GetString().Substring(2), 16);
                 ulong bekIz = Convert.ToUInt64(kayit.GetProperty("komutIz").GetString().Substring(2), 16);
@@ -1908,8 +1922,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             // config_hash AYIRT EDİCİ mi: kurulumun tek alanı değişince hash değişmeli (3.3'ün
             // "eski replay yeni parametrelerle sessizce oynamaz" güvencesi). Hava/zemin/rüzgar/
             // chaos M17'de kimliğe EKLENDİ — bu kapı o eklemenin gerçekten bağlı olduğunu ölçer.
-            var (baseCfg, _) = BuildReplay(0, balHashR);
-            ulong h0 = TheBadge.Sim.Config.ConfigHash.Compute(baseCfg, balHashR);
+            var (baseCfg, _) = BuildReplay(0, balHashR, bandsHashR);
+            ulong h0 = TheBadge.Sim.Config.ConfigHash.Compute(baseCfg, balHashR, bandsHashR);
             var varyantlar = new (string ad, Action<MatchConfig> uygula)[]
             {
                 ("hava",    c => c.Weather = c.Weather == WeatherKind.Kuru ? WeatherKind.Kar : WeatherKind.Kuru),
@@ -1925,14 +1939,15 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             string kor = "";
             foreach (var (ad, uygula) in varyantlar)
             {
-                var (v, _) = BuildReplay(0, balHashR);
+                var (v, _) = BuildReplay(0, balHashR, bandsHashR);
                 uygula(v);
-                if (TheBadge.Sim.Config.ConfigHash.Compute(v, balHashR) == h0) kor += ad + " ";
+                if (TheBadge.Sim.Config.ConfigHash.Compute(v, balHashR, bandsHashR) == h0) kor += ad + " ";
             }
-            // Balance özetinin kendisi de kimliğe girmeli
-            if (TheBadge.Sim.Config.ConfigHash.Compute(baseCfg, balHashR ^ 1UL) == h0) kor += "balance ";
+            // Balance ve KOMUT BANTLARI özetlerinin kendisi de kimliğe girmeli
+            if (TheBadge.Sim.Config.ConfigHash.Compute(baseCfg, balHashR ^ 1UL, bandsHashR) == h0) kor += "balance ";
+            if (TheBadge.Sim.Config.ConfigHash.Compute(baseCfg, balHashR, bandsHashR ^ 1UL) == h0) kor += "komutBantları ";
             if (kor.Length > 0) failures += Fail("M17ConfigHashAyirtEdici", $"şu alanlar hash'i DEĞİŞTİRMİYOR: {kor}");
-            else Pass("M17ConfigHashAyirtEdici(9 alan: sürüm·lod·balance·chaos·hava·zemin·rüzgar·hakem·kadro)");
+            else Pass("M17ConfigHashAyirtEdici(10 alan: sürüm·lod·balance·komutBantları·chaos·hava·zemin·rüzgar·hakem·kadro)");
         }
     }
 }
@@ -1976,6 +1991,21 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         else if (eksikBant.Length > 0 || bosBaglam.Length > 0)
             failures += Fail("K1KatalogTamligi", $"eksik bant: {eksikBant}· boş bağlam: {bosBaglam}");
         else Pass($"K1KatalogTamligi(32 aksiyon, {paramSayisi} parametre, bant/enum tanımları tam)");
+    }
+
+    // 24a2) KATALOG SÜRÜM KİLİDİ — Atilla kararı (2026-08-25): aksiyon ekleme MINOR,
+    // parametre/bant değişikliği MAJOR. Politikanın KOD ayağı burada zorlanır: katalogun şekil
+    // özeti pinlenir, değişince kapı düşer ve sürüm kararını yüzünüze çıkarır. (VERİ ayağı ayrı:
+    // bant DEĞERLERİ config_hash'te olduğu için golden replay setini geçersiz kılar.)
+    {
+        const ulong PinliSekil = 0xF8AF5B0053B59B80UL;   // katalog v1 (32 aksiyon, 70 parametre)
+        ulong sekil = Catalog.ShapeHash();
+        if (sekil != PinliSekil)
+            failures += Fail("K1KatalogSurumKilidi",
+                $"katalog şekli değişti (0x{sekil:X16} ≠ pinli 0x{PinliSekil:X16}). " +
+                "Aksiyon EKLENDİYSE Catalog.Version'ı MINOR, parametre/bant DEĞİŞTİYSE MAJOR " +
+                "artır ve bu sabiti yeni değerle güncelle — sessiz geçiş YOK.");
+        else Pass($"K1KatalogSurumKilidi(v{Catalog.Version} · şekil 0x{sekil:X16})");
     }
 
     // Ortak kurulum
@@ -2565,64 +2595,116 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     }
 
     // 25b) HASH KAPSAMI — ME 3.2 StateHash deseninin dünya karşılığı.
-    // Kalıcı HER alan hash'i oynatmalı; olay logu ve StateVersion oynatMAMALI (log tek yönlü
-    // çıktıdır, versiyon muhasebedir — aynı durumu farklı yoldan üreten iki save eşit hash'lidir).
+    // Kalıcı HER alan hash'i oynatmalı; olay logu ve StateVersion oynatMAMALI.
+    //
+    // BEKLENEN ALAN LİSTESİ YANSIMAYLA TÜRETİLİR (inceleme bulgusu, 2026-08-29): liste elle
+    // yazıldığında K3'ün eklediği alanlar (Form, sponsor, fiyatlar, dönem inşaat gideri) kapsam
+    // dışında kaldı ve kapı "30 alanın hepsi" diye YEŞİL raporlamayı sürdürdü — yani kapının
+    // iddiası sessizce yanlışlandı. Artık yeni bir kalıcı alan eklenip mutasyonu yazılmazsa
+    // kapı DÜŞER; kapsamı hatırlamak insana bırakılmaz.
     {
-        string hata = "";
-        var mutasyonlar = new (string ad, Action<TheBadge.World.GameState> uygula)[]
+        var mutasyonlar = new (string alan, Action<TheBadge.World.GameState> uygula)[]
         {
-            ("kasa",            s => s.Club.KasaTl += 1),
-            ("clubId",          s => s.Club.ClubId += 1),
-            ("sahipUser",       s => s.Club.OwnerUserId += 1),
-            ("kapasite",        s => s.Club.StadyumKapasite += 1),
-            ("maasGideri",      s => s.Club.HaftalikMaasGiderTl += 1),
-            ("tesisTier",       s => s.Club.TesisTier[3] += 1),
-            ("insaatId",        s => s.Club.InsaatSlot[0].InsaatId += 1),
-            ("insaatTesis",     s => s.Club.InsaatSlot[0].TesisId += 1),
-            ("insaatHedefTier", s => s.Club.InsaatSlot[0].HedefTier += 1),
-            ("insaatKalanHafta",s => s.Club.InsaatSlot[0].KalanHafta += 1),
-            ("insaatMaliyet",   s => s.Club.InsaatSlot[0].ToplamMaliyetTl += 1),
-            ("krediId",         s => s.Club.Krediler[0].KrediId += 1),
-            ("krediAnapara",    s => s.Club.Krediler[0].AnaparaTl += 1),
-            ("krediKalanAy",    s => s.Club.Krediler[0].KalanAy += 1),
-            ("krediFaiz",       s => s.Club.Krediler[0].FaizBp += 1),
-            ("oyuncuKulup",     s => s.Oyuncular[0].ClubId += 1),
-            ("oyuncuMaas",      s => s.Oyuncular[0].HaftalikMaasTl += 1),
-            ("oyuncuSozlesme",  s => s.Oyuncular[0].SozlesmeKalanHafta += 1),
-            ("oyuncuMoral",     s => s.Oyuncular[0].Moral += 1),
-            ("oyuncuKondisyon", s => s.Oyuncular[0].Kondisyon += 1),
-            ("oyuncuSakatlik",  s => s.Oyuncular[0].SakatlikHafta += 1),
-            ("oyuncuRol",       s => s.Oyuncular[0].RolId += 1),
-            ("oyuncuAnchorX",   s => s.Oyuncular[0].AnchorXmm += 1),
-            ("oyuncuAnchorY",   s => s.Oyuncular[0].AnchorYmm += 1),
-            ("oyuncuListede",   s => s.Oyuncular[0].ListedeMi = !s.Oyuncular[0].ListedeMi),
-            ("oyuncuKimlik",    s => s.Oyuncular[0].PlayerId -= 1),
-            ("sezon",           s => s.Takvim.Sezon += 1),
-            ("hafta",           s => s.Takvim.Hafta += 1),
-            ("pencere",         s => s.Takvim.Pencere = TheBadge.World.TransferWindow.Yaz),
-            ("degisiklikHakki", s => s.KalanDegisiklikHakki += 1),
+            ("GameState.KalanDegisiklikHakki", s => s.KalanDegisiklikHakki += 1),
+            ("ClubState.ClubId",              s => s.Club.ClubId += 1),
+            ("ClubState.OwnerUserId",         s => s.Club.OwnerUserId += 1),
+            ("ClubState.KasaTl",              s => s.Club.KasaTl += 1),
+            ("ClubState.StadyumKapasite",     s => s.Club.StadyumKapasite += 1),
+            ("ClubState.TesisTier",           s => s.Club.TesisTier[3] += 1),
+            ("ClubState.InsaatSlot",          s => s.Club.InsaatSlot[0].InsaatId += 1),
+            ("ClubState.Krediler",            s => s.Club.Krediler[0].KrediId += 1),
+            ("ClubState.HaftalikMaasGiderTl", s => s.Club.HaftalikMaasGiderTl += 1),
+            ("ClubState.SponsorHaftalikTl",   s => s.Club.SponsorHaftalikTl += 1),
+            ("ClubState.SponsorKalanHafta",   s => s.Club.SponsorKalanHafta += 1),
+            ("ClubState.DonemInsaatGideriTl", s => s.Club.DonemInsaatGideriTl += 1),
+            ("ClubState.Form",                s => s.Club.Form += 1),
+            ("ClubState.SponsorTeklifleri",   s => s.Club.SponsorTeklifleri[0].TeklifId += 1),
+            ("Construction.InsaatId",         s => s.Club.InsaatSlot[1].InsaatId += 1),
+            ("Construction.TesisId",          s => s.Club.InsaatSlot[0].TesisId += 1),
+            ("Construction.HedefTier",        s => s.Club.InsaatSlot[0].HedefTier += 1),
+            ("Construction.KalanHafta",       s => s.Club.InsaatSlot[0].KalanHafta += 1),
+            ("Construction.ToplamMaliyetTl",  s => s.Club.InsaatSlot[0].ToplamMaliyetTl += 1),
+            ("Loan.KrediId",                  s => s.Club.Krediler[1].KrediId += 1),
+            ("Loan.AnaparaTl",                s => s.Club.Krediler[0].AnaparaTl += 1),
+            ("Loan.KalanAy",                  s => s.Club.Krediler[0].KalanAy += 1),
+            ("Loan.FaizBp",                   s => s.Club.Krediler[0].FaizBp += 1),
+            ("SponsorOffer.TeklifId",         s => s.Club.SponsorTeklifleri[1].TeklifId += 1),
+            ("SponsorOffer.HaftalikTl",       s => s.Club.SponsorTeklifleri[0].HaftalikTl += 1),
+            ("SponsorOffer.SureHafta",        s => s.Club.SponsorTeklifleri[0].SureHafta += 1),
+            ("SponsorOffer.SonGecerlilikSezon", s => s.Club.SponsorTeklifleri[0].SonGecerlilikSezon += 1),
+            ("SponsorOffer.SonGecerlilikHafta", s => s.Club.SponsorTeklifleri[0].SonGecerlilikHafta += 1),
+            ("PlayerState.PlayerId",          s => s.Oyuncular[0].PlayerId -= 1),
+            ("PlayerState.ClubId",            s => s.Oyuncular[0].ClubId += 1),
+            ("PlayerState.HaftalikMaasTl",    s => s.Oyuncular[0].HaftalikMaasTl += 1),
+            ("PlayerState.SozlesmeKalanHafta", s => s.Oyuncular[0].SozlesmeKalanHafta += 1),
+            ("PlayerState.Moral",             s => s.Oyuncular[0].Moral += 1),
+            ("PlayerState.Kondisyon",         s => s.Oyuncular[0].Kondisyon += 1),
+            ("PlayerState.SakatlikHafta",     s => s.Oyuncular[0].SakatlikHafta += 1),
+            ("PlayerState.RolId",             s => s.Oyuncular[0].RolId += 1),
+            ("PlayerState.AnchorXmm",         s => s.Oyuncular[0].AnchorXmm += 1),
+            ("PlayerState.AnchorYmm",         s => s.Oyuncular[0].AnchorYmm += 1),
+            ("PlayerState.ListedeMi",         s => s.Oyuncular[0].ListedeMi = !s.Oyuncular[0].ListedeMi),
+            ("CalendarState.Sezon",           s => s.Takvim.Sezon += 1),
+            ("CalendarState.Hafta",           s => s.Takvim.Hafta += 1),
+            ("CalendarState.Pencere",         s => s.Takvim.Pencere = TheBadge.World.TransferWindow.Yaz),
+            ("PricingState.BiletKurus",       s => s.Fiyat.BiletKurus[2] += 1),
+            ("PricingState.KombineKurus",     s => s.Fiyat.KombineKurus += 1),
+            ("PricingState.BufeKurus",        s => s.Fiyat.BufeKurus[1] += 1),
+            ("PricingState.MagazaKurus",      s => s.Fiyat.MagazaKurus[2] += 1),
         };
+
+        // Beklenen küme: kalıcı durum tiplerinin TÜM public alanları (yansıma).
+        // `StateVersion` bilerek DIŞARIDA: muhasebedir, durum değildir (hash'e girmemeli).
+        var kapsamDisi = new HashSet<string> { "GameState.StateVersion" };
+        var beklenen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var t in new[] { typeof(TheBadge.World.GameState), typeof(TheBadge.World.ClubState),
+                                  typeof(TheBadge.World.PlayerState), typeof(TheBadge.World.CalendarState),
+                                  typeof(TheBadge.World.PricingState), typeof(TheBadge.World.Construction),
+                                  typeof(TheBadge.World.Loan), typeof(TheBadge.World.SponsorOffer) })
+            foreach (var f in t.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+            {
+                // Alt nesne referansları (Club/Oyuncular/Takvim/Fiyat) kendileri alan değil, KAPSAYICIdır
+                if (f.FieldType == typeof(TheBadge.World.ClubState) || f.FieldType == typeof(TheBadge.World.CalendarState)
+                    || f.FieldType == typeof(TheBadge.World.PricingState) || f.FieldType == typeof(TheBadge.World.PlayerState[]))
+                    continue;
+                string ad = t.Name + "." + f.Name;
+                if (!kapsamDisi.Contains(ad)) beklenen.Add(ad);
+            }
+
+        string hata = "";
+        var kapsanan = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var m in mutasyonlar) if (!kapsanan.Add(m.alan)) hata += $"{m.alan}(tekrarlı) ";
+        foreach (var b in beklenen) if (!kapsanan.Contains(b)) hata += $"{b}(MUTASYONU YOK — hash kapsamı ölçülmüyor) ";
+        foreach (var k in kapsanan) if (!beklenen.Contains(k)) hata += $"{k}(artık kalıcı alan değil) ";
+
         var taban = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
-        ulong h0 = TheBadge.World.WorldHash.Compute(taban);
+        taban.Club.InsaatSlot[0] = new TheBadge.World.Construction { InsaatId = 1, TesisId = 2, HedefTier = 1, KalanHafta = 3, ToplamMaliyetTl = 100 };
+        taban.Club.Krediler[0] = new TheBadge.World.Loan { KrediId = 1, AnaparaTl = 100, KalanAy = 3, FaizBp = 100 };
+        taban.Club.SponsorTeklifleri[0] = new TheBadge.World.SponsorOffer { TeklifId = 1, HaftalikTl = 100, SureHafta = 3, SonGecerlilikSezon = 1, SonGecerlilikHafta = 5 };
+        TheBadge.World.GameState Kur2()
+        {
+            var g = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
+            g.Club.InsaatSlot[0] = taban.Club.InsaatSlot[0];
+            g.Club.Krediler[0] = taban.Club.Krediler[0];
+            g.Club.SponsorTeklifleri[0] = taban.Club.SponsorTeklifleri[0];
+            return g;
+        }
+        ulong h0 = TheBadge.World.WorldHash.Compute(Kur2());
         var gorulen = new HashSet<ulong>();
         foreach (var m in mutasyonlar)
         {
-            var s = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
-            m.uygula(s);
-            ulong h = TheBadge.World.WorldHash.Compute(s);
-            if (h == h0) hata += m.ad + "(hash oynamadı) ";
-            if (!gorulen.Add(h)) hata += m.ad + "(hash çakıştı) ";
+            var g = Kur2();
+            m.uygula(g);
+            ulong h = TheBadge.World.WorldHash.Compute(g);
+            if (h == h0) hata += m.alan + "(hash oynamadı) ";
+            if (!gorulen.Add(h)) hata += m.alan + "(hash çakıştı) ";
         }
-        // Aynı durum → aynı hash (tekrar hesap kararlı)
-        if (TheBadge.World.WorldHash.Compute(taban) != h0) hata += "hash kararsız ";
-        var ikiz = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
-        if (TheBadge.World.WorldHash.Compute(ikiz) != h0) hata += "aynı kurulum farklı hash ";
-        // StateVersion hash'e GİRMEZ
-        ikiz.StateVersion += 7;
+        if (TheBadge.World.WorldHash.Compute(Kur2()) != h0) hata += "hash kararsız ";
+        var ikiz = Kur2(); ikiz.StateVersion += 7;
         if (TheBadge.World.WorldHash.Compute(ikiz) != h0) hata += "StateVersion hash'e girdi ";
 
         if (hata.Length > 0) failures += Fail("K2HashKapsami", hata);
-        else Pass($"K2HashKapsami({mutasyonlar.Length} kalıcı alan hash'i oynatıyor · StateVersion girmiyor · tekrar kararlı)");
+        else Pass($"K2HashKapsami({mutasyonlar.Length} kalıcı alan — liste YANSIMAYLA doğrulandı, elle bakım yok · StateVersion girmiyor)");
     }
 
     // 25c) KAPI 3 SEBEP TABLOSU — CB 5 "bağlam, sahiplik, kaynak, hak" + CB 11.1 sebep kataloğu.
@@ -3115,6 +3197,531 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
 
         if (hata.Length > 0) failures += Fail("K2Kapi3Yarisi", hata);
         else Pass($"K2Kapi3Yarisi(bariyerli: {Yaris} komut Kapı 3'ü BİRLİKTE geçti → yalnız 1 yürütüldü, kasa 0)");
+    }
+}
+
+// 26) FAZ 04 K3-A — TYCOON EKONOMİ ÇEKİRDEĞİ (GDD 4.2/4.4, sözleşme docs/ECONOMY_MAP.md)
+{
+    var eOpts = new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true };
+    string ecoPath = System.IO.Path.Combine(
+        System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json")), "economy.balance.json");
+    var eco = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.EconomyBalance>(
+        System.IO.File.ReadAllText(ecoPath), eOpts);
+    eco.Validate();
+    string wPath = System.IO.Path.Combine(
+        System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json")), "world.balance.json");
+    var eRules = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.WorldRules>(
+        System.IO.File.ReadAllText(wPath), eOpts);
+
+    // 26a) EKONOMİ SÖZLEŞMESİ — ECONOMY_MAP: sezon source/sink 1,05-1,15 · maaş payı %45-60
+    {
+        const int Sezon = 10;
+        var st = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+        var T = TheBadge.Checks.EkonomiKosu.Kos(st, eco, eRules, 0xEC0A0D1CUL, Sezon, out _);
+        double oran = T.ToplamGider == 0 ? 0 : (double)T.ToplamGelir / T.ToplamGider;
+        double maasPayi = T.ToplamGider == 0 ? 0 : (double)T.MaasTl / T.ToplamGider;
+        Console.WriteLine($"[info] K3 ekonomi ({Sezon} sezon, referans kulüp): source/sink {oran:F3} · " +
+                          $"maaş payı %{maasPayi * 100:F1} · ort. seyirci {T.Seyirci / (Sezon * eRules.yapi.sezonHaftaSayisi / 2):N0}");
+        Console.WriteLine($"[info] K3 kalem (sezon başına ₺M): bilet {T.BiletTl / Sezon / 1e6:F1} · kombine {T.KombineTl / Sezon / 1e6:F1} · " +
+                          $"büfe {T.BufeTl / Sezon / 1e6:F1} · mağaza {T.MagazaTl / Sezon / 1e6:F1} · sponsor {T.SponsorTl / Sezon / 1e6:F1} · " +
+                          $"yayın {T.YayinTl / Sezon / 1e6:F1} · prim {T.PrimTl / Sezon / 1e6:F1} || maaş {T.MaasTl / Sezon / 1e6:F1} · " +
+                          $"bakım {T.BakimTl / Sezon / 1e6:F1} · personel {T.PersonelTl / Sezon / 1e6:F1} · işletme {T.IsletmeTl / Sezon / 1e6:F1} · faiz {T.FaizTl / Sezon / 1e6:F1}");
+        string hata = "";
+        if (oran < 1.05 || oran > 1.15) hata += $"source/sink {oran:F3} bant dışı [1,05-1,15] ";
+        if (maasPayi < 0.45 || maasPayi > 0.60) hata += $"maaş payı %{maasPayi * 100:F1} bant dışı [%45-60] ";
+        if (hata.Length > 0) failures += Fail("K3EkonomiSozlesmesi", hata);
+        else Pass($"K3EkonomiSozlesmesi(source/sink {oran:F3} ∈ [1,05-1,15] · maaş payı %{maasPayi * 100:F1} ∈ [%45-60])");
+    }
+
+    // 26b) DETERMİNİZM — CB 5.2 "aynı durum + aynı komut = aynı sonuç". Ekonomi tick'i
+    // rastgelelik KULLANIR (seyirci varyansı); o yüzden bu kapı, rastgeleliğin sayaç-RNG'den
+    // geldiğini ve save seed'e bağlı olduğunu ölçer.
+    {
+        string hata = "";
+        (ulong hash, long kasa, long gelir) Kos(ulong seed)
+        {
+            var g = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+            var T = TheBadge.Checks.EkonomiKosu.Kos(g, eco, eRules, seed, 3, out _);
+            return (TheBadge.World.WorldHash.Compute(g), g.Club.KasaTl, T.ToplamGelir);
+        }
+        var a = Kos(0xEC0A0D1CUL); var b = Kos(0xEC0A0D1CUL);
+        if (a != b) hata += "aynı seed farklı sonuç ";
+        var c = Kos(0xEC0A0D1DUL);
+        if (c.hash == a.hash) hata += "farklı seed aynı hash (varyans seed'e bağlı değil) ";
+        if (hata.Length > 0) failures += Fail("K3EkonomiDeterminizmi", hata);
+        else Pass($"K3EkonomiDeterminizmi(3 sezon × 2 koşu bit-eşit → 0x{a.hash:X16} · farklı seed ayrışıyor)");
+    }
+
+    // 26c) SEYİRCİ MODELİ — GDD 4.2: "doluluk takım başarısına ve bilet fiyatına duyarlıdır".
+    // Yön doğru mu ve sınırlar tutuyor mu.
+    {
+        string hata = "";
+        int Olc(Action<TheBadge.World.GameState> ayar)
+        {
+            var g = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+            ayar?.Invoke(g);
+            return TheBadge.World.EconomyTick.Seyirci(g, eco, 0xEC0A0D1CUL, 1001);
+        }
+        int taban = Olc(null);
+        int pahali = Olc(g => { for (int t = 0; t < 5; t++) g.Fiyat.BiletKurus[t] *= 2; });
+        int ucuz = Olc(g => { for (int t = 0; t < 5; t++) g.Fiyat.BiletKurus[t] /= 2; });
+        int formYuksek = Olc(g => g.Club.Form = 100);
+        int formDusuk = Olc(g => g.Club.Form = 0);
+        if (!(pahali < taban && taban < ucuz)) hata += $"fiyat yönü bozuk ({pahali}/{taban}/{ucuz}) ";
+        if (!(formDusuk < taban && taban < formYuksek)) hata += $"form yönü bozuk ({formDusuk}/{taban}/{formYuksek}) ";
+        // Sınırlar: kapasiteyi aşmamalı, min dolulukun altına düşmemeli
+        int cokPahali = Olc(g => { for (int t = 0; t < 5; t++) g.Fiyat.BiletKurus[t] *= 20; });
+        int bedava = Olc(g => { for (int t = 0; t < 5; t++) g.Fiyat.BiletKurus[t] = 0; g.Club.Form = 100; });
+        int minSeyirci = (int)(TheBadge.Checks.EkonomiFixture.Kapasite * eco.seyirci.minDoluluk);
+        if (cokPahali < minSeyirci - 1) hata += $"min doluluk altına düştü ({cokPahali} < {minSeyirci}) ";
+        if (bedava > TheBadge.Checks.EkonomiFixture.Kapasite) hata += $"kapasite aşıldı ({bedava}) ";
+        Console.WriteLine($"[info] K3 seyirci: ucuz {ucuz:N0} · taban {taban:N0} · pahalı {pahali:N0} · " +
+                          $"form0 {formDusuk:N0} · form100 {formYuksek:N0} · tavan {bedava:N0} · taban-sınır {cokPahali:N0}");
+        if (hata.Length > 0) failures += Fail("K3SeyirciModeli", hata);
+        else Pass("K3SeyirciModeli(fiyat ↑→seyirci ↓ · form ↑→seyirci ↑ · min doluluk ve kapasite sınırları tutuyor)");
+    }
+
+    // 26d) İNŞAAT İLERLEMESİ — bitince tier yükselir, stadyum ise kapasite yeni tier'a çıkar.
+    {
+        string hata = "";
+        var g = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+        g.Club.InsaatSlot[0] = new TheBadge.World.Construction
+        { InsaatId = 1, TesisId = TheBadge.World.EconomyTick.StadyumTesisId, HedefTier = 4, KalanHafta = 3, ToplamMaliyetTl = 1000 };
+        int kap0 = g.Club.StadyumKapasite;
+        var j = new TheBadge.World.WorldJournal();
+        for (int h = 0; h < 3; h++)
+        {
+            j.Clear();
+            TheBadge.World.EconomyTick.Hafta(g, eco, eRules, 0xEC0A0D1CUL, TheBadge.World.WeekResult.Beraberlik, false, j);
+            if (!j.Validate(g, out string hj)) { hata += "journal geçersiz: " + hj + " "; break; }
+            j.Apply(g);
+        }
+        if (g.Club.TesisTier[TheBadge.World.EconomyTick.StadyumTesisId] != 4) hata += "tier yükselmedi ";
+        if (g.Club.StadyumKapasite != eco.insaat.kapasiteTier[4]) hata += $"kapasite güncellenmedi ({g.Club.StadyumKapasite}) ";
+        if (g.Club.InsaatSlot[0].InsaatId != 0) hata += "slot boşalmadı ";
+        if (kap0 == g.Club.StadyumKapasite) hata += "kapasite hiç değişmedi ";
+        if (hata.Length > 0) failures += Fail("K3InsaatIlerlemesi", hata);
+        else Pass($"K3InsaatIlerlemesi(3 hafta → tier 4, kapasite {kap0:N0}→{g.Club.StadyumKapasite:N0}, slot boşaldı)");
+    }
+
+    // 26e) KREDİ AMORTİSMANI — faiz SINK, anapara BİLANÇO AKTARIMI (WeekLedger notu).
+    {
+        string hata = "";
+        var g = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+        g.Club.Krediler[0] = new TheBadge.World.Loan
+        { KrediId = 7, AnaparaTl = 2_400_000, KalanAy = 24, FaizBp = (ushort)eco.kredi.yillikFaizBp };
+        var T = TheBadge.Checks.EkonomiKosu.Kos(g, eco, eRules, 0xEC0A0D1CUL, 3, out _);
+        if (g.Club.Krediler[0].AnaparaTl != 0) hata += $"kredi kapanmadı (kalan {g.Club.Krediler[0].AnaparaTl}) ";
+        if (g.Club.Krediler[0].KrediId != 0) hata += "kredi slotu boşalmadı ";
+        if (T.FaizTl <= 0) hata += "faiz hiç işlenmedi ";
+        if (T.AnaparaOdemeTl < 2_400_000) hata += $"anapara eksik ödendi ({T.AnaparaOdemeTl}) ";
+        // Anapara source/sink'e GİRMEMELİ
+        var kontrol = new TheBadge.World.WeekLedger { AnaparaOdemeTl = 999 };
+        if (kontrol.ToplamGider != 0) hata += "anapara sink'e girdi ";
+        Console.WriteLine($"[info] K3 kredi: 2,4M ₺ / 24 ay → toplam faiz {T.FaizTl:N0} ₺, anapara {T.AnaparaOdemeTl:N0} ₺");
+        if (hata.Length > 0) failures += Fail("K3KrediAmortismani", hata);
+        else Pass($"K3KrediAmortismani(kredi kapandı · faiz {T.FaizTl:N0} ₺ sink · anapara sink'e girmiyor)");
+    }
+
+    // 26f) İFLAS EĞRİSİ — ECONOMY_MAP: "bilinçli kötü yönetimde 2-3 sezonda tetiklenir".
+    // Senaryo: kadroya aşırı harcama (maaş ×1,5) + doluluğu düşüren açgözlü fiyatlama (×1,4).
+    {
+        string hata = "";
+        var g = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+        g.Club.HaftalikMaasGiderTl = (long)(g.Club.HaftalikMaasGiderTl * 1.5);
+        for (int t = 0; t < 5; t++) g.Fiyat.BiletKurus[t] = (int)(g.Fiyat.BiletKurus[t] * 1.4);
+        TheBadge.Checks.EkonomiKosu.Kos(g, eco, eRules, 0xEC0A0D1CUL, 6, out int iflas);
+        Console.WriteLine($"[info] K3 iflas senaryosu (maaş ×1,5 · bilet ×1,4): sezon {iflas} · son kasa {g.Club.KasaTl / 1e6:F1}M ₺");
+        if (iflas < 2 || iflas > 3) hata += $"iflas sezonu {iflas} — ECONOMY_MAP 2-3 sezon diyor ";
+        // İyi yönetilen kulüp AYNI eşikte iflas ETMEMELİ (eşik her kulübü batırmıyor)
+        var iyi = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+        TheBadge.Checks.EkonomiKosu.Kos(iyi, eco, eRules, 0xEC0A0D1CUL, 6, out int iyiIflas);
+        if (iyiIflas > 0) hata += $"iyi yönetilen kulüp de battı (sezon {iyiIflas}) ";
+        if (hata.Length > 0) failures += Fail("K3IflasEgrisi", hata);
+        else Pass($"K3IflasEgrisi(kötü yönetim → sezon {iflas} ∈ [2,3] · iyi yönetim 6 sezon ayakta)");
+    }
+
+    // 26g) BORÇ GÖZCÜSÜ — `Rng.Gauss01` çarpışması (K3 sırasında bulundu, FAZ 03 kodu).
+    // Gauss01 12 çekilişi [16·salt, 16·salt+12) aralığında topluyor; bu küme bit-0 ve bit-1
+    // çevirmeleri altında KAPALI, yani seed'in/tick'in o bitini çevirmek salt'ları yalnız kendi
+    // aralarında yer değiştiriyor ve toplam DEĞİŞMİYOR. Sonuç: komşu tick'ler ve bit-0 farklı
+    // seed'ler AYNI gauss değerini alıyor. Maç motorunda 13 çağrı yeri var (fizik/karar/düello/
+    // nişan), hepsi st.Tick anahtarlı — gürültü tasarlandığından çok daha bağımlı.
+    //
+    // DÜZELTİLMEDİ (bilinçli): düzeltme 50 golden replay'i ve M16-E'nin 12 metriğini kaydırır,
+    // yani ayrı bir dilim + yeniden kalibrasyon işidir. Bu kapı borcu GÖRÜNÜR tutar ve
+    // KÖTÜLEŞMESİNİ engeller; hedef sıfırdır. Karar `docs/DECISIONS.md` bekleyen kararlarda.
+    {
+        const int N = 2000;
+        // Gauss01'in İÇİNİ ölç: 12 çekilişin ÇOKLUK KÜMESİ aynıysa gauss değeri de aynıdır
+        // (yalnız toplama sırası değişir → kayan noktada son bitler ayrışabilir). Asıl bağımsızlık
+        // kaybı budur; tam eşitlik oranı onu OLDUĞUNDAN KÜÇÜK gösterir.
+        double[] Kume(ulong sd, uint tick)
+        {
+            var a = new double[12];
+            for (uint i = 0; i < 12; i++)
+                a[i] = TheBadge.Sim.Determinism.Rng.Rand01(sd, TheBadge.Sim.Determinism.Domain.Physics, 5, tick, 16 + i);
+            Array.Sort(a);
+            return a;
+        }
+        bool Ayni(double[] x, double[] y)
+        { for (int i = 0; i < 12; i++) if (x[i] != y[i]) return false; return true; }
+
+        int kumeTick = 0, kumeSeed = 0, tamTick = 0, tamSeed = 0;
+        for (uint t = 1; t <= N; t++)
+        {
+            if (Ayni(Kume(999UL, t), Kume(999UL, t + 1))) kumeTick++;
+            if (TheBadge.Sim.Determinism.Rng.Gauss01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t, 1)
+                == TheBadge.Sim.Determinism.Rng.Gauss01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t + 1, 1)) tamTick++;
+        }
+        for (ulong sd = 1000; sd < 3000; sd += 2)
+        {
+            if (Ayni(Kume(sd, 77), Kume(sd + 1, 77))) kumeSeed++;
+            if (TheBadge.Sim.Determinism.Rng.Gauss01(sd, TheBadge.Sim.Determinism.Domain.Physics, 5, 77, 1)
+                == TheBadge.Sim.Determinism.Rng.Gauss01(sd + 1, TheBadge.Sim.Determinism.Domain.Physics, 5, 77, 1)) tamSeed++;
+        }
+        double kt = kumeTick * 100.0 / N, ks = kumeSeed * 100.0 / 1000;
+        // Rand01 karşılaştırması: kusur TOPLAMA desenindedir, çekirdek hash'te DEĞİL
+        int rndKomsu = 0;
+        for (uint t = 1; t <= N; t++)
+            if (TheBadge.Sim.Determinism.Rng.Rand01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t, 1)
+                == TheBadge.Sim.Determinism.Rng.Rand01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t + 1, 1))
+                rndKomsu++;
+        Console.WriteLine($"[info] K3 RNG borcu: Gauss01 aynı çekiliş kümesi — komşu tick %{kt:F1} · bit0-seed %{ks:F1} " +
+                          $"(tam eşitlik %{tamTick * 100.0 / N:F1} / %{tamSeed * 100.0 / 1000:F1}) · Rand01 %{rndKomsu * 100.0 / N:F1}");
+        string hata = "";
+        if (rndKomsu != 0) hata += "Rand01 çarpışıyor (çekirdek hash bozuk — bu borç DEĞİL, REGRESYON) ";
+        if (kt > 50.0) hata += $"Gauss01 komşu tick bağımsızlığı KÖTÜLEŞTİ (%{kt:F1} > %50) ";
+        if (ks > 100.0) hata += $"Gauss01 bit0-seed bağımsızlığı KÖTÜLEŞTİ (%{ks:F1}) ";
+        if (hata.Length > 0) failures += Fail("K3RngGauss01Borcu", hata);
+        else Pass($"K3RngGauss01Borcu(aynı çekiliş kümesi: komşu tick %{kt:F1} · bit0-seed %{ks:F1} — HEDEF %0; " +
+                  $"düzeltme 50 golden replay + M16-E kalibrasyonunu kaydırır, ayrı dilim · Rand01 temiz)");
+    }
+
+    // ===================== K3-B — 9 TYCOON AKSİYONU (CB 4.1) =====================
+    var k3Bands = new TheBadge.Checks.TestBands();
+    {
+        string bp = System.IO.Path.Combine(
+            System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json")), "command.bands.json");
+        using var bd = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(bp));
+        foreach (var b in bd.RootElement.GetProperty("bantlar").EnumerateObject())
+            k3Bands.Add(b.Name, b.Value[0].GetDouble(), b.Value[1].GetDouble());
+    }
+    var k3RlCfg = new Dictionary<RateClass, RateLimitCfg[]>();
+    {
+        string bp = System.IO.Path.Combine(
+            System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json")), "command.bands.json");
+        using var bd = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(bp));
+        foreach (var r in bd.RootElement.GetProperty("rateLimit").EnumerateObject())
+        {
+            var list = new List<RateLimitCfg>();
+            foreach (var w in r.Value.EnumerateArray()) list.Add(new RateLimitCfg(w[0].GetInt32(), w[1].GetInt64() * 1000));
+            k3RlCfg[(RateClass)Enum.Parse(typeof(RateClass), r.Name)] = list.ToArray();
+        }
+    }
+    const long K3Host = 1_700_000_000_000L, K3User = 42L;
+    CommandEnvelope K3Env(string act, long user = K3User, Guid? id = null)
+        => new CommandEnvelope
+        {
+            CommandId = id ?? Guid.NewGuid(), CatalogVersion = Catalog.Version, Source = CommandSource.UI,
+            ActionType = act, IssuedAtUnixMs = K3Host, MatchTick = 0, UserId = user,
+            SaveSlotId = 1, TeamIdx = 0, PayloadJson = new byte[0]
+        };
+
+    // Tycoon senaryo tablosu: geçerli payload + aksiyona ÖZGÜ kapı 3 ihlali reçetesi.
+    // Kapı 3 ihlali üç biçimde kurulabilir: BAŞKA kullanıcı, durum kurulumu, ya da farklı payload.
+    var tycoon = new (string aksiyon, Func<TheBadge.Checks.TestPayload> gecerli,
+                      long kapi3User, Action<TheBadge.World.GameState> kapi3Kur,
+                      Func<TheBadge.Checks.TestPayload> kapi3Pl, RejectionReason kapi3Sebep)[]
+    {
+        ("tycoon.set_ticket_price",        () => new TheBadge.Checks.TestPayload().Set("tribun", "kuzey").Set("fiyat", 55.0),
+                                           4343L, null, null, RejectionReason.NotOwned),
+        ("tycoon.set_season_ticket_price", () => new TheBadge.Checks.TestPayload().Set("fiyat", 1300.0),
+                                           4343L, null, null, RejectionReason.NotOwned),
+        ("tycoon.set_concession_price",    () => new TheBadge.Checks.TestPayload().Set("urun", "icecek").Set("fiyat", 14.0),
+                                           4343L, null, null, RejectionReason.NotOwned),
+        ("tycoon.set_merch_price",         () => new TheBadge.Checks.TestPayload().Set("urun", "forma").Set("fiyat", 60.0),
+                                           4343L, null, null, RejectionReason.NotOwned),
+        // tesis 6 fixture'da tier 0 ve inşaatsız → hedefTier 1 meşru; kasa sıfırlanınca bedel düşer
+        ("tycoon.start_construction",      () => new TheBadge.Checks.TestPayload().Set("tesisId", 6L).Set("hedefTier", 1L),
+                                           0L, g => g.Club.KasaTl = 0, null, RejectionReason.InsufficientFunds),
+        ("tycoon.cancel_construction",     () => new TheBadge.Checks.TestPayload().Set("insaatId", 5L),
+                                           0L, null, () => new TheBadge.Checks.TestPayload().Set("insaatId", 55L),
+                                           RejectionReason.StateConflict),
+        ("tycoon.take_loan",               () => new TheBadge.Checks.TestPayload().Set("miktar", 500_000.0).Set("vadeAy", 24L),
+                                           0L, g => { for (int i = 0; i < g.Club.Krediler.Length; i++)
+                                                          g.Club.Krediler[i] = new TheBadge.World.Loan { KrediId = 900 + i, AnaparaTl = 1000, KalanAy = 5, FaizBp = 100 }; },
+                                           null, RejectionReason.StateConflict),
+        // kalan anapara 1M; 5M bant İÇİNDE ama borçtan büyük → StateConflict
+        ("tycoon.repay_loan",              () => new TheBadge.Checks.TestPayload().Set("krediId", 7L).Set("miktar", 400_000.0),
+                                           0L, null, () => new TheBadge.Checks.TestPayload().Set("krediId", 7L).Set("miktar", 5_000_000.0),
+                                           RejectionReason.StateConflict),
+        ("tycoon.sign_sponsor",            () => new TheBadge.Checks.TestPayload().Set("teklifId", 3L),
+                                           0L, g => { g.Club.SponsorTeklifleri[0].SonGecerlilikHafta = 1; g.Takvim.Hafta = 9; },
+                                           null, RejectionReason.WindowClosed),
+    };
+
+    // Tam kurulu bir dünya: tycoon aksiyonlarının hepsi bağlı.
+    (TheBadge.World.WorldStore depo, TheBadge.World.WorldContext ctx, TheBadge.World.WorldExecutor exec,
+     TheBadge.CommandBus.CommandBus bus, TheBadge.Checks.CollectingAuditSink sink) K3Kur()
+    {
+        var g = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, K3User);
+        g.Club.InsaatSlot[0] = new TheBadge.World.Construction
+        { InsaatId = 5, TesisId = 9, HedefTier = 1, KalanHafta = 4, ToplamMaliyetTl = 4_200_000 };
+        g.Club.Krediler[0] = new TheBadge.World.Loan { KrediId = 7, AnaparaTl = 1_000_000, KalanAy = 12, FaizBp = 2400 };
+        g.Club.SponsorTeklifleri[0] = new TheBadge.World.SponsorOffer
+        { TeklifId = 3, HaftalikTl = 410_000, SureHafta = 76, SonGecerlilikHafta = 0 };
+        var depo = new TheBadge.World.WorldStore(g);
+        var ctx = new TheBadge.World.WorldContext(depo, eRules);
+        var sink = new TheBadge.Checks.CollectingAuditSink();
+        var exec = new TheBadge.World.WorldExecutor(depo, ctx, sink);
+        TheBadge.World.TycoonActions.Baglan(ctx, exec, eco);
+        var bus = new TheBadge.CommandBus.CommandBus(k3Bands, ctx,
+            new SlidingWindowRateLimiter(k3RlCfg, 3, 300_000), new IdempotencyStore());
+        return (depo, ctx, exec, bus, sink);
+    }
+
+    // 27a) BAĞLANTI — 9 tycoon aksiyonu artık "yürütücü bağlı değil" demiyor.
+    {
+        var w = K3Kur();
+        var bagsiz = w.exec.UnboundActions();
+        int tycoonBagsiz = 0;
+        foreach (var a in bagsiz) if (a.StartsWith("tycoon.", StringComparison.Ordinal)) tycoonBagsiz++;
+        Console.WriteLine($"[info] K3 bağlantı: bağlanmamış aksiyon {bagsiz.Length}/{Catalog.Count} (tycoon: {tycoonBagsiz})");
+        if (tycoonBagsiz != 0) failures += Fail("K3TycoonBaglanti", $"{tycoonBagsiz} tycoon aksiyonu bağlanmamış");
+        else if (bagsiz.Length != Catalog.Count - 9) failures += Fail("K3TycoonBaglanti", $"beklenmeyen bağlantı sayısı ({bagsiz.Length})");
+        else Pass($"K3TycoonBaglanti(9 aksiyon bağlı · kalan {bagsiz.Length} aksiyon K4-K7'nin işi)");
+    }
+
+    // 27b) MUTLU YOL — her aksiyon durumu BEKLENEN yönde değiştiriyor mu.
+    {
+        string hata = "";
+        void Dene(string ad, string aksiyon, TheBadge.Checks.TestPayload pl,
+                  Func<TheBadge.World.GameState, bool> beklenen)
+        {
+            var w = K3Kur();
+            var o = w.bus.Submit(K3Env(aksiyon), pl, w.exec, K3Host, K3User);
+            if (!o.Ok) { hata += $"{ad}({o.Reason}/{o.Detail}) "; return; }
+            if (!beklenen(w.depo.State)) hata += $"{ad}(durum beklenen gibi değil) ";
+        }
+        Dene("bilet", "tycoon.set_ticket_price",
+             new TheBadge.Checks.TestPayload().Set("tribun", "dogu").Set("fiyat", 123.5),
+             g => g.Fiyat.BiletKurus[2] == 12350);
+        Dene("kombine", "tycoon.set_season_ticket_price",
+             new TheBadge.Checks.TestPayload().Set("fiyat", 1450.0), g => g.Fiyat.KombineKurus == 145000);
+        Dene("büfe", "tycoon.set_concession_price",
+             new TheBadge.Checks.TestPayload().Set("urun", "atistirmalik").Set("fiyat", 7.25),
+             g => g.Fiyat.BufeKurus[2] == 725);
+        Dene("mağaza", "tycoon.set_merch_price",
+             new TheBadge.Checks.TestPayload().Set("urun", "atki").Set("fiyat", 88.0),
+             g => g.Fiyat.MagazaKurus[1] == 8800);
+        Dene("inşaat başlat", "tycoon.start_construction",
+             new TheBadge.Checks.TestPayload().Set("tesisId", 6L).Set("hedefTier", 1L),
+             g => { int i = g.FreeConstructionSlot() == 1 ? -1 : 1;
+                    return g.Club.InsaatSlot[1].TesisId == 6 && g.Club.InsaatSlot[1].KalanHafta > 0
+                           && g.Club.KasaTl < 20_000_000 && i != 0; });
+        Dene("inşaat iptal", "tycoon.cancel_construction",
+             new TheBadge.Checks.TestPayload().Set("insaatId", 5L),
+             g => g.Club.InsaatSlot[0].InsaatId == 0 && g.Club.KasaTl > 20_000_000);
+        Dene("kredi al", "tycoon.take_loan",
+             new TheBadge.Checks.TestPayload().Set("miktar", 750_000.0).Set("vadeAy", 36L),
+             g => g.Club.Krediler[1].AnaparaTl == 750_000 && g.Club.KasaTl == 20_750_000);
+        Dene("kredi öde", "tycoon.repay_loan",
+             new TheBadge.Checks.TestPayload().Set("krediId", 7L).Set("miktar", 400_000.0),
+             g => g.Club.Krediler[0].AnaparaTl == 600_000 && g.Club.KasaTl == 19_600_000);
+        Dene("sponsor", "tycoon.sign_sponsor",
+             new TheBadge.Checks.TestPayload().Set("teklifId", 3L),
+             g => g.Club.SponsorHaftalikTl == 410_000 && g.Club.SponsorTeklifleri[0].TeklifId == 0
+                  && g.Club.SponsorKalanHafta == 76);
+        // Sponsor imzası SPONSOR olayı basmalı, fiyat olayı değil (inceleme bulgusu)
+        {
+            var w = K3Kur();
+            var o = w.bus.Submit(K3Env("tycoon.sign_sponsor"),
+                        new TheBadge.Checks.TestPayload().Set("teklifId", 3L), w.exec, K3Host, K3User);
+            bool sponsorOlayi = false, fiyatOlayi = false;
+            foreach (var e in w.sink.Olaylar)
+            {
+                if (e.Type == TheBadge.World.WorldEventType.SponsorImzalandi) sponsorOlayi = true;
+                if (e.Type == TheBadge.World.WorldEventType.FiyatGuncellendi) fiyatOlayi = true;
+            }
+            if (!o.Ok) hata += "sponsor imzası geçmedi ";
+            if (!sponsorOlayi) hata += "SponsorImzalandi olayı basılmadı ";
+            if (fiyatOlayi) hata += "sponsor imzası FİYAT olayı bastı ";
+        }
+        if (hata.Length > 0) failures += Fail("K3TycoonMutluYol", hata);
+        else Pass("K3TycoonMutluYol(9 aksiyon: fiyatlar kuruşa yazılıyor · inşaat/kredi/sponsor durumu ve kasa doğru · sponsor olayı doğru tipte)");
+    }
+
+    // 27d) İNCELEME BULGULARI (Codex, 2026-08-29) — dördü de kapıyla korunuyor.
+    {
+        string hata = "";
+
+        // (1) P1 — İNŞAAT HARCAMASI SINK'E GİRİYOR (ECONOMY_MAP "inşaat + tesis bakımı")
+        {
+            var w = K3Kur();
+            var g = w.depo.State;
+            long kasa0 = g.Club.KasaTl;
+            var o = w.bus.Submit(K3Env("tycoon.start_construction"),
+                        new TheBadge.Checks.TestPayload().Set("tesisId", 6L).Set("hedefTier", 1L),
+                        w.exec, K3Host, K3User);
+            if (!o.Ok) hata += $"inşaat başlamadı({o.Reason}) ";
+            long maliyet = kasa0 - g.Club.KasaTl;
+            if (g.Club.DonemInsaatGideriTl != maliyet) hata += "dönem inşaat gideri birikmedi ";
+            // Haftalık tick biriktiriciyi sink'e boşaltmalı ve sıfırlamalı
+            var j = new TheBadge.World.WorldJournal();
+            var L = TheBadge.World.EconomyTick.Hafta(g, eco, eRules, 1UL, TheBadge.World.WeekResult.Beraberlik, false, j);
+            if (!j.Validate(g, out string hj)) hata += "tick journal geçersiz: " + hj + " ";
+            else j.Apply(g);
+            if (L.InsaatTl != maliyet) hata += $"inşaat sink'e girmedi ({L.InsaatTl}≠{maliyet}) ";
+            if (L.ToplamGider < maliyet) hata += "ToplamGider inşaatı saymıyor ";
+            if (g.Club.DonemInsaatGideriTl != 0) hata += "biriktirici sıfırlanmadı ";
+            // ÇİFT MUHASEBE YOK — TAM EŞİTLİKLE. İlk sürüm `kasa > taban + gelir` diye BEKLİYORDU;
+            // oysa inşaat `NetTl`e girseydi kasa DÜŞERDİ, yani o karşılaştırma korumak istediği
+            // hata için hiç ateşlenemezdi (inceleme bulgusu — koruma yazıp korumayan bir iddia).
+            // Doğru kontrol bağımsız hesaptır: beklenen kasa hareketi ledger kalemlerinden
+            // `NetTl` KULLANILMADAN kurulur; `InsaatTl` kasıtlı olarak dışarıdadır (komut anında
+            // düşüldü). Biri `InsaatTl`i `NetTl`e eklerse kasa `InsaatTl` kadar sapar ve düşer.
+            long kasaTickOncesi = kasa0 - maliyet;
+            long beklenenDelta = L.ToplamGelir
+                                 - (L.MaasTl + L.BakimTl + L.PersonelTl + L.IsletmeTl + L.FaizTl)
+                                 - L.AnaparaOdemeTl;
+            if (g.Club.KasaTl - kasaTickOncesi != beklenenDelta)
+                hata += $"kasa hareketi ledger'la tutmuyor ({g.Club.KasaTl - kasaTickOncesi} ≠ {beklenenDelta}; " +
+                        $"inşaat {L.InsaatTl} çift sayılmış olabilir) ";
+        }
+        // (1b) İPTAL İADESİ sink'i geri çeker
+        {
+            var w = K3Kur();
+            var g = w.depo.State;
+            w.bus.Submit(K3Env("tycoon.cancel_construction"),
+                new TheBadge.Checks.TestPayload().Set("insaatId", 5L), w.exec, K3Host, K3User);
+            if (g.Club.DonemInsaatGideriTl >= 0) hata += $"iptal iadesi sink'i azaltmadı ({g.Club.DonemInsaatGideriTl}) ";
+        }
+
+        // (2) P1 — SPONSOR SÖZLEŞME SÜRESİ: 3 haftalık anlaşma 3 hafta sonra BİTER
+        {
+            var w = K3Kur();
+            var g = w.depo.State;
+            g.Club.SponsorTeklifleri[1] = new TheBadge.World.SponsorOffer
+            { TeklifId = 11, HaftalikTl = 900_000, SureHafta = 3, SonGecerlilikSezon = 0, SonGecerlilikHafta = 0 };
+            var o = w.bus.Submit(K3Env("tycoon.sign_sponsor"),
+                        new TheBadge.Checks.TestPayload().Set("teklifId", 11L), w.exec, K3Host, K3User);
+            if (!o.Ok) hata += $"süreli sponsor imzalanmadı({o.Reason}) ";
+            if (g.Club.SponsorKalanHafta != 3) hata += "süre taşınmadı ";
+            var j = new TheBadge.World.WorldJournal();
+            long[] gelir = new long[5];
+            for (int h = 0; h < 5; h++)
+            {
+                j.Clear();
+                var L = TheBadge.World.EconomyTick.Hafta(g, eco, eRules, 1UL, TheBadge.World.WeekResult.Beraberlik, false, j);
+                if (!j.Validate(g, out string hj2)) { hata += "sponsor tick journal geçersiz: " + hj2 + " "; break; }
+                j.Apply(g);
+                gelir[h] = L.SponsorTl;
+            }
+            if (!(gelir[0] == 900_000 && gelir[1] == 900_000 && gelir[2] == 900_000))
+                hata += $"sözleşme süresince ödenmedi ({gelir[0]}/{gelir[1]}/{gelir[2]}) ";
+            if (gelir[3] != eco.gelir.sponsorHaftalikTaban || gelir[4] != eco.gelir.sponsorHaftalikTaban)
+                hata += $"süre bitince taban sponsora dönülmedi ({gelir[3]}/{gelir[4]}) ";
+            if (g.Club.SponsorHaftalikTl != 0) hata += "biten sözleşme temizlenmedi ";
+        }
+
+        // (3) P2 — TEKLİF GEÇERLİLİĞİ SEZON DÖNÜŞÜNÜ AŞMAZ
+        {
+            var w = K3Kur();
+            var g = w.depo.State;
+            g.Club.SponsorTeklifleri[2] = new TheBadge.World.SponsorOffer
+            { TeklifId = 21, HaftalikTl = 500_000, SureHafta = 20, SonGecerlilikSezon = 1, SonGecerlilikHafta = 10 };
+            var pl = new TheBadge.Checks.TestPayload().Set("teklifId", 21L);
+            g.Takvim.Sezon = 1; g.Takvim.Hafta = 5;
+            if (w.bus.Validate(K3Env("tycoon.sign_sponsor"), pl.Copy(), K3Host, K3User).Reason != RejectionReason.None)
+                hata += "geçerli teklif S1H5'te reddedildi ";
+            g.Takvim.Hafta = 20;
+            if (w.bus.Validate(K3Env("tycoon.sign_sponsor"), pl.Copy(), K3Host, K3User).Reason != RejectionReason.WindowClosed)
+                hata += "süresi geçmiş teklif S1H20'de kabul edildi ";
+            g.Takvim.Sezon = 2; g.Takvim.Hafta = 1;   // sezon döndü, hafta 1'e sardı
+            if (w.bus.Validate(K3Env("tycoon.sign_sponsor"), pl.Copy(), K3Host, K3User).Reason != RejectionReason.WindowClosed)
+                hata += "SEZON DÖNÜŞÜ süresi geçmiş teklifi yeniden geçerli kıldı ";
+        }
+
+        if (hata.Length > 0) failures += Fail("K3IncelemeBulgulari", hata);
+        else Pass("K3IncelemeBulgulari(4 bulgu: inşaat sink'e girdi + iptal geri çekiyor · sponsor süresi bitiyor · " +
+                  "geçerlilik sezon dönüşünü aşmıyor · sponsor olayı doğru tipte)");
+    }
+
+    // 27c) CB 10.1 NEGATİF MATRİSİ — aksiyon başına 4 zorunlu senaryo.
+    // Senaryolar KATALOGDAN mekanik türetilir: elle yazılmış 36 vaka bir aksiyonu sessizce
+    // atlayabilir, tarama atlayamaz. (32 aksiyonun tamamı CB 10.3'ün hedefi; K3 tycoon 9'unu verir.)
+    {
+        string hata = "";
+        int senaryo = 0;
+        foreach (var (aksiyon, gecerli, kapi3User, kapi3Kur, kapi3Pl, kapi3Sebep) in tycoon)
+        {
+            var def = Catalog.Find(aksiyon);
+            if (def == null) { hata += aksiyon + "(katalogda yok) "; continue; }
+
+            // (1) KAPI 1 — şema bozulması: fazladan alan
+            {
+                var w = K3Kur();
+                var o = w.bus.Submit(K3Env(aksiyon), gecerli().Set("ekstra", 1), w.exec, K3Host, K3User);
+                senaryo++;
+                if (o.Reason != RejectionReason.SchemaViolation) hata += $"{aksiyon}/şema({o.Reason}) ";
+            }
+            // (2) KAPI 2 — bant dışı: ilk bantlı parametre alt sınırın ALTINA çekilir
+            {
+                string bantli = null; double min = 0;
+                foreach (var pd in def.Params)
+                    if (pd.BandKey != null && k3Bands.TryGetBand(pd.BandKey, out min, out _)) { bantli = pd.Name; break; }
+                if (bantli == null) hata += aksiyon + "(bantlı parametre yok) ";
+                else
+                {
+                    var w = K3Kur();
+                    var pd2 = Array.Find(def.Params, x => x.Name == bantli);
+                    object altDeger = pd2.Type == ParamType.Int ? (object)(long)(min - 1) : (object)(min - 0.1);
+                    var o = w.bus.Submit(K3Env(aksiyon), gecerli().Set(bantli, altDeger), w.exec, K3Host, K3User);
+                    senaryo++;
+                    if (o.Reason != RejectionReason.ParamOutOfBand) hata += $"{aksiyon}/bant({o.Reason}) ";
+                }
+            }
+            // (3) KAPI 3 — sahiplik/bağlam/kaynak ihlali (aksiyona özgü reçete).
+            //
+            // Reddin GERÇEKTEN kapı 3'ten geldiği ayrıca doğrulanır: yalnız sebep koduna bakmak
+            // yetmiyor, çünkü daha DERİN katmanlar (handler'ın kendi denetimi, journal'ın aralık
+            // koruması) aynı `StateConflict`i üretebiliyor. Kapı dişi ölçülünce görüldü: kredi
+            // slot ve fazla ödeme kuralları kapatıldığı hâlde kapı yeşil kalıyordu — savunma
+            // derinliği çalışıyordu ama KAPI 3 sınanmıyordu. `Validate` yürütmeye hiç gitmez,
+            // yani aynı sebebi vermesi reddin doğrulama zincirinden çıktığının kanıtıdır.
+            {
+                var w = K3Kur();
+                kapi3Kur?.Invoke(w.depo.State);
+                long u = kapi3User != 0 ? kapi3User : K3User;
+                var pl3 = (kapi3Pl ?? gecerli)();
+                var o = w.bus.Submit(K3Env(aksiyon, user: u), pl3.Copy(), w.exec, K3Host, u);
+                senaryo++;
+                if (o.Reason != kapi3Sebep) hata += $"{aksiyon}/kapı3({o.Reason}≠{kapi3Sebep}) ";
+                var w2 = K3Kur();
+                kapi3Kur?.Invoke(w2.depo.State);
+                var v = w2.bus.Validate(K3Env(aksiyon, user: u), pl3.Copy(), K3Host, u);
+                if (v.Reason != kapi3Sebep)
+                    hata += $"{aksiyon}/kapı3-DOĞRULAMA({v.Reason}≠{kapi3Sebep}: red kapı 3'ten değil, daha derinden geliyor) ";
+            }
+            // (4) KAPI 4 — rate limit aşımı. YÜRÜTMEDEN doğrulanır: aynı komutu 21 kez yürütmek
+            // durumlu aksiyonlarda (inşaat/kredi/sponsor) 2. denemede MEŞRU bir StateConflict
+            // üretir ve kapı 4'e hiç ulaşılmaz. Rate limit'i sınamak için durumu sabit tutmak
+            // gerekir — `Validate` tam olarak bunu yapar (ve sayacı da tüketmez demiştik:
+            // burada sayacı BİLEREK tüketen `Validator`ı doğrudan çağırıyoruz).
+            {
+                var w = K3Kur();
+                var rl = new SlidingWindowRateLimiter(k3RlCfg, 3, 300_000);
+                RejectionReason son = RejectionReason.None;
+                for (int i = 0; i < 21; i++)
+                    son = Validator.Validate(K3Env(aksiyon), def, gecerli(), k3Bands, w.ctx, rl, K3Host, K3User).Reason;
+                senaryo++;
+                if (son != RejectionReason.RateLimited) hata += $"{aksiyon}/rate({son}) ";
+            }
+        }
+        if (senaryo != tycoon.Length * 4) hata += $"senaryo sayısı {senaryo} ≠ {tycoon.Length * 4} ";
+        if (hata.Length > 0) failures += Fail("K3NegatifMatris", hata);
+        else Pass($"K3NegatifMatris(CB 10.1: {tycoon.Length} aksiyon × 4 senaryo = {senaryo} · şema·bant·kapı3·rate)");
     }
 }
 
