@@ -1324,7 +1324,102 @@ ateşlenemezdi. Bulguyu düzeltirken ölü bir koruma yazmışım.
   ortalamaya karıştırmak bandın anlamını değiştirir. Ledger artık her senaryoyu doğru ölçüyor;
   bandın capex'i kapsayıp kapsamayacağı balance sprintinin sorusu (bekleyen kararlara işlendi).
 
+### K4: Kadro yönetimi — 9 aksiyon + hub/maç ayrımı — ✅ TAMAM (2026-08-29)
+Kadro katmanı Tek Kapı'ya bağlandı: **9 aksiyon** (`squad.set_player_anchor`, `set_player_role`,
+`set_instruction`, `set_team_tactic`, `save_tactic_preset`, `set_captain`, `set_training_plan`,
+`match.substitution`, `match.motivation_talk`). Bağlanmamış aksiyon 32'de 23 — kalanı K5-K7'nin işi.
+
+- **Kalıcı durum eklendi:** `TacticState` (mentalite/tempo/pres/hat, 0-100 MUTLAK), `TacticPreset[]`
+  (20 yuva, GDD 3.3 "Özel Kaydetme"), `PlayerState.Talimatlar[]` (4 yuva), `ClubState.KaptanPlayerId`,
+  `AntrenmanPlanId`, `AntrenmanYogunluk`. Sözlük değil DİZİ: sırasız yapı yasağı (ME 3.2) ve hash
+  kanonikliği. Preset adı sunum verisidir ama senkronun parçası — hash'e ham metin değil DİZE ÖZETİ
+  girer (`WorldHash.DizeOzeti`, UTF-16 kod birimi + uzunluk öneki, kırpma yok).
+- **Delta → mutlak dönüşümü:** katalogda `set_team_tactic` DELTA verir ([-2,+2], CB 4.2); kalıcı durum
+  MUTLAKtır. Dönüşüm `taktik.adim` [KALİBRE] ile yapılır ve 0-100'e kırpılır — kod içinde adım
+  sabiti YOK.
+- **Hub/maç ayrımı:** 7 hub aksiyonu kalıcı durumu düzenler ve maç kuyruğuna SIZMAZ; taktik/değişiklik/
+  motivasyon maç bağlamında ME kuyruğuna gider ve kalıcı durumu KORUR. Kuyruksuz host maç aksiyonunu
+  reddeder (sessiz yutma yok).
+
+**ME arayüz boşluğu (yeni borç, ME 14.2).** CB 4.2 tablosu `set_player_anchor`/`set_player_role`/
+`set_instruction`'ı "Hub + Maç" diye listeliyor, ama `MatchCommands.cs`'te anchor ve rol komutu YOK ve
+`PlayerInstr` bir taslak (`None = 0`, katalog boş). Üç seçenek vardı: (a) maçta sessizce yut — Tek
+Kapı'nın "her komutun cevabı var" ilkesini kırar, istemci UI'ı yanlış gösterir; (b) ME komut kümesini
+bu dilimde genişlet — kapsam kayması, determinizm kapısı + golden replay etkisi; (c) maç bağlamında
+KAPI 3'ten açık sebeple reddet, borcu görünür tut. Seçilen: **(c)**. Reddin kapı 3'ten gelmesi bilinçli:
+komut yürütücüye hiç ulaşmadan düşer, ön-doğrulama da aynı cevabı verir. Kapatma dilimi: ME komut
+kümesi genişletmesi (K5-K7 sonrası, `PlayerInstr` kataloğuyla birlikte).
+
+- **Kapılar:** `K4Baglanti`, `K4HubYolu`, `K4MacYolu`, `K4MeArayuzBoslugu`, `K4CifteKayit`.
+- **Diş ölçümü (üçü de ters çevrilip ölçüldü):** maç reddi kaldırılınca 3 aksiyon maçta sessizce
+  geçiyor ve İKİSİ maç sırasında kalıcı durumu oynatıyor (`durum oynadı`); çifte kayıt koruması
+  kaldırılınca ikinci kural ve ikinci yürütücü sessizce kabul ediliyor; kapı 3 detayı düşürülünce
+  üç aksiyon da "sebep açıklanmıyor"a düşüyor.
+
+**`K2HashKapsami` yine kendi işini yaptı.** Yansımaya çevrilmiş kapsam kapısı — K3 turunda tam da bu
+sebeple yansımaya çevrilmişti — K4'ün altı yeni kalıcı alanını mutasyonsuz yakaladı, sonra üçünün
+(`KaptanPlayerId`, `AntrenmanPlanId`, `AntrenmanYogunluk`) `WorldHash`'te HİÇ olmadığını gösterdi:
+alanlar duruma girmişti, hash'e girmemişti. Elle bakımlı liste bunu bir daha kaçıracaktı.
+
+**Konteyner geri dönüşümü (süreç notu).** Bu dilim bir kez kaybedildi: oturum konteyneri geri
+dönüştürülünce `faz04/squad` dalı (henüz itilmemişti) ve tüm K4 kaynağı diskten silindi, .NET SDK'sı
+da kurulu değildi. Kaynak oturum transkriptinden geri kazanıldı, SDK `packages.microsoft.com`
+deposundan kuruldu. **Ders: yeşil kapıya ulaşan her dilim BEKLETMEDEN itilir** — yerel dal yedek değildir.
+
+### K4 inceleme turu — ✅ TAMAM (2026-08-29)
+PR #18 incelemeye açılınca **iki bağımsız inceleyici** (Codex + Bugbot) dört bulgu çıkardı; dördü de
+haklı, ikisini ikisi birden gördü. Ayrıca kendi ters-okumamda çıkan iki şeyden biri (talimat şeridi)
+Codex'inkiyle aynı çıktı — bağımsız iki yoldan aynı yere varmak bulgunun gerçekliğini pekiştirdi.
+
+1. **(P1 ×2) Değişiklik hakkı maç başına DOLMUYORDU.** `KalanDegisiklikHakki` yalnız dünya
+   kurulumunda doluyor, sonra YALNIZ azalıyordu. Alanın kaynağı `macBasinaDegisiklik`, yani adı
+   "her maç" diyor — ama hiçbir yol hakkı geri doldurmuyordu: bir save'de toplam N değişiklikten
+   sonra HER maç `NoChargesLeft` ile reddedilirdi. Çözüm: `MacTick.Basla(st, kural, j)` — maç
+   yaşam döngüsü kancası, `EconomyTick` ile AYNI sözleşme (durumu doğrudan değiştirmez, journal'a
+   yazar, host `Validate` + `Apply` yapar). Bunu önce gözcü kapı olarak yazmıştım; inceleme
+   "belgele" değil "düzelt" dedi ve haklıydı — borç değil, hatanın kendisiydi.
+2. **(P1 ×2) Maç komutu yürütme işleminin DIŞINDAydı.** Handler `Apply` içinde doğrudan
+   `kuyruk.Enqueue` yapıyordu; sonraki journal doğrulaması ya da denetim sink'i patladığında
+   `Geri` yalnız `GameState`i geri alıyor, komut kuyrukta KALIYORDU — ve tekrar denemede İKİNCİ
+   kopya giriyordu. Çözüm: komutlar `WorldJournal`da BEKLETİLİR (`MacKomutu`), yürütücü denetim de
+   geçtikten SONRA boşaltır (`MacKuyruguBagla`). Yayınlama artık commit'in parçası; her erken dönüş
+   ve her `Geri` yolu komutları yayınlanmamış bırakır. Bu, K2'nin "yarım yazılmış durum yapısal
+   olarak erişilemez" ilkesinin maç kuyruğuna uzatılmasıdır.
+3. **(High) Bus, motorun reddedeceği değişikliği kabul ediyordu.** Balance 5 hak veriyordu ama
+   `MatchEngine.MaxSubs` **3**'tür (derleme zamanı sabiti — `PendingSubs` dizisini boyutlandırıyor,
+   yani balance'tan okunması determinizm etkili bir motor değişikliğidir). Dünya "oldu" der, motor
+   sessizce `RejectedCommands++` yapardı. Çözüm: `macBasinaDegisiklik` 5 → **3** ve
+   `MacTick.HakTavaniTutarli` + kapı ikisinin eşitliğini zorunlu tutuyor. Bu bir balance KALİBRASYONU
+   değil düzeltmedir: 5 bugün fiziksel olarak onurlandırılamıyordu.
+4. **(P2) Ayrışık talimat şeridi sessizce başka oyuncuya yazardı.** `TalimatHandler` adresi
+   oyuncunun KENDİ dizi uzunluğuyla düzleştiriyor, `WorldJournal` ise `Oyuncular[0]`ın uzunluğuyla
+   çözüyordu. Diziler bir gün ayrışırsa yazma başka oyuncunun yuvasına düşerdi. Çözüm İKİ yönlü:
+   handler artık çözücüyle AYNI şeridi kullanıyor **ve** `GameState.Validate` tekdüze yuva sayısını
+   zorunlu kılıyor — çözücünün varsayımı artık doğrulanmış bir değişmez.
+
+- **Kapı:** `K4IncelemeBulgulari` (4 bulgu tek kapıda). Dördü de ters çevrilip ölçüldü; her biri
+  kendi iddiasını kırmızıya döndürüyor — reset kapatılınca "sonraki maçta değişiklik reddedildi
+  (NoChargesLeft)", tavan 5'e çekilince "hak tavanı ayrışık(balance 5 vs motor 3)", `Enqueue`
+  işleme geri alınınca "geri alınan komut kuyrukta KALDI(1)", şerit denetimi kapatılınca ayrışık
+  dizi kabul ediliyor.
+
+**Açık kalan (K6'ya):** motor, değişikliği kendi kurallarıyla da reddedebilir (kulübe indeksi,
+kırmızı kart görmüş oyuncu, yanlış taraf, aynı oyuncu iki kez) ve bu redler yalnız
+`RejectedCommands`'ı artırır — istemciye "oldu" denmiş olur. Hak tavanı artık tek kaynak olduğu için
+en sık yol kapandı, ama motor sonucunun host üzerinden istemciye geri akması (komut sonucu geri
+bildirimi) K6 maç yaşam döngüsünün işidir. Dünya katmanının motorun tüm kurallarını kopyalaması
+yanlış çözüm olurdu: iki kaynak, iki ayrışma.
+
 ## Bekleyen kararlar
+- **CB 4.2 tablosu ile ME komut kümesi çelişiyor (K4 bulgusu, 2026-08-29):** spec `squad.set_player_anchor`/
+  `set_player_role`/`set_instruction`'ı "Hub + Maç" sayıyor; motorda anchor/rol maç komutu yok,
+  `PlayerInstr` kataloğu boş. Seçenekler: (a) ME komut kümesini üç komutla genişlet (determinizm kapısı +
+  50 golden replay etkisi, 1 dilim); (b) CB 4.2'de bu üçünü "Hub" olarak revize et (spec revizyonu,
+  motor işi yok, GDD 3.2 "maç içinde bireysel talimat" vaadini daraltır); (c) yalnız `set_instruction`'ı
+  maça taşı, anchor/rol hub'da kalsın (orta yol: maç içi mikro-yönetim `PlayerInstr` ile gelir, serbest
+  pozisyonlama maç arası kararı olur). Öneri: **(c)** — GDD 3.1 serbest pozisyonlama zaten formasyon
+  kararı, GDD 3.2 talimatı ise maç içi tepki. Spec dosyasına dokunulmadı; şimdilik maç bağlamında
+  açık sebeple reddediliyor ve `K4MeArayuzBoslugu` borcu görünür tutuyor.
 - **ECONOMY_MAP source/sink bandı sermaye harcamasını (inşaat) kapsasın mı? (K3 inceleme turu,
   2026-08-29)** Ledger artık inşaatı sink sayıyor, ama referans kalibrasyon senaryosu inşaatsız:
   1,05-1,15 bandı SÜREKLİ işletme dengesini ölçüyor. Seçenekler: (a) bant işletme dengesi olarak

@@ -62,6 +62,8 @@ namespace TheBadge.World
         /// "inşaat + tesis bakımı"nı açıkça sink sayıyor.</summary>
         public long DonemInsaatGideriTl;
         public SponsorOffer[] SponsorTeklifleri;
+        public int KaptanPlayerId;          // GDD 3.2 — 0 = kaptan yok
+        public byte AntrenmanPlanId, AntrenmanYogunluk;   // GDD 4.3 / CB 4.2
         public byte Form;                   // 0-100 — seyirci modelinin form ayağı (maç sonuçları besler)
     }
 
@@ -79,6 +81,34 @@ namespace TheBadge.World
         public byte RolId;                  // GDD 3.2 bireysel rol
         public int AnchorXmm, AnchorYmm;    // GDD 3.1 serbest pozisyonlama (ME 5.3 birimi)
         public bool ListedeMi;              // transfer listesi
+        /// <summary>Bireysel talimatlar — sabit yuva sayısı [KALİBRE `yapi.talimatYuvaSayisi`].
+        /// Sözlük DEĞİL: sırasız yapı yasağı (ME 3.2) ve hash kanonikliği için dizi.</summary>
+        public Instruction[] Talimatlar;
+    }
+
+    /// <summary>Takım taktiği — GDD 3.2/3.3. Değerler MUTLAKtır (0-100); katalogdaki
+    /// `squad.set_team_tactic` ise DELTA verir ([-2, +2], CB 4.2 "delta {…}"). Delta →
+    /// mutlak dönüşümü `taktikAdimi` [KALİBRE] ile yapılır ve 0-100'e kırpılır.</summary>
+    public sealed class TacticState
+    {
+        public byte Mentalite, Tempo, Pres, Hat;
+    }
+
+    /// <summary>Kayıtlı taktik şablonu — GDD 3.3 "Özel Kaydetme". Ad SUNUM verisidir ama durum
+    /// senkronunun parçasıdır; hash'e ham metin değil DİZE ÖZETİ girer (ME 3.3 `StringHash`
+    /// deseni: UTF-16 kod birimleri, uzunluk önekli, kırpma yok).</summary>
+    public struct TacticPreset
+    {
+        public byte Slot;          // 1-20 (0 = boş)
+        public string Ad;
+        public byte Mentalite, Tempo, Pres, Hat;
+    }
+
+    /// <summary>Bireysel talimat yuvası — GDD 3.2. `TalimatId` 0 = boş.</summary>
+    public struct Instruction
+    {
+        public byte TalimatId;     // katalog bandı 1-64
+        public byte Deger;         // katalog bandı 0-10
     }
 
     /// <summary>Fiyat durumu — GDD 4.2 gelir kaynakları. TÜM fiyatlar KURUŞ cinsindendir
@@ -118,6 +148,8 @@ namespace TheBadge.World
         public PlayerState[] Oyuncular;     // PlayerId'ye göre ARTAN sıralı (kanonik)
         public CalendarState Takvim;
         public PricingState Fiyat;
+        public TacticState Taktik;
+        public TacticPreset[] Presetler;
 
         /// <summary>CB 8.2: her yanıt `newStateVersion` döndürür; istemci eski versiyonla ekran
         /// gösteriyorsa delta sync tetiklenir. Yalnız `ApplyJournal` artırır.</summary>
@@ -134,6 +166,8 @@ namespace TheBadge.World
             Oyuncular = new PlayerState[0],
             Takvim = new CalendarState(),
             Fiyat = BosFiyat(),
+            Taktik = new TacticState { Mentalite = 50, Tempo = 50, Pres = 50, Hat = 50 },
+            Presetler = new TacticPreset[0],
         };
 
         static PricingState BosFiyat() => new PricingState
@@ -159,6 +193,8 @@ namespace TheBadge.World
                 Oyuncular = new PlayerState[0],
                 Takvim = new CalendarState { Sezon = 1, Hafta = 1, Pencere = TransferWindow.Kapali },
                 Fiyat = BosFiyat(),
+                Taktik = new TacticState { Mentalite = 50, Tempo = 50, Pres = 50, Hat = 50 },
+                Presetler = new TacticPreset[rules.yapi.presetSlotSayisi],
                 KalanDegisiklikHakki = (byte)rules.yapi.macBasinaDegisiklik,
             };
         }
@@ -170,6 +206,24 @@ namespace TheBadge.World
             if (Club == null) throw new ArgumentException("GameState: Club boş.");
             if (Oyuncular == null) throw new ArgumentException("GameState: Oyuncular boş.");
             if (Takvim == null) throw new ArgumentException("GameState: Takvim boş.");
+            if (Taktik == null || Presetler == null)
+                throw new ArgumentException("GameState: Taktik/Presetler boş.");
+            // TALİMAT YUVASI TEK ŞERİT: journal adresi `oyuncuIndeksi * şerit + yuva` ile
+            // düzleştiriliyor ve şerit `Oyuncular[0]`dan okunuyor. Diziler farklı uzunlukta
+            // olursa yazma SESSİZCE başka oyuncunun yuvasına düşer (inceleme bulgusu, P2).
+            // Yüklenen durumun tekdüzeliği burada zorunlu kılınır — çözücü varsayımı artık
+            // doğrulanmış bir değişmezdir.
+            for (int i = 0; i < Oyuncular.Length; i++)
+                if (Oyuncular[i].Talimatlar == null)
+                    throw new ArgumentException($"GameState: Oyuncular[{i}].Talimatlar boş.");
+            if (Oyuncular.Length > 0)
+            {
+                int serit = Oyuncular[0].Talimatlar.Length;
+                for (int i = 1; i < Oyuncular.Length; i++)
+                    if (Oyuncular[i].Talimatlar.Length != serit)
+                        throw new ArgumentException(
+                            $"GameState: Oyuncular[{i}].Talimatlar uzunluğu {Oyuncular[i].Talimatlar.Length}, beklenen {serit} (tekdüze yuva sayısı zorunlu).");
+            }
             if (Fiyat == null || Fiyat.BiletKurus == null || Fiyat.BiletKurus.Length != 5
                 || Fiyat.BufeKurus == null || Fiyat.BufeKurus.Length != 3
                 || Fiyat.MagazaKurus == null || Fiyat.MagazaKurus.Length != 3)
@@ -276,6 +330,19 @@ namespace TheBadge.World
             int m = 0;
             for (int i = 0; i < Club.Krediler.Length; i++) if (Club.Krediler[i].KrediId > m) m = Club.Krediler[i].KrediId;
             return m + 1;
+        }
+
+        /// <summary>Preset slot indeksi (slot 1-20 → dizi indeksi); kapsam dışıysa -1.</summary>
+        public int PresetIndex(int slot) => slot >= 1 && slot <= Presetler.Length ? slot - 1 : -1;
+
+        /// <summary>Oyuncunun talimat yuvası: aynı `talimatId` varsa onun indeksi, yoksa ilk BOŞ
+        /// yuva, o da yoksa -1. Böylece aynı talimatı güncellemek yuva tüketmez.</summary>
+        public int InstructionSlot(int oyuncuIndex, byte talimatId)
+        {
+            var a = Oyuncular[oyuncuIndex].Talimatlar;
+            for (int i = 0; i < a.Length; i++) if (a[i].TalimatId == talimatId) return i;
+            for (int i = 0; i < a.Length; i++) if (a[i].TalimatId == 0) return i;
+            return -1;
         }
 
         /// <summary>Kapı 3 sorgusu: transfer penceresi açık mı (`WindowClosed`).</summary>

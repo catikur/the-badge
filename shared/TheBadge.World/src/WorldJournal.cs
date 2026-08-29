@@ -4,12 +4,13 @@ using System.Collections.Generic;
 namespace TheBadge.World
 {
     /// <summary>Mutasyon hedefi — journal girdisinin hangi durum parçasına yazdığı.</summary>
-    public enum MutTarget : byte { Kulup = 0, Oyuncu = 1, Takvim = 2, Insaat = 3, Kredi = 4, Tesis = 5, Mac = 6, Fiyat = 7, Sponsor = 8 }
+    public enum MutTarget : byte { Kulup = 0, Oyuncu = 1, Takvim = 2, Insaat = 3, Kredi = 4, Tesis = 5, Mac = 6, Fiyat = 7, Sponsor = 8, Taktik = 9, Preset = 10, Talimat = 11 }
 
     public static class ClubField
     {
         public const byte Kasa = 1, StadyumKapasite = 2, HaftalikMaasGider = 3,
-                          SponsorHaftalik = 4, Form = 5, SponsorKalanHafta = 6, DonemInsaatGideri = 7;
+                          SponsorHaftalik = 4, Form = 5, SponsorKalanHafta = 6, DonemInsaatGideri = 7,
+                          Kaptan = 8, AntrenmanPlan = 9, AntrenmanYogunluk = 10;
     }
 
     /// <summary>Fiyat alanları — `Index` slot (tribün 0-4 / ürün 0-2), değer KURUŞ.
@@ -24,6 +25,13 @@ namespace TheBadge.World
     public static class ConstructionField { public const byte InsaatId = 1, TesisId = 2, HedefTier = 3, KalanHafta = 4, ToplamMaliyet = 5; }
     public static class LoanField { public const byte KrediId = 1, Anapara = 2, KalanAy = 3, FaizBp = 4; }
     public static class FacilityField { public const byte Tier = 1; }
+    public static class TacticField { public const byte Mentalite = 1, Tempo = 2, Pres = 3, Hat = 4; }
+    /// <summary>Preset alanları — `Index` slot indeksi. `Ad` metin olduğu için journal'da DEĞİL:
+    /// metin yazması `AdYaz` ile ayrı taşınır (journal tamsayı taşıyıcısıdır).</summary>
+    public static class PresetField { public const byte Slot = 1, Mentalite = 2, Tempo = 3, Pres = 4, Hat = 5; }
+    /// <summary>Talimat alanları — `Index` = oyuncuIndex * yuvaSayisi + yuvaIndex (düz adres).</summary>
+    public static class InstructionField { public const byte TalimatId = 1, Deger = 2; }
+
     public static class SponsorField { public const byte TeklifId = 1, Haftalik = 2, Sure = 3, SonGecerlilik = 4, SonGecerlilikSezon = 5; }
     public static class MatchField { public const byte KalanDegisiklikHakki = 1; }
 
@@ -52,12 +60,27 @@ namespace TheBadge.World
         readonly List<Mutation> yazmalar = new List<Mutation>();
         readonly List<WorldEvent> olaylar = new List<WorldEvent>();
         readonly List<long> geriDegerler = new List<long>();   // Apply öncesi değerler (geri alma)
+        readonly List<(int slot, string ad)> adYazmalari = new List<(int, string)>();
+        readonly List<string> adGeri = new List<string>();
 
-        public int Count => yazmalar.Count;
+        public int Count => yazmalar.Count + adYazmalari.Count;
         public IReadOnlyList<Mutation> Mutations => yazmalar;
         public IReadOnlyList<WorldEvent> Events => olaylar;
 
-        public void Clear() { yazmalar.Clear(); olaylar.Clear(); geriDegerler.Clear(); }
+        /// <summary>Maç motoruna gidecek komutlar — journal'da BEKLETİLİR, doğrudan kuyruğa
+        /// YAZILMAZ (inceleme bulgusu, P1). Handler `Apply` içinde kuyruğa yazsaydı, sonraki
+        /// journal doğrulaması ya da denetim sink'i patladığında `Geri` yalnız `GameState`i
+        /// geri alır; komut kuyrukta KALIR ve tekrar denemede İKİNCİ kopya girerdi. Artık
+        /// yayınlama commit'in parçası: yürütücü, denetim de geçtikten SONRA boşaltır.</summary>
+        readonly List<TheBadge.Sim.Match.MatchCommand> macKomutlari = new List<TheBadge.Sim.Match.MatchCommand>();
+        public IReadOnlyList<TheBadge.Sim.Match.MatchCommand> MacKomutlari => macKomutlari;
+        public void MacKomutu(TheBadge.Sim.Match.MatchCommand cmd) => macKomutlari.Add(cmd);
+
+        public void Clear() { yazmalar.Clear(); olaylar.Clear(); geriDegerler.Clear(); adYazmalari.Clear(); adGeri.Clear(); macKomutlari.Clear(); }
+
+        /// <summary>Preset ADI yazması — journal TAMSAYI taşıyıcısıdır, metin ayrı listede taşınır.
+        /// Aralık denetimi yok (uzunluk kapı 1'de doğrulandı); geri alma için eski ad saklanır.</summary>
+        public void PresetAd(int slotIndex, string ad) => adYazmalari.Add((slotIndex, ad));
 
         public void Set(MutTarget t, int index, byte field, long value) => yazmalar.Add(new Mutation(t, index, field, value, false));
         public void Add(MutTarget t, int index, byte field, long delta) => yazmalar.Add(new Mutation(t, index, field, delta, true));
@@ -122,6 +145,13 @@ namespace TheBadge.World
                 geriDegerler.Add(mevcut);
                 Yaz(st, m, m.IsDelta ? mevcut + m.Value : m.Value);
             }
+            adGeri.Clear();
+            for (int i = 0; i < adYazmalari.Count; i++)
+            {
+                var (slot, ad) = adYazmalari[i];
+                adGeri.Add(st.Presetler[slot].Ad);
+                st.Presetler[slot].Ad = ad;
+            }
             st.StateVersion++;
         }
 
@@ -137,6 +167,8 @@ namespace TheBadge.World
         {
             if (geriDegerler.Count != yazmalar.Count)
                 throw new InvalidOperationException("Geri: eşleşen bir Apply yok.");
+            for (int i = adYazmalari.Count - 1; i >= 0; i--) st.Presetler[adYazmalari[i].slot].Ad = adGeri[i];
+            adGeri.Clear();
             for (int i = yazmalar.Count - 1; i >= 0; i--) Yaz(st, yazmalar[i], geriDegerler[i]);
             geriDegerler.Clear();
             st.StateVersion--;
@@ -159,6 +191,9 @@ namespace TheBadge.World
                         case ClubField.Form: mevcut = st.Club.Form; min = 0; max = 100; return true;
                         case ClubField.SponsorKalanHafta: mevcut = st.Club.SponsorKalanHafta; min = 0; max = ushort.MaxValue; return true;
                         case ClubField.DonemInsaatGideri: mevcut = st.Club.DonemInsaatGideriTl; return true;
+                        case ClubField.Kaptan: mevcut = st.Club.KaptanPlayerId; min = 0; max = int.MaxValue; return true;
+                        case ClubField.AntrenmanPlan: mevcut = st.Club.AntrenmanPlanId; min = 0; max = 255; return true;
+                        case ClubField.AntrenmanYogunluk: mevcut = st.Club.AntrenmanYogunluk; min = 0; max = 255; return true;
                     }
                     break;
                 case MutTarget.Fiyat:
@@ -225,6 +260,39 @@ namespace TheBadge.World
                     if (m.Index < 0 || m.Index >= st.Club.TesisTier.Length) { hata = "tesis indeksi kapsam dışı"; return false; }
                     if (m.Field == FacilityField.Tier) { mevcut = st.Club.TesisTier[m.Index]; min = 0; max = byte.MaxValue; return true; }
                     break;
+                case MutTarget.Taktik:
+                    switch (m.Field)
+                    {
+                        case TacticField.Mentalite: mevcut = st.Taktik.Mentalite; min = 0; max = 255; return true;
+                        case TacticField.Tempo: mevcut = st.Taktik.Tempo; min = 0; max = 255; return true;
+                        case TacticField.Pres: mevcut = st.Taktik.Pres; min = 0; max = 255; return true;
+                        case TacticField.Hat: mevcut = st.Taktik.Hat; min = 0; max = 255; return true;
+                    }
+                    break;
+                case MutTarget.Preset:
+                    if (m.Index < 0 || m.Index >= st.Presetler.Length) { hata = "preset slotu kapsam dışı"; return false; }
+                    switch (m.Field)
+                    {
+                        case PresetField.Slot: mevcut = st.Presetler[m.Index].Slot; min = 0; max = 255; return true;
+                        case PresetField.Mentalite: mevcut = st.Presetler[m.Index].Mentalite; min = 0; max = 255; return true;
+                        case PresetField.Tempo: mevcut = st.Presetler[m.Index].Tempo; min = 0; max = 255; return true;
+                        case PresetField.Pres: mevcut = st.Presetler[m.Index].Pres; min = 0; max = 255; return true;
+                        case PresetField.Hat: mevcut = st.Presetler[m.Index].Hat; min = 0; max = 255; return true;
+                    }
+                    break;
+                case MutTarget.Talimat:
+                    {
+                        int yuva = st.Oyuncular.Length > 0 && st.Oyuncular[0].Talimatlar != null ? st.Oyuncular[0].Talimatlar.Length : 0;
+                        if (yuva <= 0) { hata = "talimat yuvası tanımsız"; return false; }
+                        int oi = m.Index / yuva, yi = m.Index % yuva;
+                        if (oi < 0 || oi >= st.Oyuncular.Length) { hata = "talimat oyuncu indeksi kapsam dışı"; return false; }
+                        switch (m.Field)
+                        {
+                            case InstructionField.TalimatId: mevcut = st.Oyuncular[oi].Talimatlar[yi].TalimatId; min = 0; max = 255; return true;
+                            case InstructionField.Deger: mevcut = st.Oyuncular[oi].Talimatlar[yi].Deger; min = 0; max = 255; return true;
+                        }
+                        break;
+                    }
                 case MutTarget.Sponsor:
                     if (m.Index < 0 || m.Index >= st.Club.SponsorTeklifleri.Length) { hata = "sponsor teklif slotu kapsam dışı"; return false; }
                     switch (m.Field)
@@ -255,6 +323,9 @@ namespace TheBadge.World
                     else if (m.Field == ClubField.SponsorHaftalik) st.Club.SponsorHaftalikTl = v;
                     else if (m.Field == ClubField.SponsorKalanHafta) st.Club.SponsorKalanHafta = (ushort)v;
                     else if (m.Field == ClubField.DonemInsaatGideri) st.Club.DonemInsaatGideriTl = v;
+                    else if (m.Field == ClubField.Kaptan) st.Club.KaptanPlayerId = (int)v;
+                    else if (m.Field == ClubField.AntrenmanPlan) st.Club.AntrenmanPlanId = (byte)v;
+                    else if (m.Field == ClubField.AntrenmanYogunluk) st.Club.AntrenmanYogunluk = (byte)v;
                     else st.Club.Form = (byte)v;
                     break;
                 case MutTarget.Fiyat:
@@ -303,6 +374,30 @@ namespace TheBadge.World
                     }
                     break;
                 case MutTarget.Tesis: st.Club.TesisTier[m.Index] = (byte)v; break;
+                case MutTarget.Taktik:
+                    if (m.Field == TacticField.Mentalite) st.Taktik.Mentalite = (byte)v;
+                    else if (m.Field == TacticField.Tempo) st.Taktik.Tempo = (byte)v;
+                    else if (m.Field == TacticField.Pres) st.Taktik.Pres = (byte)v;
+                    else st.Taktik.Hat = (byte)v;
+                    break;
+                case MutTarget.Preset:
+                    switch (m.Field)
+                    {
+                        case PresetField.Slot: st.Presetler[m.Index].Slot = (byte)v; break;
+                        case PresetField.Mentalite: st.Presetler[m.Index].Mentalite = (byte)v; break;
+                        case PresetField.Tempo: st.Presetler[m.Index].Tempo = (byte)v; break;
+                        case PresetField.Pres: st.Presetler[m.Index].Pres = (byte)v; break;
+                        case PresetField.Hat: st.Presetler[m.Index].Hat = (byte)v; break;
+                    }
+                    break;
+                case MutTarget.Talimat:
+                    {
+                        int yuva = st.Oyuncular[0].Talimatlar.Length;
+                        int oi = m.Index / yuva, yi = m.Index % yuva;
+                        if (m.Field == InstructionField.TalimatId) st.Oyuncular[oi].Talimatlar[yi].TalimatId = (byte)v;
+                        else st.Oyuncular[oi].Talimatlar[yi].Deger = (byte)v;
+                        break;
+                    }
                 case MutTarget.Sponsor:
                     switch (m.Field)
                     {

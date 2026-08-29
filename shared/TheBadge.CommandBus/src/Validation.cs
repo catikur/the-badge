@@ -25,8 +25,11 @@ namespace TheBadge.CommandBus
     {
         /// <summary>Komutun bağlamı (Hub/Maç/Online) şu an geçerli mi.</summary>
         bool IsContextActive(Context context);
-        /// <summary>Sahiplik/kaynak/hak denetimi. Geçerse `RejectionReason.None` döner.</summary>
-        RejectionReason CheckOwnershipAndState(CommandEnvelope env, ActionDef action, IPayloadView payload);
+        /// <summary>Sahiplik/kaynak/hak denetimi. Geçerse `RejectionReason.None` döner.
+        /// `detail` reddin GEREKÇESİdir ve `ValidationResult`a taşınır — kapı 3 redleri aksiyona
+        /// özgüdür ("maliyet 4.200.000 ₺", "talimat yuvası dolu"), yalnız sebep kodu kullanıcıya
+        /// da denetim loguna da yetmez (K4 bulgusu: gerekçe çağırana hiç ulaşmıyordu).</summary>
+        RejectionReason CheckOwnershipAndState(CommandEnvelope env, ActionDef action, IPayloadView payload, out string detail);
 
         /// <summary>KARARLI takım kimliği — CB 5.1 maç içi limiti "10/dk/TAKIM" der ve bu kimlik
         /// zarftan TÜRETİLEMEZ: `TeamIdx` yalnız ev/deplasman'dır, aynı takımı yöneten iki
@@ -131,8 +134,8 @@ namespace TheBadge.CommandBus
                 return new ValidationResult(RejectionReason.StateConflict, "yanlış bağlam");
             if (!ctx.IsContextActive(etkin))
                 return new ValidationResult(RejectionReason.StateConflict, "bağlam kapalı");
-            var g3 = ctx.CheckOwnershipAndState(env, action, payload);
-            if (g3 != RejectionReason.None) return new ValidationResult(g3);
+            var g3 = ctx.CheckOwnershipAndState(env, action, payload, out string g3Detay);
+            if (g3 != RejectionReason.None) return new ValidationResult(g3, g3Detay);
 
             // ---- KAPI 4: rate limit ----
             // Saat HOST'undur: `IssuedAtUnixMs` istemci verisidir ve ileri tarihli gönderilerek

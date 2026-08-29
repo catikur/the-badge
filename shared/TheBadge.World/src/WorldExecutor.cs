@@ -53,6 +53,7 @@ namespace TheBadge.World
         readonly IActionHandler[] handlers;      // katalog indeksine göre
         readonly IWorldAuditSink audit;
         readonly WorldJournal journal = new WorldJournal();
+        IMatchCommandSink macKuyrugu;
 
         GameState st => depo.State;
 
@@ -67,11 +68,24 @@ namespace TheBadge.World
             audit = auditSink;
         }
 
+        /// <summary>Maç komut kuyruğu YÜRÜTÜCÜye bağlanır, handler'a değil: yayınlama commit'in
+        /// parçasıdır (aşağıda, denetimden SONRA boşaltılır). Handler kuyruğa doğrudan yazsaydı
+        /// geri alma onu toplayamazdı (inceleme bulgusu, P1).</summary>
+        public void MacKuyruguBagla(IMatchCommandSink sink)
+        {
+            if (macKuyrugu != null) throw new InvalidOperationException("maç kuyruğu zaten bağlı");
+            macKuyrugu = sink;
+        }
+
         /// <summary>K3-K5 aksiyonlarını buraya bağlar.</summary>
         public void RegisterHandler(string actionType, IActionHandler handler)
         {
             int i = CatalogIndex(actionType);
             if (i < 0) throw new ArgumentException("katalogda yok: " + actionType, nameof(actionType));
+            // ÇİFTE KAYIT REDDEDİLİR — iki modülün aynı aksiyonu yürütmesi bir kablolama
+            // hatasıdır ve sessizce sonuncunun kazanması hatayı gizler.
+            if (handlers[i] != null)
+                throw new InvalidOperationException("aksiyona zaten yürütücü bağlı: " + actionType);
             handlers[i] = handler ?? throw new ArgumentNullException(nameof(handler));
         }
 
@@ -102,8 +116,9 @@ namespace TheBadge.World
                 // karar kilidin İÇİNDE verilir; dışarıdaki doğrulama hızlı geri bildirim içindir.
                 // Bu, projenin "istemci ön-doğrular, sunucu yeniden doğrular" ilkesinin bir
                 // katman aşağıya uygulanmasıdır.
-                var tekrar = kapi3.CheckOwnershipAndState(env, action, payload);
-                if (tekrar != RejectionReason.None) { detail = "yürütme anında: " + tekrar; return tekrar; }
+                var tekrar = kapi3.CheckOwnershipAndState(env, action, payload, out string tekrarDetay);
+                if (tekrar != RejectionReason.None)
+                { detail = "yürütme anında: " + (tekrarDetay ?? tekrar.ToString()); return tekrar; }
 
                 int ci = CatalogIndex(action.ActionType);
                 var h = ci >= 0 ? handlers[ci] : null;
@@ -146,6 +161,22 @@ namespace TheBadge.World
                                       journal.Events);
                     }
                     catch { journal.Geri(st); throw; }
+                }
+
+                // MAÇ KOMUTLARI EN SONDA YAYINLANIR — journal doğrulaması, uygulama ve denetim
+                // hepsi geçtikten sonra. Buraya kadar gelen her yol "işlem tamamlandı" demektir;
+                // yukarıdaki her erken dönüş ve `Geri` yolu komutları YAYINLANMAMIŞ bırakır.
+                if (journal.MacKomutlari.Count > 0)
+                {
+                    if (macKuyrugu == null)
+                    {
+                        // Buraya düşmek kablolama hatasıdır: handler maç komutu üretti ama kuyruk yok.
+                        // Sessiz başarı YOK — durum zaten uygulandı, o yüzden geri al ve reddet.
+                        journal.Geri(st);
+                        detail = "maç kuyruğu bağlı değil";
+                        return RejectionReason.StateConflict;
+                    }
+                    for (int i = 0; i < journal.MacKomutlari.Count; i++) macKuyrugu.Enqueue(journal.MacKomutlari[i]);
                 }
                 return RejectionReason.None;
             }
