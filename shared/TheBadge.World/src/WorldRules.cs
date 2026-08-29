@@ -11,6 +11,7 @@ namespace TheBadge.World
         public int surum;
         public Kapi3Cfg kapi3 = new Kapi3Cfg();
         public YapiCfg yapi = new YapiCfg();
+        public TaktikCfg taktik = new TaktikCfg();
 
         [Serializable]
         public sealed class Kapi3Cfg
@@ -20,6 +21,12 @@ namespace TheBadge.World
             /// kararıdır ve K5'te (Transfer) kesinleşir — kod değişmeden ayarlanabilir.</summary>
             public string[] pencereGerektiren = new string[0];
         }
+
+        /// <summary>Taktik delta → mutlak dönüşümü. Katalog [-2, +2] DELTA verir (CB 4.2);
+        /// kalıcı durum 0-100 MUTLAK tutar. Bir delta adımı `adim` puan kaydırır ve sonuç
+        /// [min, max] aralığına kırpılır — kodda sabit yok.</summary>
+        [Serializable]
+        public sealed class TaktikCfg { public int adim, min, max; }
 
         [Serializable]
         public sealed class YapiCfg
@@ -32,6 +39,8 @@ namespace TheBadge.World
             public int sezonHaftaSayisi;      // [KALİBRE]
             public int macBasinaDegisiklik;   // [KALİBRE] ME 14.2 değişiklik hakkı
             public int sponsorTeklifSlotSayisi;  // [KALİBRE] eşzamanlı sponsor teklifi
+            public int presetSlotSayisi;         // [KALİBRE] kayıtlı taktik şablonu (CB bandı 1-20)
+            public int talimatYuvaSayisi;        // [KALİBRE] oyuncu başına eşzamanlı talimat
         }
 
         /// <summary>Aksiyon transfer penceresi istiyor mu. Liste küçüktür (tek haneli); sırasız
@@ -57,6 +66,10 @@ namespace TheBadge.World
             if (yapi.sezonHaftaSayisi <= 0) throw new ArgumentException("world.balance: yapi.sezonHaftaSayisi > 0 olmalı.");
             if (yapi.macBasinaDegisiklik < 0) throw new ArgumentException("world.balance: yapi.macBasinaDegisiklik ≥ 0 olmalı.");
             if (yapi.sponsorTeklifSlotSayisi <= 0) throw new ArgumentException("world.balance: yapi.sponsorTeklifSlotSayisi > 0 olmalı.");
+            if (yapi.presetSlotSayisi <= 0) throw new ArgumentException("world.balance: yapi.presetSlotSayisi > 0 olmalı.");
+            if (yapi.talimatYuvaSayisi <= 0) throw new ArgumentException("world.balance: yapi.talimatYuvaSayisi > 0 olmalı.");
+            if (taktik.adim <= 0) throw new ArgumentException("world.balance: taktik.adim > 0 olmalı.");
+            if (taktik.min >= taktik.max) throw new ArgumentException("world.balance: taktik.min < taktik.max olmalı.");
         }
     }
 }

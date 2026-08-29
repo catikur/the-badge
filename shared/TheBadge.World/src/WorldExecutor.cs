@@ -72,6 +72,10 @@ namespace TheBadge.World
         {
             int i = CatalogIndex(actionType);
             if (i < 0) throw new ArgumentException("katalogda yok: " + actionType, nameof(actionType));
+            // ÇİFTE KAYIT REDDEDİLİR — iki modülün aynı aksiyonu yürütmesi bir kablolama
+            // hatasıdır ve sessizce sonuncunun kazanması hatayı gizler.
+            if (handlers[i] != null)
+                throw new InvalidOperationException("aksiyona zaten yürütücü bağlı: " + actionType);
             handlers[i] = handler ?? throw new ArgumentNullException(nameof(handler));
         }
 
@@ -102,8 +106,9 @@ namespace TheBadge.World
                 // karar kilidin İÇİNDE verilir; dışarıdaki doğrulama hızlı geri bildirim içindir.
                 // Bu, projenin "istemci ön-doğrular, sunucu yeniden doğrular" ilkesinin bir
                 // katman aşağıya uygulanmasıdır.
-                var tekrar = kapi3.CheckOwnershipAndState(env, action, payload);
-                if (tekrar != RejectionReason.None) { detail = "yürütme anında: " + tekrar; return tekrar; }
+                var tekrar = kapi3.CheckOwnershipAndState(env, action, payload, out string tekrarDetay);
+                if (tekrar != RejectionReason.None)
+                { detail = "yürütme anında: " + (tekrarDetay ?? tekrar.ToString()); return tekrar; }
 
                 int ci = CatalogIndex(action.ActionType);
                 var h = ci >= 0 ? handlers[ci] : null;

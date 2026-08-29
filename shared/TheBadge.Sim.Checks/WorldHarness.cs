@@ -76,9 +76,9 @@ namespace TheBadge.Checks
         { ic = inner; bariyer = new System.Threading.Barrier(katilimci); }
         public bool IsContextActive(Context context) => ic.IsContextActive(context);
         public long ResolveTeamKey(CommandEnvelope env) => ic.ResolveTeamKey(env);
-        public RejectionReason CheckOwnershipAndState(CommandEnvelope env, ActionDef action, IPayloadView payload)
+        public RejectionReason CheckOwnershipAndState(CommandEnvelope env, ActionDef action, IPayloadView payload, out string detail)
         {
-            var r = ic.CheckOwnershipAndState(env, action, payload);
+            var r = ic.CheckOwnershipAndState(env, action, payload, out detail);
             if (derinlik++ == 0) bariyer.SignalAndWait();   // durum kilidi BURADA tutulmuyor
             return r;
         }
@@ -157,6 +157,13 @@ namespace TheBadge.Checks
         }
     }
 
+    /// <summary>Maç kuyruğu casusu — köprünün ME komutunu GERÇEKTEN ürettiğini ölçer.</summary>
+    public sealed class SpyMatchSink : IMatchCommandSink
+    {
+        public readonly List<TheBadge.Sim.Match.MatchCommand> Komutlar = new List<TheBadge.Sim.Match.MatchCommand>();
+        public void Enqueue(TheBadge.Sim.Match.MatchCommand cmd) => Komutlar.Add(cmd);
+    }
+
     /// <summary>K2 dünya durumu kurulum yardımcıları.</summary>
     public static class WorldFixture
     {
@@ -170,15 +177,19 @@ namespace TheBadge.Checks
             st.Club.StadyumKapasite = 20000;
             var list = new List<PlayerState>();
             int pid = 100;
+            Instruction[] Yuva() => new Instruction[rules.yapi.talimatYuvaSayisi];
             for (int i = 0; i < kendi; i++)
                 list.Add(new PlayerState { PlayerId = pid++, ClubId = clubId, HaftalikMaasTl = 10000,
-                                           SozlesmeKalanHafta = 100, Moral = 60, Kondisyon = 90, RolId = 1 });
+                                           SozlesmeKalanHafta = 100, Moral = 60, Kondisyon = 90, RolId = 1,
+                                           Talimatlar = Yuva() });
             for (int i = 0; i < yabanci; i++)
                 list.Add(new PlayerState { PlayerId = pid++, ClubId = clubId + 1, HaftalikMaasTl = 12000,
-                                           SozlesmeKalanHafta = 100, Moral = 60, Kondisyon = 90, RolId = 1 });
+                                           SozlesmeKalanHafta = 100, Moral = 60, Kondisyon = 90, RolId = 1,
+                                           Talimatlar = Yuva() });
             for (int i = 0; i < serbest; i++)
                 list.Add(new PlayerState { PlayerId = pid++, ClubId = 0, HaftalikMaasTl = 0,
-                                           SozlesmeKalanHafta = 0, Moral = 50, Kondisyon = 80, RolId = 1 });
+                                           SozlesmeKalanHafta = 0, Moral = 50, Kondisyon = 80, RolId = 1,
+                                           Talimatlar = Yuva() });
             st.Oyuncular = list.ToArray();
             st.Validate();
             return st;

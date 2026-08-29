@@ -47,6 +47,11 @@ namespace TheBadge.World
         {
             int i = CatalogIndex(actionType);
             if (i < 0) throw new ArgumentException("katalogda yok: " + actionType, nameof(actionType));
+            // ÇİFTE KAYIT REDDEDİLİR: sessizce üzerine yazmak, iki modülün aynı aksiyona kural
+            // bağladığı durumda BİRİNİN denetimini görünmez şekilde iptal ederdi. Kural bestesi
+            // gerekiyorsa çağıran taraf sarmalayıp TEK kayıt yapar.
+            if (ekKural[i] != null)
+                throw new InvalidOperationException("aksiyona zaten kural bağlı: " + actionType);
             ekKural[i] = rule ?? throw new ArgumentNullException(nameof(rule));
         }
 
@@ -67,14 +72,16 @@ namespace TheBadge.World
         /// <summary>Kapı 3 — TAMAMI durum kilidi altında okunur (bkz. `WorldStore`). Yürütücü
         /// aynı kilidi tutarken bu denetimi TEKRAR çağırır; kilit aynı iş parçacığında yeniden
         /// girilebilir olduğu için çağrı doğrudan yapılabilir.</summary>
-        public RejectionReason CheckOwnershipAndState(CommandEnvelope env, ActionDef action, IPayloadView payload)
+        public RejectionReason CheckOwnershipAndState(CommandEnvelope env, ActionDef action, IPayloadView payload, out string detail)
         {
+            detail = null;
             if (action == null) return RejectionReason.UnknownAction;
-            lock (depo.Kilit) return Denetle(env, action, payload);
+            lock (depo.Kilit) return Denetle(env, action, payload, out detail);
         }
 
-        RejectionReason Denetle(CommandEnvelope env, ActionDef action, IPayloadView payload)
+        RejectionReason Denetle(CommandEnvelope env, ActionDef action, IPayloadView payload, out string detail)
         {
+            detail = null;
 
             // (1) KULÜP SAHİPLİĞİ — komutu veren kullanıcı bu kulübü yönetiyor mu.
             // Diğer her denetim bunun üstüne kuruludur: başkasının kulübünde "yeterli bakiye"
@@ -162,7 +169,7 @@ namespace TheBadge.World
             // (7) AKSİYONA ÖZGÜ KURAL — K3-K5.
             int ci = CatalogIndex(action.ActionType);
             var ek = ci >= 0 ? ekKural[ci] : null;
-            if (ek != null) return ek.Check(st, env, action, payload, out _);
+            if (ek != null) return ek.Check(st, env, action, payload, out detail);
 
             return RejectionReason.None;
         }

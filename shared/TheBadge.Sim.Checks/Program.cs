@@ -2651,6 +2651,24 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             ("PricingState.KombineKurus",     s => s.Fiyat.KombineKurus += 1),
             ("PricingState.BufeKurus",        s => s.Fiyat.BufeKurus[1] += 1),
             ("PricingState.MagazaKurus",      s => s.Fiyat.MagazaKurus[2] += 1),
+            ("ClubState.KaptanPlayerId",      s => s.Club.KaptanPlayerId += 1),
+            ("ClubState.AntrenmanPlanId",     s => s.Club.AntrenmanPlanId += 1),
+            ("ClubState.AntrenmanYogunluk",   s => s.Club.AntrenmanYogunluk += 1),
+            ("GameState.Taktik",              s => s.Taktik.Mentalite += 1),
+            ("GameState.Presetler",           s => s.Presetler[0].Slot += 1),
+            ("PlayerState.Talimatlar",        s => s.Oyuncular[0].Talimatlar[0].TalimatId += 1),
+            ("TacticState.Mentalite",         s => s.Taktik.Mentalite += 2),
+            ("TacticState.Tempo",             s => s.Taktik.Tempo += 1),
+            ("TacticState.Pres",              s => s.Taktik.Pres += 1),
+            ("TacticState.Hat",               s => s.Taktik.Hat += 1),
+            ("TacticPreset.Slot",             s => s.Presetler[1].Slot += 1),
+            ("TacticPreset.Ad",               s => s.Presetler[0].Ad = "degisti"),
+            ("TacticPreset.Mentalite",        s => s.Presetler[0].Mentalite += 1),
+            ("TacticPreset.Tempo",            s => s.Presetler[0].Tempo += 1),
+            ("TacticPreset.Pres",             s => s.Presetler[0].Pres += 1),
+            ("TacticPreset.Hat",              s => s.Presetler[0].Hat += 1),
+            ("Instruction.TalimatId",         s => s.Oyuncular[1].Talimatlar[0].TalimatId += 1),
+            ("Instruction.Deger",             s => s.Oyuncular[0].Talimatlar[0].Deger += 1),
         };
 
         // Beklenen küme: kalıcı durum tiplerinin TÜM public alanları (yansıma).
@@ -2660,7 +2678,9 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         foreach (var t in new[] { typeof(TheBadge.World.GameState), typeof(TheBadge.World.ClubState),
                                   typeof(TheBadge.World.PlayerState), typeof(TheBadge.World.CalendarState),
                                   typeof(TheBadge.World.PricingState), typeof(TheBadge.World.Construction),
-                                  typeof(TheBadge.World.Loan), typeof(TheBadge.World.SponsorOffer) })
+                                  typeof(TheBadge.World.Loan), typeof(TheBadge.World.SponsorOffer),
+                                  typeof(TheBadge.World.TacticState), typeof(TheBadge.World.TacticPreset),
+                                  typeof(TheBadge.World.Instruction) })
             foreach (var f in t.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
             {
                 // Alt nesne referansları (Club/Oyuncular/Takvim/Fiyat) kendileri alan değil, KAPSAYICIdır
@@ -2681,12 +2701,22 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         taban.Club.InsaatSlot[0] = new TheBadge.World.Construction { InsaatId = 1, TesisId = 2, HedefTier = 1, KalanHafta = 3, ToplamMaliyetTl = 100 };
         taban.Club.Krediler[0] = new TheBadge.World.Loan { KrediId = 1, AnaparaTl = 100, KalanAy = 3, FaizBp = 100 };
         taban.Club.SponsorTeklifleri[0] = new TheBadge.World.SponsorOffer { TeklifId = 1, HaftalikTl = 100, SureHafta = 3, SonGecerlilikSezon = 1, SonGecerlilikHafta = 5 };
+        // Preset ve talimat yuvaları DOLU olmalı: boş yuvada bir alanı artırmak hash'i oynatır
+        // ama "bu alan gerçekten kimliğe giriyor mu" sorusunu zayıf sınar.
+        taban.Presetler[0] = new TheBadge.World.TacticPreset { Slot = 1, Ad = "taban", Mentalite = 40, Tempo = 41, Pres = 42, Hat = 43 };
+        taban.Presetler[1] = new TheBadge.World.TacticPreset { Slot = 2, Ad = "ikinci", Mentalite = 44, Tempo = 45, Pres = 46, Hat = 47 };
+        taban.Oyuncular[0].Talimatlar[0] = new TheBadge.World.Instruction { TalimatId = 3, Deger = 2 };
+        taban.Oyuncular[1].Talimatlar[0] = new TheBadge.World.Instruction { TalimatId = 4, Deger = 5 };
         TheBadge.World.GameState Kur2()
         {
             var g = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
             g.Club.InsaatSlot[0] = taban.Club.InsaatSlot[0];
             g.Club.Krediler[0] = taban.Club.Krediler[0];
             g.Club.SponsorTeklifleri[0] = taban.Club.SponsorTeklifleri[0];
+            g.Presetler[0] = taban.Presetler[0];
+            g.Presetler[1] = taban.Presetler[1];
+            g.Oyuncular[0].Talimatlar[0] = taban.Oyuncular[0].Talimatlar[0];
+            g.Oyuncular[1].Talimatlar[0] = taban.Oyuncular[1].Talimatlar[0];
             return g;
         }
         ulong h0 = TheBadge.World.WorldHash.Compute(Kur2());
@@ -3722,6 +3752,200 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         if (senaryo != tycoon.Length * 4) hata += $"senaryo sayısı {senaryo} ≠ {tycoon.Length * 4} ";
         if (hata.Length > 0) failures += Fail("K3NegatifMatris", hata);
         else Pass($"K3NegatifMatris(CB 10.1: {tycoon.Length} aksiyon × 4 senaryo = {senaryo} · şema·bant·kapı3·rate)");
+    }
+}
+
+// 28) FAZ 04 K4 — SQUAD MANAGEMENT (CB 4.2, 9 aksiyon) + HUB/MAÇ YÖNLENDİRMESİ
+{
+    var kOpts = new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true };
+    string balDir = System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json"));
+    var k4Rules = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.WorldRules>(
+        System.IO.File.ReadAllText(System.IO.Path.Combine(balDir, "world.balance.json")), kOpts);
+    k4Rules.Validate();
+    var k4Eco = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.EconomyBalance>(
+        System.IO.File.ReadAllText(System.IO.Path.Combine(balDir, "economy.balance.json")), kOpts);
+    var k4Bands = new TheBadge.Checks.TestBands();
+    var k4RlCfg = new Dictionary<RateClass, RateLimitCfg[]>();
+    {
+        using var bd = System.Text.Json.JsonDocument.Parse(
+            System.IO.File.ReadAllText(System.IO.Path.Combine(balDir, "command.bands.json")));
+        foreach (var b in bd.RootElement.GetProperty("bantlar").EnumerateObject())
+            k4Bands.Add(b.Name, b.Value[0].GetDouble(), b.Value[1].GetDouble());
+        foreach (var r in bd.RootElement.GetProperty("rateLimit").EnumerateObject())
+        {
+            var list = new List<RateLimitCfg>();
+            foreach (var w in r.Value.EnumerateArray()) list.Add(new RateLimitCfg(w[0].GetInt32(), w[1].GetInt64() * 1000));
+            k4RlCfg[(RateClass)Enum.Parse(typeof(RateClass), r.Name)] = list.ToArray();
+        }
+    }
+    const long K4Host = 1_700_000_000_000L, K4User = 42L;
+    CommandEnvelope K4Env(string act, long user = K4User, uint tick = 0, Guid? id = null)
+        => new CommandEnvelope
+        {
+            CommandId = id ?? Guid.NewGuid(), CatalogVersion = Catalog.Version, Source = CommandSource.UI,
+            ActionType = act, IssuedAtUnixMs = K4Host, MatchTick = tick, UserId = user,
+            SaveSlotId = 1, TeamIdx = 0, PayloadJson = new byte[0]
+        };
+
+    (TheBadge.World.WorldStore depo, TheBadge.World.WorldContext ctx, TheBadge.World.WorldExecutor exec,
+     TheBadge.CommandBus.CommandBus bus, TheBadge.Checks.SpyMatchSink kuyruk) K4Kur(bool kuyrukVar = true)
+    {
+        var g = TheBadge.Checks.EkonomiFixture.Kur(k4Rules, k4Eco, 500L, K4User);
+        var depo = new TheBadge.World.WorldStore(g);
+        var ctx = new TheBadge.World.WorldContext(depo, k4Rules)
+        { Active = TheBadge.CommandBus.Context.Hub | TheBadge.CommandBus.Context.Match | TheBadge.CommandBus.Context.Online };
+        var exec = new TheBadge.World.WorldExecutor(depo, ctx);
+        var kuyruk = kuyrukVar ? new TheBadge.Checks.SpyMatchSink() : null;
+        TheBadge.World.SquadActions.Baglan(ctx, exec, k4Rules, kuyruk);
+        var bus = new TheBadge.CommandBus.CommandBus(k4Bands, ctx,
+            new SlidingWindowRateLimiter(k4RlCfg, 3, 300_000), new IdempotencyStore());
+        return (depo, ctx, exec, bus, kuyruk);
+    }
+
+    // 28a) BAĞLANTI — CB 4.2'nin 9 aksiyonu bağlı
+    {
+        var w = K4Kur();
+        var bagsiz = w.exec.UnboundActions();
+        int kalan = 0;
+        foreach (var a in bagsiz) if (a.StartsWith("squad.", StringComparison.Ordinal) || a.StartsWith("match.", StringComparison.Ordinal)) kalan++;
+        Console.WriteLine($"[info] K4 bağlantı: bağlanmamış {bagsiz.Length}/{Catalog.Count} (squad+match: {kalan})");
+        if (kalan != 0) failures += Fail("K4Baglanti", $"{kalan} squad/match aksiyonu bağlanmamış");
+        else Pass($"K4Baglanti(9 aksiyon bağlı · kalan {bagsiz.Length} aksiyon K5-K7'nin işi)");
+    }
+
+    // 28b) HUB YOLU — kalıcı kurulum düzenleniyor
+    {
+        string hata = "";
+        void Dene(string ad, string aksiyon, TheBadge.Checks.TestPayload pl,
+                  Func<TheBadge.World.GameState, bool> beklenen)
+        {
+            var w = K4Kur();
+            var o = w.bus.Submit(K4Env(aksiyon), pl, w.exec, K4Host, K4User);
+            if (!o.Ok) { hata += $"{ad}({o.Reason}/{o.Detail}) "; return; }
+            if (!beklenen(w.depo.State)) hata += $"{ad}(durum beklenen gibi değil) ";
+            if (w.kuyruk.Komutlar.Count != 0) hata += $"{ad}(hub komutu MAÇ kuyruğuna gitti) ";
+        }
+        int ilk = 100;   // fixture'ın ilk kendi oyuncusu
+        Dene("anchor", "squad.set_player_anchor",
+             new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)ilk).Set("x", -12000L).Set("y", 8000L),
+             g => g.Oyuncular[0].AnchorXmm == -12000 && g.Oyuncular[0].AnchorYmm == 8000);
+        Dene("rol", "squad.set_player_role",
+             new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)ilk).Set("rolId", 7L),
+             g => g.Oyuncular[0].RolId == 7);
+        Dene("talimat", "squad.set_instruction",
+             new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)ilk).Set("talimatId", 5L).Set("deger", 3L),
+             g => g.Oyuncular[0].Talimatlar[0].TalimatId == 5 && g.Oyuncular[0].Talimatlar[0].Deger == 3);
+        Dene("taktik", "squad.set_team_tactic",
+             new TheBadge.Checks.TestPayload().Set("mentalite", 2L).Set("tempo", -1L).Set("pres", 0L).Set("hat", 1L),
+             g => g.Taktik.Mentalite == 50 + 2 * k4Rules.taktik.adim
+                  && g.Taktik.Tempo == 50 - k4Rules.taktik.adim
+                  && g.Taktik.Pres == 50 && g.Taktik.Hat == 50 + k4Rules.taktik.adim);
+        Dene("preset", "squad.save_tactic_preset",
+             new TheBadge.Checks.TestPayload().Set("ad", "gegenpress").Set("slot", 3L),
+             g => g.Presetler[2].Slot == 3 && g.Presetler[2].Ad == "gegenpress" && g.Presetler[2].Mentalite == 50);
+        Dene("kaptan", "squad.set_captain",
+             new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)ilk),
+             g => g.Club.KaptanPlayerId == ilk);
+        Dene("antrenman", "squad.set_training_plan",
+             new TheBadge.Checks.TestPayload().Set("planId", 4L).Set("yogunluk", 3L),
+             g => g.Club.AntrenmanPlanId == 4 && g.Club.AntrenmanYogunluk == 3);
+        if (hata.Length > 0) failures += Fail("K4HubYolu", hata);
+        else Pass("K4HubYolu(7 hub aksiyonu kalıcı durumu düzenliyor · maç kuyruğuna sızma yok)");
+    }
+
+    // 28c) MAÇ YOLU — komut ME kuyruğuna gidiyor, kalıcı durum (değişiklik hakkı hariç) DURUYOR
+    {
+        string hata = "";
+        // Taktik: maçta TacticChangeCmd
+        {
+            var w = K4Kur();
+            ulong h0 = w.depo.Hash();
+            var o = w.bus.Submit(K4Env("squad.set_team_tactic", tick: 500),
+                new TheBadge.Checks.TestPayload().Set("mentalite", 2L).Set("tempo", 0L).Set("pres", -1L).Set("hat", 0L),
+                w.exec, K4Host, K4User);
+            if (!o.Ok) hata += $"maç taktiği reddedildi({o.Reason}/{o.Detail}) ";
+            if (w.kuyruk.Komutlar.Count != 1) hata += "taktik kuyruğa girmedi ";
+            else if (w.kuyruk.Komutlar[0] is TheBadge.Sim.Match.TacticChangeCmd tc)
+            {
+                if (tc.IssueTick != 500 || tc.Delta.Mentalite != 2 || tc.Delta.Pres != -1) hata += "taktik delta yanlış taşındı ";
+            }
+            else hata += "taktik yanlış komut tipi ";
+            if (w.depo.Hash() != h0) hata += "maç taktiği KALICI durumu değiştirdi ";
+        }
+        // Değişiklik: SubstitutionCmd + hak azalır
+        {
+            var w = K4Kur();
+            byte hak0 = w.depo.State.KalanDegisiklikHakki;
+            var o = w.bus.Submit(K4Env("match.substitution", tick: 3600),
+                new TheBadge.Checks.TestPayload().Set("cikanId", 5L).Set("girenId", 2L), w.exec, K4Host, K4User);
+            if (!o.Ok) hata += $"değişiklik reddedildi({o.Reason}/{o.Detail}) ";
+            if (w.kuyruk.Komutlar.Count != 1 || !(w.kuyruk.Komutlar[0] is TheBadge.Sim.Match.SubstitutionCmd sc))
+                hata += "değişiklik kuyruğa girmedi ";
+            else if (sc.OutId != 5 || sc.InId != 2 || sc.IssueTick != 3600) hata += "değişiklik alanları yanlış ";
+            if (w.depo.State.KalanDegisiklikHakki != hak0 - 1) hata += "değişiklik hakkı azalmadı ";
+        }
+        // Motivasyon: MotivationCmd, ton eşlemesi
+        {
+            var w = K4Kur();
+            var o = w.bus.Submit(K4Env("match.motivation_talk", tick: 1200),
+                new TheBadge.Checks.TestPayload().Set("ton", "atesle"), w.exec, K4Host, K4User);
+            if (!o.Ok) hata += $"motivasyon reddedildi({o.Reason}) ";
+            if (w.kuyruk.Komutlar.Count != 1 || !(w.kuyruk.Komutlar[0] is TheBadge.Sim.Match.MotivationCmd mc))
+                hata += "motivasyon kuyruğa girmedi ";
+            else if (mc.Tone != TheBadge.Sim.Match.ToneType.Atesle) hata += $"ton yanlış eşlendi ({mc.Tone}) ";
+        }
+        // Kuyruk BAĞLI DEĞİLSE sessizce başarı YOK
+        {
+            var w = K4Kur(kuyrukVar: false);
+            var o = w.bus.Submit(K4Env("match.motivation_talk", tick: 1200),
+                new TheBadge.Checks.TestPayload().Set("ton", "uyar"), w.exec, K4Host, K4User);
+            if (o.Ok) hata += "kuyruksuz host SAHTE BAŞARI döndürdü ";
+        }
+        if (hata.Length > 0) failures += Fail("K4MacYolu", hata);
+        else Pass("K4MacYolu(taktik/değişiklik/motivasyon ME kuyruğuna · kalıcı durum korunuyor · kuyruksuz host reddediyor)");
+    }
+
+    // 28d) ARAYÜZ BOŞLUĞU (K4 bulgusu) — CB 4.2 anchor/rol/talimatı "Hub + Maç" diyor ama ME
+    // komut kümesinde anchor/rol karşılığı YOK ve `PlayerInstr` kataloğu boş. Bu üç yol maç
+    // bağlamında SESSİZCE hiçbir şey yapmak yerine açık sebeple reddediliyor.
+    {
+        string hata = "";
+        var macta = new (string aksiyon, TheBadge.Checks.TestPayload pl)[]
+        {
+            ("squad.set_player_anchor", new TheBadge.Checks.TestPayload().Set("oyuncuId", 100L).Set("x", 0L).Set("y", 0L)),
+            ("squad.set_player_role",   new TheBadge.Checks.TestPayload().Set("oyuncuId", 100L).Set("rolId", 3L)),
+            ("squad.set_instruction",   new TheBadge.Checks.TestPayload().Set("oyuncuId", 100L).Set("talimatId", 2L).Set("deger", 1L)),
+        };
+        foreach (var (aksiyon, pl) in macta)
+        {
+            var w = K4Kur();
+            ulong h0 = w.depo.Hash();
+            var o = w.bus.Submit(K4Env(aksiyon, tick: 900), pl.Copy(), w.exec, K4Host, K4User);
+            if (o.Reason != RejectionReason.StateConflict) hata += $"{aksiyon}/maç({o.Reason}, sessiz no-op olabilir) ";
+            if (o.Detail == null || o.Detail.IndexOf("karşılığı yok", StringComparison.Ordinal) < 0)
+                hata += $"{aksiyon}(sebep açıklanmıyor) ";
+            if (w.depo.Hash() != h0) hata += $"{aksiyon}(durum oynadı) ";
+            if (w.kuyruk.Komutlar.Count != 0) hata += $"{aksiyon}(kuyruğa anlamsız komut girdi) ";
+            // AYNI aksiyon HUB'da çalışmalı — red bağlama özgü
+            var w2 = K4Kur();
+            if (!w2.bus.Submit(K4Env(aksiyon), pl.Copy(), w2.exec, K4Host, K4User).Ok)
+                hata += $"{aksiyon}(hub'da da reddedildi) ";
+        }
+        Console.WriteLine("[info] K4 ME borcu: anchor/rol maç komutu YOK · PlayerInstr kataloğu boş (None=0) — ME 14.2 borcu");
+        if (hata.Length > 0) failures += Fail("K4MeArayuzBoslugu", hata);
+        else Pass("K4MeArayuzBoslugu(3 aksiyon maçta açık sebeple reddediliyor, hub'da çalışıyor — ME 14.2 borcu görünür)");
+    }
+
+    // 28e) ÇİFTE KAYIT REDDİ — iki modülün aynı aksiyona bağlanması kablolama hatasıdır
+    {
+        string hata = "";
+        var w = K4Kur();
+        try { w.ctx.RegisterRule("squad.set_captain", new TheBadge.Checks.TestRule()); hata += "çifte kural kabul edildi "; }
+        catch (InvalidOperationException) { }
+        try { w.exec.RegisterHandler("squad.set_captain", new TheBadge.Checks.TestHandler()); hata += "çifte yürütücü kabul edildi "; }
+        catch (InvalidOperationException) { }
+        if (hata.Length > 0) failures += Fail("K4CifteKayit", hata);
+        else Pass("K4CifteKayit(aynı aksiyona ikinci kural/yürütücü kurulumda patlıyor)");
     }
 }
 

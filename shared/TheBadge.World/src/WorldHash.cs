@@ -18,7 +18,10 @@ namespace TheBadge.World
         public static ulong Compute(GameState st)
         {
             if (st == null) return 0UL;
-            var b = new Buf(128 + st.Oyuncular.Length * 48 + st.Club.InsaatSlot.Length * 24
+            int talimatYuva = st.Oyuncular.Length > 0 && st.Oyuncular[0].Talimatlar != null
+                              ? st.Oyuncular[0].Talimatlar.Length : 0;
+            var b = new Buf(160 + st.Presetler.Length * 16
+                            + st.Oyuncular.Length * (52 + talimatYuva * 2) + st.Club.InsaatSlot.Length * 24
                             + st.Club.Krediler.Length * 20 + st.Club.TesisTier.Length
                             + st.Club.SponsorTeklifleri.Length * 20
                             + (st.Fiyat.BiletKurus.Length + st.Fiyat.BufeKurus.Length
@@ -34,6 +37,11 @@ namespace TheBadge.World
             b.U16(st.Club.SponsorKalanHafta);
             b.I64(st.Club.DonemInsaatGideriTl);
             b.U8(st.Club.Form);
+            // Kadro yönetimi kalıcı alanları — GDD 3.2. Kaptan ve antrenman planı durum
+            // senkronunun parçasıdır: replay dördülünde ayrışırsa maç girdisi ayrışır.
+            b.I32(st.Club.KaptanPlayerId);
+            b.U8(st.Club.AntrenmanPlanId);
+            b.U8(st.Club.AntrenmanYogunluk);
 
             b.I32(st.Club.TesisTier.Length);
             for (int i = 0; i < st.Club.TesisTier.Length; i++) b.U8(st.Club.TesisTier[i]);
@@ -60,6 +68,9 @@ namespace TheBadge.World
                 b.I32(p.PlayerId); b.I64(p.ClubId); b.I64(p.HaftalikMaasTl);
                 b.U16(p.SozlesmeKalanHafta); b.U8(p.Moral); b.U8(p.Kondisyon); b.U8(p.SakatlikHafta);
                 b.U8(p.RolId); b.I32(p.AnchorXmm); b.I32(p.AnchorYmm); b.U8(p.ListedeMi ? (byte)1 : (byte)0);
+                b.I32(p.Talimatlar.Length);
+                for (int k = 0; k < p.Talimatlar.Length; k++)
+                { b.U8(p.Talimatlar[k].TalimatId); b.U8(p.Talimatlar[k].Deger); }
             }
 
             b.I32(st.Club.SponsorTeklifleri.Length);
@@ -76,11 +87,36 @@ namespace TheBadge.World
             for (int i = 0; i < st.Fiyat.BufeKurus.Length; i++) b.I32(st.Fiyat.BufeKurus[i]);
             for (int i = 0; i < st.Fiyat.MagazaKurus.Length; i++) b.I32(st.Fiyat.MagazaKurus[i]);
 
+            // --- Taktik + şablonlar ---
+            b.U8(st.Taktik.Mentalite); b.U8(st.Taktik.Tempo); b.U8(st.Taktik.Pres); b.U8(st.Taktik.Hat);
+            b.I32(st.Presetler.Length);
+            for (int i = 0; i < st.Presetler.Length; i++)
+            {
+                var pr = st.Presetler[i];
+                b.U8(pr.Slot); b.U8(pr.Mentalite); b.U8(pr.Tempo); b.U8(pr.Pres); b.U8(pr.Hat);
+                // Ad SUNUM verisidir ama durum senkronunun parçası: ham metin yerine DİZE ÖZETİ
+                // girer (ME 3.3 `StringHash` deseni — UTF-16 kod birimleri, uzunluk önekli).
+                b.I64(unchecked((long)DizeOzeti(pr.Ad)));
+            }
+
             // --- Takvim + maç hakları ---
             b.U16(st.Takvim.Sezon); b.U16(st.Takvim.Hafta); b.U8((byte)st.Takvim.Pencere);
             b.U8(st.KalanDegisiklikHakki);
 
             return XxHash64.Hash(b.Span);
+        }
+
+        /// <summary>Dize özeti — ME 3.3 `ConfigHash.StringHash` ile AYNI kural: UTF-16 kod
+        /// birimleri, little-endian, uzunluk önekli, kırpma ve daraltma YOK.</summary>
+        static ulong DizeOzeti(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return XxHash64.Hash(ReadOnlySpan<byte>.Empty);
+            var t = new byte[4 + s.Length * 2];
+            uint n = (uint)s.Length;
+            t[0] = (byte)n; t[1] = (byte)(n >> 8); t[2] = (byte)(n >> 16); t[3] = (byte)(n >> 24);
+            for (int i = 0; i < s.Length; i++)
+            { ushort c = s[i]; t[4 + i * 2] = (byte)c; t[5 + i * 2] = (byte)(c >> 8); }
+            return XxHash64.Hash(t);
         }
 
         /// <summary>Tahsissiz yazma tamponu — açık little-endian.</summary>

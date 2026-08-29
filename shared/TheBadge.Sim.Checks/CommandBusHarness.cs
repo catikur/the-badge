@@ -84,8 +84,8 @@ namespace TheBadge.Checks
         /// aynı takımı yöneten farklı kullanıcılar AYNI anahtarı alır.</summary>
         public long TeamKey = 1000;
         public bool IsContextActive(Context context) => (Active & context) != 0;
-        public RejectionReason CheckOwnershipAndState(CommandEnvelope env, ActionDef action, IPayloadView payload)
-        { Calls++; return Next; }
+        public RejectionReason CheckOwnershipAndState(CommandEnvelope env, ActionDef action, IPayloadView payload, out string detail)
+        { Calls++; detail = null; return Next; }
         public long ResolveTeamKey(CommandEnvelope env) => TeamKey + env.TeamIdx;
     }
 

@@ -16,6 +16,13 @@
     "kadroMax": 32,
     "sezonHaftaSayisi": 38,
     "macBasinaDegisiklik": 5,
-    "sponsorTeklifSlotSayisi": 4
+    "sponsorTeklifSlotSayisi": 4,
+    "presetSlotSayisi": 20,
+    "talimatYuvaSayisi": 4
+  },
+  "taktik": {
+    "adim": 10,
+    "min": 0,
+    "max": 100
   }
 }
