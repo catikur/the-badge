@@ -1519,6 +1519,16 @@ bulunmuş ve düzeltilmişti — aynı yere iki yoldan varmak bulgunun gerçekli
   satışta kaptanlık düşmedi", eski kimlik algoritması geri konunca "teklif kimliği bandı aştı
   (4097 > 4096)".
 
+**Açık kalan (K6'ya): karşı tarafın cevabını YÜRÜTEN yok.** `propose_offer` her zaman
+`SiraTeklifEdende = false` yazıyor; World modülünde hedef kulübün sırasını ilerleten bir tick ya da
+AI tüketicisi YOK, yani kullanıcının açtığı teklif kendi başına kabul/ret/karşı teklif ALAMAZ —
+`Valuation.Karar` bugün yalnız zaten var olan bir karşı teklifi işlerken çağrılıyor. Alış akışı
+uçtan uca değil. Bu bilinçli: karşı taraf BAŞKA BİR KULÜP ve onu kimin sürdüğü henüz verilmemiş bir
+karara bağlı — online ligde başka bir oyuncu (K6, Nakama), offline'da bir AI kulüp tick'i
+(`EconomyTick`/`MacTick` kardeşi). İkisinin tahkimini değerleme ve pazarlık MANTIĞInı kapsayan bir
+dilim içinde seçmek kapsam kaymasıydı; pazarlık beyni burada ve test edilmiş durumda, sürücü K6'da.
+(Codex bunu PR #19'da P1 olarak işaretledi; gerekçeyle K6'ya bırakıldı, thread açık.)
+
 **Bu turun dersi:** PR açıklamasına "biliyorum ama önemsiz" diye yazdığım bir NOT (kimlik tekilliği)
 gerçek bir hataydı — gerekçem "yuvalar periyodik olarak boşalır" varsayımına dayanıyordu ve o
 varsayım hiçbir yerde ZORLANMIYORDU. **Açık uç olarak yazdığım şeyin gerekçesi bir varsayıma
