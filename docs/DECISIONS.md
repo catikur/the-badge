@@ -1721,6 +1721,16 @@ Codex beş bulgu çıkardı (1 P1, 4 P2); beşi de haklı.
    önce. Kanal yokluğu durumdan bağımsız, deterministik bir kablolama hatasıdır; uygulamadan önce
    bilinebilir.
 
+**ARANACAK ÖRÜNTÜ — "yazılan ama hiç ilerletilmeyen sayaç" (ikinci kez).** K4'te
+`KalanDegisiklikHakki` dünya kurulumunda doluyor, sonra yalnız azalıyordu; K7'de personelin
+`KalanHafta`sı alımda yazılıyor, hiç azalmıyordu. İkisi de tek başına masum görünür — hata,
+sayacın YAŞAM DÖNGÜSÜ eksik olduğunda ortaya çıkar ve genellikle BAŞKA bir kuralla birleşip
+büyür (K4: `NoChargesLeft` her maçı kilitledi; K7: aynı-tip kuralı o tipi sonsuza dek kilitledi).
+**Kural: kalıcı duruma bir SAYAÇ yazan her dilim, o sayacı kimin ilerlettiğini/tazelediğini de
+göstermek zorundadır.** Gösteremiyorsa ya tick eksiktir ya sayaç kalıcı durumda olmamalıdır.
+Bu, K7'nin "yeni denetim yazmadan önce daha derin katmana bak" kuralının kardeşi: ikisi de
+"eklediğim şeyin etrafındaki mekanizmayı da kontrol et" diyor.
+
 - **Kapı:** `K7IncelemeBulgulari`. Beşi de ters çevrilip ölçüldü — süre ilerlemeyince
   "yuva tam bosalmadi(tip 4 tier 3 hafta 38)" ve aynı tip bir daha alınamıyor, kimlik öneriyi
   kapsamayınca "ayni prompt + FARKLI payload ayni SuggestionId", `TryGetNumber`a dönünce
