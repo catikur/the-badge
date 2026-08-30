@@ -1414,7 +1414,11 @@ yanlış çözüm olurdu: iki kaynak, iki ayrışma.
 GDD 17 FAZ 04'ün "Valuation algoritması, negotiation logic, kontrat sistemi" kalemi. **5 aksiyon**
 bağlandı (`transfer.list_player`, `propose_offer`, `respond_offer`, `sign_free_agent`,
 `release_player`). K5 kapısı yalnız transfer modülünü bağladığı için orada 27/32 bağlanmamış
-görünür; K4 ile birlikte bağlayan bir host'ta kalan **18**'dir (32 − 9 kadro − 5 transfer).
+görünür; K3+K4+K5'i birlikte bağlayan bir host'ta kalan **9**'dur (32 − 9 tycoon − 9 kadro/maç −
+5 transfer). *(Düzeltme: bu satır önce "18" diyordu — K3'ün 9 tycoon aksiyonunu saymayı atlamıştım;
+PR #19 açıklamasında da aynı yanlış sayı geçti.)* Kalan 9: `staff.hire`, `staff.activate_premium`,
+`social.arrange_talk`, `social.press_response`, `social.report_player`, `league.create`,
+`league.join`, `league.set_rules`, `replay.share_clip`.
 Kalanı K6-K7'nin işi.
 
 - **Durum:** `PlayerState`'e değerleme girdileri (`Guc`, `Potansiyel`, `Yas`, `IstenenBedelTl`) ve
@@ -1533,6 +1537,100 @@ dilim içinde seçmek kapsam kaymasıydı; pazarlık beyni burada ve test edilmi
 gerçek bir hataydı — gerekçem "yuvalar periyodik olarak boşalır" varsayımına dayanıyordu ve o
 varsayım hiçbir yerde ZORLANMIYORDU. **Açık uç olarak yazdığım şeyin gerekçesi bir varsayıma
 dayanıyorsa, o varsayımı ya kapıya bağla ya da bulgu say.**
+
+### K6: Online katmanı — offline kuyruk, uzlaştırma, 5 aksiyon, transfer sürücüsü — ✅ TAMAM (2026-08-30)
+**Kapsam kararı (Atilla, 2026-08-30):** yalnız DETERMİNİSTİK katman. Bu konteynerde Nakama örneği
+yok ve egress politikası dış servisleri engelliyor; gerçek RPC köprüsü yazılsa derlenirdi ama
+ÇALIŞTIĞI KANITLANAMAZDI ve "test geçmeyen kod reddedilir" kuralı delinirdi. Köprü ayrı dilim;
+bu dilim host'un bağlayacağı arayüzleri (`IOnlineSink`) ve tüm kararları kapıyla veriyor.
+
+- **Offline kuyruk (CB 8.3):** Tier 1-2 bağlantı yokken **kuyruğa GİRMEZ** — reddedilir. Kuyruğa
+  alıp sonra reddetmek kullanıcıya işinin tutulduğunu düşündürürdü; ekonomik durum çatallanması
+  "kullanıcı dikkatli olur" diye değil, komut hiç kaydedilmediği için engellenir. Tier katalogda
+  sabit ve kaynaktan bağımsız (CB 6) — LLM bu kapıyı düşüremez.
+- **Uzlaştırma (K6 kararı 2026-08-25):** kuyruk SIRAYLA gider, sunucu otoriterdir, ama reddettiği
+  her komut `UzlastirmaKaydi` olarak **sebebiyle** döner. Kuyruk her hâlükârda boşalır: yarım
+  uygulanmış kuyruk ikinci bağlanmada komutları tekrar oynatırdı (idempotency deposu çoğunu
+  yakalar ama ona güvenmek yapısal değil).
+- **5 online aksiyon:** `league.create/join/set_rules`, `replay.share_clip`, `social.report_player`.
+  Lig kimliği `Rng.Hash64` ile TÜRETİLİR (Guid/zaman YASAK); tekillik sunucunun işi, buradaki iş
+  üretimin deterministik olması. Katılım şifresi kalıcı duruma **ham** yazılmaz, `DizeOzeti` girer.
+  Kural değişikliği yalnız KURUCUya açık (GDD 6.2) ve kısmi güncelleme dokunulmayanı KORUR.
+- **Yayın kanalı:** klip ve rapor `GameState`i değiştirmez, `IOnlineSink`e gider — ama K4'ün maç
+  kuyruğu dersiyle AYNI şekilde journal'da BEKLETİLİR ve yürütücü denetimden SONRA boşaltır.
+  Geri alınamayan dış etkiler işlemin dışında kalamaz.
+- **Transfer karşı taraf sürücüsü:** K5'te bilerek ertelenen boşluk (PR #19 açık thread'i) kapandı.
+  `TransferTick.Ilerlet` topu karşı tarafta olan teklifleri işler; sıra BİZDEYSE **dokunmaz**
+  (kullanıcının kararını gasp etmez) ve süresi dolmuşa karışmaz (temizlik K5'in yolu — iki yerden
+  temizlemek aynı yuvayı iki gerekçeyle kapatırdı). AI kabul ederse transferi KENDİSİ yapmaz,
+  sırayı bize geçirir: kabul komutu Tek Kapı'dan geçmeli, yoksa kadro ve bütçe denetimi atlanırdı.
+
+- **Kapılar (6):** `K6Baglanti` · `K6OfflineKuyruk` · `K6Uzlastirma` · `K6LigAksiyonlari` ·
+  `K6YayinKanali` · `K6TransferSurucusu`. Beşi ters çevrilip ölçüldü: tier kapısı kalkınca 4 aksiyon
+  kuyruğa giriyor, rapor sessizleşince "düşen sayısı 0≠2", kurucu yetkisi kalkınca katılan üye kural
+  değiştiriyor, sıra denetimi kalkınca AI kullanıcının kararını gasp ediyor, kanal denetimi kalkınca
+  kanalsız host sessizce başarı dönüyor.
+
+**Kendi diffimde iki kusur buldum (inceleme gelmeden).**
+1. **`ligUyeMax` ÖLÜ [KALİBRE] anahtarıydı** — yüklemede doğrulanıyor, hiçbir yerde kullanılmıyordu.
+   K5 incelemesinde Bugbot'a "hiçbir şey yapmayan bir yapılandırma anahtarı, olmayandan kötüdür;
+   var sanılır" diye yazmıştım ve bir dilim sonra aynısını yapmışım. Kaldırıldı.
+2. **`LeagueState.UyeSayisi` hash'e giriyordu ama YERELDE TÜRETİLEMEZDİ.** Lige katılan istemci
+   ligde kaç kulüp olduğunu BİLMEZ; `join` alanı 1 yapıyordu, yani hash'e giren bir sayı
+   uyduruluyordu. Hash'e giren her alan replay dördülünden (engineVersion, config_hash, seed,
+   komut zaman çizelgesi) yeniden üretilebilmelidir — türetilemeyen sayı iki istemciyi
+   ayrıştırırdı. Alan kaldırıldı; mevcut ve tavan denetimi SUNUCUnundur. `K6LigAksiyonlari`
+   artık sınıfı koruyor: katılım, payload'ın vermediği alanları (kurucu/chaos/hız/bütçe/saat
+   dilimi) YAZMAMALI. Diş ölçümü: uydurma eklenince `katılım sunucunun alanlarını uydurdu(chaos 1…)`.
+
+**Kendi kapımın ölçüm YERİ yanlıştı.** `K6TransferSurucusu`'nun "seed sürücüyü oynatıyor mu"
+iddiası ilk yazımda sabit 1,5M teklifle ölçülüyordu; o teklif oyuncunun değerinin çok dışındaydı ve
+karar seed'den BAĞIMSIZ olarak hep aynıydı — kapı kırmızı yandı. İddia yanlış değildi, **ölçüm
+yeri** yanlıştı: pazarlık salınımı ancak PAZARLIK BANDINDA sonucu değiştirir. Teklif artık değerin
+%75'i olarak hesaplanıyor. (K5'in "kapı en kritik yolu ölçmeli" dersinin kardeşi: doğru şeyi
+yanlış noktada ölçen kapı da yanıltır.)
+
+`K2HashKapsami` dördüncü dilim üst üste yeni alanı yakaladı (`GameState.Lig`).
+
+### K6 inceleme turu — ✅ TAMAM (2026-08-30)
+Codex dört bulgu çıkardı (3 P1, 1 P2); dördü de haklı. Biri **para basma yolu**ydu.
+
+1. **(P1) Alıcı kararı SATICI eşikleriyle veriliyordu.** `TransferTick` tek rutin (`Valuation.Karar`)
+   kullanıyordu; o rutin SATICI mantığıdır ve "yeterince YÜKSEK"i kabul eder. Teklifi karşı taraf
+   açtığında AI **alıcı** rolündedir — ama aynı rutinle, istenen fiyat ne kadar yüksekse o kadar
+   istekli oluyordu. Sömürü: gelen teklife FAHİŞ karşı teklif ver, AI kabul etsin, satışı tamamla.
+   Çözüm: `Valuation.AliciKarari` — eşikler TERS (ucuzu kabul, fahişi ret, AŞAĞI pazarlık), ayrı
+   [KALİBRE] katsayılar ve sıra denetimi (`aliciKabulEsigiOran < aliciRedEsigiOran`).
+   **Ders: iki rol simetrik değildir; "aynı fonksiyon iki tarafa da çalışır" varsayımı sömürü üretti.**
+2. **(P1) Yayın patlarsa durum geri alınmıyordu.** `KlipPaylas` ağ zaman aşımıyla fırlarsa istisna
+   `Apply` ve `Persist`ten SONRA kaçıyor, `Geri` çağrılmıyor, bus rezervasyonu serbest bırakılıyordu:
+   durum ilerlemiş kalıyor ve tekrar denemede aynı klip yeniden yayınlanabiliyordu. Çözüm: yayın
+   `try/catch` içinde, patlarsa `journal.Geri`. Maç kuyruğu boşaltması da aynı korumayı aldı.
+3. **(P1) Lig şifresinin TUZSUZ HIZLI özeti kalıcı duruma yazılıyordu.** "Ham değil, özeti" diye
+   yazmıştım ama `DizeOzeti` tuzsuz bir xxHash64: düşük entropili bir lig şifresi için sözlük
+   saldırısı ucuzdur, yani şifreyi saklamaktan anlamlı ölçüde iyi DEĞİLDİ. Çözüm: alan tamamen
+   kaldırıldı — şifre kalıcı durumda **hiçbir biçimde** iz bırakmaz, doğrulama sunucunundur.
+4. **(P2) Uzlaştırma ortada patlarsa uygulanmış önek tekrar oynuyordu.** `Clear()` döngü SONUNDAydı;
+   gönderim ortada patlayınca o satıra ulaşılmıyor, zaten uygulanmış komutlar kuyrukta kalıyor ve
+   sonraki bağlanmada tekrar oynuyordu — o turun raporu da kayboluyordu. Çözüm: her tamamlanan
+   girdi ANINDA kuyruktan düşer; rapor dışarıdan verilen listeye yazılır, istisna yukarı çıksa bile
+   tamamlananların raporu elde kalır ve kuyrukta yalnız gönderilmemiş sonek durur.
+
+- **Kapı:** `K6IncelemeBulgulari`. Dördü de ters çevrilip ölçüldü — satıcı rutini alıcıya
+  verilince "AI alıcı FAHİŞ fiyatı kabul etti (para basma yolu açık)", geri alma kalkınca "yayın
+  patlayınca sürüm geri alınmadı", eski `Clear()` konumu geri gelince "ikinci bağlanma 5 komut
+  gönderdi (uygulanmış önek tekrar oynadı)", şifre sızıntısı eklenince "farklı şifreler farklı
+  hash veriyor".
+
+**Şifre kapım İLK HÂLİYLE DİŞSİZDİ.** "Şifreli katılım ile şifresiz katılım aynı hash'i vermeli"
+diye yazmıştım; sızıntıyı `ozet % 3` ile taklit ettiğimde sonuç tesadüfen 0 çıktı ve hash'ler
+eşleşti — kapı yeşil kaldı. Üç yollu karşılaştırmaya çevrildi (şifresiz, şifre A, şifre B): şifreden
+türeyen herhangi bir şey sızarsa iki FARKLI şifre mutlaka ayrışır, bu şansa bağlı değil.
+**Ders: tek örnekle kurulan eşitlik iddiası, o örneğin şansına bağlıdır.**
+
+**Kalan borç (Nakama köprüsü dilimine):** yerel geri alma, uzak tarafın ZATEN ALDIĞI bir yayını geri
+çağıramaz. `IOnlineSink` artık `commandId` taşıyor — ikinci kopyayı elemek köprünün bu anahtarla
+yapacağı dedup'ın (outbox) işi. Anahtarsız arayüz bu güvenceyi yapısal olarak imkânsız kılardı.
 
 ## Bekleyen kararlar
 - **CB 4.2 tablosu ile ME komut kümesi çelişiyor (K4 bulgusu, 2026-08-29):** spec `squad.set_player_anchor`/

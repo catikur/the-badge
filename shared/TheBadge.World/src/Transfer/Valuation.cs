@@ -68,6 +68,39 @@ namespace TheBadge.World
             return v < tb.fesih.asgariTl ? tb.fesih.asgariTl : v;
         }
 
+        /// <summary>ALICI kulübün kararı — satıcınınkinin TERSİ, aynası değil.
+        ///
+        /// Satıcı "yeterince YÜKSEK"i kabul eder; alıcı "yeterince DÜŞÜK"ü. İlk yazımda tek
+        /// rutin iki tarafa da kullanılıyordu ve alıcı, istenen fiyat ne kadar yüksekse o kadar
+        /// istekli oluyordu: kullanıcı gelen teklife FAHİŞ bir karşı teklif verip AI'ya kabul
+        /// ettirebiliyordu (inceleme bulgusu, P1 — para basma yolu).
+        ///
+        /// `istenenBedel` satıcının istediği fiyattır; alıcı bunu değerine göre tartar.</summary>
+        public static PazarlikKarari AliciKarari(in PlayerState p, long istenenBedel, byte tur,
+                                                 TransferBalance tb, ulong saveSeed, out long karsiBedel)
+        {
+            karsiBedel = 0;
+            long deger = PiyasaDegeri(p, tb);
+            var pz = tb.pazarlik;
+
+            double u = Rng.Rand01(saveSeed, Domain.Decision, (uint)p.PlayerId, tur, 1);
+            double salinim = (u * 2.0 - 1.0) * pz.kisilikSalinimOran;
+
+            double kabulTavani = deger * (pz.aliciKabulEsigiOran + salinim);
+            double redTabani = deger * (pz.aliciRedEsigiOran + salinim);
+
+            if (istenenBedel <= kabulTavani) return PazarlikKarari.Kabul;     // ucuz → al
+            if (istenenBedel > redTabani || tur >= pz.maxTur) return PazarlikKarari.Ret;  // fahiş → çekil
+
+            double hedef = deger * (pz.aliciKarsiTeklifHedefOran + salinim);
+            // Alıcının karşı teklifi istenen bedelden YÜKSEK olamaz: olsaydı "pazarlık" satıcıyı
+            // daha ÇOK istemeye davet ederdi.
+            if (hedef > istenenBedel) hedef = istenenBedel;
+            if (hedef < 0) hedef = 0;
+            karsiBedel = (long)hedef;
+            return PazarlikKarari.KarsiTeklif;
+        }
+
         /// <summary>Satıcı kulübün kararı. `saveSeed` + oyuncu + tur pazarlığı ADRESLER: aynı
         /// girdi her zaman aynı kararı verir, çağrı sırasından bağımsız (ME 3.1 sayaç-RNG).
         ///

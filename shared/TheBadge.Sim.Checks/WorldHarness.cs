@@ -173,6 +173,28 @@ namespace TheBadge.Checks
         public void Enqueue(TheBadge.Sim.Match.MatchCommand cmd) => Komutlar.Add(cmd);
     }
 
+    /// <summary>Online yayın casusu — K6. Klip ve rapor ayrı listelerde tutulur ki
+    /// "yayınlandı mı" ve "hangisi yayınlandı" ayrı ayrı ölçülebilsin.</summary>
+    public sealed class SpyOnlineSink : TheBadge.World.IOnlineSink
+    {
+        public readonly List<(System.Guid cid, int macId, int pencereSn, byte hedef, long userId)> Klipler
+            = new List<(System.Guid, int, int, byte, long)>();
+        public readonly List<(System.Guid cid, long hedefUserId, byte sebep, string notlar, long userId)> Raporlar
+            = new List<(System.Guid, long, byte, string, long)>();
+        /// <summary>true ise yayın PATLAR — işlem güvenliği ölçümü için.</summary>
+        public bool Patlat;
+        public void KlipPaylas(System.Guid commandId, int macId, int pencereSn, byte hedef, long userId)
+        {
+            if (Patlat) throw new InvalidOperationException("ağ zaman aşımı (test)");
+            Klipler.Add((commandId, macId, pencereSn, hedef, userId));
+        }
+        public void OyuncuRaporla(System.Guid commandId, long hedefUserId, byte sebep, string notlar, long userId)
+        {
+            if (Patlat) throw new InvalidOperationException("ağ zaman aşımı (test)");
+            Raporlar.Add((commandId, hedefUserId, sebep, notlar, userId));
+        }
+    }
+
     /// <summary>K2 dünya durumu kurulum yardımcıları.</summary>
     public static class WorldFixture
     {

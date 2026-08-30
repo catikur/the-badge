@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace TheBadge.World
 {
     /// <summary>Mutasyon hedefi — journal girdisinin hangi durum parçasına yazdığı.</summary>
-    public enum MutTarget : byte { Kulup = 0, Oyuncu = 1, Takvim = 2, Insaat = 3, Kredi = 4, Tesis = 5, Mac = 6, Fiyat = 7, Sponsor = 8, Taktik = 9, Preset = 10, Talimat = 11, TransferTeklif = 12 }
+    public enum MutTarget : byte { Kulup = 0, Oyuncu = 1, Takvim = 2, Insaat = 3, Kredi = 4, Tesis = 5, Mac = 6, Fiyat = 7, Sponsor = 8, Taktik = 9, Preset = 10, Talimat = 11, TransferTeklif = 12, Lig = 13 }
 
     public static class ClubField
     {
@@ -21,6 +21,13 @@ namespace TheBadge.World
         public const byte ClubId = 1, HaftalikMaas = 2, SozlesmeKalanHafta = 3, Moral = 4,
                           Kondisyon = 5, SakatlikHafta = 6, RolId = 7, AnchorX = 8, AnchorY = 9, Listede = 10,
                           Guc = 11, Potansiyel = 12, Yas = 13, IstenenBedel = 14;
+    }
+
+    /// <summary>Lig alanları — CB 4.4.</summary>
+    public static class LeagueField
+    {
+        public const byte LigId = 1, Kurucu = 2, Chaos = 3, Hiz = 4, Butce = 5,
+                          SaatDilimi = 6;
     }
 
     /// <summary>Transfer teklifi alanları — CB 4.3.</summary>
@@ -84,7 +91,26 @@ namespace TheBadge.World
         public IReadOnlyList<TheBadge.Sim.Match.MatchCommand> MacKomutlari => macKomutlari;
         public void MacKomutu(TheBadge.Sim.Match.MatchCommand cmd) => macKomutlari.Add(cmd);
 
-        public void Clear() { yazmalar.Clear(); olaylar.Clear(); geriDegerler.Clear(); adYazmalari.Clear(); adGeri.Clear(); macKomutlari.Clear(); }
+        /// <summary>Online yayınlar — maç komutlarıyla AYNI sözleşme: journal'da BEKLETİLİR,
+        /// yürütücü denetim de geçtikten SONRA boşaltır. Klip paylaşımı ve oyuncu raporu geri
+        /// alınamayan DIŞ etkilerdir; işlem yarıda kalırsa yayınlanmamaları gerekir.</summary>
+        public struct OnlineYayin
+        {
+            public Guid CommandId;         // uzak tarafın dedup anahtarı
+            public bool Klip;              // false = rapor
+            public int MacId, PencereSn;
+            public byte Kod;               // klip: hedef · rapor: sebep
+            public long UserId, HedefUserId;
+            public string Notlar;
+        }
+        readonly List<OnlineYayin> onlineYayinlar = new List<OnlineYayin>();
+        public IReadOnlyList<OnlineYayin> OnlineYayinlar => onlineYayinlar;
+        public void OnlineKlip(Guid commandId, int macId, int pencereSn, byte hedef, long userId)
+            => onlineYayinlar.Add(new OnlineYayin { CommandId = commandId, Klip = true, MacId = macId, PencereSn = pencereSn, Kod = hedef, UserId = userId });
+        public void OnlineRapor(Guid commandId, long hedefUserId, byte sebep, string notlar, long userId)
+            => onlineYayinlar.Add(new OnlineYayin { CommandId = commandId, Klip = false, HedefUserId = hedefUserId, Kod = sebep, Notlar = notlar, UserId = userId });
+
+        public void Clear() { yazmalar.Clear(); olaylar.Clear(); geriDegerler.Clear(); adYazmalari.Clear(); adGeri.Clear(); macKomutlari.Clear(); onlineYayinlar.Clear(); }
 
         /// <summary>Preset ADI yazması — journal TAMSAYI taşıyıcısıdır, metin ayrı listede taşınır.
         /// Aralık denetimi yok (uzunluk kapı 1'de doğrulandı); geri alma için eski ad saklanır.</summary>
@@ -237,6 +263,17 @@ namespace TheBadge.World
                         case PlayerField.Potansiyel: mevcut = st.Oyuncular[m.Index].Potansiyel; min = 0; max = 100; return true;
                         case PlayerField.Yas: mevcut = st.Oyuncular[m.Index].Yas; min = 0; max = byte.MaxValue; return true;
                         case PlayerField.IstenenBedel: mevcut = st.Oyuncular[m.Index].IstenenBedelTl; min = 0; return true;
+                    }
+                    break;
+                case MutTarget.Lig:
+                    switch (m.Field)
+                    {
+                        case LeagueField.LigId: mevcut = st.Lig.LigId; min = 0; max = int.MaxValue; return true;
+                        case LeagueField.Kurucu: mevcut = st.Lig.KurucuUserId; min = 0; return true;
+                        case LeagueField.Chaos: mevcut = st.Lig.Chaos; min = 0; max = 255; return true;
+                        case LeagueField.Hiz: mevcut = st.Lig.Hiz; min = 0; max = 255; return true;
+                        case LeagueField.Butce: mevcut = st.Lig.ButceTl; min = 0; return true;
+                        case LeagueField.SaatDilimi: mevcut = st.Lig.SaatDilimi; min = short.MinValue; max = short.MaxValue; return true;
                     }
                     break;
                 case MutTarget.TransferTeklif:
@@ -429,6 +466,17 @@ namespace TheBadge.World
                         else st.Oyuncular[oi].Talimatlar[yi].Deger = (byte)v;
                         break;
                     }
+                case MutTarget.Lig:
+                    switch (m.Field)
+                    {
+                        case LeagueField.LigId: st.Lig.LigId = (int)v; break;
+                        case LeagueField.Kurucu: st.Lig.KurucuUserId = v; break;
+                        case LeagueField.Chaos: st.Lig.Chaos = (byte)v; break;
+                        case LeagueField.Hiz: st.Lig.Hiz = (byte)v; break;
+                        case LeagueField.Butce: st.Lig.ButceTl = v; break;
+                        case LeagueField.SaatDilimi: st.Lig.SaatDilimi = (short)v; break;
+                    }
+                    break;
                 case MutTarget.TransferTeklif:
                     switch (m.Field)
                     {

@@ -21,7 +21,10 @@
     "kisilikSalinimOran": 0.08,
     "maasTalepOran": 0.021,
     "maxTur": 4,
-    "teklifGecerlilikHafta": 2
+    "teklifGecerlilikHafta": 2,
+    "aliciKabulEsigiOran": 1.05,
+    "aliciRedEsigiOran": 1.6,
+    "aliciKarsiTeklifHedefOran": 0.92
   },
   "fesih": {
     "kalanHaftaCarpani": 0.6,

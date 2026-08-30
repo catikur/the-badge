@@ -464,14 +464,14 @@ namespace TheBadge.World
             hafta = (ushort)(h > sezonSonu ? sezonSonu : h);   // sezon sonunda EN GEÇ düşer
         }
 
-        internal static bool SureDoldu(GameState st, in TransferOffer t)
+        public static bool SureDoldu(GameState st, in TransferOffer t)
         {
             if (t.SonGecerlilikSezon == 0 && t.SonGecerlilikHafta == 0) return false;
             if (st.Takvim.Sezon != t.SonGecerlilikSezon) return st.Takvim.Sezon > t.SonGecerlilikSezon;
             return st.Takvim.Hafta > t.SonGecerlilikHafta;
         }
 
-        internal static void YuvaTemizle(WorldJournal j, int yuva)
+        public static void YuvaTemizle(WorldJournal j, int yuva)
         {
             j.Set(MutTarget.TransferTeklif, yuva, OfferField.TeklifId, 0);
             j.Set(MutTarget.TransferTeklif, yuva, OfferField.OyuncuId, 0);

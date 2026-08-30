@@ -2683,6 +2683,13 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             ("TransferOffer.SonGecerlilikHafta", s => s.Club.TransferTeklifleri[0].SonGecerlilikHafta += 1),
             ("TransferOffer.SiraTeklifEdende",s => s.Club.TransferTeklifleri[0].SiraTeklifEdende = !s.Club.TransferTeklifleri[0].SiraTeklifEdende),
             ("TransferOffer.TurSayisi",       s => s.Club.TransferTeklifleri[0].TurSayisi += 1),
+            ("GameState.Lig",                 s => s.Lig.LigId += 1),
+            ("LeagueState.LigId",             s => s.Lig.LigId += 2),
+            ("LeagueState.KurucuUserId",      s => s.Lig.KurucuUserId += 1),
+            ("LeagueState.Chaos",             s => s.Lig.Chaos += 1),
+            ("LeagueState.Hiz",               s => s.Lig.Hiz += 1),
+            ("LeagueState.ButceTl",           s => s.Lig.ButceTl += 1),
+            ("LeagueState.SaatDilimi",        s => s.Lig.SaatDilimi += 1),
         };
 
         // Beklenen küme: kalıcı durum tiplerinin TÜM public alanları (yansıma).
@@ -2694,7 +2701,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                                   typeof(TheBadge.World.PricingState), typeof(TheBadge.World.Construction),
                                   typeof(TheBadge.World.Loan), typeof(TheBadge.World.SponsorOffer),
                                   typeof(TheBadge.World.TacticState), typeof(TheBadge.World.TacticPreset),
-                                  typeof(TheBadge.World.Instruction), typeof(TheBadge.World.TransferOffer) })
+                                  typeof(TheBadge.World.Instruction), typeof(TheBadge.World.TransferOffer),
+                                  typeof(TheBadge.World.LeagueState) })
             foreach (var f in t.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
             {
                 // Alt nesne referansları (Club/Oyuncular/Takvim/Fiyat) kendileri alan değil, KAPSAYICIdır
@@ -2729,6 +2737,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             SonGecerlilikSezon = 1, SonGecerlilikHafta = 9, SiraTeklifEdende = true, TurSayisi = 2 };
         taban.Oyuncular[0].Guc = 70; taban.Oyuncular[0].Potansiyel = 80; taban.Oyuncular[0].Yas = 24;
         taban.Oyuncular[0].IstenenBedelTl = 3_000_000;
+        taban.Lig = new TheBadge.World.LeagueState { LigId = 77, KurucuUserId = 9, Chaos = 1, Hiz = 3,
+            ButceTl = 5_000_000, SaatDilimi = 3 };
         TheBadge.World.GameState Kur2()
         {
             var g = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
@@ -2745,6 +2755,9 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             g.Oyuncular[0].Potansiyel = taban.Oyuncular[0].Potansiyel;
             g.Oyuncular[0].Yas = taban.Oyuncular[0].Yas;
             g.Oyuncular[0].IstenenBedelTl = taban.Oyuncular[0].IstenenBedelTl;
+            g.Lig = new TheBadge.World.LeagueState { LigId = taban.Lig.LigId, KurucuUserId = taban.Lig.KurucuUserId,
+                Chaos = taban.Lig.Chaos, Hiz = taban.Lig.Hiz, ButceTl = taban.Lig.ButceTl,
+                SaatDilimi = taban.Lig.SaatDilimi };
             return g;
         }
         ulong h0 = TheBadge.World.WorldHash.Compute(Kur2());
@@ -4777,6 +4790,461 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         }
         if (hata.Length > 0) failures += Fail("K5NegatifMatris", hata);
         else Pass($"K5NegatifMatris(CB 10.1: {senaryo} senaryo · şema·bant·kapı3·rate)");
+    }
+}
+
+// ============================================================================================
+// 30) FAZ 04 K6 — ONLINE KATMANI (offline kuyruk + uzlaştırma + 5 aksiyon + transfer sürücüsü)
+// ============================================================================================
+{
+    var k6Opts = new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true };
+    string k6Bal = System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json"));
+    var k6Rules = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.WorldRules>(
+        System.IO.File.ReadAllText(System.IO.Path.Combine(k6Bal, "world.balance.json")), k6Opts);
+    k6Rules.Validate();
+    var k6Eco = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.EconomyBalance>(
+        System.IO.File.ReadAllText(System.IO.Path.Combine(k6Bal, "economy.balance.json")), k6Opts);
+    var k6Tb = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.TransferBalance>(
+        System.IO.File.ReadAllText(System.IO.Path.Combine(k6Bal, "transfer.balance.json")), k6Opts);
+    k6Tb.Validate();
+    var k6Bands = new TheBadge.Checks.TestBands();
+    var k6RlCfg = new Dictionary<RateClass, RateLimitCfg[]>();
+    {
+        using var bd = System.Text.Json.JsonDocument.Parse(
+            System.IO.File.ReadAllText(System.IO.Path.Combine(k6Bal, "command.bands.json")));
+        foreach (var b in bd.RootElement.GetProperty("bantlar").EnumerateObject())
+            k6Bands.Add(b.Name, b.Value[0].GetDouble(), b.Value[1].GetDouble());
+        foreach (var r in bd.RootElement.GetProperty("rateLimit").EnumerateObject())
+        {
+            var list = new List<RateLimitCfg>();
+            foreach (var w in r.Value.EnumerateArray()) list.Add(new RateLimitCfg(w[0].GetInt32(), w[1].GetInt64() * 1000));
+            k6RlCfg[(RateClass)Enum.Parse(typeof(RateClass), r.Name)] = list.ToArray();
+        }
+    }
+    const long K6Host = 1_700_000_000_000L, K6User = 42L, K6Other = 77L;
+    const ulong K6Seed = 0x6ACE1177UL;
+    CommandEnvelope K6Env(string act, long user = K6User, Guid? id = null)
+        => new CommandEnvelope
+        {
+            CommandId = id ?? Guid.NewGuid(), CatalogVersion = Catalog.Version, Source = CommandSource.UI,
+            ActionType = act, IssuedAtUnixMs = K6Host, MatchTick = 0, UserId = user,
+            SaveSlotId = 1, TeamIdx = 0, PayloadJson = new byte[0]
+        };
+
+    (TheBadge.World.WorldStore depo, TheBadge.World.WorldContext ctx, TheBadge.World.WorldExecutor exec,
+     TheBadge.CommandBus.CommandBus bus, TheBadge.Checks.SpyOnlineSink kanal) K6Kur(bool kanalVar = true)
+    {
+        var g = TheBadge.Checks.EkonomiFixture.Kur(k6Rules, k6Eco, 500L, K6User);
+        g.Takvim.Pencere = TheBadge.World.TransferWindow.Yaz;
+        var depo = new TheBadge.World.WorldStore(g);
+        var ctx = new TheBadge.World.WorldContext(depo, k6Rules)
+        { Active = TheBadge.CommandBus.Context.Hub | TheBadge.CommandBus.Context.Online };
+        var exec = new TheBadge.World.WorldExecutor(depo, ctx);
+        var kanal = kanalVar ? new TheBadge.Checks.SpyOnlineSink() : null;
+        TheBadge.World.OnlineActions.Baglan(ctx, exec, k6Rules, kanal);
+        var bus = new TheBadge.CommandBus.CommandBus(k6Bands, ctx,
+            new SlidingWindowRateLimiter(k6RlCfg, 3, 300_000), new IdempotencyStore());
+        return (depo, ctx, exec, bus, kanal);
+    }
+
+    // 30a) BAĞLANTI
+    {
+        var w = K6Kur();
+        int kalan = 0;
+        foreach (var a in w.exec.UnboundActions())
+            if (a.StartsWith("league.", StringComparison.Ordinal) || a.StartsWith("replay.", StringComparison.Ordinal)
+                || a == "social.report_player") kalan++;
+        Console.WriteLine($"[info] K6 bağlantı: bağlanmamış {w.exec.UnboundActions().Length}/{Catalog.Count} (online: {kalan})");
+        if (kalan != 0) failures += Fail("K6Baglanti", $"{kalan} online aksiyonu bağlanmamış");
+        else Pass("K6Baglanti(5 online aksiyon bağlı · kalan staff×2 + social×2 K7'nin işi)");
+    }
+
+    // 30b) OFFLINE KUYRUK — CB 8.3: Tier 1-2 bağlantısız VERİLEMEZ, Tier 0 kuyruğa girer
+    {
+        string hata = "";
+        var kuyruk = new TheBadge.World.OfflineQueue(k6Rules.yapi.cevrimdisiKuyrukTavani);
+        var pl = new TheBadge.Checks.TestPayload().Set("personaId", 1L).Set("ton", "sakinlestir");
+        // Tier 0 (social.arrange_talk) KUYRUĞA GİRER
+        var t0 = kuyruk.Kuyrukla(K6Env("social.arrange_talk"), Catalog.Find("social.arrange_talk"), pl, out string d0);
+        if (t0 != RejectionReason.None) hata += $"Tier 0 kuyruğa alınmadı({t0}/{d0}) ";
+        if (kuyruk.Sayi != 1) hata += "kuyruk saymadı ";
+        // Tier 1 ve Tier 2 REDDEDİLİR — kuyruğa bile girmez
+        foreach (var act in new[] { "league.join", "tycoon.take_loan", "transfer.propose_offer", "replay.share_clip" })
+        {
+            var def = Catalog.Find(act);
+            int once = kuyruk.Sayi;
+            var r = kuyruk.Kuyrukla(K6Env(act), def, pl, out string d);
+            if (r != RejectionReason.StateConflict) hata += $"{act}(Tier {(int)def.Tier}) kuyrukta reddedilmedi({r}) ";
+            if (kuyruk.Sayi != once) hata += $"{act} reddedildiği hâlde kuyruğa girdi ";
+        }
+        // Tavan
+        var kucuk = new TheBadge.World.OfflineQueue(2);
+        for (int i = 0; i < 2; i++) kucuk.Kuyrukla(K6Env("social.arrange_talk"), Catalog.Find("social.arrange_talk"), pl, out _);
+        var tasan = kucuk.Kuyrukla(K6Env("social.arrange_talk"), Catalog.Find("social.arrange_talk"), pl, out string dt);
+        if (tasan != RejectionReason.StateConflict) hata += $"kuyruk tavanı tutmadı({tasan}) ";
+        if (hata.Length > 0) failures += Fail("K6OfflineKuyruk", hata);
+        else Pass($"K6OfflineKuyruk(CB 8.3: Tier 0 kuyrukta · Tier 1-2 kuyruğa GİRMİYOR · tavan {k6Rules.yapi.cevrimdisiKuyrukTavani})");
+    }
+
+    // 30c) UZLAŞTIRMA — sunucu otoriter, DÜŞEN KOMUT RAPOR EDİLİR (K6 kararı 2026-08-25)
+    {
+        string hata = "";
+        var kuyruk = new TheBadge.World.OfflineQueue(k6Rules.yapi.cevrimdisiKuyrukTavani);
+        var pl = new TheBadge.Checks.TestPayload().Set("personaId", 1L).Set("ton", "sakinlestir");
+        var idler = new List<Guid>();
+        for (int i = 0; i < 5; i++)
+        {
+            var id = Guid.NewGuid(); idler.Add(id);
+            kuyruk.Kuyrukla(K6Env("social.arrange_talk", id: id), Catalog.Find("social.arrange_talk"), pl, out _);
+        }
+        // Sunucu 2. ve 4. komutu REDDEDİYOR
+        int sira = 0;
+        var gonderimSirasi = new List<Guid>();
+        var rapor = kuyruk.YenidenBaglan((env, p) =>
+        {
+            gonderimSirasi.Add(env.CommandId);
+            sira++;
+            return sira == 2 ? (RejectionReason.StateConflict, "sunucu durumu farklı")
+                 : sira == 4 ? (RejectionReason.RateLimited, "çok hızlı")
+                 : (RejectionReason.None, null);
+        });
+        if (rapor.Length != 5) hata += $"rapor eksik({rapor.Length}) ";
+        // SIRA korunuyor mu
+        for (int i = 0; i < idler.Count && i < gonderimSirasi.Count; i++)
+            if (gonderimSirasi[i] != idler[i]) { hata += "gönderim sırası bozuldu "; break; }
+        // Düşenler SEBEBİYLE raporlanıyor mu
+        int dusen = 0;
+        foreach (var r in rapor)
+            if (r.Sonuc == TheBadge.World.UzlastirmaSonucu.Dustu)
+            {
+                dusen++;
+                if (r.Sebep == RejectionReason.None) hata += "düşen komutun sebebi yok ";
+                if (string.IsNullOrEmpty(r.Detay)) hata += "düşen komutun detayı yok ";
+                if (r.CommandId == Guid.Empty) hata += "düşen komutun kimliği yok ";
+            }
+        if (dusen != 2) hata += $"düşen sayısı {dusen}≠2 ";
+        // Kuyruk BOŞALIYOR — yarım kuyruk ikinci bağlanmada tekrar oynatırdı
+        if (kuyruk.Sayi != 0) hata += "uzlaştırmadan sonra kuyruk boşalmadı ";
+        Console.WriteLine($"[info] K6 uzlaştırma: 5 komut · {dusen} düştü, hepsi sebebiyle raporlandı");
+        if (hata.Length > 0) failures += Fail("K6Uzlastirma", hata);
+        else Pass("K6Uzlastirma(sıra korunuyor · sunucu otoriter · düşen komut SESSİZCE yutulmuyor · kuyruk boşalıyor)");
+    }
+
+    // 30d) LİG AKSİYONLARI — kurulum, katılım, kural değişikliği ve KURUCU yetkisi
+    {
+        string hata = "";
+        {
+            var w = K6Kur();
+            var o = w.bus.Submit(K6Env("league.create"),
+                new TheBadge.Checks.TestPayload().Set("chaos", 1L).Set("hiz", 3L).Set("butce", 5_000_000d).Set("saatDilimi", 3L),
+                w.exec, K6Host, K6User);
+            if (!o.Ok) hata += $"lig kurulamadı({o.Reason}/{o.Detail}) ";
+            var lig = w.depo.State.Lig;
+            if (lig.LigId == 0) hata += "ligId yazılmadı ";
+            if (lig.KurucuUserId != K6User) hata += "kurucu yazılmadı ";
+            if (lig.Chaos != 1 || lig.Hiz != 3 || lig.SaatDilimi != 3) hata += "lig kuralları yanlış ";
+            // İkinci lig KURULAMAZ
+            var ikinci = w.bus.Submit(K6Env("league.create"),
+                new TheBadge.Checks.TestPayload().Set("chaos", 0L).Set("hiz", 1L).Set("butce", 1_000_000d).Set("saatDilimi", 0L),
+                w.exec, K6Host, K6User);
+            if (ikinci.Ok) hata += "ikinci lig kuruldu ";
+            // KURUCU kural değiştirebilir; kısmi güncelleme dokunulmayanı KORUR
+            var kural = w.bus.Submit(K6Env("league.set_rules"),
+                new TheBadge.Checks.TestPayload().Set("ligId", (long)lig.LigId).Set("chaos", 2L),
+                w.exec, K6Host, K6User);
+            if (!kural.Ok) hata += $"kurucu kural değiştiremedi({kural.Reason}/{kural.Detail}) ";
+            if (w.depo.State.Lig.Chaos != 2) hata += "chaos güncellenmedi ";
+            if (w.depo.State.Lig.Hiz != 3) hata += "dokunulmayan hız DEĞİŞTİ ";
+            // KURUCU OLMAYAN değiştiremez
+            var yabanci = w.bus.Submit(K6Env("league.set_rules", user: K6Other),
+                new TheBadge.Checks.TestPayload().Set("ligId", (long)lig.LigId).Set("chaos", 0L),
+                w.exec, K6Host, K6Other);
+            if (yabanci.Ok) hata += "kurucu olmayan kural değiştirdi ";
+        }
+        {
+            // KATILIM: şifre HAM hâliyle saklanmaz
+            var w = K6Kur();
+            var o = w.bus.Submit(K6Env("league.join"),
+                new TheBadge.Checks.TestPayload().Set("ligId", 12345L).Set("sifre", "gizli-parola"),
+                w.exec, K6Host, K6User);
+            if (!o.Ok) hata += $"lige katılınamadı({o.Reason}/{o.Detail}) ";
+            if (w.depo.State.Lig.LigId != 12345) hata += "ligId yazılmadı ";
+            if (w.depo.State.Lig.KurucuUserId != 0) hata += "katılan üye kurucu oldu ";
+            // ŞİFRE DURUMDA İZ BIRAKMAZ: ne ham ne özet. Şifreli ve şifresiz katılım AYNI
+            // hash'i vermeli — vermiyorsa şifreden türeyen bir şey duruma sızmış demektir.
+            // (Önce tuzsuz bir özet yazıyordum; düşük entropili lig şifresi için sözlük saldırısı
+            // ucuz olduğundan bu, şifreyi saklamaktan anlamlı ölçüde iyi değildi — inceleme, P1.)
+            // ÜÇ YOL AYNI HASH'İ VERMELİ: şifresiz, şifre A, şifre B. İlk yazımda yalnız
+            // "şifreli vs şifresiz" karşılaştırıyordum ve kapı DİŞSİZ çıktı: sızıntıyı
+            // `ozet % 3` ile taklit ettiğimde sonuç tesadüfen 0 oldu ve hash'ler eşleşti.
+            // İki FARKLI şifre karşılaştırması bu şansa bağlı değil — şifreden türeyen herhangi
+            // bir şey duruma sızarsa ikisi mutlaka ayrışır.
+            ulong Katil(string sifre)
+            {
+                var wx = K6Kur();
+                var pay = new TheBadge.Checks.TestPayload().Set("ligId", 12345L);
+                if (sifre != null) pay.Set("sifre", sifre);
+                wx.bus.Submit(K6Env("league.join"), pay, wx.exec, K6Host, K6User);
+                return wx.depo.Hash();
+            }
+            ulong hSifresiz = Katil(null), hA = Katil("gizli-parola"), hB = Katil("bambaska-parola");
+            if (hA != hSifresiz || hB != hSifresiz || hA != hB)
+                hata += "şifre kalıcı duruma sızdı (farklı şifreler farklı hash veriyor) ";
+            // KATILIM BİLMEDİĞİNİ UYDURMAZ: payload yalnız ligId ve şifre veriyor. Kurucu,
+            // chaos, hız, bütçe, saat dilimi SUNUCUnun bilgisidir ve komut zaman çizelgesinden
+            // türetilemez — katılım bunları YAZMAMALI. (İlk yazımda bir `UyeSayisi` alanı vardı
+            // ve katılım onu 1 yapıyordu: ligde kaç kulüp olduğunu bilmeyen istemci, hash'e
+            // giren bir sayıyı UYDURUYORDU. Alan kaldırıldı; bu kapı sınıfı koruyor.)
+            var l2 = w.depo.State.Lig;
+            if (l2.Chaos != 0 || l2.Hiz != 0 || l2.ButceTl != 0 || l2.SaatDilimi != 0)
+                hata += $"katılım sunucunun alanlarını uydurdu(chaos {l2.Chaos} hiz {l2.Hiz} butce {l2.ButceTl} tz {l2.SaatDilimi}) ";
+            // Katılan üye kural DEĞİŞTİREMEZ (kurucu değil)
+            var kural = w.bus.Submit(K6Env("league.set_rules"),
+                new TheBadge.Checks.TestPayload().Set("ligId", 12345L).Set("hiz", 5L), w.exec, K6Host, K6User);
+            if (kural.Ok || kural.Reason != RejectionReason.NotOwned) hata += $"katılan üye kural değiştirdi({kural.Reason}) ";
+        }
+        if (hata.Length > 0) failures += Fail("K6LigAksiyonlari", hata);
+        else Pass("K6LigAksiyonlari(kurulum · tek lig · kısmi kural güncellemesi · KURUCU yetkisi · şifre özeti · katılım bilmediğini uydurmuyor)");
+    }
+
+    // 30e) YAYIN KANALI — klip/rapor kalıcı durumu değiştirmiyor, kanal yoksa sessiz başarı YOK
+    {
+        string hata = "";
+        {
+            var w = K6Kur();
+            ulong h0 = w.depo.Hash();
+            var o = w.bus.Submit(K6Env("replay.share_clip"),
+                new TheBadge.Checks.TestPayload().Set("macId", 777L).Set("pencereSn", 15L).Set("hedef", "lig"),
+                w.exec, K6Host, K6User);
+            if (!o.Ok) hata += $"klip paylaşılamadı({o.Reason}/{o.Detail}) ";
+            if (w.kanal.Klipler.Count != 1) hata += "klip kanala gitmedi ";
+            else if (w.kanal.Klipler[0].macId != 777 || w.kanal.Klipler[0].pencereSn != 15) hata += "klip alanları yanlış ";
+            if (w.depo.Hash() != h0) hata += "klip KALICI durumu değiştirdi ";
+
+            var r = w.bus.Submit(K6Env("social.report_player"),
+                new TheBadge.Checks.TestPayload().Set("hedefUserId", K6Other).Set("sebep", "hile"),
+                w.exec, K6Host, K6User);
+            if (!r.Ok) hata += $"rapor gönderilemedi({r.Reason}/{r.Detail}) ";
+            if (w.kanal.Raporlar.Count != 1) hata += "rapor kanala gitmedi ";
+            if (w.depo.Hash() != h0) hata += "rapor KALICI durumu değiştirdi ";
+            // Kendini raporlama
+            var kendi = w.bus.Submit(K6Env("social.report_player"),
+                new TheBadge.Checks.TestPayload().Set("hedefUserId", K6User).Set("sebep", "spam"),
+                w.exec, K6Host, K6User);
+            if (kendi.Ok) hata += "kendini raporlama geçti ";
+        }
+        {
+            // Kanal BAĞLI DEĞİLSE sessiz başarı YOK
+            var w = K6Kur(kanalVar: false);
+            var o = w.bus.Submit(K6Env("replay.share_clip"),
+                new TheBadge.Checks.TestPayload().Set("macId", 5L).Set("pencereSn", 10L).Set("hedef", "genel"),
+                w.exec, K6Host, K6User);
+            if (o.Ok) hata += "kanalsız host klip paylaşımını KABUL etti ";
+        }
+        if (hata.Length > 0) failures += Fail("K6YayinKanali", hata);
+        else Pass("K6YayinKanali(klip ve rapor kanala · kalıcı durum korunuyor · kendini raporlama yok · kanalsız host reddediyor)");
+    }
+
+    // 30g) İNCELEME BULGULARI — 4 bulgu (Codex)
+    {
+        string hata = "";
+
+        // (1) ALICI KARARI SATICI EŞİKLERİYLE VERİLİYORDU — para basma yolu:
+        //     gelen teklife FAHİŞ karşı teklif ver, AI kabul etsin, satışı tamamla.
+        {
+            var g = TheBadge.Checks.EkonomiFixture.Kur(k6Rules, k6Eco, 500L, K6User);
+            g.Takvim.Pencere = TheBadge.World.TransferWindow.Yaz;
+            var oyuncu = g.Oyuncular[5];
+            long deger = TheBadge.World.Valuation.PiyasaDegeri(oyuncu, k6Tb);
+            // ALICI: fahiş fiyatı REDDETMELİ, ucuzu kabul etmeli — satıcının TERSİ
+            var fahis = TheBadge.World.Valuation.AliciKarari(oyuncu, deger * 5, 1, k6Tb, K6Seed, out _);
+            if (fahis != TheBadge.World.PazarlikKarari.Ret) hata += $"alıcı fahiş fiyatı reddetmedi({fahis}) ";
+            var ucuz = TheBadge.World.Valuation.AliciKarari(oyuncu, deger / 4, 1, k6Tb, K6Seed, out _);
+            if (ucuz != TheBadge.World.PazarlikKarari.Kabul) hata += $"alıcı ucuz fiyatı kabul etmedi({ucuz}) ";
+            // SATICI aynı fahiş fiyatı KABUL eder — iki rutinin GERÇEKTEN ters olduğunun kanıtı
+            var saticiFahis = TheBadge.World.Valuation.Karar(oyuncu, deger * 5, 1, k6Tb, K6Seed, out _);
+            if (saticiFahis != TheBadge.World.PazarlikKarari.Kabul) hata += "satıcı rutini beklendiği gibi davranmıyor ";
+            // Alıcının karşı teklifi istenen bedelden YÜKSEK olamaz
+            var orta = TheBadge.World.Valuation.AliciKarari(oyuncu, (long)(deger * 1.3), 1, k6Tb, K6Seed, out long aKarsi);
+            if (orta == TheBadge.World.PazarlikKarari.KarsiTeklif && aKarsi > (long)(deger * 1.3))
+                hata += "alıcı karşı teklifi istenen bedelden yüksek ";
+        }
+        // Sürücü DOĞRU rutini seçiyor mu: ONLAR teklif etti, biz fahiş karşı teklif verdik
+        {
+            var g = TheBadge.Checks.EkonomiFixture.Kur(k6Rules, k6Eco, 500L, K6User);
+            g.Takvim.Pencere = TheBadge.World.TransferWindow.Yaz;
+            long deger = TheBadge.World.Valuation.PiyasaDegeri(g.Oyuncular[5], k6Tb);
+            g.Club.TransferTeklifleri[0] = new TheBadge.World.TransferOffer
+            {
+                TeklifId = 9, OyuncuId = g.Oyuncular[5].PlayerId, TeklifEdenClubId = 900L,
+                BedelTl = deger * 5, HaftalikMaasTl = 60_000,     // BİZİM fahiş karşı teklifimiz
+                SonGecerlilikSezon = g.Takvim.Sezon, SonGecerlilikHafta = (ushort)(g.Takvim.Hafta + 2),
+                SiraTeklifEdende = true, TurSayisi = 2            // top ONLARDA (teklifi açan onlar)
+            };
+            var j = new TheBadge.World.WorldJournal();
+            TheBadge.World.TransferTick.Ilerlet(g, k6Tb, k6Rules, K6Seed, j);
+            if (!j.Validate(g, out string vh)) hata += $"journal geçersiz({vh}) ";
+            j.Apply(g);
+            var t = g.Club.TransferTeklifleri[0];
+            // AI ALICI fahiş fiyatı kabul ETMEMELİ: ya yuva kapandı (ret) ya bedel DÜŞTÜ
+            bool kabulEtti = t.TeklifId != 0 && !t.SiraTeklifEdende && t.BedelTl >= deger * 5;
+            if (kabulEtti) hata += "AI alıcı FAHİŞ fiyatı kabul etti (para basma yolu açık) ";
+        }
+
+        // (2) YAYIN PATLARSA DURUM GERİ ALINIR
+        {
+            var w = K6Kur();
+            w.kanal.Patlat = true;
+            ulong h0 = w.depo.Hash();
+            ulong v0 = w.depo.Version;
+            bool firladi = false;
+            try
+            {
+                w.bus.Submit(K6Env("replay.share_clip"),
+                    new TheBadge.Checks.TestPayload().Set("macId", 3L).Set("pencereSn", 10L).Set("hedef", "lig"),
+                    w.exec, K6Host, K6User);
+            }
+            catch (InvalidOperationException) { firladi = true; }
+            if (!firladi) hata += "yayın patlaması yukarı çıkmadı ";
+            if (w.depo.Hash() != h0) hata += "yayın patlayınca durum geri alınmadı ";
+            if (w.depo.Version != v0) hata += "yayın patlayınca sürüm geri alınmadı ";
+        }
+
+        // (3) YAYIN DEDUP ANAHTARI — uzak taraf ikinci kopyayı eleyebilsin
+        {
+            var w = K6Kur();
+            var env = K6Env("replay.share_clip");
+            w.bus.Submit(env, new TheBadge.Checks.TestPayload().Set("macId", 8L).Set("pencereSn", 12L).Set("hedef", "lig"),
+                w.exec, K6Host, K6User);
+            if (w.kanal.Klipler.Count != 1) hata += "klip yayınlanmadı ";
+            else if (w.kanal.Klipler[0].cid != env.CommandId) hata += "yayın komut kimliğini taşımıyor ";
+        }
+
+        // (4) UZLAŞTIRMA ORTADA PATLARSA: uygulanmış önek TEKRAR OYNAMAZ
+        {
+            var kuyruk = new TheBadge.World.OfflineQueue(k6Rules.yapi.cevrimdisiKuyrukTavani);
+            var pl = new TheBadge.Checks.TestPayload().Set("personaId", 1L).Set("ton", "sakinlestir");
+            for (int i = 0; i < 5; i++)
+                kuyruk.Kuyrukla(K6Env("social.arrange_talk"), Catalog.Find("social.arrange_talk"), pl, out _);
+            int n = 0;
+            var rapor = new List<TheBadge.World.UzlastirmaKaydi>();
+            bool firladi = false;
+            try
+            {
+                kuyruk.YenidenBaglan((env, p) =>
+                {
+                    n++;
+                    if (n == 3) throw new InvalidOperationException("ağ koptu (test)");
+                    return (RejectionReason.None, null);
+                }, rapor);
+            }
+            catch (InvalidOperationException) { firladi = true; }
+            if (!firladi) hata += "gönderim patlaması yukarı çıkmadı ";
+            // İlk 2 UYGULANDI ve kuyruktan düştü; 3. gönderilemedi, kuyrukta KALDI
+            if (rapor.Count != 2) hata += $"tamamlananların raporu kayboldu({rapor.Count}≠2) ";
+            if (kuyruk.Sayi != 3) hata += $"kuyrukta gönderilmemiş sonek kalmadı({kuyruk.Sayi}≠3) ";
+            // İkinci bağlanma: yalnız KALAN 3'ü gönderir, ilk 2'yi TEKRAR OYNATMAZ
+            int ikinci = 0;
+            kuyruk.YenidenBaglan((env, p) => { ikinci++; return (RejectionReason.None, null); });
+            if (ikinci != 3) hata += $"ikinci bağlanma {ikinci} komut gönderdi (uygulanmış önek tekrar oynadı) ";
+        }
+
+        if (hata.Length > 0) failures += Fail("K6IncelemeBulgulari", hata);
+        else Pass("K6IncelemeBulgulari(4 bulgu: alıcı/satıcı eşikleri ters · yayın patlayınca geri alma · dedup anahtarı · uzlaştırma checkpoint)");
+    }
+
+    // 30f) TRANSFER SÜRÜCÜSÜ — K5'in açık bıraktığı boşluk: karşı taraf artık cevap veriyor
+    {
+        string hata = "";
+        TheBadge.World.GameState Kur()
+        {
+            var g = TheBadge.Checks.EkonomiFixture.Kur(k6Rules, k6Eco, 500L, K6User);
+            g.Takvim.Pencere = TheBadge.World.TransferWindow.Yaz;
+            g.Oyuncular[0].ClubId = 900L;
+            return g;
+        }
+        // BİZ teklif ettik → top KARŞIDA → sürücü ilerletmeli
+        {
+            var g = Kur();
+            g.Club.TransferTeklifleri[0] = new TheBadge.World.TransferOffer
+            {
+                TeklifId = 1, OyuncuId = g.Oyuncular[0].PlayerId, TeklifEdenClubId = 500L,
+                BedelTl = 2_000_000, HaftalikMaasTl = 60_000,
+                SonGecerlilikSezon = g.Takvim.Sezon, SonGecerlilikHafta = (ushort)(g.Takvim.Hafta + 2),
+                SiraTeklifEdende = false, TurSayisi = 1
+            };
+            var j = new TheBadge.World.WorldJournal();
+            int n = TheBadge.World.TransferTick.Ilerlet(g, k6Tb, k6Rules, K6Seed, j);
+            if (n != 1) hata += $"sürücü teklifi işlemedi({n}) ";
+            if (!j.Validate(g, out string vh)) hata += $"sürücü journal geçersiz({vh}) ";
+            j.Apply(g);
+            var t = g.Club.TransferTeklifleri[0];
+            // Sonuç ne olursa olsun DURUM İLERLEMELİ: ya yuva kapandı (ret) ya sıra bize geçti
+            bool ilerledi = t.TeklifId == 0 || t.SiraTeklifEdende;
+            if (!ilerledi) hata += "sürücü sırayı ilerletmedi ";
+        }
+        // Sıra BİZDEYSE sürücü DOKUNMAZ — kullanıcının kararını gasp etmez
+        {
+            var g = Kur();
+            g.Club.TransferTeklifleri[0] = new TheBadge.World.TransferOffer
+            {
+                TeklifId = 2, OyuncuId = g.Oyuncular[0].PlayerId, TeklifEdenClubId = 500L,
+                BedelTl = 2_000_000, HaftalikMaasTl = 60_000,
+                SonGecerlilikSezon = g.Takvim.Sezon, SonGecerlilikHafta = (ushort)(g.Takvim.Hafta + 2),
+                SiraTeklifEdende = true, TurSayisi = 2
+            };
+            var j = new TheBadge.World.WorldJournal();
+            int n = TheBadge.World.TransferTick.Ilerlet(g, k6Tb, k6Rules, K6Seed, j);
+            if (n != 0) hata += $"sıra bizdeyken sürücü müdahale etti({n}) ";
+        }
+        // SÜRESİ DOLMUŞ teklife dokunmaz (temizlik K5'in yolu)
+        {
+            var g = Kur();
+            g.Club.TransferTeklifleri[0] = new TheBadge.World.TransferOffer
+            {
+                TeklifId = 3, OyuncuId = g.Oyuncular[0].PlayerId, TeklifEdenClubId = 500L,
+                BedelTl = 2_000_000, HaftalikMaasTl = 60_000,
+                SonGecerlilikSezon = g.Takvim.Sezon, SonGecerlilikHafta = (ushort)(g.Takvim.Hafta - 1),
+                SiraTeklifEdende = false, TurSayisi = 1
+            };
+            var j = new TheBadge.World.WorldJournal();
+            int n = TheBadge.World.TransferTick.Ilerlet(g, k6Tb, k6Rules, K6Seed, j);
+            if (n != 0) hata += "süresi dolmuş teklife sürücü dokundu ";
+        }
+        // DETERMİNİZM: aynı durum + aynı seed = aynı sonuç
+        {
+            // TEKLİF PAZARLIK BANDINDA seçilir: değerin çok altında ya da üstünde bir teklifte
+            // karar seed'den BAĞIMSIZ olarak ret/kabuldür ve "seed oynatıyor mu" sorusu orada
+            // ölçülemez. İlk yazımda sabit 1,5M kullanmıştım ve kapı bu yüzden kırmızıydı —
+            // iddia yanlış değildi, ÖLÇÜM YERİ yanlıştı.
+            long bandDegeri;
+            {
+                var gd = Kur();
+                bandDegeri = (long)(TheBadge.World.Valuation.PiyasaDegeri(gd.Oyuncular[0], k6Tb) * 0.75);
+            }
+            ulong Kos(ulong seed)
+            {
+                var g = Kur();
+                g.Club.TransferTeklifleri[0] = new TheBadge.World.TransferOffer
+                {
+                    TeklifId = 4, OyuncuId = g.Oyuncular[0].PlayerId, TeklifEdenClubId = 500L,
+                    BedelTl = bandDegeri, HaftalikMaasTl = 60_000,
+                    SonGecerlilikSezon = g.Takvim.Sezon, SonGecerlilikHafta = (ushort)(g.Takvim.Hafta + 2),
+                    SiraTeklifEdende = false, TurSayisi = 1
+                };
+                var j = new TheBadge.World.WorldJournal();
+                TheBadge.World.TransferTick.Ilerlet(g, k6Tb, k6Rules, seed, j);
+                j.Validate(g, out _); j.Apply(g);
+                return TheBadge.World.WorldHash.Compute(g);
+            }
+            ulong a = Kos(K6Seed), b = Kos(K6Seed);
+            if (a != b) hata += "sürücü deterministik değil ";
+            bool ayristi = false;
+            for (ulong sd = 1; sd < 60 && !ayristi; sd++) if (Kos(sd) != a) ayristi = true;
+            if (!ayristi) hata += "seed sürücüyü hiç oynatmıyor ";
+        }
+        if (hata.Length > 0) failures += Fail("K6TransferSurucusu", hata);
+        else Pass("K6TransferSurucusu(karşı taraf cevap veriyor · sıra bizdeyken dokunmuyor · süresi dolmuşa karışmıyor · deterministik)");
     }
 }
 
