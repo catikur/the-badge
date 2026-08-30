@@ -3428,16 +3428,20 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         else Pass($"K3IflasEgrisi(kötü yönetim → sezon {iflas} ∈ [2,3] · iyi yönetim 6 sezon ayakta)");
     }
 
-    // 26g) BORÇ GÖZCÜSÜ — `Rng.Gauss01` çarpışması (K3 sırasında bulundu, FAZ 03 kodu).
-    // Gauss01 12 çekilişi [16·salt, 16·salt+12) aralığında topluyor; bu küme bit-0 ve bit-1
-    // çevirmeleri altında KAPALI, yani seed'in/tick'in o bitini çevirmek salt'ları yalnız kendi
-    // aralarında yer değiştiriyor ve toplam DEĞİŞMİYOR. Sonuç: komşu tick'ler ve bit-0 farklı
-    // seed'ler AYNI gauss değerini alıyor. Maç motorunda 13 çağrı yeri var (fizik/karar/düello/
-    // nişan), hepsi st.Tick anahtarlı — gürültü tasarlandığından çok daha bağımlı.
+    // 26g) REGRESYON GÖZCÜSÜ — `Rng.Gauss01` bağımsızlığı. Adı `K3RngGauss01Borcu` TARİHSELdir:
+    // kapı K3'te (FAZ 03 kodunda bulunan) bir BORCU beklemek için yazıldı, borç K8'de ödendi
+    // (2026-08-30, Atilla kararı) ve kapı artık borcu değil REGRESYONU bekliyor. Adı DECISIONS'taki
+    // çapraz referanslar çözülsün diye korundu.
     //
-    // DÜZELTİLMEDİ (bilinçli): düzeltme 50 golden replay'i ve M16-E'nin 12 metriğini kaydırır,
-    // yani ayrı bir dilim + yeniden kalibrasyon işidir. Bu kapı borcu GÖRÜNÜR tutar ve
-    // KÖTÜLEŞMESİNİ engeller; hedef sıfırdır. Karar `docs/DECISIONS.md` bekleyen kararlarda.
+    // Kapatılan kusur: `Gauss01` 12 çekilişi `[16·salt, 16·salt+12)` aralığında TOPLUYORDU; bu küme
+    // bit-0/bit-1 çevirmeleri altında kapalı olduğundan seed'in/tick'in o bitini çevirmek salt'ları
+    // yalnız kendi aralarında yer değiştiriyor, toplam DEĞİŞMİYORDU — komşu tick'lerin %50,0'ı ve
+    // bit-0 farklı tohumların %100,0'ı aynı gauss değerini alıyordu. Maç motorunda 13 çağrı yeri
+    // var (fizik/karar/düello/nişan), hepsi st.Tick anahtarlı.
+    //
+    // Çözüm tek sayı adımlı yayılım (`Rng.Gauss01` doc yorumunda gerekçesiyle). Bugünkü ölçüm
+    // %0,0/%0,0. Bu kapının işi o sıfırı KORUMAK; tavan %0,5'tir ve eski formül geri konulursa
+    // %50/%100 ile kırmızıya döner. Tam anlatı: `docs/DECISIONS.md` → K8.
     {
         const int N = 2000;
         // GERÇEK `Gauss01` ÖLÇÜLÜR — içinin KOPYASI DEĞİL. İlk yazımda bu kapı `salt*16 + i`

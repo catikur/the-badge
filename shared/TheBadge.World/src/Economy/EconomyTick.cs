@@ -11,15 +11,16 @@ namespace TheBadge.World
     /// simülasyonunun karar/fizik akışlarıyla ÇAKIŞMAMALIDIR (ayrı akış olmasaydı ekonomi
     /// çekilişi maç içi çekilişleri kaydırırdı).
     ///
-    /// NEDEN `Gauss01` DEĞİL (K3 bulgusu, 2026-08-25): `Rng.Gauss01` 12 çekilişi
-    /// `[16·salt, 16·salt+12)` salt aralığında topluyor; bu küme bit-0 ve bit-1 çevirmeleri
-    /// altında KAPALI olduğu için seed'in ya da tick'in o bitini çevirmek salt'ları yalnız kendi
-    /// aralarında yer değiştiriyor ve TOPLAM DEĞİŞMİYOR. Ölçüm: komşu tick'lerde %47, bit-0
-    /// farklı seed'lerde %94 çarpışma (`Rand01`'de sıfır). Ekonomi bu yüzden tek `Rand01`
-    /// çekilişini simetrik üniforma dönüştürerek kullanır — üniformun sd'si a/√3 olduğundan
-    /// genlik `sigma·√3` seçilir, böylece istenen standart sapma korunur.
-    /// `Gauss01`'in kendisi FAZ 03 borcudur (DECISIONS: bekleyen kararlar) — buradan düzeltmek
-    /// tüm golden replay'leri ve M16-E kalibrasyonunu kaydırırdı.
+    /// NEDEN `Gauss01` DEĞİL: K3'te (2026-08-25) `Rng.Gauss01`'in 12 çekilişi
+    /// `[16·salt, 16·salt+12)` aralığında topladığı ve bu kümenin bit-0/bit-1 çevirmeleri altında
+    /// KAPALI olduğu bulundu — komşu tick'lerin %50,0'ı ve bit-0 farklı tohumların %100,0'ı aynı
+    /// değeri alıyordu. Ekonomi bu yüzden tek `Rand01` çekilişini simetrik üniforma dönüştürerek
+    /// kullanır — üniformun sd'si a/√3 olduğundan genlik `sigma·√3` seçilir, standart sapma korunur.
+    ///
+    /// BORÇ K8'DE ÖDENDİ (2026-08-30, Atilla kararı): `Gauss01` artık tek sayı adımlı yayılım
+    /// kullanıyor, ölçüm %0,0/%0,0. Buna rağmen bu çağrı yeri `Rand01` tabanlı kalıyor — geçmek
+    /// ekonomi sonuçlarını kaydırır ve karşılığında hiçbir şey kazandırmaz (üniform gürültü burada
+    /// zaten doğru araç). Değiştirmek istenirse ayrı bir karardır.
     ///
     /// TEK KAPI: bu sınıf durumu DOĞRUDAN değiştirmez — tüm yazmaları `WorldJournal`a kuyruklar,
     /// uygulamayı `WorldExecutor` yapar (CLAUDE.md değişmez #1).</summary>

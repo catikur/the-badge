@@ -9,9 +9,10 @@ namespace TheBadge.World
     /// <summary>DEĞERLEME + PAZARLIK — GDD 17 FAZ 04 "Valuation algoritması, negotiation logic".
     ///
     /// DETERMİNİZM: saf fonksiyonlar; durum okur, yazmaz. Rastgelelik yalnız `Rng.Rand01` ile ve
-    /// yalnız pazarlık kişiliğinde. `Gauss01` KULLANILMAZ — çakışma borcu açıktır (DECISIONS,
-    /// bekleyen kararlar): komşu tick'lerde ve bit0-farklı seed'lerde aynı çekiliş kümesini
-    /// veriyor. K3 ekonomi tick'i de aynı sebeple `Rand01` tabanlı gürültü kullanıyor.
+    /// yalnız pazarlık kişiliğinde. `Gauss01` KULLANILMAZ: yazıldığında çakışma borcu açıktı
+    /// (komşu tick'lerde ve bit0-farklı tohumlarda aynı çekiliş kümesi). Borç K8'de ödendi
+    /// (2026-08-30) ama bu çağrı yeri `Rand01` tabanlı KALIYOR — geçmek transfer sonuçlarını
+    /// kaydırır ve karşılığında bir şey kazandırmaz. K3 ekonomi tick'i de aynı yerde duruyor.
     ///
     /// Ara hesap `double`, SONUÇ tamsayı (₺). Kalıcı durumda float taşınmaz (CLAUDE.md).</summary>
     public static class Valuation
