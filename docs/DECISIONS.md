@@ -1211,7 +1211,7 @@ sözleşmesi `docs/ECONOMY_MAP.md`.
   `K3KrediAmortismani` · `K3IflasEgrisi` (kötü yönetim sezon 2 ∈ [2,3]; iyi yönetim 6 sezon ayakta) ·
   `K3RngGauss01Borcu` (aşağıdaki bulgunun gözcüsü).
 
-### 🔴 BULGU: `Rng.Gauss01` komşu tick'lerde ve bit-0 farklı seed'lerde AYNI değeri üretiyor
+### ~~🔴 BULGU: `Rng.Gauss01` komşu tick'lerde ve bit-0 farklı seed'lerde AYNI değeri üretiyor~~ → ✅ KAPANDI (2026-08-30)
 K3'ün seyirci varyansı seed'e duyarlı çıkmayınca ortaya çıktı; kök sebep FAZ 03 kodunda.
 
 - **Mekanizma:** `Gauss01` 12 çekilişi `[16·salt, 16·salt+12)` salt aralığında topluyor. Bu küme
@@ -1741,7 +1741,133 @@ Bu, K7'nin "yeni denetim yazmadan önce daha derin katmana bak" kuralının kard
 kapı bunu da ölçüyor — yoksa "bus reddedecek" varsayımı dayanaksız kalırdı. K5'in "açık uç olarak
 yazdığın şeyin gerekçesi varsayıma dayanıyorsa kapıya bağla" dersinin uygulaması.
 
+### 🔴 BULGU: `Rng.Gauss01` borç gözcüsü, gözetlediği fonksiyonu ÖLÇMÜYORDU (2026-08-30)
+K7 merge edildikten sonra bekleyen kararın (b) şıkkının tetikleyici koşulu geldi ("FAZ 04 sonunda,
+K7 bittikten sonra"). Kararı fiyatlamak için önerilen düzeltme GEÇİCİ olarak uygulanıp tam kapı
+koşuldu. Düzeltme commit EDİLMEDİ — `Gauss01`'in gövdesi ME Spec 3.1'de normatif kod bloğu olarak
+duruyor (`s * 16 + i` dahil), yani değişiklik bir spec çelişkisidir ve kararı Atilla verir.
+
+- **Gözcü kapı sahteydi.** `K3RngGauss01Borcu`, `salt*16 + i` adres formülünü kapının İÇİNDE yeniden
+  kuruyor ve 12 çekilişi `Rand01`den kendisi topluyordu. `Gauss01` yalnız yazdırılan ama İDDİA
+  EDİLMEYEN tam-eşitlik satırında çağrılıyordu. Yani gözcü, gözetlediği fonksiyona hiç bakmıyordu.
+- **Kanıt (tek satır):** düzeltme kaynağa uygulandığında kapının iddia ettiği sayılar **%50,0 /
+  %100,0'da çakılı kaldı**; yalnız iddia edilmeyen tam eşitlik %26,9/%55,3 → **%0,0/%0,0**'a indi.
+  Borç ödense kapı bunu göremezdi; `Gauss01` başka türlü bozulsa da göremezdi.
+- **DÜZELTİLDİ (kapı, kaynak değil):** kapı artık gerçek `Gauss01`'i çağırıp YAKIN EŞİTLİK ölçüyor
+  (|Δ| < 1e-12). Küme aynıysa toplam yalnız toplama sırasında ayrışır (hata sınırı ~12·eps·6 ≈
+  1,6e-14), dolayısıyla yakın eşitlik aynı kümeyi public API üzerinden yakalar. Mevcut kodda AYNI
+  sayıları veriyor (%50,0 / %100,0) — hiçbir eşik gevşemedi ya da sıkılmadı, yalnız ölçü dürüstleşti.
+- **Diş ölçümü (üç yön):** borç dururken %50,0/%100,0 → PASS · düzeltme uygulanınca %0,0/%0,0 → PASS
+  (borcun ödendiği artık GÖRÜNÜYOR) · `tick & ~3u` ile kötüleştirilince %75,0 → **FAIL**. İlk
+  kötüleştirme denemem (`tick & ~1u`) mevcut kusurla aynı yere düştü ve %50'de kaldı: perturbasyon
+  yanlıştı, ölçü değil — tam eşitlik %26,9→%50,0 hareket ederek değişikliği yine de gördü.
+- **Kural:** bir borcu "görünür tutan" gözcü kapı, borcun **ÖDENDİĞİNİ de gösterebilmelidir**.
+  Gösteremiyorsa gözetlediği şeyi değil kendi kopyasını ölçüyordur. Kapının içine, gözetlediği
+  kodun formülünü ikinci kez yazmak bu hatanın taşıyıcısıdır.
+
+### 📏 ÖLÇÜM: `Gauss01` düzeltmesinin gerçek maliyeti — tahminden ÇOK ucuz (2026-08-30)
+Bekleyen karar "golden set yeniden üretilir, M16-E'nin 12 metriği yeniden ölçülür ve **muhtemelen
+yeniden kalibre edilir (1-2 dilim)**" diyordu. Ölçüldü; bu tahmin fazla kötümsermiş.
+
+- **Kırmızıya dönen 6 kapı:** `MatchSkeletonGolden` · `M2Golden` · `M4Golden` · `M6Golden` ·
+  `M17GoldenReplay` (50/50) — beşi de golden HASH kapısı, yani mekanik yeniden üretim işi
+  (üretici komut zaten var). Altıncısı `M4CalibrationBands`.
+- **`M16ECalibGenis` GEÇTİ — 12 metriğin hepsi bantta kaldı.** gol 2,41→2,57 · şut 27,6→27,4 ·
+  isabetli 7,5→7,6 · korner 8,5→8,2 · faul 21,2→21,0 · sarı 3,32→3,21 · kırmızı 0,21→0,23 ·
+  penaltı 0,30→0,32 · ofsayt 4,9→4,9 · sakatlık 0,48→0,52 · pas %81,3→%81,4 · xG sapma %1,1→%5,7.
+  **Yeniden kalibrasyon gerekmiyor.**
+- **`M4CalibrationBands` gürültüden düştü, motordan değil.** N=12'de gol 1,58 (taban 2,0) verdi.
+  Aynı fikstürde N=200 ölçümü: taban **2,43** → düzeltmeli **2,40**. Yani gerçek etki 0,03 gol;
+  1,58 tamamen örneklem gürültüsü. **TUZAK:** düzeltmeyi yapan kişi bu kırmızıyı görüp motoru
+  "yeniden kalibre" etmeye kalkarsa gürültüye kalibre etmiş olur.
+- **Yan bulgu:** `M4CalibrationBands` 12 maçlık örneklemde gerçek değeri 2,40 olan bir metriği 1,58
+  ölçebiliyor ve bandın tabanı 2,0. Yani bu kapı **tek başına gürültüden kırmızıya dönebilir**.
+  Gürültüden düşebilen kapı, geçtiğinde de az şey söyler. Ayrı bir öneri olarak bekleyen kararlarda.
+- **Açık kalan tek soru:** xG sapma %1,1 → %5,7 (tavan %10). Bantta ama oransal olarak en çok
+  hareket eden metrik; düzeltme dilimi bunu kabul etmeden önce bakmalı.
+- **Yeniden fiyatlama:** golden yeniden üretimi + xG sapmasına bir bakış = **tek küçük dilim**,
+  "1-2 dilim + yeniden kalibrasyon" değil.
+
+### K8: `Rng.Gauss01` çarpışma borcu ödendi — ✅ TAMAM (2026-08-30)
+Atilla'nın kararı (yukarıda) üzerine uygulandı. FAZ 03'ten kalan son sim çekirdeği borcu.
+
+- **Değişiklik tek satır:** `salt * 16 + i` → `salt * 0x9E3779B1u + i * 0x85EBCA6Bu`. 12 adres artık
+  `base + i·k` (k tek) biçiminde; bir elemanın bit-0'ını çevirmek başka bir elemana düşemez, çünkü
+  bu `(j-i)·k = ±1 (mod 2^32)` gerektirir ve k tersinir olduğundan çözüm |j-i| ≤ 11'in çok dışındadır.
+- **Sonuç:** komşu tick %50,0 → **%0,0** · bit0-seed %100,0 → **%0,0**.
+- **SPEC ÇELİŞKİSİ — bu kayıt bağlayıcıdır.** ME Spec 3.1'in kod bloğu `s * 16 + i` yazar; kod artık
+  ondan ayrılıyor. Spec dosyasına DOKUNULMADI (yasak). ME 13.4 upset kararında (2026-08-19) kurulan
+  precedent uygulandı: spec dosyası korunur, DECISIONS kaydı bağlayıcı olur. Gerekçe `Rng.Gauss01`
+  XML doc yorumuna da yazıldı ki koda bakan kişi ayrılığı orada görsün.
+- **Golden yeniden üretimi (5 kapı):** `MatchSkeletonGolden` 0x896E1495EFF5C34C · `M2Golden`
+  0x2950BCCD69FEACA4 · `M4Golden` 0x66A1E641E68B66B2 · `M6Golden` 0x12F21C303ACF022E ·
+  `M17GoldenReplay` 50/50 (`gen-replays` üretici komutuyla; balanceHash ve bandsHash DEĞİŞMEDİ —
+  0xCE04A7006C62F2C2 / 0x03BEA30B618B4B08, yani bu bir motor değişikliğidir, balance değişikliği değil).
+- **Kalibrasyon:** M16-E'nin 12 metriğinin hepsi bantta, yeniden kalibrasyon YAPILMADI (fiyatlama
+  kaydındaki tahmin doğrulandı). `M4CalibrationBands` örneklemi 12 → 200 yapıldı: gol 2,43 → 2,40.
+- **xG sapması %1,1 → %5,7 (tavan %10) — bakıldı, KABUL EDİLDİ.** Ham sayılar: xG 2,44 → 2,43
+  (sabit), şut 27,6 → 27,4 (sabit), goller 2,41 → **2,57**. Yani sapma xG modelinin kaymasından
+  DEĞİL, dönüşüm oranının artmasından geliyor. Gol 2,57 ME 17.2 bandının (2,2-3,2) içinde ve gerçek
+  futbola (~2,7) 2,41'den daha yakın. **Mekanizma KANITLANMADI** — şut/kaleci düellosuna baktım,
+  gördüğüm iki `salt 63` çağrısı orta nişanı ve savunma uzaklaştırmasıydı, dönüşümü açıklamıyor.
+  İddia edilmiyor; ölçüm kaydediliyor. Açık uç: xG katsayıları artık %5,7 az tahmin ediyor →
+  balance sprintinde nudge edilmeli (bekleyen kararlara yazıldı).
+- **Gözcü kapının eşikleri SIKILDI.** Önceki eşikler %50/%100'dü çünkü ölçüt "bugünkü borçtan
+  kötüleşme"ydi. Borç kapandıktan sonra o eşikleri bırakmak hatanın TAMAMEN geri gelmesine sessizce
+  izin verirdi. Tavan %0,5 (2000 örnekte 10; tesadüf beklentisi ~1,6e-9). Diş: eski formül geri
+  konunca kapı iki boyutta da **FAIL** veriyor.
+- **Kural:** **bir borç kapandığında, o borcu bekleyen kapının eşiği de kapanmalıdır.** Eşik borcun
+  seviyesinde unutulursa kapı hatanın tamamen geri gelmesine izin verir — gözcü kapının en sinsi
+  çürüme biçimi budur.
+
+### 🟡 BULGU (açık): iki alt sistem aynı RNG adresini paylaşıyor — `Physics · 700+entity · salt 63`
+K8 sırasında xG mekanizması aranırken görüldü, K8'in kapsamı dışında.
+
+- `MatchEngine.cs:1136` orta nişanı: `Gauss01(seed, Physics, 700 + i, st.Tick, 63)`
+- `MatchEngine.cs:3151` savunma uzaklaştırması: `Gauss01(seed, Physics, 700 + def, st.Tick, 63)`
+- Aynı domain, aynı entity aralığı, aynı salt, aynı tick anahtarı. `i == def` olan bir ajan aynı
+  tick'te her ikisini de yaparsa **birebir aynı** değeri çeker. Domain/entity/salt şemasının varlık
+  sebebi tam olarak bunu önlemek.
+- Erişilebilirliği DOĞRULANMADI (aynı tick'te hem orta yapıp hem uzaklaştıran ajan gerekiyor).
+  Bugün bir kapıyı düşürmüyor. Önerisi bekleyen kararlarda.
+
+### K8 inceleme turu — ✅ TAMAM (2026-08-30)
+Tek bulgu (Codex, P2) ve fazlasıyla yerinde: kapının BAŞLIK yorumu hâlâ borcu ödenmemiş
+anlatıyordu — `DÜZELTİLMEDİ (bilinçli)`, "karar bekleyen kararlarda", `[16·salt, 16·salt+12)`
+aralığında "topluyor" — oysa aynı commit borcu kapatıp eşiği sıkmıştı. Gövdeyi yeniden yazıp
+üstündeki bloğu bir daha okumamışım.
+
+- **Zararın doğru tarifi bulguda:** mesele "yorum eskimiş" değil, **birbiriyle çelişen iki
+  talimat**. Başlık "dokunma, karar bekliyor" diyor; on satır aşağıda gövde borcun kapandığını
+  söylüyor. Kırmızı bir kapıyı teşhis eden kişi önce başlığı okur ve yanlış sonuca varır.
+- **Codex bir yer gördü; aynı bayatlık iki yerde daha vardı** ve ikisi de bir TASARIM TERCİHİNİ
+  açık borca işaret ederek gerekçelendiriyordu: `EconomyTick` ("`Gauss01`'in kendisi FAZ 03
+  borcudur") ve `Valuation` ("`Gauss01` KULLANILMAZ — çakışma borcu açıktır"). Üçü de güncellendi.
+- **İki çağrı yerinin KODU değişmedi:** `Rand01` tabanlı üniform gürültüde kalıyorlar. `Gauss01`'e
+  geçmek ekonomi ve transfer sonuçlarını kaydırır ve karşılığında bir şey kazandırmaz — üniform
+  gürültü orada zaten doğru araçtı, borç yalnızca ikincil gerekçeydi. Yorumlar artık bunu söylüyor
+  ki sonraki okuyucu, hâlâ geçerli bir tercihi "kaldırılmayı bekleyen geçici çözüm" sanmasın.
+- **Kapı adı korundu:** `K3RngGauss01Borcu` artık borcu değil regresyonu bekliyor, ama ad
+  DECISIONS'taki çapraz referanslar çözülsün diye değiştirilmedi; başlık yorumu bunu açıkça yazıyor.
+- **Kural:** **bir borç kapatıldığında, o borcu GEREKÇE olarak gösteren her yorum da kapatılır.**
+  Kodu düzeltip üstündeki gerekçeyi bırakmak, düzeltmeyi okunamaz hale getirir. Bu turda ironisi
+  şuydu: konusu "bayat anlatan kapı yanıltır" olan bir PR, tam da bayat anlatan bir kapı içeriyordu.
+- **Diş ölçümü YOK — bilinçli.** Değişiklik yalnız yorum; bir kapının yakalayacağı davranış yok.
+  Diş ölçtüğünü iddia etmek gösteri olurdu.
+
 ## Bekleyen kararlar
+
+- **xG katsayıları %5,7 az tahmin ediyor (K8 sonrası, 2026-08-30).** `Gauss01` düzeltmesi gol
+  ortalamasını 2,41 → 2,57 çıkardı; xG 2,43'te sabit kaldı. Sapma tavanın (%10) altında ama
+  1,1'den 5,7'ye çıktı. Seçenekler: (a) balance sprintinde xG katsayılarını yeni dönüşüm oranına
+  nudge et; (b) dönüşüm oranının NEDEN çıktığını önce bul (mekanizma K8'de kanıtlanamadı), sonra
+  karar ver; (c) dokunma — bantta. **Öneri: (b) sonra (a)** — katsayıyı anlamadan nudge etmek,
+  bir sonraki motor değişikliğinde aynı işi tekrar yaptırır.
+- **`Physics · 700+entity · salt 63` adres paylaşımı (yukarıdaki 🟡 bulgu).** Seçenekler:
+  (a) uzaklaştırmayı ayrı salta taşı (tek satır, golden'ları kaydırır — K8'in golden turu HENÜZ
+  taze olduğu için ucuz); (b) tüm çağrı yerlerini tarayan bir adres-çakışma kapısı yaz, sonra
+  hepsini birden düzelt; (c) erişilebilirliği önce kanıtla. **Öneri: (b)** — bu tek örneği elle
+  düzeltmek, aynı sınıftan başka çakışma var mı sorusunu cevapsız bırakır.
 - **CB 4.2 tablosu ile ME komut kümesi çelişiyor (K4 bulgusu, 2026-08-29):** spec `squad.set_player_anchor`/
   `set_player_role`/`set_instruction`'ı "Hub + Maç" sayıyor; motorda anchor/rol maç komutu yok,
   `PlayerInstr` kataloğu boş. Seçenekler: (a) ME komut kümesini üç komutla genişlet (determinizm kapısı +
@@ -1758,12 +1884,12 @@ yazdığın şeyin gerekçesi varsayıma dayanıyorsa kapıya bağla" dersinin u
   capex dahil yeniden tanımlansın ve yeniden kalibre edilsin. **Öneri: (a)** — yığınsal harcamayı
   sürekli dengeye karıştırmak bandı bulanıklaştırır ve kulübün yatırım yapmasını cezalandırır gibi
   okunur. Karar balance sprintine ait, K4-K5'i bloklamaz.
-- **`Rng.Gauss01` çarpışması ne zaman düzeltilsin? (K3 bulgusu, 2026-08-25)** Ölçüm ve mekanizma
-  yukarıdaki bulgu kaydında. Seçenekler: (a) ŞİMDİ düzelt → golden set yeniden üretilir, M16-E'nin
-  12 metriği yeniden ölçülür ve muhtemelen yeniden kalibre edilir (1-2 dilim); (b) FAZ 04 sonunda,
-  K7 bittikten sonra tek seferde; (c) FAZ 05 öncesi, cihaz testlerinden önce. **Öneri: (b)** —
-  gürültü kalitesi bugün hiçbir kapıyı düşürmüyor, ama FAZ 05'e taşınırsa kalibrasyon borcu asset
-  üretimiyle aynı sprinte biner. Gözcü kapı bu arada borcu görünür tutuyor.
+- ~~**`Rng.Gauss01` çarpışması ne zaman düzeltilsin?**~~ → **KARAR (2026-08-30, Atilla): ŞİMDİ
+  YAP.** Üç seçenek ölçülmüş maliyetle sunuldu (şimdi / FAZ 05 öncesi / hiç). Uygulandı, aşağıdaki
+  K8 kaydına bakınız. Bekleyen karar kapandı.
+- ~~**`M4CalibrationBands` örneklemi 12 maç — gürültüden kırmızıya dönebiliyor.**~~ → **YAPILDI
+  (2026-08-30): N=12 → 200.** Seçenek (a) uygulandı; bant DEĞİŞTİRİLMEDİ, yalnız ölçümün gürültüsü
+  küçültüldü. Kapı süresi kabul edilebilir kaldı (tüm takım 3 dk 14 sn).
 - ~~ME 13.4 upset büyüklüğü~~ → **KARAR (2026-08-19, Atilla): (d) HİBRİT.** Dört seçenek
   sunuldu — (a) tam zincir normalizasyonu (2 dilim motor işi), (b) yalnız hedef revizyonu
   (%93 revize hedefin de üstünde kalır), (c) skor üstü yeniden örnekleme (tek-kaynak ilkesi +

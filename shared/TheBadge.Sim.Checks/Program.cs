@@ -416,7 +416,7 @@ if (runA.finalHash != runB.finalHash || runA.at600 != runB.at600)
 else Pass("MatchSkeletonDeterminism");
 
 // 7b) Golden: durum hash'i sabitlendi — alan/sıra değişikliği bilinçli golden güncellemesi ister
-const ulong MATCH_GOLDEN = 0xCB52C4334C5210D1UL; // M16-G'de yeniden sabitlendi (ME 9.1 pozisyon hatası + 9.2 direk bandı + nişan-kaleci bağı — bilinçli)
+const ulong MATCH_GOLDEN = 0x896E1495EFF5C34CUL; // Gauss01 alt-salt yayılımıyla yeniden sabitlendi (2026-08-30, Atilla onayı — bilinçli)
 if (MATCH_GOLDEN != 0 && runA.finalHash != MATCH_GOLDEN)
     failures += Fail("MatchSkeletonGolden", $"0x{runA.finalHash:X} != 0x{MATCH_GOLDEN:X}");
 else Pass("MatchSkeletonGolden");
@@ -618,7 +618,7 @@ Console.WriteLine($"[info] M2 durum hash: 0x{mA2.h:X}");
 if (mA2.h != mB2.h) failures += Fail("M2Determinism", $"0x{mA2.h:X} != 0x{mB2.h:X}");
 else Pass("M2Determinism");
 
-const ulong M2_GOLDEN = 0xBBCDA9097CE51BC3UL; // M16-G'de yeniden sabitlendi (bilinçli)
+const ulong M2_GOLDEN = 0x2950BCCD69FEACA4UL; // Gauss01 alt-salt yayılımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
 if (M2_GOLDEN != 0 && mA2.h != M2_GOLDEN) failures += Fail("M2Golden", $"0x{mA2.h:X}");
 else Pass("M2Golden");
 
@@ -703,7 +703,7 @@ if (f1.hash != f2.hash || f1.res.TotalTicks != f2.res.TotalTicks)
     failures += Fail("M4Determinism", $"0x{f1.hash:X} != 0x{f2.hash:X}");
 else Pass("M4Determinism");
 
-const ulong M4_GOLDEN = 0xE134C82D570B080FUL; // M16-G'de yeniden sabitlendi (bilinçli)
+const ulong M4_GOLDEN = 0x66A1E641E68B66B2UL; // Gauss01 alt-salt yayılımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
 if (M4_GOLDEN != 0 && f1.hash != M4_GOLDEN) failures += Fail("M4Golden", $"0x{f1.hash:X}");
 else Pass("M4Golden");
 
@@ -731,7 +731,12 @@ else Pass($"M4SetPieces(k{f1.corners}/t{f1.throwIns}/d{f1.goalKicks})");
 // Kalibrasyon bandı (ME 17.2 ruhu): 24 maçlık tarama — ortalamalar bantta mı
 {
     double g = 0, sh = 0, sv = 0, co = 0, fo = 0, ca = 0, dkT = 0;
-    const int NM4 = 12;
+    // ÖRNEKLEM 12 → 200 (2026-08-30): 12 maçta bu kapı, gerçek değeri 2,40 olan gol ortalamasını
+    // 1,58 ölçebiliyordu ve bandın tabanı 2,0 — yani kapı TEK BAŞINA gürültüden kırmızıya
+    // dönebiliyordu. Gauss01 düzeltmesi sırasında tam bunu yaptı; N=200'de taban 2,43 → 2,40,
+    // gerçek etki 0,03 gol. Gürültüden düşebilen kapı geçtiğinde de az şey söyler. Bant
+    // DEĞİŞTİRİLMEDİ — yalnız ölçümün gürültüsü küçültüldü.
+    const int NM4 = 200;
     for (int n = 0; n < NM4; n++)
     {
         var r = RunFull(0xE5A0UL + (ulong)n * 7919UL);
@@ -994,7 +999,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     Console.WriteLine($"[info] M6 komutlu maç hash: 0x{hA:X}");
     if (hA != hB) failures += Fail("M6Determinism", $"0x{hA:X} != 0x{hB:X}");
     else Pass("M6Determinism");
-    const ulong M6_GOLDEN = 0xA5C24BED28C10999UL; // M16-G'de yeniden sabitlendi (bilinçli)
+    const ulong M6_GOLDEN = 0x12F21C303ACF022EUL; // Gauss01 alt-salt yayılımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
     if (M6_GOLDEN != 0 && hA != M6_GOLDEN) failures += Fail("M6Golden", $"0x{hA:X}");
     else Pass("M6Golden");
 }
@@ -1833,7 +1838,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     Console.WriteLine($"[info] M16-E kalibrasyon ({NE} maç, lig dağılımı): gol {g / NE:0.00} · şut {sh / NE:0.0} · " +
                       $"isabetli {isb / NE:0.0} · korner {ko / NE:0.0} · faul {fa / NE:0.0} · sarı {sa / NE:0.00} · " +
                       $"kırmızı {ki / NE:0.00} · penaltı {pe / NE:0.00} · ofsayt {of / NE:0.0} · sakatlık {inj / NE:0.00} · " +
-                      $"pas %{pasP:0.0} · xG sapma %{xgSap:0.0}");
+                      $"pas %{pasP:0.0} · xG {xg / NE:0.00} · xG sapma %{xgSap:0.0}");
     bool ok16e = g / NE is >= 2.2 and <= 3.2 && sh / NE is >= 18 and <= 30 && isb / NE is >= 6 and <= 12
               && ko / NE is >= 7 and <= 13 && fa / NE is >= 16 and <= 30 && sa / NE is >= 2.6 and <= 5.5
               && ki / NE is >= 0.10 and <= 0.36 && pe / NE is >= 0.15 and <= 0.42 && of / NE is >= 1.6 and <= 5.6
@@ -3423,44 +3428,50 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         else Pass($"K3IflasEgrisi(kötü yönetim → sezon {iflas} ∈ [2,3] · iyi yönetim 6 sezon ayakta)");
     }
 
-    // 26g) BORÇ GÖZCÜSÜ — `Rng.Gauss01` çarpışması (K3 sırasında bulundu, FAZ 03 kodu).
-    // Gauss01 12 çekilişi [16·salt, 16·salt+12) aralığında topluyor; bu küme bit-0 ve bit-1
-    // çevirmeleri altında KAPALI, yani seed'in/tick'in o bitini çevirmek salt'ları yalnız kendi
-    // aralarında yer değiştiriyor ve toplam DEĞİŞMİYOR. Sonuç: komşu tick'ler ve bit-0 farklı
-    // seed'ler AYNI gauss değerini alıyor. Maç motorunda 13 çağrı yeri var (fizik/karar/düello/
-    // nişan), hepsi st.Tick anahtarlı — gürültü tasarlandığından çok daha bağımlı.
+    // 26g) REGRESYON GÖZCÜSÜ — `Rng.Gauss01` bağımsızlığı. Adı `K3RngGauss01Borcu` TARİHSELdir:
+    // kapı K3'te (FAZ 03 kodunda bulunan) bir BORCU beklemek için yazıldı, borç K8'de ödendi
+    // (2026-08-30, Atilla kararı) ve kapı artık borcu değil REGRESYONU bekliyor. Adı DECISIONS'taki
+    // çapraz referanslar çözülsün diye korundu.
     //
-    // DÜZELTİLMEDİ (bilinçli): düzeltme 50 golden replay'i ve M16-E'nin 12 metriğini kaydırır,
-    // yani ayrı bir dilim + yeniden kalibrasyon işidir. Bu kapı borcu GÖRÜNÜR tutar ve
-    // KÖTÜLEŞMESİNİ engeller; hedef sıfırdır. Karar `docs/DECISIONS.md` bekleyen kararlarda.
+    // Kapatılan kusur: `Gauss01` 12 çekilişi `[16·salt, 16·salt+12)` aralığında TOPLUYORDU; bu küme
+    // bit-0/bit-1 çevirmeleri altında kapalı olduğundan seed'in/tick'in o bitini çevirmek salt'ları
+    // yalnız kendi aralarında yer değiştiriyor, toplam DEĞİŞMİYORDU — komşu tick'lerin %50,0'ı ve
+    // bit-0 farklı tohumların %100,0'ı aynı gauss değerini alıyordu. Maç motorunda 13 çağrı yeri
+    // var (fizik/karar/düello/nişan), hepsi st.Tick anahtarlı.
+    //
+    // Çözüm tek sayı adımlı yayılım (`Rng.Gauss01` doc yorumunda gerekçesiyle). Bugünkü ölçüm
+    // %0,0/%0,0. Bu kapının işi o sıfırı KORUMAK; tavan %0,5'tir ve eski formül geri konulursa
+    // %50/%100 ile kırmızıya döner. Tam anlatı: `docs/DECISIONS.md` → K8.
     {
         const int N = 2000;
-        // Gauss01'in İÇİNİ ölç: 12 çekilişin ÇOKLUK KÜMESİ aynıysa gauss değeri de aynıdır
-        // (yalnız toplama sırası değişir → kayan noktada son bitler ayrışabilir). Asıl bağımsızlık
-        // kaybı budur; tam eşitlik oranı onu OLDUĞUNDAN KÜÇÜK gösterir.
-        double[] Kume(ulong sd, uint tick)
-        {
-            var a = new double[12];
-            for (uint i = 0; i < 12; i++)
-                a[i] = TheBadge.Sim.Determinism.Rng.Rand01(sd, TheBadge.Sim.Determinism.Domain.Physics, 5, tick, 16 + i);
-            Array.Sort(a);
-            return a;
-        }
-        bool Ayni(double[] x, double[] y)
-        { for (int i = 0; i < 12; i++) if (x[i] != y[i]) return false; return true; }
+        // GERÇEK `Gauss01` ÖLÇÜLÜR — içinin KOPYASI DEĞİL. İlk yazımda bu kapı `salt*16 + i`
+        // adres formülünü BURADA yeniden kuruyor ve 12 çekilişi `Rand01`den kendisi topluyordu;
+        // yani gözcü, gözetlediği fonksiyonu hiç çağırmıyordu. Ölçüldü (2026-08-30): önerilen
+        // düzeltme kaynağa uygulandığında bu kapının İDDİA ETTİĞİ sayılar %50,0/%100,0'da
+        // ÇAKILI kaldı, yalnız yazdırıp iddia etmediği tam eşitlik %0,0'a indi. Borç ödense
+        // kapı bunu göremezdi; `Gauss01` başka türlü bozulsa da göremezdi.
+        //
+        // Çokluk kümesi yerine YAKIN EŞİTLİK ölçülür: küme aynıysa toplam yalnız toplama
+        // sırasında ayrışır (hata sınırı ~12·eps·6 ≈ 1,6e-14), dolayısıyla |Δ| < 1e-12 aynı
+        // kümeyi public API üzerinden yakalar. Farklı iki kümenin tesadüfen bu kadar yakın
+        // düşme olasılığı ~1e-12 — 2000 örnekte ihmal edilebilir.
+        const double Eps = 1e-12;
+        static bool Yakin(double a, double b) => Math.Abs(a - b) < Eps;
 
         int kumeTick = 0, kumeSeed = 0, tamTick = 0, tamSeed = 0;
         for (uint t = 1; t <= N; t++)
         {
-            if (Ayni(Kume(999UL, t), Kume(999UL, t + 1))) kumeTick++;
-            if (TheBadge.Sim.Determinism.Rng.Gauss01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t, 1)
-                == TheBadge.Sim.Determinism.Rng.Gauss01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t + 1, 1)) tamTick++;
+            double a = TheBadge.Sim.Determinism.Rng.Gauss01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t, 1);
+            double b = TheBadge.Sim.Determinism.Rng.Gauss01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t + 1, 1);
+            if (Yakin(a, b)) kumeTick++;
+            if (a == b) tamTick++;
         }
         for (ulong sd = 1000; sd < 3000; sd += 2)
         {
-            if (Ayni(Kume(sd, 77), Kume(sd + 1, 77))) kumeSeed++;
-            if (TheBadge.Sim.Determinism.Rng.Gauss01(sd, TheBadge.Sim.Determinism.Domain.Physics, 5, 77, 1)
-                == TheBadge.Sim.Determinism.Rng.Gauss01(sd + 1, TheBadge.Sim.Determinism.Domain.Physics, 5, 77, 1)) tamSeed++;
+            double a = TheBadge.Sim.Determinism.Rng.Gauss01(sd, TheBadge.Sim.Determinism.Domain.Physics, 5, 77, 1);
+            double b = TheBadge.Sim.Determinism.Rng.Gauss01(sd + 1, TheBadge.Sim.Determinism.Domain.Physics, 5, 77, 1);
+            if (Yakin(a, b)) kumeSeed++;
+            if (a == b) tamSeed++;
         }
         double kt = kumeTick * 100.0 / N, ks = kumeSeed * 100.0 / 1000;
         // Rand01 karşılaştırması: kusur TOPLAMA desenindedir, çekirdek hash'te DEĞİL
@@ -3469,15 +3480,23 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             if (TheBadge.Sim.Determinism.Rng.Rand01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t, 1)
                 == TheBadge.Sim.Determinism.Rng.Rand01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t + 1, 1))
                 rndKomsu++;
-        Console.WriteLine($"[info] K3 RNG borcu: Gauss01 aynı çekiliş kümesi — komşu tick %{kt:F1} · bit0-seed %{ks:F1} " +
+        Console.WriteLine($"[info] K3 RNG borcu: Gauss01 ayırt edilemez değer — komşu tick %{kt:F1} · bit0-seed %{ks:F1} " +
                           $"(tam eşitlik %{tamTick * 100.0 / N:F1} / %{tamSeed * 100.0 / 1000:F1}) · Rand01 %{rndKomsu * 100.0 / N:F1}");
+        // EŞİKLER BORÇ KAPANINCA SIKILDI (2026-08-30). Önceki eşikler %50 / %100'dü çünkü ölçüt
+        // "bugünkü borçtan KÖTÜLEŞME"ydi. Borç ödendikten sonra o eşikleri bırakmak, hatanın
+        // TAMAMEN geri gelmesine sessizce izin vermek olurdu — gözcü kapının en sinsi çürüme
+        // biçimi budur: borç kapanır, eşik borcun seviyesinde unutulur.
+        // Bağımsız Gauss değerlerinin |Δ| < 1e-12 içine düşme olasılığı ≈ 0,4·2e-12 ≈ 8e-13;
+        // 2000 örnekte beklenen sayı ~1,6e-9. %0,5 (2000'de 10) tesadüfe geniş pay bırakır ve
+        // gerçek regresyonu (≥%50) kaçırmaz.
+        const double Tavan = 0.5;
         string hata = "";
-        if (rndKomsu != 0) hata += "Rand01 çarpışıyor (çekirdek hash bozuk — bu borç DEĞİL, REGRESYON) ";
-        if (kt > 50.0) hata += $"Gauss01 komşu tick bağımsızlığı KÖTÜLEŞTİ (%{kt:F1} > %50) ";
-        if (ks > 100.0) hata += $"Gauss01 bit0-seed bağımsızlığı KÖTÜLEŞTİ (%{ks:F1}) ";
+        if (rndKomsu != 0) hata += "Rand01 çarpışıyor (çekirdek hash bozuk) ";
+        if (kt > Tavan) hata += $"Gauss01 komşu tick bağımsızlığı BOZULDU (%{kt:F1} > %{Tavan}) ";
+        if (ks > Tavan) hata += $"Gauss01 bit0-seed bağımsızlığı BOZULDU (%{ks:F1} > %{Tavan}) ";
         if (hata.Length > 0) failures += Fail("K3RngGauss01Borcu", hata);
-        else Pass($"K3RngGauss01Borcu(aynı çekiliş kümesi: komşu tick %{kt:F1} · bit0-seed %{ks:F1} — HEDEF %0; " +
-                  $"düzeltme 50 golden replay + M16-E kalibrasyonunu kaydırır, ayrı dilim · Rand01 temiz)");
+        else Pass($"K3RngGauss01Borcu(BORÇ KAPANDI — ayırt edilemez değer: komşu tick %{kt:F1} · " +
+                  $"bit0-seed %{ks:F1}, tavan %{Tavan} · gerçek Gauss01 ölçülüyor · Rand01 temiz)");
     }
 
     // ===================== K3-B — 9 TYCOON AKSİYONU (CB 4.1) =====================
