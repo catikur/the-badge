@@ -20,7 +20,7 @@ namespace TheBadge.World
             if (st == null) return 0UL;
             int talimatYuva = st.Oyuncular.Length > 0 && st.Oyuncular[0].Talimatlar != null
                               ? st.Oyuncular[0].Talimatlar.Length : 0;
-            var b = new Buf(160 + st.Presetler.Length * 16
+            var b = new Buf(210 + st.Presetler.Length * 16
                             + st.Oyuncular.Length * (64 + talimatYuva * 2) + st.Club.InsaatSlot.Length * 24
                             + st.Club.Krediler.Length * 20 + st.Club.TesisTier.Length
                             + st.Club.SponsorTeklifleri.Length * 20
@@ -99,6 +99,12 @@ namespace TheBadge.World
             for (int i = 0; i < st.Fiyat.BufeKurus.Length; i++) b.I32(st.Fiyat.BufeKurus[i]);
             for (int i = 0; i < st.Fiyat.MagazaKurus.Length; i++) b.I32(st.Fiyat.MagazaKurus[i]);
 
+            // --- Lig (CB 4.4) ---
+            b.I32(st.Lig.LigId); b.I64(st.Lig.KurucuUserId);
+            b.U8(st.Lig.Chaos); b.U8(st.Lig.Hiz); b.I64(st.Lig.ButceTl);
+            b.U16(unchecked((ushort)st.Lig.SaatDilimi)); b.I32(st.Lig.UyeSayisi);
+            b.I64(unchecked((long)st.Lig.SifreOzeti));
+
             // --- Taktik + şablonlar ---
             b.U8(st.Taktik.Mentalite); b.U8(st.Taktik.Tempo); b.U8(st.Taktik.Pres); b.U8(st.Taktik.Hat);
             b.I32(st.Presetler.Length);
@@ -120,7 +126,9 @@ namespace TheBadge.World
 
         /// <summary>Dize özeti — ME 3.3 `ConfigHash.StringHash` ile AYNI kural: UTF-16 kod
         /// birimleri, little-endian, uzunluk önekli, kırpma ve daraltma YOK.</summary>
-        static ulong DizeOzeti(string s)
+        /// <summary>Dize özeti — ham metin yerine kimliğe giren değer. Lig şifresi de bunu
+        /// kullanır: ham şifre kalıcı duruma YAZILMAZ.</summary>
+        public static ulong DizeOzeti(string s)
         {
             if (string.IsNullOrEmpty(s)) return XxHash64.Hash(ReadOnlySpan<byte>.Empty);
             var t = new byte[4 + s.Length * 2];

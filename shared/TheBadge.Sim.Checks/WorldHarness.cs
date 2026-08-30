@@ -173,6 +173,20 @@ namespace TheBadge.Checks
         public void Enqueue(TheBadge.Sim.Match.MatchCommand cmd) => Komutlar.Add(cmd);
     }
 
+    /// <summary>Online yayın casusu — K6. Klip ve rapor ayrı listelerde tutulur ki
+    /// "yayınlandı mı" ve "hangisi yayınlandı" ayrı ayrı ölçülebilsin.</summary>
+    public sealed class SpyOnlineSink : TheBadge.World.IOnlineSink
+    {
+        public readonly List<(int macId, int pencereSn, byte hedef, long userId)> Klipler
+            = new List<(int, int, byte, long)>();
+        public readonly List<(long hedefUserId, byte sebep, string notlar, long userId)> Raporlar
+            = new List<(long, byte, string, long)>();
+        public void KlipPaylas(int macId, int pencereSn, byte hedef, long userId)
+            => Klipler.Add((macId, pencereSn, hedef, userId));
+        public void OyuncuRaporla(long hedefUserId, byte sebep, string notlar, long userId)
+            => Raporlar.Add((hedefUserId, sebep, notlar, userId));
+    }
+
     /// <summary>K2 dünya durumu kurulum yardımcıları.</summary>
     public static class WorldFixture
     {

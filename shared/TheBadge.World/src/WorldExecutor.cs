@@ -54,6 +54,7 @@ namespace TheBadge.World
         readonly IWorldAuditSink audit;
         readonly WorldJournal journal = new WorldJournal();
         IMatchCommandSink macKuyrugu;
+        IOnlineSink onlineKanal;
 
         GameState st => depo.State;
 
@@ -75,6 +76,14 @@ namespace TheBadge.World
         {
             if (macKuyrugu != null) throw new InvalidOperationException("maç kuyruğu zaten bağlı");
             macKuyrugu = sink;
+        }
+
+        /// <summary>Online yayın kanalı — maç kuyruğuyla aynı gerekçe: yayınlama commit'in
+        /// parçasıdır, handler doğrudan yazamaz.</summary>
+        public void OnlineKanalBagla(IOnlineSink sink)
+        {
+            if (onlineKanal != null) throw new InvalidOperationException("online kanal zaten bağlı");
+            onlineKanal = sink;
         }
 
         /// <summary>K3-K5 aksiyonlarını buraya bağlar.</summary>
@@ -177,6 +186,22 @@ namespace TheBadge.World
                         return RejectionReason.StateConflict;
                     }
                     for (int i = 0; i < journal.MacKomutlari.Count; i++) macKuyrugu.Enqueue(journal.MacKomutlari[i]);
+                }
+
+                if (journal.OnlineYayinlar.Count > 0)
+                {
+                    if (onlineKanal == null)
+                    {
+                        journal.Geri(st);
+                        detail = "online kanal bağlı değil";
+                        return RejectionReason.StateConflict;
+                    }
+                    for (int i = 0; i < journal.OnlineYayinlar.Count; i++)
+                    {
+                        var y = journal.OnlineYayinlar[i];
+                        if (y.Klip) onlineKanal.KlipPaylas(y.MacId, y.PencereSn, y.Kod, y.UserId);
+                        else onlineKanal.OyuncuRaporla(y.HedefUserId, y.Kod, y.Notlar, y.UserId);
+                    }
                 }
                 return RejectionReason.None;
             }

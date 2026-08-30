@@ -18,6 +18,9 @@ namespace TheBadge.World
         HaftaIlerledi = 10,
         SponsorImzalandi = 11,
         SponsorSonaErdi = 12,
+        LigKuruldu = 13,
+        LigeKatilindi = 14,
+        LigKurallariDegisti = 15,
     }
 
     /// <summary>Dünya olayı — TEK YÖNLÜ: dünya mantığı bu kaydı ASLA OKUMAZ ve `WorldHash`e

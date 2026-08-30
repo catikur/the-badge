@@ -1414,7 +1414,11 @@ yanlış çözüm olurdu: iki kaynak, iki ayrışma.
 GDD 17 FAZ 04'ün "Valuation algoritması, negotiation logic, kontrat sistemi" kalemi. **5 aksiyon**
 bağlandı (`transfer.list_player`, `propose_offer`, `respond_offer`, `sign_free_agent`,
 `release_player`). K5 kapısı yalnız transfer modülünü bağladığı için orada 27/32 bağlanmamış
-görünür; K4 ile birlikte bağlayan bir host'ta kalan **18**'dir (32 − 9 kadro − 5 transfer).
+görünür; K3+K4+K5'i birlikte bağlayan bir host'ta kalan **9**'dur (32 − 9 tycoon − 9 kadro/maç −
+5 transfer). *(Düzeltme: bu satır önce "18" diyordu — K3'ün 9 tycoon aksiyonunu saymayı atlamıştım;
+PR #19 açıklamasında da aynı yanlış sayı geçti.)* Kalan 9: `staff.hire`, `staff.activate_premium`,
+`social.arrange_talk`, `social.press_response`, `social.report_player`, `league.create`,
+`league.join`, `league.set_rules`, `replay.share_clip`.
 Kalanı K6-K7'nin işi.
 
 - **Durum:** `PlayerState`'e değerleme girdileri (`Guc`, `Potansiyel`, `Yas`, `IstenenBedelTl`) ve
@@ -1533,6 +1537,48 @@ dilim içinde seçmek kapsam kaymasıydı; pazarlık beyni burada ve test edilmi
 gerçek bir hataydı — gerekçem "yuvalar periyodik olarak boşalır" varsayımına dayanıyordu ve o
 varsayım hiçbir yerde ZORLANMIYORDU. **Açık uç olarak yazdığım şeyin gerekçesi bir varsayıma
 dayanıyorsa, o varsayımı ya kapıya bağla ya da bulgu say.**
+
+### K6: Online katmanı — offline kuyruk, uzlaştırma, 5 aksiyon, transfer sürücüsü — ✅ TAMAM (2026-08-30)
+**Kapsam kararı (Atilla, 2026-08-30):** yalnız DETERMİNİSTİK katman. Bu konteynerde Nakama örneği
+yok ve egress politikası dış servisleri engelliyor; gerçek RPC köprüsü yazılsa derlenirdi ama
+ÇALIŞTIĞI KANITLANAMAZDI ve "test geçmeyen kod reddedilir" kuralı delinirdi. Köprü ayrı dilim;
+bu dilim host'un bağlayacağı arayüzleri (`IOnlineSink`) ve tüm kararları kapıyla veriyor.
+
+- **Offline kuyruk (CB 8.3):** Tier 1-2 bağlantı yokken **kuyruğa GİRMEZ** — reddedilir. Kuyruğa
+  alıp sonra reddetmek kullanıcıya işinin tutulduğunu düşündürürdü; ekonomik durum çatallanması
+  "kullanıcı dikkatli olur" diye değil, komut hiç kaydedilmediği için engellenir. Tier katalogda
+  sabit ve kaynaktan bağımsız (CB 6) — LLM bu kapıyı düşüremez.
+- **Uzlaştırma (K6 kararı 2026-08-25):** kuyruk SIRAYLA gider, sunucu otoriterdir, ama reddettiği
+  her komut `UzlastirmaKaydi` olarak **sebebiyle** döner. Kuyruk her hâlükârda boşalır: yarım
+  uygulanmış kuyruk ikinci bağlanmada komutları tekrar oynatırdı (idempotency deposu çoğunu
+  yakalar ama ona güvenmek yapısal değil).
+- **5 online aksiyon:** `league.create/join/set_rules`, `replay.share_clip`, `social.report_player`.
+  Lig kimliği `Rng.Hash64` ile TÜRETİLİR (Guid/zaman YASAK); tekillik sunucunun işi, buradaki iş
+  üretimin deterministik olması. Katılım şifresi kalıcı duruma **ham** yazılmaz, `DizeOzeti` girer.
+  Kural değişikliği yalnız KURUCUya açık (GDD 6.2) ve kısmi güncelleme dokunulmayanı KORUR.
+- **Yayın kanalı:** klip ve rapor `GameState`i değiştirmez, `IOnlineSink`e gider — ama K4'ün maç
+  kuyruğu dersiyle AYNI şekilde journal'da BEKLETİLİR ve yürütücü denetimden SONRA boşaltır.
+  Geri alınamayan dış etkiler işlemin dışında kalamaz.
+- **Transfer karşı taraf sürücüsü:** K5'te bilerek ertelenen boşluk (PR #19 açık thread'i) kapandı.
+  `TransferTick.Ilerlet` topu karşı tarafta olan teklifleri işler; sıra BİZDEYSE **dokunmaz**
+  (kullanıcının kararını gasp etmez) ve süresi dolmuşa karışmaz (temizlik K5'in yolu — iki yerden
+  temizlemek aynı yuvayı iki gerekçeyle kapatırdı). AI kabul ederse transferi KENDİSİ yapmaz,
+  sırayı bize geçirir: kabul komutu Tek Kapı'dan geçmeli, yoksa kadro ve bütçe denetimi atlanırdı.
+
+- **Kapılar (6):** `K6Baglanti` · `K6OfflineKuyruk` · `K6Uzlastirma` · `K6LigAksiyonlari` ·
+  `K6YayinKanali` · `K6TransferSurucusu`. Beşi ters çevrilip ölçüldü: tier kapısı kalkınca 4 aksiyon
+  kuyruğa giriyor, rapor sessizleşince "düşen sayısı 0≠2", kurucu yetkisi kalkınca katılan üye kural
+  değiştiriyor, sıra denetimi kalkınca AI kullanıcının kararını gasp ediyor, kanal denetimi kalkınca
+  kanalsız host sessizce başarı dönüyor.
+
+**Kendi kapımın ölçüm YERİ yanlıştı.** `K6TransferSurucusu`'nun "seed sürücüyü oynatıyor mu"
+iddiası ilk yazımda sabit 1,5M teklifle ölçülüyordu; o teklif oyuncunun değerinin çok dışındaydı ve
+karar seed'den BAĞIMSIZ olarak hep aynıydı — kapı kırmızı yandı. İddia yanlış değildi, **ölçüm
+yeri** yanlıştı: pazarlık salınımı ancak PAZARLIK BANDINDA sonucu değiştirir. Teklif artık değerin
+%75'i olarak hesaplanıyor. (K5'in "kapı en kritik yolu ölçmeli" dersinin kardeşi: doğru şeyi
+yanlış noktada ölçen kapı da yanıltır.)
+
+`K2HashKapsami` dördüncü dilim üst üste yeni alanı yakaladı (`GameState.Lig`).
 
 ## Bekleyen kararlar
 - **CB 4.2 tablosu ile ME komut kümesi çelişiyor (K4 bulgusu, 2026-08-29):** spec `squad.set_player_anchor`/

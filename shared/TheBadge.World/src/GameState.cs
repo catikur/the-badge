@@ -29,6 +29,23 @@ namespace TheBadge.World
 
     /// <summary>Sponsor teklifi — GDD 4.2 "Sponsorluk Anlaşmaları". `tycoon.sign_sponsor`
     /// bunlardan birini seçer. Teklifler K5/LiveOps tarafından doldurulur; K3 imzalamayı yürütür.</summary>
+    /// <summary>Lig üyeliği — CB 4.4 `league.create` / `join` / `set_rules`. `LigId` 0 = ligsiz.
+    /// Kurallar (chaos/hız) lig KURUCUSUNUNdur; `Kurucu` alanı yetkiyi taşır ve `set_rules`
+    /// yalnız ona açıktır. GDD 6.2 "Kurucu ligin kurallarını belirler".</summary>
+    public sealed class LeagueState
+    {
+        public int LigId;                 // 0 = ligsiz
+        public long KurucuUserId;         // 0 = yok
+        public byte Chaos;                // katalog bandı 0-2
+        public byte Hiz;                  // katalog bandı 1-5
+        public long ButceTl;
+        public short SaatDilimi;          // -12..+14
+        public int UyeSayisi;
+        /// <summary>Katılım şifresi ÖZETİ — ham şifre kalıcı duruma YAZILMAZ ve hash'e ham
+        /// metin olarak girmez (K4 preset adı dersinin güvenlik tarafı). 0 = şifresiz lig.</summary>
+        public ulong SifreOzeti;
+    }
+
     /// <summary>Transfer teklifi — CB 4.3 `transfer.propose_offer` / `respond_offer`.
     /// `TeklifId` 0 = boş yuva. Teklif KİMDEN kime: `TeklifEdenClubId` her zaman teklifi
     /// AÇAN kulüptür; hedef oyuncunun sahibi cevabı verir. Karşı teklifte bedel güncellenir
@@ -179,6 +196,10 @@ namespace TheBadge.World
         public PlayerState[] Oyuncular;     // PlayerId'ye göre ARTAN sıralı (kanonik)
         public CalendarState Takvim;
         public PricingState Fiyat;
+        /// <summary>Lig üyeliği — CB 4.4. Kalıcı durumun parçası: replay dörtlüsünde ayrışırsa
+        /// ligin kuralları (chaos/hız) ayrışır ve maç girdisi değişir.</summary>
+        public LeagueState Lig;
+
         public TacticState Taktik;
         public TacticPreset[] Presetler;
 
@@ -200,6 +221,7 @@ namespace TheBadge.World
             Fiyat = BosFiyat(),
             Taktik = new TacticState { Mentalite = 50, Tempo = 50, Pres = 50, Hat = 50 },
             Presetler = new TacticPreset[0],
+            Lig = new LeagueState(),
         };
 
         static PricingState BosFiyat() => new PricingState
@@ -228,6 +250,7 @@ namespace TheBadge.World
                 Fiyat = BosFiyat(),
                 Taktik = new TacticState { Mentalite = 50, Tempo = 50, Pres = 50, Hat = 50 },
                 Presetler = new TacticPreset[rules.yapi.presetSlotSayisi],
+                Lig = new LeagueState(),
                 KalanDegisiklikHakki = (byte)rules.yapi.macBasinaDegisiklik,
             };
         }
@@ -239,8 +262,8 @@ namespace TheBadge.World
             if (Club == null) throw new ArgumentException("GameState: Club boş.");
             if (Oyuncular == null) throw new ArgumentException("GameState: Oyuncular boş.");
             if (Takvim == null) throw new ArgumentException("GameState: Takvim boş.");
-            if (Taktik == null || Presetler == null)
-                throw new ArgumentException("GameState: Taktik/Presetler boş.");
+            if (Taktik == null || Presetler == null || Lig == null)
+                throw new ArgumentException("GameState: Taktik/Presetler/Lig boş.");
             // TALİMAT YUVASI TEK ŞERİT: journal adresi `oyuncuIndeksi * şerit + yuva` ile
             // düzleştiriliyor ve şerit `Oyuncular[0]`dan okunuyor. Diziler farklı uzunlukta
             // olursa yazma SESSİZCE başka oyuncunun yuvasına düşer (inceleme bulgusu, P2).
