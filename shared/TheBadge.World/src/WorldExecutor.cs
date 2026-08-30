@@ -55,6 +55,7 @@ namespace TheBadge.World
         readonly WorldJournal journal = new WorldJournal();
         IMatchCommandSink macKuyrugu;
         IOnlineSink onlineKanal;
+        IPersonaSink personaKanal;
 
         GameState st => depo.State;
 
@@ -84,6 +85,13 @@ namespace TheBadge.World
         {
             if (onlineKanal != null) throw new InvalidOperationException("online kanal zaten bağlı");
             onlineKanal = sink;
+        }
+
+        /// <summary>Persona kanalı — online kanalla aynı gerekçe.</summary>
+        public void PersonaKanalBagla(IPersonaSink sink)
+        {
+            if (personaKanal != null) throw new InvalidOperationException("persona kanalı zaten bağlı");
+            personaKanal = sink;
         }
 
         /// <summary>K3-K5 aksiyonlarını buraya bağlar.</summary>
@@ -153,6 +161,18 @@ namespace TheBadge.World
                     return RejectionReason.StateConflict;
                 }
 
+                // KABLOLAMA DENETİMİ DENETİMDEN ÖNCE: bir yayın kanalı eksikse komut ZATEN
+                // reddedilecek. Bunu `audit.Persist`ten SONRA yapmak, reddedilen bir komut için
+                // kalıcı bir "BAŞARILI" denetim kaydı bırakıyordu (inceleme bulgusu) — denetim
+                // logu, olmayan bir başarıyı anlatıyordu. Kanal yokluğu durumdan bağımsız,
+                // deterministik bir kablolama hatasıdır; uygulamadan da önce bilinebilir.
+                if (journal.MacKomutlari.Count > 0 && macKuyrugu == null)
+                { detail = "maç kuyruğu bağlı değil"; return RejectionReason.StateConflict; }
+                if (journal.OnlineYayinlar.Count > 0 && onlineKanal == null)
+                { detail = "online kanal bağlı değil"; return RejectionReason.StateConflict; }
+                if (journal.PersonaYayinlar.Count > 0 && personaKanal == null)
+                { detail = "persona kanalı bağlı değil"; return RejectionReason.StateConflict; }
+
                 ulong pre = WorldHash.Compute(st);
                 journal.Apply(st);
                 ulong post = WorldHash.Compute(st);
@@ -177,14 +197,6 @@ namespace TheBadge.World
                 // yukarıdaki her erken dönüş ve `Geri` yolu komutları YAYINLANMAMIŞ bırakır.
                 if (journal.MacKomutlari.Count > 0)
                 {
-                    if (macKuyrugu == null)
-                    {
-                        // Buraya düşmek kablolama hatasıdır: handler maç komutu üretti ama kuyruk yok.
-                        // Sessiz başarı YOK — durum zaten uygulandı, o yüzden geri al ve reddet.
-                        journal.Geri(st);
-                        detail = "maç kuyruğu bağlı değil";
-                        return RejectionReason.StateConflict;
-                    }
                     try
                     {
                         for (int i = 0; i < journal.MacKomutlari.Count; i++) macKuyrugu.Enqueue(journal.MacKomutlari[i]);
@@ -194,12 +206,6 @@ namespace TheBadge.World
 
                 if (journal.OnlineYayinlar.Count > 0)
                 {
-                    if (onlineKanal == null)
-                    {
-                        journal.Geri(st);
-                        detail = "online kanal bağlı değil";
-                        return RejectionReason.StateConflict;
-                    }
                     // YAYIN PATLARSA DURUM GERİ ALINIR. Önce korumasızdı: `KlipPaylas` ağ
                     // zaman aşımıyla fırlarsa istisna `Apply` ve `Persist`ten SONRA kaçıyor,
                     // `Geri` çağrılmıyor ve bus rezervasyonu serbest bırakıyordu — durum ilerlemiş
@@ -213,6 +219,20 @@ namespace TheBadge.World
                             var y = journal.OnlineYayinlar[i];
                             if (y.Klip) onlineKanal.KlipPaylas(y.CommandId, y.MacId, y.PencereSn, y.Kod, y.UserId);
                             else onlineKanal.OyuncuRaporla(y.CommandId, y.HedefUserId, y.Kod, y.Notlar, y.UserId);
+                        }
+                    }
+                    catch { journal.Geri(st); throw; }
+                }
+
+                if (journal.PersonaYayinlar.Count > 0)
+                {
+                    try
+                    {
+                        for (int i = 0; i < journal.PersonaYayinlar.Count; i++)
+                        {
+                            var pv = journal.PersonaYayinlar[i];
+                            if (pv.Konusma) personaKanal.KonusmaAyarlandi(pv.CommandId, pv.Id, pv.Kod, pv.UserId);
+                            else personaKanal.BasinYaniti(pv.CommandId, pv.Id, pv.Kod, pv.UserId);
                         }
                     }
                     catch { journal.Geri(st); throw; }

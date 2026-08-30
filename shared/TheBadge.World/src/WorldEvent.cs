@@ -21,6 +21,9 @@ namespace TheBadge.World
         LigKuruldu = 13,
         LigeKatilindi = 14,
         LigKurallariDegisti = 15,
+        PersonelAlindi = 16,
+        PremiumAktif = 17,
+        PersonelAyrildi = 18,
     }
 
     /// <summary>Dünya olayı — TEK YÖNLÜ: dünya mantığı bu kaydı ASLA OKUMAZ ve `WorldHash`e

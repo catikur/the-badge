@@ -4,13 +4,13 @@ using System.Collections.Generic;
 namespace TheBadge.World
 {
     /// <summary>Mutasyon hedefi — journal girdisinin hangi durum parçasına yazdığı.</summary>
-    public enum MutTarget : byte { Kulup = 0, Oyuncu = 1, Takvim = 2, Insaat = 3, Kredi = 4, Tesis = 5, Mac = 6, Fiyat = 7, Sponsor = 8, Taktik = 9, Preset = 10, Talimat = 11, TransferTeklif = 12, Lig = 13 }
+    public enum MutTarget : byte { Kulup = 0, Oyuncu = 1, Takvim = 2, Insaat = 3, Kredi = 4, Tesis = 5, Mac = 6, Fiyat = 7, Sponsor = 8, Taktik = 9, Preset = 10, Talimat = 11, TransferTeklif = 12, Lig = 13, Personel = 14 }
 
     public static class ClubField
     {
         public const byte Kasa = 1, StadyumKapasite = 2, HaftalikMaasGider = 3,
                           SponsorHaftalik = 4, Form = 5, SponsorKalanHafta = 6, DonemInsaatGideri = 7,
-                          Kaptan = 8, AntrenmanPlan = 9, AntrenmanYogunluk = 10;
+                          Kaptan = 8, AntrenmanPlan = 9, AntrenmanYogunluk = 10, AktifPremium = 11;
     }
 
     /// <summary>Fiyat alanları — `Index` slot (tribün 0-4 / ürün 0-2), değer KURUŞ.
@@ -22,6 +22,9 @@ namespace TheBadge.World
                           Kondisyon = 5, SakatlikHafta = 6, RolId = 7, AnchorX = 8, AnchorY = 9, Listede = 10,
                           Guc = 11, Potansiyel = 12, Yas = 13, IstenenBedel = 14;
     }
+
+    /// <summary>Personel alanları — CB 4.3.</summary>
+    public static class StaffField { public const byte Tip = 1, Tier = 2, KalanHafta = 3; }
 
     /// <summary>Lig alanları — CB 4.4.</summary>
     public static class LeagueField
@@ -105,12 +108,29 @@ namespace TheBadge.World
         }
         readonly List<OnlineYayin> onlineYayinlar = new List<OnlineYayin>();
         public IReadOnlyList<OnlineYayin> OnlineYayinlar => onlineYayinlar;
+        /// <summary>Persona kanalı — online yayınla AYNI sözleşme: journal'da bekletilir,
+        /// yürütücü denetimden sonra boşaltır, patlarsa durum geri alınır.</summary>
+        public struct PersonaYayin
+        {
+            public Guid CommandId;
+            public bool Konusma;           // false = basın
+            public int Id;                 // konuşma: personaId · basın: soruId
+            public byte Kod;               // konuşma: ton · basın: cevap sınıfı
+            public long UserId;
+        }
+        readonly List<PersonaYayin> personaYayinlar = new List<PersonaYayin>();
+        public IReadOnlyList<PersonaYayin> PersonaYayinlar => personaYayinlar;
+        public void PersonaKonusma(Guid cid, int personaId, byte ton, long userId)
+            => personaYayinlar.Add(new PersonaYayin { CommandId = cid, Konusma = true, Id = personaId, Kod = ton, UserId = userId });
+        public void PersonaBasin(Guid cid, int soruId, byte cevapSinifi, long userId)
+            => personaYayinlar.Add(new PersonaYayin { CommandId = cid, Konusma = false, Id = soruId, Kod = cevapSinifi, UserId = userId });
+
         public void OnlineKlip(Guid commandId, int macId, int pencereSn, byte hedef, long userId)
             => onlineYayinlar.Add(new OnlineYayin { CommandId = commandId, Klip = true, MacId = macId, PencereSn = pencereSn, Kod = hedef, UserId = userId });
         public void OnlineRapor(Guid commandId, long hedefUserId, byte sebep, string notlar, long userId)
             => onlineYayinlar.Add(new OnlineYayin { CommandId = commandId, Klip = false, HedefUserId = hedefUserId, Kod = sebep, Notlar = notlar, UserId = userId });
 
-        public void Clear() { yazmalar.Clear(); olaylar.Clear(); geriDegerler.Clear(); adYazmalari.Clear(); adGeri.Clear(); macKomutlari.Clear(); onlineYayinlar.Clear(); }
+        public void Clear() { yazmalar.Clear(); olaylar.Clear(); geriDegerler.Clear(); adYazmalari.Clear(); adGeri.Clear(); macKomutlari.Clear(); onlineYayinlar.Clear(); personaYayinlar.Clear(); }
 
         /// <summary>Preset ADI yazması — journal TAMSAYI taşıyıcısıdır, metin ayrı listede taşınır.
         /// Aralık denetimi yok (uzunluk kapı 1'de doğrulandı); geri alma için eski ad saklanır.</summary>
@@ -228,6 +248,7 @@ namespace TheBadge.World
                         case ClubField.Kaptan: mevcut = st.Club.KaptanPlayerId; min = 0; max = int.MaxValue; return true;
                         case ClubField.AntrenmanPlan: mevcut = st.Club.AntrenmanPlanId; min = 0; max = 255; return true;
                         case ClubField.AntrenmanYogunluk: mevcut = st.Club.AntrenmanYogunluk; min = 0; max = 255; return true;
+                        case ClubField.AktifPremium: mevcut = st.Club.AktifPremiumId; min = 0; max = int.MaxValue; return true;
                     }
                     break;
                 case MutTarget.Fiyat:
@@ -263,6 +284,15 @@ namespace TheBadge.World
                         case PlayerField.Potansiyel: mevcut = st.Oyuncular[m.Index].Potansiyel; min = 0; max = 100; return true;
                         case PlayerField.Yas: mevcut = st.Oyuncular[m.Index].Yas; min = 0; max = byte.MaxValue; return true;
                         case PlayerField.IstenenBedel: mevcut = st.Oyuncular[m.Index].IstenenBedelTl; min = 0; return true;
+                    }
+                    break;
+                case MutTarget.Personel:
+                    if (m.Index < 0 || m.Index >= st.Club.Personel.Length) { hata = "personel slotu kapsam dışı"; return false; }
+                    switch (m.Field)
+                    {
+                        case StaffField.Tip: mevcut = st.Club.Personel[m.Index].Tip; min = 0; max = 255; return true;
+                        case StaffField.Tier: mevcut = st.Club.Personel[m.Index].Tier; min = 0; max = 255; return true;
+                        case StaffField.KalanHafta: mevcut = st.Club.Personel[m.Index].KalanHafta; min = 0; max = ushort.MaxValue; return true;
                     }
                     break;
                 case MutTarget.Lig:
@@ -390,7 +420,15 @@ namespace TheBadge.World
                     else if (m.Field == ClubField.Kaptan) st.Club.KaptanPlayerId = (int)v;
                     else if (m.Field == ClubField.AntrenmanPlan) st.Club.AntrenmanPlanId = (byte)v;
                     else if (m.Field == ClubField.AntrenmanYogunluk) st.Club.AntrenmanYogunluk = (byte)v;
-                    else st.Club.Form = (byte)v;
+                    else if (m.Field == ClubField.AktifPremium) st.Club.AktifPremiumId = (int)v;
+                    else if (m.Field == ClubField.Form) st.Club.Form = (byte)v;
+                    // YAKALA-HEPSİNİ `else` KALDIRILDI: zinciri `else st.Club.Form = v` ile
+                    // bitirmek, ARALIK DENETİMİNDEN GEÇEN ama uygulama zincirine eklenmemiş her
+                    // yeni alanı SESSİZCE Form'a yazıyordu. `AktifPremium` eklenince tam bunu
+                    // yaptı: aktivasyon izi yazılmadı, kulüp formu bozuldu ve komut BAŞARILI
+                    // döndü. Bilinmeyen alan artık PATLAR — journal'ın aralık denetleyebildiği
+                    // ama uygulayamadığı bir alan bir KOD hatasıdır, sessiz kalamaz.
+                    else throw new InvalidOperationException($"WorldJournal: ClubField {m.Field} uygulanamıyor");
                     break;
                 case MutTarget.Fiyat:
                     if (m.Field == PriceField.Bilet) st.Fiyat.BiletKurus[m.Index] = (int)v;
@@ -466,6 +504,14 @@ namespace TheBadge.World
                         else st.Oyuncular[oi].Talimatlar[yi].Deger = (byte)v;
                         break;
                     }
+                case MutTarget.Personel:
+                    switch (m.Field)
+                    {
+                        case StaffField.Tip: st.Club.Personel[m.Index].Tip = (byte)v; break;
+                        case StaffField.Tier: st.Club.Personel[m.Index].Tier = (byte)v; break;
+                        case StaffField.KalanHafta: st.Club.Personel[m.Index].KalanHafta = (ushort)v; break;
+                    }
+                    break;
                 case MutTarget.Lig:
                     switch (m.Field)
                     {

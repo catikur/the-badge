@@ -1632,6 +1632,115 @@ türeyen herhangi bir şey sızarsa iki FARKLI şifre mutlaka ayrışır, bu şa
 çağıramaz. `IOnlineSink` artık `commandId` taşıyor — ikinci kopyayı elemek köprünün bu anahtarla
 yapacağı dedup'ın (outbox) işi. Anahtarsız arayüz bu güvenceyi yapısal olarak imkânsız kılardı.
 
+### K7: LLM hattı + injection savunması — katalog 32/32 kapandı — ✅ TAMAM (2026-08-30)
+**Kapsam (K6 ile aynı ilke):** LLM ÇAĞRISININ KENDİSİ kapsam dışı — API erişimi bu ortamda
+kanıtlanamaz ve prompt'lar `docs/prompts/` altında versiyonlu dosyalarda yaşar (CLAUDE.md).
+Burada olan şey **savunma**: modelin ne söylediğinden BAĞIMSIZ olarak çıktının katalog dışına,
+bant dışına ya da onaysız yürütmeye dönüşemeyeceğini yapısal kılan katman. CB 7.2'nin güvencesi
+zaten buna dayanır — "en başarılı injection bile yalnızca bir öneri kartı üretebilir".
+
+- **`SuggestionPipeline`:** LLM çıktısı ya SOHBET, ya katalog içi ÖNERİ, ya da DÜŞÜRÜLÜR; üçüncü
+  olasılık yok. `actionType` katalogda yoksa düşer; `Tier` çıktıdan DEĞİL katalogdan okunur
+  (CB 6 — "LLM tier'ını asla düşüremez"); payload bant ön denetiminden geçer.
+- **Girdi temizliği (CB 7.1):** boş, uzunluk [KALİBRE 500], kontrol karakteri, tekrar spam.
+  Sekme ve satır sonu SERBEST — meşru çok satırlı girdi reddedilmez.
+- **`SuggestionId` (CB 7.4):** `Guid.NewGuid()` YASAK; girdi özeti + kayıt tohumundan TÜRETİLİR,
+  yani replay'de zincir yeniden kurulur.
+- **Son 4 aksiyon:** `social.arrange_talk`, `social.press_response`, `staff.hire`,
+  `staff.activate_premium`. **Katalog 32/32 bağlı — FAZ 04 aksiyon hattı tamam.**
+- **Injection korpusu:** `evals/injection/korpus_v1.jsonl` — **28 kalıp × 11 kategori**
+  (CB 10.2'nin yedisi + tier düşürme, bant aşımı, enum dışı, eksik alan). Sonuç: 6 sohbet,
+  15 düşürüldü, 7 katalog içi öneri. Hiçbiri katalog dışı çıktı, bant dışı parametre ya da
+  onaysız yürütme üretemedi.
+
+**Journal'da SESSİZ YANLIŞ YAZMA bulundu (kendi kapım yakaladı).** `ClubField` uygulama zinciri
+`else st.Club.Form = v` ile bitiyordu. `AktifPremium` alanını ekleyince aralık denetimi onu tanıdı
+ama uygulama zinciri tanımadı ve yazma **yakala-hepsini else'e düşüp FORM'a gitti**: aktivasyon izi
+yazılmadı, kulüp formu bozuldu ve komut **BAŞARILI döndü**. Düşürülmüş bir yazmadan da kötü — yanlış
+alana yazma. Çözüm: yakala-hepsini kaldırıldı, `Form` kendi dalına alındı, bilinmeyen alan artık
+**patlıyor**. Aralık denetleyebildiği ama uygulayamadığı bir alan journal için KOD hatasıdır ve
+sessiz kalamaz. Diş ölçümü: eski `else` geri konunca `premium izi yazilmadi`.
+
+**ASCII varsayımı TÜRKÇE bir oyunda özellikle yanlıştı (öz-inceleme).** Tekrar spam ölçüsünü
+128'lik bir diziyle yazmış ve `c >= 128` olanları ATLAMIŞTIM: `"ğ"×200` oranı **0** veriyordu,
+yani Türkçe spam filtreden serbestçe geçiyordu. Türkçe metin bu oyunda kural, istisna değil.
+Düzelttikten sonra emoji spam'i HÂLÂ geçiyordu — ikinci sebep: BMP dışı karakterler C#'ta VEKİL
+ÇİFTtir, `"😀"×150` iki farklı `char`dan 150'şer tane demektir ve char sayarken oran 0,5'te kalıp
+eşiğin altına düşer. Sayım kod noktasına (rune) çevrildi. `Dictionary` kullanımı burada güvenli:
+sonuç en yüksek SAYIdır, iterasyon sırasına bağlı değildir (ME 3.2 yasağı sıraya bağımlı MANTIK
+içindir) ve bu sıcak yol değil. Diş ölçümü: ASCII varsayımı geri konunca hem Türkçe hem emoji
+spam'i geçiyor. **Ders: "yalnız ASCII" ve "bir karakter = bir char" iki ayrı sessiz varsayımdı;
+ikisi de bu projenin ana dilinde yanlış.**
+
+**Dördüncü kez aynı tuzak: ölü kural.** `KonusmaHandler`'a ton için enum denetimi yazmıştım;
+katalog `ton`u `ParamType.Enum` + `TonEnum` ile tanımlıyor ve **KAPI 1 şema denetimi** enum dışını
+benden ÖNCE eliyor. Denetimi kaldırıp ölçtüğümde suite YEŞİL kaldı — kural gereksizdi, kapı zayıf
+değildi. Kapı artık otoriteyi (bus'ın `SchemaViolation`ı) ölçüyor. K5'te sahiplik ve kadro
+sınırında, K6'da lig üye sayısında, burada enum'da: **yeni bir denetim yazmadan önce daha derin
+katmanın o aksiyon için ne yaptığına bakılır.** Bu artık bir alışkanlık değil, kural.
+
+- **Kapılar (6):** `K7KatalogKapandi` · `K7GirdiTemizligi` · `K7InjectionKorpusu` ·
+  `K7OneriYurutmeDegil` · `K7SonDortAksiyon` · `K7Izlenebilirlik`. Üçü ters çevrilip ölçüldü:
+  katalog kısıtı kalkınca `admin.grant_all` öneri olarak geçiyor, Tier katalogdan okunmayınca
+  6 kalıpta `Tier dusuruldu(T0 != T2)`, yakala-hepsini else geri gelince premium izi kayboluyor.
+- `K2HashKapsami` beşinci dilim üst üste yeni alanı yakaladı (`Personel`, `AktifPremiumId`).
+
+**Açık uç:** LLM'in KALİTESİ (golden set eval, CLAUDE.md "skor < %85 merge yok") bu dilimde
+ölçülmedi — model çağrısı gerektirir. `evals/golden/` iskeleti duruyor; kalite kapısı, model
+erişimi olan ortamda koşacak ayrı iş. Bu dilim GÜVENLİĞİ test eder, KALİTEYİ değil — CLAUDE.md'nin
+kendisi bunların ayrı kapılar olduğunu söylüyor.
+
+### K7 inceleme turu — ✅ TAMAM (2026-08-30)
+Codex beş bulgu çıkardı (1 P1, 4 P2); beşi de haklı.
+
+1. **(P1) Personel sözleşmesi HİÇ SONA ERMİYORDU.** `staff.hire` `KalanHafta` yazıyordu ama
+   hiçbir şey azaltmıyordu: süre dolduktan sonra personel aktif kalıyor, yuvayı KALICI işgal
+   ediyor ve aynı-tip kuralı o tipin bir daha alınmasını SONSUZA DEK engelliyordu. **K4'te
+   değişiklik hakkının maç başına dolmamasıyla aynı sınıf hata: yazılan ama hiç ilerletilmeyen
+   sayaç.** Çözüm: `StaffTick.Hafta` — `EconomyTick`/`MacTick`/`TransferTick` ile aynı sözleşme.
+   Süre bitince yuva TAMAMEN boşalır (`Tip`, `Tier`, `KalanHafta`): yalnız `Tip = 0` bırakmak
+   hash'te artık bırakır ve iki farklı yoldan aynı kadroya varan iki kayıt ayrışırdı.
+2. **(P2) Öneri, doğrulanmış PAYLOAD'ı taşımıyordu.** CB 7.1 sözleşmesi `IntentSuggestion(actionType,
+   payload, gerekçe)` diyor; benimkinde payload YOKTU. Kart, doğrulamayı geçen argümanları
+   gösteremez ve onay anında AYNISINI gönderemezdi — ayrı ve değiştirilebilir bir `IPayloadView`
+   tutmak gerekirdi, yani **gösterilen öneri ile onaylanıp denetime giren şey birbirine bağlı
+   olmazdı.** Çözüm: `OneriParam[]` ile doğrulanan değerler öneriyle taşınıyor.
+3. **(P2) `SuggestionId` ÖNERİYİ kapsamıyordu.** Kimlik yalnız (girdi özeti, kayıt tohumu)'ndan
+   türüyordu. Model DETERMİNİSTİK DEĞİL: aynı prompt aynı oturumda farklı aksiyon/payload
+   önerebilir ve o kartlar onay ile denetim kaydında AYIRT EDİLEMEZ olurdu — CB 7.4'ün vaat ettiği
+   bire bir girdi → öneri → sonuç izi koparadı. Çözüm: aksiyon adı + parametreler (katalog
+   sırasında) kimliğe giriyor; determinizm korunuyor.
+4. **(P2) Tam sayı alanı `TryGetNumber` ile okunuyordu.** `tip: 3.5` bant içi görünüp ÖNERİ
+   oluyordu ama bus aynı payload'ı `SchemaViolation` ile reddediyordu — yani kullanıcıya
+   **onaylayamayacağı kart** gösteriliyordu. Bu, bu hattın ön denetim yapma GEREKÇESİNİN tam
+   tersiydi. Çözüm: `ParamType.Int` için `TryGetInt`.
+5. **(P2) Kanal eksikken denetime BAŞARILI kayıt yazılıyordu.** Kablolama denetimi
+   `audit.Persist(..., None)`den SONRAydı: komut reddediliyor ve durum geri alınıyordu ama
+   denetim logunda kalıcı bir "başarılı" kaydı kalıyordu — **denetim logu olmayan bir başarıyı
+   anlatıyordu.** Çözüm: üç kanalın (maç kuyruğu, online, persona) varlık denetimi `Apply`dan da
+   önce. Kanal yokluğu durumdan bağımsız, deterministik bir kablolama hatasıdır; uygulamadan önce
+   bilinebilir.
+
+**ARANACAK ÖRÜNTÜ — "yazılan ama hiç ilerletilmeyen sayaç" (ikinci kez).** K4'te
+`KalanDegisiklikHakki` dünya kurulumunda doluyor, sonra yalnız azalıyordu; K7'de personelin
+`KalanHafta`sı alımda yazılıyor, hiç azalmıyordu. İkisi de tek başına masum görünür — hata,
+sayacın YAŞAM DÖNGÜSÜ eksik olduğunda ortaya çıkar ve genellikle BAŞKA bir kuralla birleşip
+büyür (K4: `NoChargesLeft` her maçı kilitledi; K7: aynı-tip kuralı o tipi sonsuza dek kilitledi).
+**Kural: kalıcı duruma bir SAYAÇ yazan her dilim, o sayacı kimin ilerlettiğini/tazelediğini de
+göstermek zorundadır.** Gösteremiyorsa ya tick eksiktir ya sayaç kalıcı durumda olmamalıdır.
+Bu, K7'nin "yeni denetim yazmadan önce daha derin katmana bak" kuralının kardeşi: ikisi de
+"eklediğim şeyin etrafındaki mekanizmayı da kontrol et" diyor.
+
+- **Kapı:** `K7IncelemeBulgulari`. Beşi de ters çevrilip ölçüldü — süre ilerlemeyince
+  "yuva tam bosalmadi(tip 4 tier 3 hafta 38)" ve aynı tip bir daha alınamıyor, kimlik öneriyi
+  kapsamayınca "ayni prompt + FARKLI payload ayni SuggestionId", `TryGetNumber`a dönünce
+  "ondalik tam sayi alani ONERI oldu", payload taşınmayınca kart boş, denetim sırası eskiye
+  dönünce "reddedilen komut icin BASARILI denetim kaydi yazildi".
+
+**4. bulgunun kendi kapısı da vardı:** iddianın dayanağı "bus GERÇEKTEN reddediyor" olduğu için
+kapı bunu da ölçüyor — yoksa "bus reddedecek" varsayımı dayanaksız kalırdı. K5'in "açık uç olarak
+yazdığın şeyin gerekçesi varsayıma dayanıyorsa kapıya bağla" dersinin uygulaması.
+
 ## Bekleyen kararlar
 - **CB 4.2 tablosu ile ME komut kümesi çelişiyor (K4 bulgusu, 2026-08-29):** spec `squad.set_player_anchor`/
   `set_player_role`/`set_instruction`'ı "Hub + Maç" sayıyor; motorda anchor/rol maç komutu yok,

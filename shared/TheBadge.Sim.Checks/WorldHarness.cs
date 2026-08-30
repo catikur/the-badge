@@ -195,6 +195,19 @@ namespace TheBadge.Checks
         }
     }
 
+    /// <summary>Persona kanal casusu — K7.</summary>
+    public sealed class SpyPersonaSink : TheBadge.World.IPersonaSink
+    {
+        public readonly List<(System.Guid cid, int personaId, byte ton, long userId)> Konusmalar
+            = new List<(System.Guid, int, byte, long)>();
+        public readonly List<(System.Guid cid, int soruId, byte sinif, long userId)> Basinlar
+            = new List<(System.Guid, int, byte, long)>();
+        public void KonusmaAyarlandi(System.Guid cid, int personaId, byte ton, long userId)
+            => Konusmalar.Add((cid, personaId, ton, userId));
+        public void BasinYaniti(System.Guid cid, int soruId, byte sinif, long userId)
+            => Basinlar.Add((cid, soruId, sinif, userId));
+    }
+
     /// <summary>K2 dünya durumu kurulum yardımcıları.</summary>
     public static class WorldFixture
     {
