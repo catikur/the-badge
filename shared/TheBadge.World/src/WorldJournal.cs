@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace TheBadge.World
 {
     /// <summary>Mutasyon hedefi — journal girdisinin hangi durum parçasına yazdığı.</summary>
-    public enum MutTarget : byte { Kulup = 0, Oyuncu = 1, Takvim = 2, Insaat = 3, Kredi = 4, Tesis = 5, Mac = 6, Fiyat = 7, Sponsor = 8, Taktik = 9, Preset = 10, Talimat = 11 }
+    public enum MutTarget : byte { Kulup = 0, Oyuncu = 1, Takvim = 2, Insaat = 3, Kredi = 4, Tesis = 5, Mac = 6, Fiyat = 7, Sponsor = 8, Taktik = 9, Preset = 10, Talimat = 11, TransferTeklif = 12 }
 
     public static class ClubField
     {
@@ -19,7 +19,15 @@ namespace TheBadge.World
     public static class PlayerField
     {
         public const byte ClubId = 1, HaftalikMaas = 2, SozlesmeKalanHafta = 3, Moral = 4,
-                          Kondisyon = 5, SakatlikHafta = 6, RolId = 7, AnchorX = 8, AnchorY = 9, Listede = 10;
+                          Kondisyon = 5, SakatlikHafta = 6, RolId = 7, AnchorX = 8, AnchorY = 9, Listede = 10,
+                          Guc = 11, Potansiyel = 12, Yas = 13, IstenenBedel = 14;
+    }
+
+    /// <summary>Transfer teklifi alanları — CB 4.3.</summary>
+    public static class OfferField
+    {
+        public const byte TeklifId = 1, OyuncuId = 2, TeklifEden = 3, Bedel = 4, Maas = 5,
+                          SonGecerlilikSezon = 6, SonGecerlilikHafta = 7, SiraTeklifEdende = 8, TurSayisi = 9;
     }
     public static class CalendarField { public const byte Sezon = 1, Hafta = 2, Pencere = 3; }
     public static class ConstructionField { public const byte InsaatId = 1, TesisId = 2, HedefTier = 3, KalanHafta = 4, ToplamMaliyet = 5; }
@@ -225,6 +233,25 @@ namespace TheBadge.World
                         case PlayerField.AnchorX: mevcut = st.Oyuncular[m.Index].AnchorXmm; min = int.MinValue; max = int.MaxValue; return true;
                         case PlayerField.AnchorY: mevcut = st.Oyuncular[m.Index].AnchorYmm; min = int.MinValue; max = int.MaxValue; return true;
                         case PlayerField.Listede: mevcut = st.Oyuncular[m.Index].ListedeMi ? 1 : 0; min = 0; max = 1; return true;
+                        case PlayerField.Guc: mevcut = st.Oyuncular[m.Index].Guc; min = 0; max = 100; return true;
+                        case PlayerField.Potansiyel: mevcut = st.Oyuncular[m.Index].Potansiyel; min = 0; max = 100; return true;
+                        case PlayerField.Yas: mevcut = st.Oyuncular[m.Index].Yas; min = 0; max = byte.MaxValue; return true;
+                        case PlayerField.IstenenBedel: mevcut = st.Oyuncular[m.Index].IstenenBedelTl; min = 0; return true;
+                    }
+                    break;
+                case MutTarget.TransferTeklif:
+                    if (m.Index < 0 || m.Index >= st.Club.TransferTeklifleri.Length) { hata = "transfer teklif slotu kapsam dışı"; return false; }
+                    switch (m.Field)
+                    {
+                        case OfferField.TeklifId: mevcut = st.Club.TransferTeklifleri[m.Index].TeklifId; min = 0; max = int.MaxValue; return true;
+                        case OfferField.OyuncuId: mevcut = st.Club.TransferTeklifleri[m.Index].OyuncuId; min = 0; max = int.MaxValue; return true;
+                        case OfferField.TeklifEden: mevcut = st.Club.TransferTeklifleri[m.Index].TeklifEdenClubId; min = 0; return true;
+                        case OfferField.Bedel: mevcut = st.Club.TransferTeklifleri[m.Index].BedelTl; min = 0; return true;
+                        case OfferField.Maas: mevcut = st.Club.TransferTeklifleri[m.Index].HaftalikMaasTl; min = 0; return true;
+                        case OfferField.SonGecerlilikSezon: mevcut = st.Club.TransferTeklifleri[m.Index].SonGecerlilikSezon; min = 0; max = ushort.MaxValue; return true;
+                        case OfferField.SonGecerlilikHafta: mevcut = st.Club.TransferTeklifleri[m.Index].SonGecerlilikHafta; min = 0; max = ushort.MaxValue; return true;
+                        case OfferField.SiraTeklifEdende: mevcut = st.Club.TransferTeklifleri[m.Index].SiraTeklifEdende ? 1 : 0; min = 0; max = 1; return true;
+                        case OfferField.TurSayisi: mevcut = st.Club.TransferTeklifleri[m.Index].TurSayisi; min = 0; max = byte.MaxValue; return true;
                     }
                     break;
                 case MutTarget.Takvim:
@@ -338,6 +365,10 @@ namespace TheBadge.World
                     switch (m.Field)
                     {
                         case PlayerField.ClubId: st.Oyuncular[m.Index].ClubId = v; break;
+                        case PlayerField.Guc: st.Oyuncular[m.Index].Guc = (byte)v; break;
+                        case PlayerField.Potansiyel: st.Oyuncular[m.Index].Potansiyel = (byte)v; break;
+                        case PlayerField.Yas: st.Oyuncular[m.Index].Yas = (byte)v; break;
+                        case PlayerField.IstenenBedel: st.Oyuncular[m.Index].IstenenBedelTl = v; break;
                         case PlayerField.HaftalikMaas: st.Oyuncular[m.Index].HaftalikMaasTl = v; break;
                         case PlayerField.SozlesmeKalanHafta: st.Oyuncular[m.Index].SozlesmeKalanHafta = (ushort)v; break;
                         case PlayerField.Moral: st.Oyuncular[m.Index].Moral = (byte)v; break;
@@ -398,6 +429,20 @@ namespace TheBadge.World
                         else st.Oyuncular[oi].Talimatlar[yi].Deger = (byte)v;
                         break;
                     }
+                case MutTarget.TransferTeklif:
+                    switch (m.Field)
+                    {
+                        case OfferField.TeklifId: st.Club.TransferTeklifleri[m.Index].TeklifId = (int)v; break;
+                        case OfferField.OyuncuId: st.Club.TransferTeklifleri[m.Index].OyuncuId = (int)v; break;
+                        case OfferField.TeklifEden: st.Club.TransferTeklifleri[m.Index].TeklifEdenClubId = v; break;
+                        case OfferField.Bedel: st.Club.TransferTeklifleri[m.Index].BedelTl = v; break;
+                        case OfferField.Maas: st.Club.TransferTeklifleri[m.Index].HaftalikMaasTl = v; break;
+                        case OfferField.SonGecerlilikSezon: st.Club.TransferTeklifleri[m.Index].SonGecerlilikSezon = (ushort)v; break;
+                        case OfferField.SonGecerlilikHafta: st.Club.TransferTeklifleri[m.Index].SonGecerlilikHafta = (ushort)v; break;
+                        case OfferField.SiraTeklifEdende: st.Club.TransferTeklifleri[m.Index].SiraTeklifEdende = v != 0; break;
+                        case OfferField.TurSayisi: st.Club.TransferTeklifleri[m.Index].TurSayisi = (byte)v; break;
+                    }
+                    break;
                 case MutTarget.Sponsor:
                     switch (m.Field)
                     {

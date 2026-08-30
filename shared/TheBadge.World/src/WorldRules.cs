@@ -41,6 +41,8 @@ namespace TheBadge.World
             public int sponsorTeklifSlotSayisi;  // [KALİBRE] eşzamanlı sponsor teklifi
             public int presetSlotSayisi;         // [KALİBRE] kayıtlı taktik şablonu (CB bandı 1-20)
             public int talimatYuvaSayisi;        // [KALİBRE] oyuncu başına eşzamanlı talimat
+            public int transferTeklifSlotSayisi; // [KALİBRE] eşzamanlı açık transfer teklifi
+            public int transferTeklifIdMax;      // [KALİBRE] katalog bandı `transfer.teklifId` ÜST SINIRIYLA aynı olmalı
         }
 
         /// <summary>Aksiyon transfer penceresi istiyor mu. Liste küçüktür (tek haneli); sırasız
@@ -68,6 +70,9 @@ namespace TheBadge.World
             if (yapi.sponsorTeklifSlotSayisi <= 0) throw new ArgumentException("world.balance: yapi.sponsorTeklifSlotSayisi > 0 olmalı.");
             if (yapi.presetSlotSayisi <= 0) throw new ArgumentException("world.balance: yapi.presetSlotSayisi > 0 olmalı.");
             if (yapi.talimatYuvaSayisi <= 0) throw new ArgumentException("world.balance: yapi.talimatYuvaSayisi > 0 olmalı.");
+            if (yapi.transferTeklifSlotSayisi <= 0) throw new ArgumentException("world.balance: yapi.transferTeklifSlotSayisi > 0 olmalı.");
+            if (yapi.transferTeklifIdMax < yapi.transferTeklifSlotSayisi)
+                throw new ArgumentException("world.balance: yapi.transferTeklifIdMax ≥ transferTeklifSlotSayisi olmalı.");
             if (taktik.adim <= 0) throw new ArgumentException("world.balance: taktik.adim > 0 olmalı.");
             if (taktik.min >= taktik.max) throw new ArgumentException("world.balance: taktik.min < taktik.max olmalı.");
         }
