@@ -64,21 +64,37 @@ namespace TheBadge.World
         }
 
         /// <summary>En sık karakterin oranı — ucuz ve DETERMİNİSTİK spam ölçüsü.
-        /// "aaaaaaaa…" gibi girdiler bağlam penceresini şişirmek için kullanılır.</summary>
+        /// "aaaaaaaa…" gibi girdiler bağlam penceresini şişirmek için kullanılır.
+        ///
+        /// TÜM KARAKTERLER SAYILIR, yalnız ASCII değil. İlk yazımda 128'lik bir dizi kullanıp
+        /// `c >= 128` olanları ATLIYORDUM: TÜRKÇE bir oyunda "ğğğğğ…" ya da emoji spam'i oranı
+        /// **0** veriyordu, yani filtreden serbestçe geçiyordu. Türkçe metin bu oyunda kural,
+        /// istisna değil — ASCII varsayımı burada özellikle yanlıştı.
+        ///
+        /// `Dictionary` kullanımı burada GÜVENLİ: sonuç en yüksek SAYIdır, iterasyon SIRASINA
+        /// bağlı değildir (ME 3.2 yasağı sıraya bağımlı mantık içindir). Ayrıca bu sıcak yol
+        /// değil — kullanıcı mesajı başına bir kez koşar.</summary>
         internal static double TekrarOrani(string s)
         {
-            if (s.Length == 0) return 0;
-            var sayac = new int[128];
-            int enCok = 0, sayilan = 0;
+            if (string.IsNullOrEmpty(s)) return 0;
+            // KOD NOKTASI (rune) sayılır, `char` DEĞİL. BMP dışı karakterler (emoji) C#'ta
+            // VEKİL ÇİFTİdir: "😀"×150 iki farklı char'dan 150'şer tane demektir ve char
+            // sayarken oran 0,5'te kalıp eşiğin ALTINA düşer. Emoji spam'i tam bu yüzden
+            // filtreden geçiyordu — vekil çift, tekrarı görünürde YARIYA indiriyor.
+            var sayac = new System.Collections.Generic.Dictionary<int, int>();
+            int enCok = 0, toplam = 0;
             for (int i = 0; i < s.Length; i++)
             {
-                char c = s[i];
-                if (c >= 128) continue;
-                sayilan++;
-                int n = ++sayac[c];
+                int kod;
+                if (char.IsHighSurrogate(s[i]) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
+                { kod = char.ConvertToUtf32(s[i], s[i + 1]); i++; }
+                else kod = s[i];
+                toplam++;
+                sayac.TryGetValue(kod, out int n);
+                sayac[kod] = ++n;
                 if (n > enCok) enCok = n;
             }
-            return sayilan == 0 ? 0 : enCok / (double)sayilan;
+            return toplam == 0 ? 0 : enCok / (double)toplam;
         }
 
         /// <summary>LLM çıktısını ÖNERİye çevirir — ya da düşürüp sohbete indirir.
@@ -91,6 +107,16 @@ namespace TheBadge.World
         {
             if (bantlar == null) throw new ArgumentNullException(nameof(bantlar));
             if (kural == null) throw new ArgumentNullException(nameof(kural));
+            // Payload YOKSA aksiyon önerisi değerlendirilemez: model aksiyon adı verip alanları
+            // vermemiş olabilir. Bu bir düşürme sebebidir, çökme sebebi değil.
+            if (payload == null && !string.IsNullOrEmpty(onerilenAction))
+                return new IntentSuggestion
+                {
+                    SuggestionId = OneriKimligi(WorldHash.DizeOzeti(kullaniciMetni ?? string.Empty), saveSeed),
+                    GirdiOzeti = WorldHash.DizeOzeti(kullaniciMetni ?? string.Empty),
+                    Sonuc = OneriSonucu.Dusuruldu,
+                    DusurmeSebebi = "payload yok"
+                };
 
             ulong ozet = WorldHash.DizeOzeti(kullaniciMetni ?? string.Empty);
             var s = new IntentSuggestion

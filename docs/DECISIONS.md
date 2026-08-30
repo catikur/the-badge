@@ -1661,6 +1661,17 @@ alana yazma. Çözüm: yakala-hepsini kaldırıldı, `Form` kendi dalına alınd
 **patlıyor**. Aralık denetleyebildiği ama uygulayamadığı bir alan journal için KOD hatasıdır ve
 sessiz kalamaz. Diş ölçümü: eski `else` geri konunca `premium izi yazilmadi`.
 
+**ASCII varsayımı TÜRKÇE bir oyunda özellikle yanlıştı (öz-inceleme).** Tekrar spam ölçüsünü
+128'lik bir diziyle yazmış ve `c >= 128` olanları ATLAMIŞTIM: `"ğ"×200` oranı **0** veriyordu,
+yani Türkçe spam filtreden serbestçe geçiyordu. Türkçe metin bu oyunda kural, istisna değil.
+Düzelttikten sonra emoji spam'i HÂLÂ geçiyordu — ikinci sebep: BMP dışı karakterler C#'ta VEKİL
+ÇİFTtir, `"😀"×150` iki farklı `char`dan 150'şer tane demektir ve char sayarken oran 0,5'te kalıp
+eşiğin altına düşer. Sayım kod noktasına (rune) çevrildi. `Dictionary` kullanımı burada güvenli:
+sonuç en yüksek SAYIdır, iterasyon sırasına bağlı değildir (ME 3.2 yasağı sıraya bağımlı MANTIK
+içindir) ve bu sıcak yol değil. Diş ölçümü: ASCII varsayımı geri konunca hem Türkçe hem emoji
+spam'i geçiyor. **Ders: "yalnız ASCII" ve "bir karakter = bir char" iki ayrı sessiz varsayımdı;
+ikisi de bu projenin ana dilinde yanlış.**
+
 **Dördüncü kez aynı tuzak: ölü kural.** `KonusmaHandler`'a ton için enum denetimi yazmıştım;
 katalog `ton`u `ParamType.Enum` + `TonEnum` ile tanımlıyor ve **KAPI 1 şema denetimi** enum dışını
 benden ÖNCE eliyor. Denetimi kaldırıp ölçtüğümde suite YEŞİL kaldı — kural gereksizdi, kapı zayıf

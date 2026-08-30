@@ -5348,6 +5348,13 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         // Kontrol karakteri KOD ile uretilir: kaynak dosyaya ham kontrol bayti KONMAZ.
         Bekle("kontrol", "merhaba " + ((char)7) + " gizli", TheBadge.World.GirdiRedSebebi.KontrolKarakteri);
         Bekle("spam", new string('x', 200) + "biraz metin", TheBadge.World.GirdiRedSebebi.TekrarSpam);
+        // ASCII DISI SPAM: Turkce bir oyunda "gggg..." ya da emoji spam'i ASCII varsayimiyla
+        // yazilmis bir sayacta oran 0 verir ve filtreden GECER. Ilk yazimimda tam bunu yapiyordu.
+        Bekle("turkce spam", new string('ğ', 200), TheBadge.World.GirdiRedSebebi.TekrarSpam);
+        Bekle("emoji spam", string.Concat(System.Linq.Enumerable.Repeat("😀", 150)), TheBadge.World.GirdiRedSebebi.TekrarSpam);
+        // Mesru Turkce metin REDDEDILMEZ — filtre dili degil TEKRARI hedefler
+        Bekle("mesru turkce", "Kaptanimizla gorusup moral durumunu ogrenmek istiyorum, cunku son maclarda dusus var.",
+              TheBadge.World.GirdiRedSebebi.Yok);
         // Sekme ve satir sonu SERBEST kalmali - mesru cok satirli girdi reddedilmemeli
         Bekle("cok satir", "birinci satir\nikinci satir\tgirintili", TheBadge.World.GirdiRedSebebi.Yok);
         if (hata.Length > 0) failures += Fail("K7GirdiTemizligi", hata);
