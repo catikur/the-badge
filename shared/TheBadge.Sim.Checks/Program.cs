@@ -416,7 +416,7 @@ if (runA.finalHash != runB.finalHash || runA.at600 != runB.at600)
 else Pass("MatchSkeletonDeterminism");
 
 // 7b) Golden: durum hash'i sabitlendi — alan/sıra değişikliği bilinçli golden güncellemesi ister
-const ulong MATCH_GOLDEN = 0xCB52C4334C5210D1UL; // M16-G'de yeniden sabitlendi (ME 9.1 pozisyon hatası + 9.2 direk bandı + nişan-kaleci bağı — bilinçli)
+const ulong MATCH_GOLDEN = 0x896E1495EFF5C34CUL; // Gauss01 alt-salt yayılımıyla yeniden sabitlendi (2026-08-30, Atilla onayı — bilinçli)
 if (MATCH_GOLDEN != 0 && runA.finalHash != MATCH_GOLDEN)
     failures += Fail("MatchSkeletonGolden", $"0x{runA.finalHash:X} != 0x{MATCH_GOLDEN:X}");
 else Pass("MatchSkeletonGolden");
@@ -618,7 +618,7 @@ Console.WriteLine($"[info] M2 durum hash: 0x{mA2.h:X}");
 if (mA2.h != mB2.h) failures += Fail("M2Determinism", $"0x{mA2.h:X} != 0x{mB2.h:X}");
 else Pass("M2Determinism");
 
-const ulong M2_GOLDEN = 0xBBCDA9097CE51BC3UL; // M16-G'de yeniden sabitlendi (bilinçli)
+const ulong M2_GOLDEN = 0x2950BCCD69FEACA4UL; // Gauss01 alt-salt yayılımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
 if (M2_GOLDEN != 0 && mA2.h != M2_GOLDEN) failures += Fail("M2Golden", $"0x{mA2.h:X}");
 else Pass("M2Golden");
 
@@ -703,7 +703,7 @@ if (f1.hash != f2.hash || f1.res.TotalTicks != f2.res.TotalTicks)
     failures += Fail("M4Determinism", $"0x{f1.hash:X} != 0x{f2.hash:X}");
 else Pass("M4Determinism");
 
-const ulong M4_GOLDEN = 0xE134C82D570B080FUL; // M16-G'de yeniden sabitlendi (bilinçli)
+const ulong M4_GOLDEN = 0x66A1E641E68B66B2UL; // Gauss01 alt-salt yayılımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
 if (M4_GOLDEN != 0 && f1.hash != M4_GOLDEN) failures += Fail("M4Golden", $"0x{f1.hash:X}");
 else Pass("M4Golden");
 
@@ -731,7 +731,12 @@ else Pass($"M4SetPieces(k{f1.corners}/t{f1.throwIns}/d{f1.goalKicks})");
 // Kalibrasyon bandı (ME 17.2 ruhu): 24 maçlık tarama — ortalamalar bantta mı
 {
     double g = 0, sh = 0, sv = 0, co = 0, fo = 0, ca = 0, dkT = 0;
-    const int NM4 = 12;
+    // ÖRNEKLEM 12 → 200 (2026-08-30): 12 maçta bu kapı, gerçek değeri 2,40 olan gol ortalamasını
+    // 1,58 ölçebiliyordu ve bandın tabanı 2,0 — yani kapı TEK BAŞINA gürültüden kırmızıya
+    // dönebiliyordu. Gauss01 düzeltmesi sırasında tam bunu yaptı; N=200'de taban 2,43 → 2,40,
+    // gerçek etki 0,03 gol. Gürültüden düşebilen kapı geçtiğinde de az şey söyler. Bant
+    // DEĞİŞTİRİLMEDİ — yalnız ölçümün gürültüsü küçültüldü.
+    const int NM4 = 200;
     for (int n = 0; n < NM4; n++)
     {
         var r = RunFull(0xE5A0UL + (ulong)n * 7919UL);
@@ -994,7 +999,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     Console.WriteLine($"[info] M6 komutlu maç hash: 0x{hA:X}");
     if (hA != hB) failures += Fail("M6Determinism", $"0x{hA:X} != 0x{hB:X}");
     else Pass("M6Determinism");
-    const ulong M6_GOLDEN = 0xA5C24BED28C10999UL; // M16-G'de yeniden sabitlendi (bilinçli)
+    const ulong M6_GOLDEN = 0x12F21C303ACF022EUL; // Gauss01 alt-salt yayılımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
     if (M6_GOLDEN != 0 && hA != M6_GOLDEN) failures += Fail("M6Golden", $"0x{hA:X}");
     else Pass("M6Golden");
 }
@@ -1833,7 +1838,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     Console.WriteLine($"[info] M16-E kalibrasyon ({NE} maç, lig dağılımı): gol {g / NE:0.00} · şut {sh / NE:0.0} · " +
                       $"isabetli {isb / NE:0.0} · korner {ko / NE:0.0} · faul {fa / NE:0.0} · sarı {sa / NE:0.00} · " +
                       $"kırmızı {ki / NE:0.00} · penaltı {pe / NE:0.00} · ofsayt {of / NE:0.0} · sakatlık {inj / NE:0.00} · " +
-                      $"pas %{pasP:0.0} · xG sapma %{xgSap:0.0}");
+                      $"pas %{pasP:0.0} · xG {xg / NE:0.00} · xG sapma %{xgSap:0.0}");
     bool ok16e = g / NE is >= 2.2 and <= 3.2 && sh / NE is >= 18 and <= 30 && isb / NE is >= 6 and <= 12
               && ko / NE is >= 7 and <= 13 && fa / NE is >= 16 and <= 30 && sa / NE is >= 2.6 and <= 5.5
               && ki / NE is >= 0.10 and <= 0.36 && pe / NE is >= 0.15 and <= 0.42 && of / NE is >= 1.6 and <= 5.6
@@ -3473,13 +3478,21 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                 rndKomsu++;
         Console.WriteLine($"[info] K3 RNG borcu: Gauss01 ayırt edilemez değer — komşu tick %{kt:F1} · bit0-seed %{ks:F1} " +
                           $"(tam eşitlik %{tamTick * 100.0 / N:F1} / %{tamSeed * 100.0 / 1000:F1}) · Rand01 %{rndKomsu * 100.0 / N:F1}");
+        // EŞİKLER BORÇ KAPANINCA SIKILDI (2026-08-30). Önceki eşikler %50 / %100'dü çünkü ölçüt
+        // "bugünkü borçtan KÖTÜLEŞME"ydi. Borç ödendikten sonra o eşikleri bırakmak, hatanın
+        // TAMAMEN geri gelmesine sessizce izin vermek olurdu — gözcü kapının en sinsi çürüme
+        // biçimi budur: borç kapanır, eşik borcun seviyesinde unutulur.
+        // Bağımsız Gauss değerlerinin |Δ| < 1e-12 içine düşme olasılığı ≈ 0,4·2e-12 ≈ 8e-13;
+        // 2000 örnekte beklenen sayı ~1,6e-9. %0,5 (2000'de 10) tesadüfe geniş pay bırakır ve
+        // gerçek regresyonu (≥%50) kaçırmaz.
+        const double Tavan = 0.5;
         string hata = "";
-        if (rndKomsu != 0) hata += "Rand01 çarpışıyor (çekirdek hash bozuk — bu borç DEĞİL, REGRESYON) ";
-        if (kt > 50.0) hata += $"Gauss01 komşu tick bağımsızlığı KÖTÜLEŞTİ (%{kt:F1} > %50) ";
-        if (ks > 100.0) hata += $"Gauss01 bit0-seed bağımsızlığı KÖTÜLEŞTİ (%{ks:F1}) ";
+        if (rndKomsu != 0) hata += "Rand01 çarpışıyor (çekirdek hash bozuk) ";
+        if (kt > Tavan) hata += $"Gauss01 komşu tick bağımsızlığı BOZULDU (%{kt:F1} > %{Tavan}) ";
+        if (ks > Tavan) hata += $"Gauss01 bit0-seed bağımsızlığı BOZULDU (%{ks:F1} > %{Tavan}) ";
         if (hata.Length > 0) failures += Fail("K3RngGauss01Borcu", hata);
-        else Pass($"K3RngGauss01Borcu(ayırt edilemez değer: komşu tick %{kt:F1} · bit0-seed %{ks:F1} — HEDEF %0; " +
-                  $"gerçek Gauss01 ölçülüyor, borç ödenirse bu satır DÜŞER · Rand01 temiz)");
+        else Pass($"K3RngGauss01Borcu(BORÇ KAPANDI — ayırt edilemez değer: komşu tick %{kt:F1} · " +
+                  $"bit0-seed %{ks:F1}, tavan %{Tavan} · gerçek Gauss01 ölçülüyor · Rand01 temiz)");
     }
 
     // ===================== K3-B — 9 TYCOON AKSİYONU (CB 4.1) =====================
