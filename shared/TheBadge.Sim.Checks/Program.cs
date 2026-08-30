@@ -223,6 +223,73 @@ static (ulong cfgHash, ulong stateHash, int gh, int ga, uint ticks, ulong trace,
 
 const int ReplaySetN = 50;   // ME 17.4: "50 arşiv golden replay"
 
+// KALİTE KOŞUSU — `-- eval-run <cevaplar.jsonl>` (docs/evals: skor < %85 → merge yok).
+// Cevap dosyası GERÇEK model çıktılarıdır: her satır { id, cikti }. Bu ortamda model erişimi
+// olmadığı için kapı koşumunda ÇAĞRILMAZ; model erişimi olan ortamda / CI adımında koşar.
+// Puanlayıcının kendisi `K9EvalRubrigi` ile burada denetlenir — alet burada, ölçüm orada.
+if (args.Length > 0 && args[0] == "eval-run")
+{
+    if (args.Length < 2) { Console.WriteLine("kullanim: -- eval-run <cevaplar.jsonl>"); return 2; }
+    var eOpt = System.Text.Json.JsonDocument.Parse(
+        System.IO.File.ReadAllText(FindRepoFile("balance/llm.balance.json"))).RootElement.GetProperty("eval");
+    int esik = eOpt.GetProperty("gecmeEsigiYuzde").GetInt32();
+
+    var rub = new List<TheBadge.World.EvalRubrik>();
+    var sirali = new Dictionary<string, TheBadge.World.EvalRubrik>();
+    foreach (var satir in System.IO.File.ReadAllLines(FindRepoFile("evals/golden/mac_sonu_roportaj.golden.jsonl")))
+    {
+        if (satir.Trim().Length == 0) continue;
+        using var jd = System.Text.Json.JsonDocument.Parse(satir);
+        var root = jd.RootElement; var inp = root.GetProperty("input");
+        var parca = new List<string>(); foreach (var pr in inp.EnumerateObject()) parca.Add(pr.Value.GetString());
+        var exp = root.GetProperty("expect");
+        var mi = new List<string>(); foreach (var e in exp.GetProperty("must_include").EnumerateArray()) mi.Add(e.GetString());
+        var ya = new List<string>(); foreach (var e in exp.GetProperty("yasak").EnumerateArray()) ya.Add(e.GetString());
+        var r = new TheBadge.World.EvalRubrik
+        {
+            Id = root.GetProperty("id").GetString(), Boyut = root.GetProperty("boyut").GetString(),
+            GirdiMetni = string.Join(" ", parca),
+            Skor = inp.TryGetProperty("skor", out var sk) ? sk.GetString() : "",
+            ArkVar = inp.TryGetProperty("ark", out _),
+            MustInclude = mi.ToArray(), Yasak = ya.ToArray(),
+            Ton = exp.GetProperty("ton").GetString(), MaxCumle = exp.GetProperty("max_cumle").GetInt32()
+        };
+        rub.Add(r); sirali[r.Id] = r;
+    }
+
+    var cevap = new Dictionary<string, string>();
+    foreach (var satir in System.IO.File.ReadAllLines(args[1]))
+    {
+        if (satir.Trim().Length == 0) continue;
+        using var jd = System.Text.Json.JsonDocument.Parse(satir);
+        if (!jd.RootElement.TryGetProperty("id", out var idEl)) continue;
+        cevap[idEl.GetString()] = jd.RootElement.GetProperty("cikti").GetString();
+    }
+
+    // EKSİK CEVAP SESSİZCE GEÇMEZ: cevabı olmayan golden satırı, "başarısız" sayılır — atlanırsa
+    // eksik üretim yüzde payını YÜKSELTİRDİ (az örnekle yüksek skor).
+    var sirayla = new List<string>();
+    var eksik = new List<string>();
+    foreach (var r in rub)
+    {
+        if (cevap.TryGetValue(r.Id, out string c)) sirayla.Add(c);
+        else { sirayla.Add(""); eksik.Add(r.Id); }
+    }
+
+    var sonuc = TheBadge.World.EvalScorer.Kos(rub, sirayla);
+    Console.WriteLine($"[eval] {sonuc.Gecen}/{sonuc.Toplam} makine kararı gecti = %{sonuc.YuzdeGecme:0.0} (esik %{esik})");
+    if (eksik.Count > 0) Console.WriteLine($"[eval] CEVABI OLMAYAN {eksik.Count} golden satiri basarisiz sayildi: {string.Join(",", eksik)}");
+    foreach (var d in sonuc.Dusenler) Console.WriteLine($"  [dusen] {d}");
+    Console.WriteLine($"[eval] INSAN BAKISI gereken {sonuc.InsanBakisi.Count} madde (makine YARGILAMADI):");
+    for (int i = 0; i < sonuc.InsanBakisi.Count && i < 10; i++) Console.WriteLine($"  [insan] {sonuc.InsanBakisi[i]}");
+    if (sonuc.InsanBakisi.Count > 10) Console.WriteLine($"  [insan] ... +{sonuc.InsanBakisi.Count - 10} madde");
+
+    bool gecti = sonuc.YuzdeGecme >= esik;
+    Console.WriteLine(gecti ? $"== EVAL GECTI (%{sonuc.YuzdeGecme:0.0} >= %{esik}) — insan bakisi maddeleri AYRICA gozden gecirilmeli =="
+                            : $"== EVAL DUSTU (%{sonuc.YuzdeGecme:0.0} < %{esik}) — MERGE YOK ==");
+    return gecti ? 0 : 1;
+}
+
 if (args.Length > 0 && args[0] == "gen-replays")
 {
     var gOpts = new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true };
@@ -6048,6 +6115,152 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
 
         if (hata.Length > 0) failures += Fail("K9PompaKomutuDusurmez", hata);
         else Pass("K9PompaKomutuDusurmez(yayin kanalinin sagligi komutun sonucunu BELIRLEMIYOR - kayit duruyor, sonra teslim)");
+    }
+}
+
+// 34) K9-D — LLM KALİTE KAPISI (docs/evals: golden set + rubrik + %85 eşiği)
+//
+// KAPSAM SINIRI, açıkça: bu ortamda CANLI MODEL YOK. O yüzden burada koşan şey "modelin kalitesi"
+// değil, kalite kapısının ALETİdir: golden setin bütünlüğü ve `EvalScorer`'ın dedektörlerinin
+// doğru ayırıp ayırmadığı. Gerçek kalite koşusu `-- eval-run <cevaplar.jsonl>` ile, model erişimi
+// olan ortamda yapılır ve eşiği (%85, [KALİBRE]) orada uygular.
+//
+// Bu ayrımı bulanıklaştırmak — elle yazılmış cümleleri "model çıktısı" sayıp %100 raporlamak —
+// ölçmediği şeye puan vermek olurdu. `scorer_fixtures.jsonl` adı ve ilk satırı bunu söylüyor.
+{
+    string k9GoldenYol = FindRepoFile("evals/golden/mac_sonu_roportaj.golden.jsonl");
+    string k9FiksturYol = FindRepoFile("evals/golden/scorer_fixtures.jsonl");
+    var k9LlmBal = System.Text.Json.JsonDocument.Parse(
+        System.IO.File.ReadAllText(FindRepoFile("balance/llm.balance.json"))).RootElement.GetProperty("eval");
+    int k9Esik = k9LlmBal.GetProperty("gecmeEsigiYuzde").GetInt32();
+    int k9Min = k9LlmBal.GetProperty("minGoldenOrnek").GetInt32();
+    int k9Max = k9LlmBal.GetProperty("maxGoldenOrnek").GetInt32();
+
+    var k9Rubrikler = new List<TheBadge.World.EvalRubrik>();
+    var k9Sirali = new Dictionary<string, TheBadge.World.EvalRubrik>();
+    foreach (var satir in System.IO.File.ReadAllLines(k9GoldenYol))
+    {
+        if (satir.Trim().Length == 0) continue;
+        using var jd = System.Text.Json.JsonDocument.Parse(satir);
+        var root = jd.RootElement;
+        var inp = root.GetProperty("input");
+        var parcalar = new List<string>();
+        foreach (var pr in inp.EnumerateObject()) parcalar.Add(pr.Value.GetString());
+        var exp = root.GetProperty("expect");
+        var mi = new List<string>(); foreach (var e in exp.GetProperty("must_include").EnumerateArray()) mi.Add(e.GetString());
+        var ya = new List<string>(); foreach (var e in exp.GetProperty("yasak").EnumerateArray()) ya.Add(e.GetString());
+        var r = new TheBadge.World.EvalRubrik
+        {
+            Id = root.GetProperty("id").GetString(),
+            Boyut = root.GetProperty("boyut").GetString(),
+            GirdiMetni = string.Join(" ", parcalar),
+            Skor = inp.TryGetProperty("skor", out var sk) ? sk.GetString() : "",
+            ArkVar = inp.TryGetProperty("ark", out _),
+            MustInclude = mi.ToArray(),
+            Yasak = ya.ToArray(),
+            Ton = exp.GetProperty("ton").GetString(),
+            MaxCumle = exp.GetProperty("max_cumle").GetInt32()
+        };
+        k9Rubrikler.Add(r);
+        k9Sirali[r.Id] = r;
+    }
+
+    // 34a) GOLDEN SET KAPSAMI — docs/evals: 20-50 örnek, boyutlar temsil edilmeli
+    {
+        string hata = "";
+        if (k9Rubrikler.Count < k9Min) hata += $"golden ornek {k9Rubrikler.Count} < {k9Min} ";
+        if (k9Rubrikler.Count > k9Max) hata += $"golden ornek {k9Rubrikler.Count} > {k9Max} ";
+        var idler = new HashSet<string>(); var boyutlar = new HashSet<string>();
+        foreach (var r in k9Rubrikler)
+        {
+            if (!idler.Add(r.Id)) hata += $"tekrar eden id:{r.Id} ";
+            boyutlar.Add(r.Boyut);
+            if (string.IsNullOrWhiteSpace(r.Ton)) hata += $"{r.Id}: ton yok ";
+            if (r.MaxCumle <= 0) hata += $"{r.Id}: max_cumle gecersiz ";
+        }
+        foreach (var b in new[] { "olgu", "ton", "yasak", "uzunluk" })
+            if (!boyutlar.Contains(b)) hata += $"boyut temsil edilmiyor:{b} ";
+
+        // HER `yasak` ve `ton` anahtarı puanlayıcı tarafından TANINIYOR mu? Tanınmayan anahtar,
+        // rubrikte yazılı ama hiç denetlenmeyen bir kural demektir — sessiz zayıflama.
+        foreach (var r in k9Rubrikler)
+        {
+            var p = TheBadge.World.EvalScorer.Puanla("Deneme sorusu?", r);
+            if (p.Detay != null && p.Detay.IndexOf("BILINMEYEN", StringComparison.Ordinal) >= 0)
+                hata += $"{r.Id}: {p.Detay} ";
+        }
+
+        Console.WriteLine($"[info] K9 golden set: {k9Rubrikler.Count} ornek · boyut {boyutlar.Count} · esik %{k9Esik}");
+        if (hata.Length > 0) failures += Fail("K9GoldenSetKapsami", hata);
+        else Pass($"K9GoldenSetKapsami({k9Rubrikler.Count} ornek ∈ [{k9Min},{k9Max}] · 4 boyut temsil edildi · " +
+                  $"tum yasak/ton anahtarlari puanlayicida TANIMLI)");
+    }
+
+    // 34b) PUANLAYICI DEDEKTÖRLERİ — fikstürler beklenen kararı veriyor mu
+    {
+        string hata = "";
+        int n = 0, dogru = 0;
+        foreach (var satir in System.IO.File.ReadAllLines(k9FiksturYol))
+        {
+            if (satir.Trim().Length == 0) continue;
+            using var jd = System.Text.Json.JsonDocument.Parse(satir);
+            if (!jd.RootElement.TryGetProperty("id", out var idEl)) continue;   // açıklama satırı
+            string id = idEl.GetString();
+            string cikti = jd.RootElement.GetProperty("cikti").GetString();
+            bool bekle = jd.RootElement.GetProperty("bekle").GetBoolean();
+            string hedef = jd.RootElement.GetProperty("hedef").GetString();
+            if (!k9Sirali.TryGetValue(id, out var r)) { hata += $"fikstur bilinmeyen golden id:{id} "; continue; }
+            n++;
+            var p = TheBadge.World.EvalScorer.Puanla(cikti, r);
+            if (p.MakineKarari == bekle) dogru++;
+            else hata += $"[{id}/{hedef}] beklenen {bekle} ama {p.MakineKarari} ({p.Detay}) ";
+        }
+        if (n < 15) hata += $"fikstur sayisi az({n}) - dedektorler ortulmemis olabilir ";
+
+        // ARK dedektörü: aynı çıktı, `ArkVar` false iken DÜŞMELİ (fikstür dosyası bunu ifade edemez)
+        var arkRub = k9Sirali["g003"];
+        var arksiz = new TheBadge.World.EvalRubrik
+        {
+            Id = "g003-arksiz", Boyut = arkRub.Boyut, GirdiMetni = arkRub.GirdiMetni, Skor = arkRub.Skor,
+            ArkVar = false, MustInclude = arkRub.MustInclude, Yasak = arkRub.Yasak, Ton = arkRub.Ton, MaxCumle = arkRub.MaxCumle
+        };
+        var arkP = TheBadge.World.EvalScorer.Puanla(
+            "Son dakika golu sonrasi rakip menajerle yasananlari nasil aciklarsiniz?", arksiz);
+        if (arkP.MakineKarari) hata += "ark YOKKEN rakip menajer polemigi gecti ";
+
+        // BİLİNMEYEN anahtar SESSİZCE geçmemeli
+        var bilinmeyen = new TheBadge.World.EvalRubrik
+        { Id = "x", Boyut = "olgu", GirdiMetni = "0-0", Skor = "0-0", Yasak = new[] { "uydurulmus kural" }, Ton = "sorgulayici", MaxCumle = 2 };
+        if (TheBadge.World.EvalScorer.Puanla("Bir soru?", bilinmeyen).MakineKarari)
+            hata += "BILINMEYEN yasak anahtari sessizce GECTI ";
+
+        Console.WriteLine($"[info] K9 puanlayici: {n} fikstur · dogru karar {dogru}");
+        if (hata.Length > 0) failures += Fail("K9EvalRubrigi", hata);
+        else Pass($"K9EvalRubrigi({n} fikstur - 8 dedektor ayiriyor - ark baglami - bilinmeyen anahtar sessizce gecmiyor)");
+    }
+
+    // 34c) KOŞU SÖZLEŞMESİ — eksik çıktı sessizce "geçti" sayılamaz
+    {
+        string hata = "";
+        var ciktilar = new List<string>();
+        for (int i = 0; i < k9Rubrikler.Count; i++) ciktilar.Add("Gecerli bir soru?");
+        var son = TheBadge.World.EvalScorer.Kos(k9Rubrikler, ciktilar);
+        if (son.Toplam != k9Rubrikler.Count) hata += "kosu toplami yanlis ";
+        if (son.InsanBakisi.Count == 0) hata += "insan bakisi gerektiren boyut RAPORLANMADI ";
+        // AÇIK KORUMANIN kendisi ölçülür, "herhangi bir ArgumentException" DEĞİL.
+        // `ArgumentOutOfRangeException` da `ArgumentException`dan türüyor: koruma kaldırılınca
+        // indeks patlıyor ve tip yakalaması bunu "koruma calisti" sanıyordu (diş ölçümü yakaladı).
+        // Fark önemli — koruma varken anlamlı bir mesaj, yokken anlamsız bir indeks çökmesi olur.
+        string korumaMesaji = null;
+        try { TheBadge.World.EvalScorer.Kos(k9Rubrikler, new List<string> { "tek cikti?" }); }
+        catch (ArgumentOutOfRangeException) { korumaMesaji = "INDEKS COKMESI"; }
+        catch (ArgumentException ex) { korumaMesaji = ex.Message; }
+        if (korumaMesaji == null) hata += "eksik cikti listesi SESSIZCE kabul edildi ";
+        else if (korumaMesaji.IndexOf("uyusmuyor", StringComparison.Ordinal) < 0)
+            hata += $"acik koruma yerine baska hata dustu: {korumaMesaji} ";
+
+        if (hata.Length > 0) failures += Fail("K9EvalKosuSozlesmesi", hata);
+        else Pass($"K9EvalKosuSozlesmesi(eksik cikti reddediliyor · insan bakisi boyutlari ayri raporlaniyor: {son.InsanBakisi.Count} madde)");
     }
 }
 

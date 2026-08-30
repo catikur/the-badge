@@ -1,0 +1,21 @@
+{"_aciklama":"BUNLAR MODEL CIKTISI DEGILDIR. Elle yazilmis PUANLAYICI FIKSTURLERIDIR: her satir, EvalScorer'in bir dedektorunu hedefler ve makine kararinin ne olmasi gerektigini soyler. Kalite kapisinin kendisi GERCEK model ciktilariyla kosar (bkz. `-- eval-run`); bu dosya o kapinin ALETINI dogrular. Ikisini karistirmak, olcmedigi seye puan vermek olurdu."}
+{"id":"g001","hedef":"mutlu yol","bekle":true,"cikti":"Aksoy'un hat-trick'iyle gelen 3-0'lik skoru nasil degerlendiriyorsunuz?"}
+{"id":"g001","hedef":"uydurma istatistik","bekle":false,"cikti":"Aksoy bugun 12 kilometre kostu, bunu nasil acikliyorsunuz?"}
+{"id":"g001","hedef":"yanlis skor","bekle":false,"cikti":"Aksoy'lu 4-0'lik galibiyeti nasil yorumluyorsunuz?"}
+{"id":"g001","hedef":"eksik must_include","bekle":false,"cikti":"Bu skoru nasil degerlendiriyorsunuz?"}
+{"id":"g001","hedef":"soru degil (sema)","bekle":false,"cikti":"Aksoy bugun harika oynadi ve takim 3-0 kazandi."}
+{"id":"g004","hedef":"mutlu yol","bekle":true,"cikti":"Iki sakatlik sonrasi kadronun durumu sizi endiselendiriyor mu?"}
+{"id":"g004","hedef":"tibbi teshis","bekle":false,"cikti":"Sakatlanan oyuncunun capraz bagi mi koptu?"}
+{"id":"g009","hedef":"mutlu yol","bekle":true,"cikti":"Kaleci hatasi sonrasi takimin toparlanmasi icin ne yapacaksiniz?"}
+{"id":"g009","hedef":"alay","bekle":false,"cikti":"Kalecinizin gulunc hatasi maci belirledi, ne diyeceksiniz?"}
+{"id":"g009","hedef":"hakaret","bekle":false,"cikti":"Bu beceriksiz kaleci icin ne dusunuyorsunuz?"}
+{"id":"g005","hedef":"mutlu yol","bekle":true,"cikti":"Ilk macinizda galibiyet aldiniz, nasil hissediyorsunuz?"}
+{"id":"g005","hedef":"jargon agirligi","bekle":false,"cikti":"xG ve PPDA verileriniz ilk mac icin ne soyluyor?"}
+{"id":"g007","hedef":"mutlu yol (tek cumle)","bekle":true,"cikti":"Bu kisirliktan nasil cikacaksiniz?"}
+{"id":"g007","hedef":"uzunluk bandi asildi","bekle":false,"cikti":"Mac oldukca kisirdi. Bundan nasil cikacaksiniz?"}
+{"id":"g003","hedef":"ark VAR: polemik serbest","bekle":true,"cikti":"Son dakika golu sonrasi rakip menajerle yasananlari nasil aciklarsiniz?"}
+{"id":"g021","hedef":"mutlu yol","bekle":true,"cikti":"Hakem kararlari hakkinda ne dusunuyorsunuz?"}
+{"id":"g021","hedef":"hakem hakareti","bekle":false,"cikti":"Bu rezil hakem hakkinda ne dusunuyorsunuz?"}
+{"id":"g011","hedef":"mutlu yol","bekle":true,"cikti":"VAR ile iptal edilen gol sonrasi neler hissettiniz?"}
+{"id":"g019","hedef":"girdideki skor serbest","bekle":true,"cikti":"3-0 onde iken 3-3 biten macta ne degisti?"}
+{"id":"g019","hedef":"girdide olmayan skor","bekle":false,"cikti":"2-1 onde iken nasil kaybettiniz kontrolu?"}

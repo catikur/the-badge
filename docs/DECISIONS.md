@@ -1958,6 +1958,46 @@ bir kopyası yazılacaktı — "yeni denetim yazmadan önce daha derin katmana b
 - **Kural:** **"hepsi başarısız" senaryosu, sıra iddiasını ölçemez.** Bir sıralama garantisini test
   etmek için, atlanabilecek olanın atlanabilir DURUMDA olması gerekir.
 
+### K9-D: LLM kalite kapısı — alet burada, ölçüm model erişimi olan ortamda (2026-08-30)
+K7'nin açık ucu. **Kapsam sınırı en baştan:** bu ortamda canlı model YOK, dolayısıyla burada koşan
+şey "modelin kalitesi" değil kalite kapısının ALETİdir. Bu ayrımı bulanıklaştırmak — elle yazılmış
+cümleleri model çıktısı sayıp yüksek bir skor raporlamak — ölçmediği şeye puan vermek olurdu.
+
+- **Golden set 5 → 24 örnek** (`docs/evals` bandı 20-50 ✓). Her satıra `boyut` alanı eklendi
+  (olgu · ton · yasak · uzunluk); `K9GoldenSetKapsami` dört boyutun da temsil edilmesini zorunlu
+  kılıyor, id tekrarını ve eksik `ton`/`max_cumle`yi reddediyor.
+- **`EvalScorer` — `yasak` anahtarları KAVRAMDIR, düz metin değil.** "uydurma istatistik", "alay",
+  "tibbi teshis" gibi anahtarlar altdizi araması olamaz; her biri deterministik bir DEDEKTÖRE
+  bağlandı (girdide olmayan sayı · girdide geçmeyen skor kalıbı · sözlükler · jargon yoğunluğu ·
+  ark bağlamı). **Tanınmayan anahtar kapıyı KIRMIZIYA döndürür** — rubrikte yazılı ama hiç
+  denetlenmeyen bir kural, sessiz zayıflamadır (K9-A'daki "çözemediğini atlama" disiplini).
+- **Makinenin YARGILAMADIĞI boyutlar ayrı raporlanır.** Prose kalitesi ve üslup inceliği
+  `InsanBakisi` listesine düşer, puana GİRMEZ. `evals/golden/README` zaten "script + insan bakışı
+  karışımı" diyordu; puanlayıcı o sözleşmeye uyuyor.
+- **`scorer_fixtures.jsonl` MODEL ÇIKTISI DEĞİLDİR** ve dosyanın ilk satırı bunu söylüyor: elle
+  yazılmış, her biri bir dedektörü hedefleyen 20 fikstür. `K9EvalRubrigi` her birinin beklenen
+  makine kararını verdiğini denetliyor.
+- **Fikstür gerçek bir hata yakaladı (g019):** "yanlis skor" dedektörü yalnız `skor` alanına
+  bakıyordu; girdinin `one_cikan` alanı "3-0 onde iken" diyorken maçın skoru 3-3 olduğu için doğru
+  cümle hatalı sayılıyordu. Referans girdinin TAMAMI yapıldı — kural zaten "memory_facts dışına
+  çıkma"ydı, `skor` alanına daraltmak kuralın kendisini daraltıyordu.
+- **Koşucu:** `-- eval-run <cevaplar.jsonl>`, eşik `balance/llm.balance.json` →
+  `eval.gecmeEsigiYuzde` = **85** [KALİBRE]. **Cevabı olmayan golden satırı BAŞARISIZ sayılır**;
+  atlansaydı eksik üretim yüzde payını yükseltirdi (az örnekle yüksek skor). Aletin gösterimi:
+  24 satırın 9'una cevap verilince %37,5 → "MERGE YOK" döndü.
+- **Diş ölçümü (üç yön):** bilinmeyen `yasak` anahtarı sessizce geçsin → `K9EvalRubrigi` FAIL ·
+  golden set 24→18 → `K9GoldenSetKapsami` FAIL · `Kos`un sayı denetimi kaldırılsın →
+  `K9EvalKosuSozlesmesi` FAIL.
+- **ÜÇÜNCÜ KAPI İLK YAZIMDA DİŞSİZDİ.** `catch (ArgumentException)` yazmıştım; ama
+  `ArgumentOutOfRangeException` ondan TÜREDİĞİ için, koruma kaldırılınca patlayan indeks çökmesini
+  "koruma çalıştı" sanıyordu. Kapı artık açık korumanın MESAJINI arıyor. Fark önemli: koruma varken
+  anlamlı bir hata, yokken anlamsız bir indeks çökmesi olur.
+- **YAPILMADI, açıkça:** gerçek model çıktılarıyla kalite koşusu. Model erişimi gerektirir; CI
+  adımı olarak `-- eval-run` ile bağlanır. `docs/prompts/templates/mac_sonu_roportaj.md`'nin
+  `son_eval: bekliyor` alanı DOĞRU kalıyor — canlı eval koşulmadı, koşulmuş gibi yazılmadı.
+- **Kural:** **bir istisna tipini yakalamak, o istisnayı yakaladığını kanıtlamaz** — türemiş tipler
+  aynı `catch`e düşer. Bir korumayı ölçen kapı, korumanın KENDİ imzasını (mesaj/tip) aramalıdır.
+
 ## Bekleyen kararlar
 
 - ~~**xG katsayıları az tahmin ediyor.**~~ → **YAPILDI (2026-08-30, K9-B):** seçenek (b)
