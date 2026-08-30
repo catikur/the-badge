@@ -1571,6 +1571,18 @@ bu dilim host'un bağlayacağı arayüzleri (`IOnlineSink`) ve tüm kararları k
   değiştiriyor, sıra denetimi kalkınca AI kullanıcının kararını gasp ediyor, kanal denetimi kalkınca
   kanalsız host sessizce başarı dönüyor.
 
+**Kendi diffimde iki kusur buldum (inceleme gelmeden).**
+1. **`ligUyeMax` ÖLÜ [KALİBRE] anahtarıydı** — yüklemede doğrulanıyor, hiçbir yerde kullanılmıyordu.
+   K5 incelemesinde Bugbot'a "hiçbir şey yapmayan bir yapılandırma anahtarı, olmayandan kötüdür;
+   var sanılır" diye yazmıştım ve bir dilim sonra aynısını yapmışım. Kaldırıldı.
+2. **`LeagueState.UyeSayisi` hash'e giriyordu ama YERELDE TÜRETİLEMEZDİ.** Lige katılan istemci
+   ligde kaç kulüp olduğunu BİLMEZ; `join` alanı 1 yapıyordu, yani hash'e giren bir sayı
+   uyduruluyordu. Hash'e giren her alan replay dördülünden (engineVersion, config_hash, seed,
+   komut zaman çizelgesi) yeniden üretilebilmelidir — türetilemeyen sayı iki istemciyi
+   ayrıştırırdı. Alan kaldırıldı; mevcut ve tavan denetimi SUNUCUnundur. `K6LigAksiyonlari`
+   artık sınıfı koruyor: katılım, payload'ın vermediği alanları (kurucu/chaos/hız/bütçe/saat
+   dilimi) YAZMAMALI. Diş ölçümü: uydurma eklenince `katılım sunucunun alanlarını uydurdu(chaos 1…)`.
+
 **Kendi kapımın ölçüm YERİ yanlıştı.** `K6TransferSurucusu`'nun "seed sürücüyü oynatıyor mu"
 iddiası ilk yazımda sabit 1,5M teklifle ölçülüyordu; o teklif oyuncunun değerinin çok dışındaydı ve
 karar seed'den BAĞIMSIZ olarak hep aynıydı — kapı kırmızı yandı. İddia yanlış değildi, **ölçüm

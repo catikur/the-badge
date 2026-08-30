@@ -21,7 +21,6 @@
     "talimatYuvaSayisi": 4,
     "transferTeklifSlotSayisi": 8,
     "transferTeklifIdMax": 4096,
-    "ligUyeMax": 20,
     "cevrimdisiKuyrukTavani": 64
   },
   "taktik": {

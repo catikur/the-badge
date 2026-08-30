@@ -2690,7 +2690,6 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             ("LeagueState.Hiz",               s => s.Lig.Hiz += 1),
             ("LeagueState.ButceTl",           s => s.Lig.ButceTl += 1),
             ("LeagueState.SaatDilimi",        s => s.Lig.SaatDilimi += 1),
-            ("LeagueState.UyeSayisi",         s => s.Lig.UyeSayisi += 1),
             ("LeagueState.SifreOzeti",        s => s.Lig.SifreOzeti += 1),
         };
 
@@ -2740,7 +2739,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         taban.Oyuncular[0].Guc = 70; taban.Oyuncular[0].Potansiyel = 80; taban.Oyuncular[0].Yas = 24;
         taban.Oyuncular[0].IstenenBedelTl = 3_000_000;
         taban.Lig = new TheBadge.World.LeagueState { LigId = 77, KurucuUserId = 9, Chaos = 1, Hiz = 3,
-            ButceTl = 5_000_000, SaatDilimi = 3, UyeSayisi = 4, SifreOzeti = 0xABCDEF01UL };
+            ButceTl = 5_000_000, SaatDilimi = 3, SifreOzeti = 0xABCDEF01UL };
         TheBadge.World.GameState Kur2()
         {
             var g = TheBadge.Checks.WorldFixture.Kur(wRules, WKulup, WSahip, 20, 3, 2, 1_000_000);
@@ -2759,7 +2758,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             g.Oyuncular[0].IstenenBedelTl = taban.Oyuncular[0].IstenenBedelTl;
             g.Lig = new TheBadge.World.LeagueState { LigId = taban.Lig.LigId, KurucuUserId = taban.Lig.KurucuUserId,
                 Chaos = taban.Lig.Chaos, Hiz = taban.Lig.Hiz, ButceTl = taban.Lig.ButceTl,
-                SaatDilimi = taban.Lig.SaatDilimi, UyeSayisi = taban.Lig.UyeSayisi, SifreOzeti = taban.Lig.SifreOzeti };
+                SaatDilimi = taban.Lig.SaatDilimi, SifreOzeti = taban.Lig.SifreOzeti };
             return g;
         }
         ulong h0 = TheBadge.World.WorldHash.Compute(Kur2());
@@ -4945,7 +4944,6 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             if (lig.LigId == 0) hata += "ligId yazılmadı ";
             if (lig.KurucuUserId != K6User) hata += "kurucu yazılmadı ";
             if (lig.Chaos != 1 || lig.Hiz != 3 || lig.SaatDilimi != 3) hata += "lig kuralları yanlış ";
-            if (lig.UyeSayisi != 1) hata += "üye sayısı yanlış ";
             // İkinci lig KURULAMAZ
             var ikinci = w.bus.Submit(K6Env("league.create"),
                 new TheBadge.Checks.TestPayload().Set("chaos", 0L).Set("hiz", 1L).Set("butce", 1_000_000d).Set("saatDilimi", 0L),
@@ -4975,13 +4973,21 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             if (w.depo.State.Lig.KurucuUserId != 0) hata += "katılan üye kurucu oldu ";
             if (w.depo.State.Lig.SifreOzeti == 0) hata += "şifre özeti yazılmadı ";
             if (w.depo.State.Lig.SifreOzeti == (ulong)"gizli-parola".GetHashCode()) hata += "şifre ham saklandı ";
+            // KATILIM BİLMEDİĞİNİ UYDURMAZ: payload yalnız ligId ve şifre veriyor. Kurucu,
+            // chaos, hız, bütçe, saat dilimi SUNUCUnun bilgisidir ve komut zaman çizelgesinden
+            // türetilemez — katılım bunları YAZMAMALI. (İlk yazımda bir `UyeSayisi` alanı vardı
+            // ve katılım onu 1 yapıyordu: ligde kaç kulüp olduğunu bilmeyen istemci, hash'e
+            // giren bir sayıyı UYDURUYORDU. Alan kaldırıldı; bu kapı sınıfı koruyor.)
+            var l2 = w.depo.State.Lig;
+            if (l2.Chaos != 0 || l2.Hiz != 0 || l2.ButceTl != 0 || l2.SaatDilimi != 0)
+                hata += $"katılım sunucunun alanlarını uydurdu(chaos {l2.Chaos} hiz {l2.Hiz} butce {l2.ButceTl} tz {l2.SaatDilimi}) ";
             // Katılan üye kural DEĞİŞTİREMEZ (kurucu değil)
             var kural = w.bus.Submit(K6Env("league.set_rules"),
                 new TheBadge.Checks.TestPayload().Set("ligId", 12345L).Set("hiz", 5L), w.exec, K6Host, K6User);
             if (kural.Ok || kural.Reason != RejectionReason.NotOwned) hata += $"katılan üye kural değiştirdi({kural.Reason}) ";
         }
         if (hata.Length > 0) failures += Fail("K6LigAksiyonlari", hata);
-        else Pass("K6LigAksiyonlari(kurulum · tek lig · kısmi kural güncellemesi · KURUCU yetkisi · şifre özeti)");
+        else Pass("K6LigAksiyonlari(kurulum · tek lig · kısmi kural güncellemesi · KURUCU yetkisi · şifre özeti · katılım bilmediğini uydurmuyor)");
     }
 
     // 30e) YAYIN KANALI — klip/rapor kalıcı durumu değiştirmiyor, kanal yoksa sessiz başarı YOK

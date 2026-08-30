@@ -27,7 +27,7 @@ namespace TheBadge.World
     public static class LeagueField
     {
         public const byte LigId = 1, Kurucu = 2, Chaos = 3, Hiz = 4, Butce = 5,
-                          SaatDilimi = 6, UyeSayisi = 7, SifreOzeti = 8;
+                          SaatDilimi = 6, SifreOzeti = 8;
     }
 
     /// <summary>Transfer teklifi alanları — CB 4.3.</summary>
@@ -273,7 +273,6 @@ namespace TheBadge.World
                         case LeagueField.Hiz: mevcut = st.Lig.Hiz; min = 0; max = 255; return true;
                         case LeagueField.Butce: mevcut = st.Lig.ButceTl; min = 0; return true;
                         case LeagueField.SaatDilimi: mevcut = st.Lig.SaatDilimi; min = short.MinValue; max = short.MaxValue; return true;
-                        case LeagueField.UyeSayisi: mevcut = st.Lig.UyeSayisi; min = 0; max = int.MaxValue; return true;
                         // Şifre ÖZETİ 64 bit: aralık denetimi anlamsız, her desen geçerli.
                         case LeagueField.SifreOzeti: mevcut = unchecked((long)st.Lig.SifreOzeti); min = long.MinValue; max = long.MaxValue; return true;
                     }
@@ -477,7 +476,6 @@ namespace TheBadge.World
                         case LeagueField.Hiz: st.Lig.Hiz = (byte)v; break;
                         case LeagueField.Butce: st.Lig.ButceTl = v; break;
                         case LeagueField.SaatDilimi: st.Lig.SaatDilimi = (short)v; break;
-                        case LeagueField.UyeSayisi: st.Lig.UyeSayisi = (int)v; break;
                         case LeagueField.SifreOzeti: st.Lig.SifreOzeti = unchecked((ulong)v); break;
                     }
                     break;

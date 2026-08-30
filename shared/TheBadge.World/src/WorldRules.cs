@@ -43,7 +43,6 @@ namespace TheBadge.World
             public int talimatYuvaSayisi;        // [KALİBRE] oyuncu başına eşzamanlı talimat
             public int transferTeklifSlotSayisi; // [KALİBRE] eşzamanlı açık transfer teklifi
             public int transferTeklifIdMax;      // [KALİBRE] katalog bandı `transfer.teklifId` ÜST SINIRIYLA aynı olmalı
-            public int ligUyeMax;                // [KALİBRE] lig başına kulüp sayısı
             public int cevrimdisiKuyrukTavani;   // [KALİBRE] CB 8.3 offline kuyruk uzunluğu
         }
 
@@ -73,7 +72,6 @@ namespace TheBadge.World
             if (yapi.presetSlotSayisi <= 0) throw new ArgumentException("world.balance: yapi.presetSlotSayisi > 0 olmalı.");
             if (yapi.talimatYuvaSayisi <= 0) throw new ArgumentException("world.balance: yapi.talimatYuvaSayisi > 0 olmalı.");
             if (yapi.transferTeklifSlotSayisi <= 0) throw new ArgumentException("world.balance: yapi.transferTeklifSlotSayisi > 0 olmalı.");
-            if (yapi.ligUyeMax <= 1) throw new ArgumentException("world.balance: yapi.ligUyeMax > 1 olmalı.");
             if (yapi.cevrimdisiKuyrukTavani <= 0) throw new ArgumentException("world.balance: yapi.cevrimdisiKuyrukTavani > 0 olmalı.");
             if (yapi.transferTeklifIdMax < yapi.transferTeklifSlotSayisi)
                 throw new ArgumentException("world.balance: yapi.transferTeklifIdMax ≥ transferTeklifSlotSayisi olmalı.");

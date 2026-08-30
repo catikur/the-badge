@@ -36,7 +36,7 @@ namespace TheBadge.World
             exec.OnlineKanalBagla(kanal);
 
             ctx.RegisterRule("league.create", new LigYokKurali());
-            ctx.RegisterRule("league.join", new KatilimKurali(kural));
+            ctx.RegisterRule("league.join", new KatilimKurali());
             ctx.RegisterRule("league.set_rules", new KurucuKurali());
 
             exec.RegisterHandler("league.create", new LigKurHandler());
@@ -62,8 +62,6 @@ namespace TheBadge.World
 
         sealed class KatilimKurali : IActionRule
         {
-            readonly WorldRules kural;
-            public KatilimKurali(WorldRules k) { kural = k; }
             public RejectionReason Check(GameState st, CommandEnvelope env, ActionDef a, IPayloadView p, out string detail)
             {
                 detail = null;
@@ -114,7 +112,6 @@ namespace TheBadge.World
                 j.Set(MutTarget.Lig, 0, LeagueField.Hiz, hiz);
                 j.Set(MutTarget.Lig, 0, LeagueField.Butce, WorldMoney.ToTl(butce));
                 j.Set(MutTarget.Lig, 0, LeagueField.SaatDilimi, tz);
-                j.Set(MutTarget.Lig, 0, LeagueField.UyeSayisi, 1);
                 j.Emit(new WorldEvent(WorldEventType.LigKuruldu, ligId, chaos, st.Takvim.Sezon, st.Takvim.Hafta));
                 return RejectionReason.None;
             }
@@ -132,7 +129,6 @@ namespace TheBadge.World
                 j.Set(MutTarget.Lig, 0, LeagueField.LigId, lid);
                 j.Set(MutTarget.Lig, 0, LeagueField.SifreOzeti, unchecked((long)ozet));
                 // Kurucu DEĞİLİZ: katılan üyenin kurucu alanı 0 kalır ve `set_rules` kapalıdır.
-                j.Add(MutTarget.Lig, 0, LeagueField.UyeSayisi, 1);
                 j.Emit(new WorldEvent(WorldEventType.LigeKatilindi, (int)lid, 0, st.Takvim.Sezon, st.Takvim.Hafta));
                 return RejectionReason.None;
             }

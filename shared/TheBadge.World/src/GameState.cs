@@ -40,7 +40,10 @@ namespace TheBadge.World
         public byte Hiz;                  // katalog bandı 1-5
         public long ButceTl;
         public short SaatDilimi;          // -12..+14
-        public int UyeSayisi;
+        // ÜYE SAYISI KASITLI OLARAK YOK: lig mevcudu SUNUCUnun bilgisidir ve komut zaman
+        // çizelgesinden TÜRETİLEMEZ (lige katılan istemci, ligde kaç kulüp olduğunu bilmez).
+        // Hash'e giren her alan replay dördülünden yeniden üretilebilmelidir; türetilemeyen bir
+        // sayıyı oraya koymak iki istemciyi ayrıştırırdı. Mevcut ve tavan denetimi sunucunundur.
         /// <summary>Katılım şifresi ÖZETİ — ham şifre kalıcı duruma YAZILMAZ ve hash'e ham
         /// metin olarak girmez (K4 preset adı dersinin güvenlik tarafı). 0 = şifresiz lig.</summary>
         public ulong SifreOzeti;
