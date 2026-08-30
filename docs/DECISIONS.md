@@ -1690,6 +1690,47 @@ katmanın o aksiyon için ne yaptığına bakılır.** Bu artık bir alışkanl�
 erişimi olan ortamda koşacak ayrı iş. Bu dilim GÜVENLİĞİ test eder, KALİTEYİ değil — CLAUDE.md'nin
 kendisi bunların ayrı kapılar olduğunu söylüyor.
 
+### K7 inceleme turu — ✅ TAMAM (2026-08-30)
+Codex beş bulgu çıkardı (1 P1, 4 P2); beşi de haklı.
+
+1. **(P1) Personel sözleşmesi HİÇ SONA ERMİYORDU.** `staff.hire` `KalanHafta` yazıyordu ama
+   hiçbir şey azaltmıyordu: süre dolduktan sonra personel aktif kalıyor, yuvayı KALICI işgal
+   ediyor ve aynı-tip kuralı o tipin bir daha alınmasını SONSUZA DEK engelliyordu. **K4'te
+   değişiklik hakkının maç başına dolmamasıyla aynı sınıf hata: yazılan ama hiç ilerletilmeyen
+   sayaç.** Çözüm: `StaffTick.Hafta` — `EconomyTick`/`MacTick`/`TransferTick` ile aynı sözleşme.
+   Süre bitince yuva TAMAMEN boşalır (`Tip`, `Tier`, `KalanHafta`): yalnız `Tip = 0` bırakmak
+   hash'te artık bırakır ve iki farklı yoldan aynı kadroya varan iki kayıt ayrışırdı.
+2. **(P2) Öneri, doğrulanmış PAYLOAD'ı taşımıyordu.** CB 7.1 sözleşmesi `IntentSuggestion(actionType,
+   payload, gerekçe)` diyor; benimkinde payload YOKTU. Kart, doğrulamayı geçen argümanları
+   gösteremez ve onay anında AYNISINI gönderemezdi — ayrı ve değiştirilebilir bir `IPayloadView`
+   tutmak gerekirdi, yani **gösterilen öneri ile onaylanıp denetime giren şey birbirine bağlı
+   olmazdı.** Çözüm: `OneriParam[]` ile doğrulanan değerler öneriyle taşınıyor.
+3. **(P2) `SuggestionId` ÖNERİYİ kapsamıyordu.** Kimlik yalnız (girdi özeti, kayıt tohumu)'ndan
+   türüyordu. Model DETERMİNİSTİK DEĞİL: aynı prompt aynı oturumda farklı aksiyon/payload
+   önerebilir ve o kartlar onay ile denetim kaydında AYIRT EDİLEMEZ olurdu — CB 7.4'ün vaat ettiği
+   bire bir girdi → öneri → sonuç izi koparadı. Çözüm: aksiyon adı + parametreler (katalog
+   sırasında) kimliğe giriyor; determinizm korunuyor.
+4. **(P2) Tam sayı alanı `TryGetNumber` ile okunuyordu.** `tip: 3.5` bant içi görünüp ÖNERİ
+   oluyordu ama bus aynı payload'ı `SchemaViolation` ile reddediyordu — yani kullanıcıya
+   **onaylayamayacağı kart** gösteriliyordu. Bu, bu hattın ön denetim yapma GEREKÇESİNİN tam
+   tersiydi. Çözüm: `ParamType.Int` için `TryGetInt`.
+5. **(P2) Kanal eksikken denetime BAŞARILI kayıt yazılıyordu.** Kablolama denetimi
+   `audit.Persist(..., None)`den SONRAydı: komut reddediliyor ve durum geri alınıyordu ama
+   denetim logunda kalıcı bir "başarılı" kaydı kalıyordu — **denetim logu olmayan bir başarıyı
+   anlatıyordu.** Çözüm: üç kanalın (maç kuyruğu, online, persona) varlık denetimi `Apply`dan da
+   önce. Kanal yokluğu durumdan bağımsız, deterministik bir kablolama hatasıdır; uygulamadan önce
+   bilinebilir.
+
+- **Kapı:** `K7IncelemeBulgulari`. Beşi de ters çevrilip ölçüldü — süre ilerlemeyince
+  "yuva tam bosalmadi(tip 4 tier 3 hafta 38)" ve aynı tip bir daha alınamıyor, kimlik öneriyi
+  kapsamayınca "ayni prompt + FARKLI payload ayni SuggestionId", `TryGetNumber`a dönünce
+  "ondalik tam sayi alani ONERI oldu", payload taşınmayınca kart boş, denetim sırası eskiye
+  dönünce "reddedilen komut icin BASARILI denetim kaydi yazildi".
+
+**4. bulgunun kendi kapısı da vardı:** iddianın dayanağı "bus GERÇEKTEN reddediyor" olduğu için
+kapı bunu da ölçüyor — yoksa "bus reddedecek" varsayımı dayanaksız kalırdı. K5'in "açık uç olarak
+yazdığın şeyin gerekçesi varsayıma dayanıyorsa kapıya bağla" dersinin uygulaması.
+
 ## Bekleyen kararlar
 - **CB 4.2 tablosu ile ME komut kümesi çelişiyor (K4 bulgusu, 2026-08-29):** spec `squad.set_player_anchor`/
   `set_player_role`/`set_instruction`'ı "Hub + Maç" sayıyor; motorda anchor/rol maç komutu yok,

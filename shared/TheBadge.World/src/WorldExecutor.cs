@@ -161,6 +161,18 @@ namespace TheBadge.World
                     return RejectionReason.StateConflict;
                 }
 
+                // KABLOLAMA DENETİMİ DENETİMDEN ÖNCE: bir yayın kanalı eksikse komut ZATEN
+                // reddedilecek. Bunu `audit.Persist`ten SONRA yapmak, reddedilen bir komut için
+                // kalıcı bir "BAŞARILI" denetim kaydı bırakıyordu (inceleme bulgusu) — denetim
+                // logu, olmayan bir başarıyı anlatıyordu. Kanal yokluğu durumdan bağımsız,
+                // deterministik bir kablolama hatasıdır; uygulamadan da önce bilinebilir.
+                if (journal.MacKomutlari.Count > 0 && macKuyrugu == null)
+                { detail = "maç kuyruğu bağlı değil"; return RejectionReason.StateConflict; }
+                if (journal.OnlineYayinlar.Count > 0 && onlineKanal == null)
+                { detail = "online kanal bağlı değil"; return RejectionReason.StateConflict; }
+                if (journal.PersonaYayinlar.Count > 0 && personaKanal == null)
+                { detail = "persona kanalı bağlı değil"; return RejectionReason.StateConflict; }
+
                 ulong pre = WorldHash.Compute(st);
                 journal.Apply(st);
                 ulong post = WorldHash.Compute(st);
@@ -185,14 +197,6 @@ namespace TheBadge.World
                 // yukarıdaki her erken dönüş ve `Geri` yolu komutları YAYINLANMAMIŞ bırakır.
                 if (journal.MacKomutlari.Count > 0)
                 {
-                    if (macKuyrugu == null)
-                    {
-                        // Buraya düşmek kablolama hatasıdır: handler maç komutu üretti ama kuyruk yok.
-                        // Sessiz başarı YOK — durum zaten uygulandı, o yüzden geri al ve reddet.
-                        journal.Geri(st);
-                        detail = "maç kuyruğu bağlı değil";
-                        return RejectionReason.StateConflict;
-                    }
                     try
                     {
                         for (int i = 0; i < journal.MacKomutlari.Count; i++) macKuyrugu.Enqueue(journal.MacKomutlari[i]);
@@ -202,12 +206,6 @@ namespace TheBadge.World
 
                 if (journal.OnlineYayinlar.Count > 0)
                 {
-                    if (onlineKanal == null)
-                    {
-                        journal.Geri(st);
-                        detail = "online kanal bağlı değil";
-                        return RejectionReason.StateConflict;
-                    }
                     // YAYIN PATLARSA DURUM GERİ ALINIR. Önce korumasızdı: `KlipPaylas` ağ
                     // zaman aşımıyla fırlarsa istisna `Apply` ve `Persist`ten SONRA kaçıyor,
                     // `Geri` çağrılmıyor ve bus rezervasyonu serbest bırakıyordu — durum ilerlemiş
@@ -228,12 +226,6 @@ namespace TheBadge.World
 
                 if (journal.PersonaYayinlar.Count > 0)
                 {
-                    if (personaKanal == null)
-                    {
-                        journal.Geri(st);
-                        detail = "persona kanalı bağlı değil";
-                        return RejectionReason.StateConflict;
-                    }
                     try
                     {
                         for (int i = 0; i < journal.PersonaYayinlar.Count; i++)

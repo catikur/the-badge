@@ -5489,6 +5489,118 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         else Pass("K7SonDortAksiyon(konusma - basin - personel - premium - ton kapali enum - [KALIBRE] sure - kanalsiz host reddediyor)");
     }
 
+    // 31g) INCELEME BULGULARI - 5 bulgu (Codex)
+    {
+        string hata = "";
+
+        // (1) PERSONEL SOZLESMESI SONA ERIYOR - yazilan ama hic ilerletilmeyen sayac
+        {
+            var w = K7Kur();
+            w.bus.Submit(K7Env("staff.hire"),
+                new TheBadge.Checks.TestPayload().Set("tip", 4L).Set("tier", 3L).Set("sureYil", 1L),
+                w.exec, K7Host, K7User);
+            int hafta = k7Rules.yapi.sezonHaftaSayisi;
+            if (w.depo.State.Club.Personel[0].KalanHafta != hafta) hata += "sure yazilmadi ";
+            // Sure boyunca personel DURUYOR
+            for (int n = 0; n < hafta - 1; n++)
+            {
+                var j = new TheBadge.World.WorldJournal();
+                TheBadge.World.StaffTick.Hafta(w.depo.State, j);
+                if (!j.Validate(w.depo.State, out string vh)) { hata += $"tick journal gecersiz({vh}) "; break; }
+                j.Apply(w.depo.State);
+            }
+            if (w.depo.State.Club.Personel[0].Tip != 4) hata += "personel suresinden once ayrildi ";
+            // SON hafta: yuva TAMAMEN bosaliyor
+            {
+                var j = new TheBadge.World.WorldJournal();
+                int biten = TheBadge.World.StaffTick.Hafta(w.depo.State, j);
+                j.Validate(w.depo.State, out _); j.Apply(w.depo.State);
+                if (biten != 1) hata += $"sona eren sayisi {biten} != 1 ";
+            }
+            var pr2 = w.depo.State.Club.Personel[0];
+            if (pr2.Tip != 0 || pr2.Tier != 0 || pr2.KalanHafta != 0)
+                hata += $"yuva tam bosalmadi(tip {pr2.Tip} tier {pr2.Tier} hafta {pr2.KalanHafta}) ";
+            // Ve ayni tip TEKRAR alinabiliyor - eski hata bunu sonsuza dek engelliyordu
+            var tekrar = w.bus.Submit(K7Env("staff.hire"),
+                new TheBadge.Checks.TestPayload().Set("tip", 4L).Set("tier", 5L).Set("sureYil", 1L),
+                w.exec, K7Host, K7User);
+            if (!tekrar.Ok) hata += $"sure dolduktan sonra ayni tip alinamadi({tekrar.Reason}/{tekrar.Detail}) ";
+        }
+
+        // (2) ONERI DOGRULANMIS PAYLOAD'I TASIYOR - CB 7.1 sozlesmesi
+        {
+            var pl = new TheBadge.Checks.TestPayload().Set("tip", 3d).Set("tier", 2d).Set("sureYil", 2d);
+            var s2 = TheBadge.World.SuggestionPipeline.Degerlendir("teknik direktor", "staff.hire", pl, k7Bands, k7Llm, K7Seed);
+            if (s2.Payload == null || s2.Payload.Length != 3) hata += $"payload tasinmiyor({s2.Payload?.Length}) ";
+            else
+            {
+                bool tipVar = false;
+                foreach (var pp in s2.Payload) if (pp.Ad == "tip" && pp.Deger == 3d) tipVar = true;
+                if (!tipVar) hata += "payload degeri yanlis tasindi ";
+            }
+            // Enum ve metin alanlari da tasinmali
+            var pl2 = new TheBadge.Checks.TestPayload().Set("personaId", 5d).Set("ton", "atesle");
+            var s4 = TheBadge.World.SuggestionPipeline.Degerlendir("kaptanla konus", "social.arrange_talk", pl2, k7Bands, k7Llm, K7Seed);
+            bool tonVar = false;
+            if (s4.Payload != null) foreach (var pp in s4.Payload) if (pp.Ad == "ton" && pp.Metin && pp.MetinDeger == "atesle") tonVar = true;
+            if (!tonVar) hata += "enum degeri payload'a tasinmadi ";
+        }
+
+        // (3) SUGGESTIONID ONERIYI DE KAPSIYOR - ayni prompt farkli oneri = farkli kimlik
+        {
+            var a = new TheBadge.Checks.TestPayload().Set("tip", 3d).Set("tier", 2d).Set("sureYil", 2d);
+            var b = new TheBadge.Checks.TestPayload().Set("tip", 5d).Set("tier", 2d).Set("sureYil", 2d);
+            var s5 = TheBadge.World.SuggestionPipeline.Degerlendir("ayni prompt", "staff.hire", a, k7Bands, k7Llm, K7Seed);
+            var s6 = TheBadge.World.SuggestionPipeline.Degerlendir("ayni prompt", "staff.hire", b, k7Bands, k7Llm, K7Seed);
+            if (s5.SuggestionId == s6.SuggestionId)
+                hata += "ayni prompt + FARKLI payload ayni SuggestionId (denetimde ayirt edilemez) ";
+            var pl3 = new TheBadge.Checks.TestPayload().Set("envanterId", 7d);
+            var s7 = TheBadge.World.SuggestionPipeline.Degerlendir("ayni prompt", "staff.activate_premium", pl3, k7Bands, k7Llm, K7Seed);
+            if (s7.SuggestionId == s5.SuggestionId)
+                hata += "ayni prompt + FARKLI aksiyon ayni SuggestionId ";
+            // Determinizm KORUNUYOR: ayni girdi + ayni oneri = ayni kimlik
+            var s8 = TheBadge.World.SuggestionPipeline.Degerlendir("ayni prompt", "staff.hire", a, k7Bands, k7Llm, K7Seed);
+            if (s8.SuggestionId != s5.SuggestionId) hata += "ayni oneri farkli kimlik (determinizm bozuldu) ";
+        }
+
+        // (4) TAM SAYI ALANI ONDALIK KABUL ETMIYOR - kullaniciya onaylayamayacagi kart gosterilmez
+        {
+            var kesirli = new TheBadge.Checks.TestPayload().Set("tip", 3.5d).Set("tier", 2d).Set("sureYil", 2d);
+            var s9 = TheBadge.World.SuggestionPipeline.Degerlendir("teknik direktor", "staff.hire", kesirli, k7Bands, k7Llm, K7Seed);
+            if (s9.Sonuc == TheBadge.World.OneriSonucu.Oneri)
+                hata += "ondalik tam sayi alani ONERI oldu (bus reddedecek - onaylanamaz kart) ";
+            // Ve bus GERCEKTEN reddediyor - iddianin dayanagi
+            var w = K7Kur();
+            var busRed = w.bus.Submit(K7Env("staff.hire"), kesirli, w.exec, K7Host, K7User);
+            if (busRed.Ok) hata += "bus ondalik tam sayiyi kabul etti (iddia dayanaksiz) ";
+        }
+
+        // (5) KANAL EKSIKSE DENETIME BASARI YAZILMIYOR
+        {
+            var g = TheBadge.Checks.EkonomiFixture.Kur(k7Rules, k7Eco, 500L, K7User);
+            g.Takvim.Pencere = TheBadge.World.TransferWindow.Yaz;
+            var depo = new TheBadge.World.WorldStore(g);
+            var ctx = new TheBadge.World.WorldContext(depo, k7Rules)
+            { Active = TheBadge.CommandBus.Context.Hub | TheBadge.CommandBus.Context.Online };
+            var denetim = new TheBadge.Checks.CollectingAuditSink();
+            var exec = new TheBadge.World.WorldExecutor(depo, ctx, denetim);
+            TheBadge.World.SocialStaffActions.Baglan(ctx, exec, k7Rules, null);   // PERSONA KANALI YOK
+            var bus = new TheBadge.CommandBus.CommandBus(k7Bands, ctx,
+                new SlidingWindowRateLimiter(k7RlCfg, 3, 300_000), new IdempotencyStore());
+            var o = bus.Submit(K7Env("social.arrange_talk"),
+                new TheBadge.Checks.TestPayload().Set("personaId", 1L).Set("ton", "uyar"), exec, K7Host, K7User);
+            if (o.Ok) hata += "kanalsiz host kabul etti ";
+            // DENETIM LOGUNDA basarili kayit OLMAMALI: reddedilen komut icin kalici bir
+            // "BASARILI" kaydi, denetim logunu olmayan bir basariyi anlatir hale getirirdi.
+            foreach (var kayit in denetim.Kayitlar)
+                if (kayit.Result == RejectionReason.None)
+                    hata += "reddedilen komut icin BASARILI denetim kaydi yazildi ";
+        }
+
+        if (hata.Length > 0) failures += Fail("K7IncelemeBulgulari", hata);
+        else Pass("K7IncelemeBulgulari(5 bulgu: personel suresi doluyor - payload tasiniyor - kimlik oneriyi kapsiyor - tam sayi tipi - kanalsizken denetime basari yazilmiyor)");
+    }
+
     // 31f) IZLENEBILIRLIK - CB 7.4
     {
         string hata = "";

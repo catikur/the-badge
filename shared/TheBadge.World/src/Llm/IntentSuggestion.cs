@@ -15,12 +15,28 @@ namespace TheBadge.World
 
     /// <summary>Öneri kartı — CB 7.1 "IntentSuggestion(actionType, payload, gerekçe)".
     /// ÖNERİ YÜRÜTME DEĞİLDİR (CB 7.2 K4): kullanıcı onayı olmadan hiçbir şey çalışmaz.</summary>
+    /// <summary>Doğrulamayı GEÇEN parametre — öneri kartının göstereceği ve onay sonrası
+    /// gönderilecek DEĞERİN TA KENDİSİ.</summary>
+    public struct OneriParam
+    {
+        public string Ad;
+        public bool Metin;      // true: `Deger` yerine `MetinDeger` geçerli
+        public double Deger;
+        public string MetinDeger;
+    }
+
     public sealed class IntentSuggestion
     {
         public Guid SuggestionId;
         public OneriSonucu Sonuc;
         public string ActionType;      // Sonuc == Oneri ise dolu
         public Tier Tier;              // KATALOGDAN gelir, LLM'den DEĞİL
+        /// <summary>DOĞRULANMIŞ payload — CB 7.1 sözleşmesi `IntentSuggestion(actionType,
+        /// payload, gerekçe)` diyor ve ilk yazımda payload YOKTU. Kart, doğrulamayı geçen
+        /// argümanları gösteremez ve onay anında AYNISINI gönderemezdi; ayrı ve DEĞİŞTİRİLEBİLİR
+        /// bir `IPayloadView` tutmak gerekirdi, yani gösterilen öneri ile onaylanıp denetime
+        /// giren şey birbirine BAĞLI OLMAZDI (inceleme bulgusu).</summary>
+        public OneriParam[] Payload;
         public string Gerekce;
         public string DusurmeSebebi;   // Dusuruldu ise dolu
         /// <summary>Girdi metninin ÖZETİ — CB 7.4 izlenebilirlik zinciri. Ham metin denetim
@@ -140,6 +156,7 @@ namespace TheBadge.World
             // KAPI 1 + KAPI 2 ön denetimi: eksik zorunlu alan ya da bant dışı değer öneriyi
             // düşürür. Onay sonrası tam zincir yine koşar — bu, kullanıcıya ONAYLAYAMAYACAĞI
             // bir kart göstermemek içindir.
+            var toplanan = new System.Collections.Generic.List<OneriParam>(def.Params.Length);
             for (int i = 0; i < def.Params.Length; i++)
             {
                 var p = def.Params[i];
@@ -148,6 +165,7 @@ namespace TheBadge.World
                     if (!payload.TryGetText(p.Name, out string ev))
                     { if (p.Required) return Dusur(s, "eksik alan: " + p.Name); continue; }
                     if (TransferActions.EnumIndex(p.EnumValues, ev) < 0) return Dusur(s, "enum dışı: " + p.Name);
+                    toplanan.Add(new OneriParam { Ad = p.Name, Metin = true, MetinDeger = ev });
                     continue;
                 }
                 if (p.Type == ParamType.Text)
@@ -156,21 +174,39 @@ namespace TheBadge.World
                     { if (p.Required) return Dusur(s, "eksik alan: " + p.Name); continue; }
                     if (p.MaxLength > 0 && tv != null && tv.Length > p.MaxLength)
                         return Dusur(s, "metin uzunluğu: " + p.Name);
+                    toplanan.Add(new OneriParam { Ad = p.Name, Metin = true, MetinDeger = tv });
                     continue;
                 }
-                if (!payload.TryGetNumber(p.Name, out double v))
+                double v;
+                if (p.Type == ParamType.Int)
+                {
+                    // TAM SAYI, TAM SAYI OLARAK denetlenir. Önce hepsini `TryGetNumber` ile
+                    // okuyordum: `tip: 3.5` bant içi görünüp ÖNERİ oluyordu, ama bus aynı
+                    // payload'ı `SchemaViolation` ile reddediyordu — yani kullanıcıya
+                    // ONAYLAYAMAYACAĞI kart gösteriliyordu (inceleme bulgusu). Bu, bu hattın
+                    // ön denetim yapma GEREKÇESİNİN tam tersiydi.
+                    if (!payload.TryGetInt(p.Name, out long iv))
+                    { if (p.Required) return Dusur(s, "eksik ya da tam sayı olmayan alan: " + p.Name); continue; }
+                    v = iv;
+                }
+                else if (!payload.TryGetNumber(p.Name, out v))
                 { if (p.Required) return Dusur(s, "eksik alan: " + p.Name); continue; }
+
                 if (p.BandKey != null)
                 {
                     if (!bantlar.TryGetBand(p.BandKey, out double min, out double max))
                         return Dusur(s, "bant tanımsız: " + p.BandKey);
                     if (v < min || v > max) return Dusur(s, "bant dışı: " + p.Name);
                 }
+                toplanan.Add(new OneriParam { Ad = p.Name, Deger = v });
             }
 
             s.Sonuc = OneriSonucu.Oneri;
             s.ActionType = def.ActionType;
             s.Tier = def.Tier;                 // KATALOGDAN — modelden değil
+            s.Payload = toplanan.ToArray();
+            // F3: kimlik ÖNERİYİ de kapsar (aşağıdaki yorum).
+            s.SuggestionId = OneriKimligi(ozet, saveSeed, s.ActionType, s.Payload);
             return s;
         }
 
@@ -183,9 +219,33 @@ namespace TheBadge.World
         }
 
         /// <summary>Öneri kimliği — CB 7.4 zincirini bağlar. `Guid.NewGuid()` YASAK (determinizm):
-        /// aynı girdi + aynı kayıt aynı kimliği verir, yani replay'de zincir yeniden kurulur.</summary>
-        internal static Guid OneriKimligi(ulong girdiOzeti, ulong saveSeed)
+        /// aynı girdi + aynı kayıt + AYNI ÖNERİ aynı kimliği verir.
+        ///
+        /// ÖNERİNİN KENDİSİ de kimliğe girer. Önce yalnız (girdi özeti, kayıt tohumu) kullanıyordum;
+        /// model DETERMİNİSTİK DEĞİL, yani aynı prompt aynı oturumda FARKLI aksiyon/payload
+        /// önerebilir ve o kartlar onay ile denetim kaydında AYIRT EDİLEMEZ hâle gelirdi —
+        /// kimliğin vaat ettiği bire bir girdi → öneri → sonuç izi kopardı (inceleme bulgusu).</summary>
+        internal static Guid OneriKimligi(ulong girdiOzeti, ulong saveSeed,
+                                          string actionType = null, OneriParam[] payload = null)
         {
+            // Öneri özeti: aksiyon adı + parametreler KATALOG SIRASINDA (sözlük değil dizi —
+            // sıra `def.Params` tarafından belirlenir, yani deterministik).
+            ulong oneriOzeti = 0UL;
+            if (actionType != null)
+            {
+                oneriOzeti = WorldHash.DizeOzeti(actionType);
+                if (payload != null)
+                    for (int i = 0; i < payload.Length; i++)
+                    {
+                        var pp = payload[i];
+                        oneriOzeti = oneriOzeti * 1099511628211UL ^ WorldHash.DizeOzeti(pp.Ad);
+                        oneriOzeti = oneriOzeti * 1099511628211UL
+                                   ^ (pp.Metin ? WorldHash.DizeOzeti(pp.MetinDeger ?? string.Empty)
+                                               : unchecked((ulong)BitConverter.DoubleToInt64Bits(pp.Deger)));
+                    }
+            }
+            girdiOzeti ^= oneriOzeti;
+
             ulong a = TheBadge.Sim.Determinism.Rng.Hash64(saveSeed, 1u, (uint)(girdiOzeti & 0xFFFFFFFF),
                                                           (uint)(girdiOzeti >> 32), 0x5C0Fu);
             ulong b = TheBadge.Sim.Determinism.Rng.Hash64(saveSeed, 1u, (uint)(girdiOzeti >> 32),
