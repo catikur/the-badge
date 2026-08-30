@@ -1831,6 +1831,30 @@ K8 sırasında xG mekanizması aranırken görüldü, K8'in kapsamı dışında.
 - Erişilebilirliği DOĞRULANMADI (aynı tick'te hem orta yapıp hem uzaklaştıran ajan gerekiyor).
   Bugün bir kapıyı düşürmüyor. Önerisi bekleyen kararlarda.
 
+### K8 inceleme turu — ✅ TAMAM (2026-08-30)
+Tek bulgu (Codex, P2) ve fazlasıyla yerinde: kapının BAŞLIK yorumu hâlâ borcu ödenmemiş
+anlatıyordu — `DÜZELTİLMEDİ (bilinçli)`, "karar bekleyen kararlarda", `[16·salt, 16·salt+12)`
+aralığında "topluyor" — oysa aynı commit borcu kapatıp eşiği sıkmıştı. Gövdeyi yeniden yazıp
+üstündeki bloğu bir daha okumamışım.
+
+- **Zararın doğru tarifi bulguda:** mesele "yorum eskimiş" değil, **birbiriyle çelişen iki
+  talimat**. Başlık "dokunma, karar bekliyor" diyor; on satır aşağıda gövde borcun kapandığını
+  söylüyor. Kırmızı bir kapıyı teşhis eden kişi önce başlığı okur ve yanlış sonuca varır.
+- **Codex bir yer gördü; aynı bayatlık iki yerde daha vardı** ve ikisi de bir TASARIM TERCİHİNİ
+  açık borca işaret ederek gerekçelendiriyordu: `EconomyTick` ("`Gauss01`'in kendisi FAZ 03
+  borcudur") ve `Valuation` ("`Gauss01` KULLANILMAZ — çakışma borcu açıktır"). Üçü de güncellendi.
+- **İki çağrı yerinin KODU değişmedi:** `Rand01` tabanlı üniform gürültüde kalıyorlar. `Gauss01`'e
+  geçmek ekonomi ve transfer sonuçlarını kaydırır ve karşılığında bir şey kazandırmaz — üniform
+  gürültü orada zaten doğru araçtı, borç yalnızca ikincil gerekçeydi. Yorumlar artık bunu söylüyor
+  ki sonraki okuyucu, hâlâ geçerli bir tercihi "kaldırılmayı bekleyen geçici çözüm" sanmasın.
+- **Kapı adı korundu:** `K3RngGauss01Borcu` artık borcu değil regresyonu bekliyor, ama ad
+  DECISIONS'taki çapraz referanslar çözülsün diye değiştirilmedi; başlık yorumu bunu açıkça yazıyor.
+- **Kural:** **bir borç kapatıldığında, o borcu GEREKÇE olarak gösteren her yorum da kapatılır.**
+  Kodu düzeltip üstündeki gerekçeyi bırakmak, düzeltmeyi okunamaz hale getirir. Bu turda ironisi
+  şuydu: konusu "bayat anlatan kapı yanıltır" olan bir PR, tam da bayat anlatan bir kapı içeriyordu.
+- **Diş ölçümü YOK — bilinçli.** Değişiklik yalnız yorum; bir kapının yakalayacağı davranış yok.
+  Diş ölçtüğünü iddia etmek gösteri olurdu.
+
 ## Bekleyen kararlar
 
 - **xG katsayıları %5,7 az tahmin ediyor (K8 sonrası, 2026-08-30).** `Gauss01` düzeltmesi gol
