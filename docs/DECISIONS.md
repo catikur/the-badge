@@ -1894,14 +1894,38 @@ bir kapı yazıldı. Doğru karar çıktı — elle düzeltme, aşağıdaki iki 
 - **Kural:** **bir salt aralığının genişliğini ayarlanabilir bir sayı belirliyorsa, o sayı artık
   balance değil determinizm parametresidir.** Ya kapıya bağlanır ya da koddan sabitlenir.
 
+### K9-B: xG sapması — K8'deki OKUMAM YANLIŞTI, gerçek bulgu daha eski ve sistematik (2026-08-30)
+K8'de "gol 2,41→2,57 çıktı, xG sabit kaldı, yani düzeltme dönüşüm oranını artırdı" yazmıştım.
+Tek 500 maçlık ölçüme dayanan bu okuma **yanlıştı**.
+
+- **Ölçüm:** 8 BAĞIMSIZ tohum ailesi × 500 maç, işaretli sapma. Sonuç **ORT +%4,26 · SD 2,52 ·
+  aralık [+1,44, +8,52]**. Yani tek bir 500 maçlık ölçümün doğal yayılımı ±2,5 puan; K8'deki %5,7
+  ile K9-A'daki %2,5 bu yayılımın İÇİNDE. İkisi de motor değişikliği hakkında bir şey söylemiyordu.
+- **Asıl bulgu 8/8 ailenin POZİTİF olması** (tesadüf olasılığı ≈ %0,8): xG sistematik olarak az
+  tahmin ediyordu ve bu K8'DEN ÖNCE DE BÖYLEYDİ — o zaman sadece düşük bir örnek (%1,1) çekmişiz.
+- **Kaynak ayrıştırıldı — penaltı DEĞİL.** Penaltı modelinin beklenen dönüşümü ≈0,753
+  (pCenter/tahmin dağılımından, direk 0,04 düşülerek); kaydedilen `hedefOrtalama` 0,76. Fark <%1 ve
+  penaltı hacmi 0,24/maç — toplam sapmanın kaynağı olamaz. Sapma **açık oyun xG'sinde**.
+- **DÜZELTME BALANCE İŞİ, SPEC İŞİ DEĞİL:** ME 15.2 xG'nin FORMÜLÜNÜ (lojistik + terimler)
+  belirtir; katsayılar `balance/sim.balance.json` → `shot.xg` altında [KALİBRE]'dir. Formüle
+  dokunulmadı, yalnız `b0` ayarlandı: **-2,48 → -2,43**.
+- **Nudge ölçülerek seçildi** (aynı 8 aile): b0 -2,48 → ORT +%4,26 · b0 **-2,43 → ORT +%0,33**
+  (aralık [-2,37, +4,42]) · b0 -2,40 → ORT −%1,95. Ortayı tutturan -2,43.
+- **Yan kazanç — kapı sağlamlaştı, bant GEVŞEMEDİ.** `M16ECalibGenis`'in xG sapma tavanı %10;
+  eski merkezle en kötü gözlem 8,52 (pay 1,5 puan), yeni merkezle 4,42 (pay 5,6 puan). Yani
+  "gürültüden kırmızıya dönme" riski bandı gevşetmeden yarıya indi. Gerçek yanlılığı düzeltmek,
+  kapının kırılganlığını da düzeltti — bandı esnetmek bunu yapmazdı, yalnız gizlerdi.
+- **`balanceHash` DEĞİŞTİ** (0xCE04A7006C62F2C2 → 0x4A949442E9BE564C): bu bir balance değişikliğidir,
+  golden set yeniden üretildi. K9-A'nın motor değişikliğinden farkı burada görünür.
+- **Kural:** **tek bir örneklemden "şu değişiklik şunu yaptı" sonucu çıkarma.** Önce o ölçünün
+  kendi yayılımını ölç; fark yayılımın içindeyse ortada bulgu yoktur. K8'de bunu yapmadım ve
+  olmayan bir nedensellik yazdım.
+
 ## Bekleyen kararlar
 
-- **xG katsayıları %5,7 az tahmin ediyor (K8 sonrası, 2026-08-30).** `Gauss01` düzeltmesi gol
-  ortalamasını 2,41 → 2,57 çıkardı; xG 2,43'te sabit kaldı. Sapma tavanın (%10) altında ama
-  1,1'den 5,7'ye çıktı. Seçenekler: (a) balance sprintinde xG katsayılarını yeni dönüşüm oranına
-  nudge et; (b) dönüşüm oranının NEDEN çıktığını önce bul (mekanizma K8'de kanıtlanamadı), sonra
-  karar ver; (c) dokunma — bantta. **Öneri: (b) sonra (a)** — katsayıyı anlamadan nudge etmek,
-  bir sonraki motor değişikliğinde aynı işi tekrar yaptırır.
+- ~~**xG katsayıları az tahmin ediyor.**~~ → **YAPILDI (2026-08-30, K9-B):** seçenek (b)
+  sonra (a) — önce neden arandı. "%5,7" ölçüm gürültüsüydü; gerçek yanlılık +%4,26 ve K8'den
+  eskiydi. `shot.xg.b0` -2,48 → -2,43 ile merkeze oturtuldu (+%0,33).
 - ~~**`Physics · 700+entity · salt 63` adres paylaşımı.**~~ → **YAPILDI (2026-08-30, K9-A):**
   seçenek (b) — tarayan kapı yazıldı, sonra düzeltildi. Kapı ikinci bir bulgu daha çıkardı
   (balance'ın salt aralığı genişliğini belirlemesi); elle düzeltme ikisini de kaçırırdı.
