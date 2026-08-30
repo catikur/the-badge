@@ -1592,6 +1592,46 @@ yanlış noktada ölçen kapı da yanıltır.)
 
 `K2HashKapsami` dördüncü dilim üst üste yeni alanı yakaladı (`GameState.Lig`).
 
+### K6 inceleme turu — ✅ TAMAM (2026-08-30)
+Codex dört bulgu çıkardı (3 P1, 1 P2); dördü de haklı. Biri **para basma yolu**ydu.
+
+1. **(P1) Alıcı kararı SATICI eşikleriyle veriliyordu.** `TransferTick` tek rutin (`Valuation.Karar`)
+   kullanıyordu; o rutin SATICI mantığıdır ve "yeterince YÜKSEK"i kabul eder. Teklifi karşı taraf
+   açtığında AI **alıcı** rolündedir — ama aynı rutinle, istenen fiyat ne kadar yüksekse o kadar
+   istekli oluyordu. Sömürü: gelen teklife FAHİŞ karşı teklif ver, AI kabul etsin, satışı tamamla.
+   Çözüm: `Valuation.AliciKarari` — eşikler TERS (ucuzu kabul, fahişi ret, AŞAĞI pazarlık), ayrı
+   [KALİBRE] katsayılar ve sıra denetimi (`aliciKabulEsigiOran < aliciRedEsigiOran`).
+   **Ders: iki rol simetrik değildir; "aynı fonksiyon iki tarafa da çalışır" varsayımı sömürü üretti.**
+2. **(P1) Yayın patlarsa durum geri alınmıyordu.** `KlipPaylas` ağ zaman aşımıyla fırlarsa istisna
+   `Apply` ve `Persist`ten SONRA kaçıyor, `Geri` çağrılmıyor, bus rezervasyonu serbest bırakılıyordu:
+   durum ilerlemiş kalıyor ve tekrar denemede aynı klip yeniden yayınlanabiliyordu. Çözüm: yayın
+   `try/catch` içinde, patlarsa `journal.Geri`. Maç kuyruğu boşaltması da aynı korumayı aldı.
+3. **(P1) Lig şifresinin TUZSUZ HIZLI özeti kalıcı duruma yazılıyordu.** "Ham değil, özeti" diye
+   yazmıştım ama `DizeOzeti` tuzsuz bir xxHash64: düşük entropili bir lig şifresi için sözlük
+   saldırısı ucuzdur, yani şifreyi saklamaktan anlamlı ölçüde iyi DEĞİLDİ. Çözüm: alan tamamen
+   kaldırıldı — şifre kalıcı durumda **hiçbir biçimde** iz bırakmaz, doğrulama sunucunundur.
+4. **(P2) Uzlaştırma ortada patlarsa uygulanmış önek tekrar oynuyordu.** `Clear()` döngü SONUNDAydı;
+   gönderim ortada patlayınca o satıra ulaşılmıyor, zaten uygulanmış komutlar kuyrukta kalıyor ve
+   sonraki bağlanmada tekrar oynuyordu — o turun raporu da kayboluyordu. Çözüm: her tamamlanan
+   girdi ANINDA kuyruktan düşer; rapor dışarıdan verilen listeye yazılır, istisna yukarı çıksa bile
+   tamamlananların raporu elde kalır ve kuyrukta yalnız gönderilmemiş sonek durur.
+
+- **Kapı:** `K6IncelemeBulgulari`. Dördü de ters çevrilip ölçüldü — satıcı rutini alıcıya
+  verilince "AI alıcı FAHİŞ fiyatı kabul etti (para basma yolu açık)", geri alma kalkınca "yayın
+  patlayınca sürüm geri alınmadı", eski `Clear()` konumu geri gelince "ikinci bağlanma 5 komut
+  gönderdi (uygulanmış önek tekrar oynadı)", şifre sızıntısı eklenince "farklı şifreler farklı
+  hash veriyor".
+
+**Şifre kapım İLK HÂLİYLE DİŞSİZDİ.** "Şifreli katılım ile şifresiz katılım aynı hash'i vermeli"
+diye yazmıştım; sızıntıyı `ozet % 3` ile taklit ettiğimde sonuç tesadüfen 0 çıktı ve hash'ler
+eşleşti — kapı yeşil kaldı. Üç yollu karşılaştırmaya çevrildi (şifresiz, şifre A, şifre B): şifreden
+türeyen herhangi bir şey sızarsa iki FARKLI şifre mutlaka ayrışır, bu şansa bağlı değil.
+**Ders: tek örnekle kurulan eşitlik iddiası, o örneğin şansına bağlıdır.**
+
+**Kalan borç (Nakama köprüsü dilimine):** yerel geri alma, uzak tarafın ZATEN ALDIĞI bir yayını geri
+çağıramaz. `IOnlineSink` artık `commandId` taşıyor — ikinci kopyayı elemek köprünün bu anahtarla
+yapacağı dedup'ın (outbox) işi. Anahtarsız arayüz bu güvenceyi yapısal olarak imkânsız kılardı.
+
 ## Bekleyen kararlar
 - **CB 4.2 tablosu ile ME komut kümesi çelişiyor (K4 bulgusu, 2026-08-29):** spec `squad.set_player_anchor`/
   `set_player_role`/`set_instruction`'ı "Hub + Maç" sayıyor; motorda anchor/rol maç komutu yok,

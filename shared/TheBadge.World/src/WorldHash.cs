@@ -103,7 +103,6 @@ namespace TheBadge.World
             b.I32(st.Lig.LigId); b.I64(st.Lig.KurucuUserId);
             b.U8(st.Lig.Chaos); b.U8(st.Lig.Hiz); b.I64(st.Lig.ButceTl);
             b.U16(unchecked((ushort)st.Lig.SaatDilimi));
-            b.I64(unchecked((long)st.Lig.SifreOzeti));
 
             // --- Taktik + şablonlar ---
             b.U8(st.Taktik.Mentalite); b.U8(st.Taktik.Tempo); b.U8(st.Taktik.Pres); b.U8(st.Taktik.Hat);

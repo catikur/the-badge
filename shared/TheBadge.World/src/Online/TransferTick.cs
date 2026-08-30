@@ -46,7 +46,14 @@ namespace TheBadge.World
                 int oi = st.IndexOfPlayer(t.OyuncuId);
                 if (oi < 0) continue;
 
-                var karar = Valuation.Karar(st.Oyuncular[oi], t.BedelTl, t.TurSayisi, tb, saveSeed, out long karsi);
+                // HANGİ TARAF ADINA OYNUYORUZ: teklifi BİZ açtıysak karşı taraf SATICIdır
+                // (bizim paramıza karşı oyuncusunu veriyor); teklifi ONLAR açtıysa karşı taraf
+                // ALICIdır (bizim oyuncumuza para veriyor). İki rolün eşikleri TERStir; tek
+                // rutini ikisine de kullanmak, alıcıya fahiş fiyatı kabul ettiriyordu
+                // (inceleme bulgusu, P1).
+                var karar = bizTeklifEttik
+                    ? Valuation.Karar(st.Oyuncular[oi], t.BedelTl, t.TurSayisi, tb, saveSeed, out long karsi)
+                    : Valuation.AliciKarari(st.Oyuncular[oi], t.BedelTl, t.TurSayisi, tb, saveSeed, out karsi);
                 islenen++;
                 switch (karar)
                 {

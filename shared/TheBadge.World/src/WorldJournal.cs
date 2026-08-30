@@ -27,7 +27,7 @@ namespace TheBadge.World
     public static class LeagueField
     {
         public const byte LigId = 1, Kurucu = 2, Chaos = 3, Hiz = 4, Butce = 5,
-                          SaatDilimi = 6, SifreOzeti = 8;
+                          SaatDilimi = 6;
     }
 
     /// <summary>Transfer teklifi alanları — CB 4.3.</summary>
@@ -96,6 +96,7 @@ namespace TheBadge.World
         /// alınamayan DIŞ etkilerdir; işlem yarıda kalırsa yayınlanmamaları gerekir.</summary>
         public struct OnlineYayin
         {
+            public Guid CommandId;         // uzak tarafın dedup anahtarı
             public bool Klip;              // false = rapor
             public int MacId, PencereSn;
             public byte Kod;               // klip: hedef · rapor: sebep
@@ -104,10 +105,10 @@ namespace TheBadge.World
         }
         readonly List<OnlineYayin> onlineYayinlar = new List<OnlineYayin>();
         public IReadOnlyList<OnlineYayin> OnlineYayinlar => onlineYayinlar;
-        public void OnlineKlip(int macId, int pencereSn, byte hedef, long userId)
-            => onlineYayinlar.Add(new OnlineYayin { Klip = true, MacId = macId, PencereSn = pencereSn, Kod = hedef, UserId = userId });
-        public void OnlineRapor(long hedefUserId, byte sebep, string notlar, long userId)
-            => onlineYayinlar.Add(new OnlineYayin { Klip = false, HedefUserId = hedefUserId, Kod = sebep, Notlar = notlar, UserId = userId });
+        public void OnlineKlip(Guid commandId, int macId, int pencereSn, byte hedef, long userId)
+            => onlineYayinlar.Add(new OnlineYayin { CommandId = commandId, Klip = true, MacId = macId, PencereSn = pencereSn, Kod = hedef, UserId = userId });
+        public void OnlineRapor(Guid commandId, long hedefUserId, byte sebep, string notlar, long userId)
+            => onlineYayinlar.Add(new OnlineYayin { CommandId = commandId, Klip = false, HedefUserId = hedefUserId, Kod = sebep, Notlar = notlar, UserId = userId });
 
         public void Clear() { yazmalar.Clear(); olaylar.Clear(); geriDegerler.Clear(); adYazmalari.Clear(); adGeri.Clear(); macKomutlari.Clear(); onlineYayinlar.Clear(); }
 
@@ -273,8 +274,6 @@ namespace TheBadge.World
                         case LeagueField.Hiz: mevcut = st.Lig.Hiz; min = 0; max = 255; return true;
                         case LeagueField.Butce: mevcut = st.Lig.ButceTl; min = 0; return true;
                         case LeagueField.SaatDilimi: mevcut = st.Lig.SaatDilimi; min = short.MinValue; max = short.MaxValue; return true;
-                        // Şifre ÖZETİ 64 bit: aralık denetimi anlamsız, her desen geçerli.
-                        case LeagueField.SifreOzeti: mevcut = unchecked((long)st.Lig.SifreOzeti); min = long.MinValue; max = long.MaxValue; return true;
                     }
                     break;
                 case MutTarget.TransferTeklif:
@@ -476,7 +475,6 @@ namespace TheBadge.World
                         case LeagueField.Hiz: st.Lig.Hiz = (byte)v; break;
                         case LeagueField.Butce: st.Lig.ButceTl = v; break;
                         case LeagueField.SaatDilimi: st.Lig.SaatDilimi = (short)v; break;
-                        case LeagueField.SifreOzeti: st.Lig.SifreOzeti = unchecked((ulong)v); break;
                     }
                     break;
                 case MutTarget.TransferTeklif:

@@ -36,6 +36,12 @@ namespace TheBadge.World
             public double maasTalepOran;         // haftalık maaş talebi = değer × oran
             public int maxTur;
             public int teklifGecerlilikHafta;
+            // ALICI tarafı eşikleri — satıcınınkilerin AYNASI DEĞİL, TERSİ. Satıcı "yeterince
+            // YÜKSEK"i kabul eder; alıcı "yeterince DÜŞÜK"ü. Aynı rutini iki tarafa da kullanmak,
+            // alıcının fahiş fiyatı kabul etmesine yol açıyordu (inceleme bulgusu, P1).
+            public double aliciKabulEsigiOran;       // değerin bu katı ve ALTI → kabul
+            public double aliciRedEsigiOran;         // değerin bu katı ve ÜSTÜ → ret
+            public double aliciKarsiTeklifHedefOran; // alıcı AŞAĞI pazarlık eder
         }
         [Serializable] public sealed class FesihCfg
         {
@@ -67,6 +73,12 @@ namespace TheBadge.World
             if (pazarlik.maxTur <= 0) throw new ArgumentException("transfer.balance: pazarlik.maxTur > 0 olmalı.");
             if (pazarlik.teklifGecerlilikHafta <= 0) throw new ArgumentException("transfer.balance: pazarlik.teklifGecerlilikHafta > 0 olmalı.");
             if (pazarlik.maasTalepOran <= 0) throw new ArgumentException("transfer.balance: pazarlik.maasTalepOran > 0 olmalı.");
+            // Alıcı eşiklerinin SIRASI satıcınınkinin TERSİdir: kabul eşiği ret eşiğinin ALTINDA
+            // olmalı. Ters kurulursa pazarlık penceresi kapanır ve alıcı hiç karşı teklif vermez.
+            if (!(pazarlik.aliciKabulEsigiOran < pazarlik.aliciRedEsigiOran))
+                throw new ArgumentException("transfer.balance: pazarlik.aliciKabulEsigiOran < aliciRedEsigiOran olmalı.");
+            if (pazarlik.aliciKarsiTeklifHedefOran <= 0 || pazarlik.aliciKarsiTeklifHedefOran > pazarlik.aliciKabulEsigiOran)
+                throw new ArgumentException("transfer.balance: pazarlik.aliciKarsiTeklifHedefOran (0, aliciKabulEsigiOran] olmalı.");
             if (fesih.kalanHaftaCarpani < 0) throw new ArgumentException("transfer.balance: fesih.kalanHaftaCarpani ≥ 0 olmalı.");
             if (fesih.asgariTl < 0) throw new ArgumentException("transfer.balance: fesih.asgariTl ≥ 0 olmalı.");
         }

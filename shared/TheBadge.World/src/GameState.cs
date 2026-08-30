@@ -44,9 +44,9 @@ namespace TheBadge.World
         // çizelgesinden TÜRETİLEMEZ (lige katılan istemci, ligde kaç kulüp olduğunu bilmez).
         // Hash'e giren her alan replay dördülünden yeniden üretilebilmelidir; türetilemeyen bir
         // sayıyı oraya koymak iki istemciyi ayrıştırırdı. Mevcut ve tavan denetimi sunucunundur.
-        /// <summary>Katılım şifresi ÖZETİ — ham şifre kalıcı duruma YAZILMAZ ve hash'e ham
-        /// metin olarak girmez (K4 preset adı dersinin güvenlik tarafı). 0 = şifresiz lig.</summary>
-        public ulong SifreOzeti;
+        // ŞİFRE ALANI KASITLI OLARAK YOK: ne ham ne özet. Tuzsuz hızlı bir özet, düşük entropili
+        // bir lig şifresi için sözlük saldırısına açıktır — şifreyi saklamaktan anlamlı ölçüde
+        // iyi değildir. Kimlik doğrulama SUNUCUnundur; şifre durumda iz bırakmaz.
     }
 
     /// <summary>Transfer teklifi — CB 4.3 `transfer.propose_offer` / `respond_offer`.

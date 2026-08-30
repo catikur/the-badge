@@ -185,7 +185,11 @@ namespace TheBadge.World
                         detail = "maç kuyruğu bağlı değil";
                         return RejectionReason.StateConflict;
                     }
-                    for (int i = 0; i < journal.MacKomutlari.Count; i++) macKuyrugu.Enqueue(journal.MacKomutlari[i]);
+                    try
+                    {
+                        for (int i = 0; i < journal.MacKomutlari.Count; i++) macKuyrugu.Enqueue(journal.MacKomutlari[i]);
+                    }
+                    catch { journal.Geri(st); throw; }   // aynı gerekçe: yayınlama commit'in parçası
                 }
 
                 if (journal.OnlineYayinlar.Count > 0)
@@ -196,12 +200,22 @@ namespace TheBadge.World
                         detail = "online kanal bağlı değil";
                         return RejectionReason.StateConflict;
                     }
-                    for (int i = 0; i < journal.OnlineYayinlar.Count; i++)
+                    // YAYIN PATLARSA DURUM GERİ ALINIR. Önce korumasızdı: `KlipPaylas` ağ
+                    // zaman aşımıyla fırlarsa istisna `Apply` ve `Persist`ten SONRA kaçıyor,
+                    // `Geri` çağrılmıyor ve bus rezervasyonu serbest bırakıyordu — durum ilerlemiş
+                    // kalıyor, tekrar denemede aynı klip yeniden yayınlanabiliyordu (inceleme
+                    // bulgusu, P1). Yerel taraf artık tutarlı; UZAK tarafın ikinci kopyayı elemesi
+                    // `commandId` dedup'ıyla köprünün işi (DECISIONS: outbox borcu).
+                    try
                     {
-                        var y = journal.OnlineYayinlar[i];
-                        if (y.Klip) onlineKanal.KlipPaylas(y.MacId, y.PencereSn, y.Kod, y.UserId);
-                        else onlineKanal.OyuncuRaporla(y.HedefUserId, y.Kod, y.Notlar, y.UserId);
+                        for (int i = 0; i < journal.OnlineYayinlar.Count; i++)
+                        {
+                            var y = journal.OnlineYayinlar[i];
+                            if (y.Klip) onlineKanal.KlipPaylas(y.CommandId, y.MacId, y.PencereSn, y.Kod, y.UserId);
+                            else onlineKanal.OyuncuRaporla(y.CommandId, y.HedefUserId, y.Kod, y.Notlar, y.UserId);
+                        }
                     }
+                    catch { journal.Geri(st); throw; }
                 }
                 return RejectionReason.None;
             }

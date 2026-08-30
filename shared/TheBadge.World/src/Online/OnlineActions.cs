@@ -12,8 +12,12 @@ namespace TheBadge.World
     /// boşaltır (K4 inceleme dersi — doğrudan yazan handler geri alınamıyordu).</summary>
     public interface IOnlineSink
     {
-        void KlipPaylas(int macId, int pencereSn, byte hedef, long userId);
-        void OyuncuRaporla(long hedefUserId, byte sebep, string notlar, long raporlayanUserId);
+        /// <summary>`commandId` UZAK TARAFIN dedup anahtarıdır. Yerel geri alma, uzak tarafın
+        /// zaten ALDIĞI bir yayını geri çağıramaz (ağ tek yönlüdür); tekrar denemede ikinci
+        /// kopyayı engelleyecek olan köprünün bu anahtarla yaptığı dedup'tır (inceleme
+        /// bulgusu, P1). Anahtarsız arayüz bu güvenceyi YAPISAL OLARAK imkânsız kılardı.</summary>
+        void KlipPaylas(Guid commandId, int macId, int pencereSn, byte hedef, long userId);
+        void OyuncuRaporla(Guid commandId, long hedefUserId, byte sebep, string notlar, long raporlayanUserId);
     }
 
     /// <summary>CB 4.4 ONLINE AKSİYONLARI — 5 aksiyon (`league.create`, `join`, `set_rules`,
@@ -123,11 +127,12 @@ namespace TheBadge.World
             {
                 detail = null;
                 if (!p.TryGetInt("ligId", out long lid)) return RejectionReason.SchemaViolation;
-                // Şifre ham hâliyle SAKLANMAZ: kalıcı duruma ve hash'e yalnız özeti girer.
-                ulong ozet = p.TryGetText("sifre", out string sifre) && !string.IsNullOrEmpty(sifre)
-                             ? WorldHash.DizeOzeti(sifre) : 0UL;
+                // ŞİFRE HİÇBİR BİÇİMDE KALICI DURUMA YAZILMAZ. Önce "ham değil, özeti" yazıyordum;
+                // `DizeOzeti` TUZSUZ ve HIZLI bir xxHash64 — düşük entropili bir lig şifresi için
+                // sözlük saldırısı ucuzdur, yani şifreyi saklamaktan anlamlı ölçüde iyi DEĞİLDİ
+                // (inceleme bulgusu, P1). Doğrulama SUNUCUnundur; şifre yalnız komut payload'ında
+                // sunucuya gider ve durumda iz bırakmaz.
                 j.Set(MutTarget.Lig, 0, LeagueField.LigId, lid);
-                j.Set(MutTarget.Lig, 0, LeagueField.SifreOzeti, unchecked((long)ozet));
                 // Kurucu DEĞİLİZ: katılan üyenin kurucu alanı 0 kalır ve `set_rules` kapalıdır.
                 j.Emit(new WorldEvent(WorldEventType.LigeKatilindi, (int)lid, 0, st.Takvim.Sezon, st.Takvim.Hafta));
                 return RejectionReason.None;
@@ -162,7 +167,7 @@ namespace TheBadge.World
                     return RejectionReason.SchemaViolation;
                 int hi = TransferActions.EnumIndex(PaylasimHedefi, hedef);
                 if (hi < 0) { detail = "hedef: " + hedef; return RejectionReason.SchemaViolation; }
-                j.OnlineKlip((int)macId, (int)pencere, (byte)hi, env.UserId);
+                j.OnlineKlip(env.CommandId, (int)macId, (int)pencere, (byte)hi, env.UserId);
                 return RejectionReason.None;
             }
         }
@@ -178,7 +183,7 @@ namespace TheBadge.World
                 if (si < 0) { detail = "sebep: " + sebep; return RejectionReason.SchemaViolation; }
                 if (hedef == env.UserId) { detail = "kendini raporlayamazsın"; return RejectionReason.StateConflict; }
                 p.TryGetText("notlar", out string notlar);
-                j.OnlineRapor(hedef, (byte)si, notlar, env.UserId);
+                j.OnlineRapor(env.CommandId, hedef, (byte)si, notlar, env.UserId);
                 return RejectionReason.None;
             }
         }

@@ -77,28 +77,41 @@ namespace TheBadge.World
         }
 
         /// <summary>Yeniden bağlanma: kuyruk SIRAYLA sunucuya gönderilir. Sunucu otoriter —
-        /// reddettiği komut düşer ama SEBEBİYLE raporlanır. Kuyruk her hâlükârda boşalır:
-        /// yarım uygulanmış bir kuyruk, ikinci bir yeniden bağlanmada komutları TEKRAR
-        /// oynatırdı (idempotency deposu çoğunu yakalar ama ona güvenmek yapısal değil).</summary>
+        /// reddettiği komut düşer ama SEBEBİYLE raporlanır.
+        ///
+        /// HER TAMAMLANAN GİRDİ ANINDA KUYRUKTAN DÜŞER. Önce sonunda `Clear()` çağırıyordum;
+        /// gönderim ortada PATLARSA (ağ kopması) o satıra hiç ulaşılmıyor ve ZATEN UYGULANMIŞ
+        /// önek kuyrukta kalıyordu — sonraki bağlanmada tekrar oynardı ve o turun raporu da
+        /// kaybolurdu (inceleme bulgusu, P2). Artık istisna yukarı çıksa bile kuyrukta yalnız
+        /// GÖNDERİLMEMİŞ sonek kalır; tamamlananların raporu `tamamlanan` üzerinden dışarı verilir.</summary>
         public UzlastirmaKaydi[] YenidenBaglan(Func<CommandEnvelope, IPayloadView, (RejectionReason, string)> sunucuyaGonder)
         {
+            var rapor = new List<UzlastirmaKaydi>();
+            YenidenBaglan(sunucuyaGonder, rapor);
+            return rapor.ToArray();
+        }
+
+        /// <summary>Rapor DIŞARIDAN verilen listeye yazılır: gönderim patlarsa çağıran taraf
+        /// o ana kadar tamamlananların raporunu yine de elinde tutar.</summary>
+        public void YenidenBaglan(Func<CommandEnvelope, IPayloadView, (RejectionReason, string)> sunucuyaGonder,
+                                  List<UzlastirmaKaydi> rapor)
+        {
             if (sunucuyaGonder == null) throw new ArgumentNullException(nameof(sunucuyaGonder));
-            var rapor = new UzlastirmaKaydi[kuyruk.Count];
-            for (int i = 0; i < kuyruk.Count; i++)
+            if (rapor == null) throw new ArgumentNullException(nameof(rapor));
+            while (kuyruk.Count > 0)
             {
-                var (env, payload) = kuyruk[i];
-                var (sebep, detay) = sunucuyaGonder(env, payload);
-                rapor[i] = new UzlastirmaKaydi
+                var (env, payload) = kuyruk[0];
+                var (sebep, detay) = sunucuyaGonder(env, payload);   // patlarsa: bu girdi KUYRUKTA kalır
+                kuyruk.RemoveAt(0);                                   // tamamlandı → hemen düş
+                rapor.Add(new UzlastirmaKaydi
                 {
                     CommandId = env.CommandId,
                     ActionType = env.ActionType,
                     Sonuc = sebep == RejectionReason.None ? UzlastirmaSonucu.Uygulandi : UzlastirmaSonucu.Dustu,
                     Sebep = sebep,
                     Detay = detay
-                };
+                });
             }
-            kuyruk.Clear();
-            return rapor;
         }
 
         /// <summary>Kuyruğu boşaltır — kullanıcı "bekleyenleri iptal et" derse. Rapor üretmez.</summary>
