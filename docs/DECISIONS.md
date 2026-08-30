@@ -1480,6 +1480,50 @@ katman (K2) onu zaten yapıyordu, ve kural ÖLÜ kaldı. Üçünde de fark ettir
 çevirip kırmızıya dönmesini beklemek.** Dönmediğinde kapı zayıf değil, kural gereksizdi. Bundan
 sonra yeni bir `IActionRule` yazmadan önce `WorldContext`'in o aksiyon için ne yaptığına bakılır.
 
+### K5 inceleme turu — ✅ TAMAM (2026-08-30)
+PR #19'da iki bağımsız inceleyici (Codex + Bugbot) **altı** bulgu çıkardı; altısı da haklı, ikisini
+ikisi birden gördü. Biri (serbest oyuncu maaş talebi) inceleme gelmeden önce kendi okumamda
+bulunmuş ve düzeltilmişti — aynı yere iki yoldan varmak bulgunun gerçekliğini pekiştirdi.
+
+1. **(P1 ×2) Süresi dolmuş teklif yuvayı SONSUZA DEK kilitliyordu.** Cevap yolu süresi dolmuş
+   teklifi reddediyordu — **ret dahil**; iptal aksiyonu yok, haftalık tick temizlemiyor. Sekiz
+   teklif süresi dolduktan sonra kulüp bir daha teklif VEREMEZDİ. Çözüm üç parçalı: (a) yeni teklif
+   ararken süresi dolmuş yuva GERİ KAZANILIR, (b) süresi dolmuş teklife **ret** verilebilir (sıra
+   beklemeden — kapatmanın kullanıcı yolu), kabul/karşı teklif hâlâ reddedilir, (c) süresi dolmuş
+   teklif "açık teklif" SAYILMAZ; sayılsaydı bir kez süresi geçen teklif o oyuncuya bir daha
+   teklif vermeyi engellerdi. (c)'yi kapının kendisi yakaladı: (a)'yı yazdıktan sonra kapı
+   "yuva geri kazanılmadı(bu oyuncuya açık teklifin zaten var)" dedi.
+2. **(P1 ×2) Kabul, sahipliği YENİDEN denetlemiyordu.** `respond_offer` KAPI 3'te `OwnerNeed.Yok`;
+   yön yalnız `TeklifEdenClubId`den çıkarılıyordu. Teklif açıkken oyuncu satılmış ya da feshedilmişse
+   BAYAT teklif artık bizde OLMAYAN birini taşır, bedeli kasaya yazar, maaş defterini bozardı.
+   Teklif "kim teklif etti"yi söyler, "oyuncu ŞU AN kimde"yi söylemez. Çözüm: kabul anında satışta
+   oyuncu HÂLÂ bizim, alışta HÂLÂ yabancı olmalı.
+3. **(P1) Serbest oyuncu maaş talebi yoktu** — 90 güçlü bir oyuncu haftalık ₺0'a imzalanabiliyordu
+   ve yeni eklenen `maasTalepOran` hiçbir işe yaramıyordu (`Valuation.MaasTalebi` ölü koddu).
+   Kendi okumamda bulunup düzeltilmişti; `SerbestMaasKurali` talebi zorunlu kılıyor.
+4. **(P2) Kardeş teklifler transfer sonrası CANLI kalıyordu.** Kabul yalnız seçilen yuvayı
+   kapatıyordu; `release_player` teklif dizisine hiç dokunmuyordu. Aynı oyuncu ikinci kez
+   satılabilir ya da artık gitmiş biri için bedel ödenebilirdi.
+5. **(P2) Kadrodan çıkan oyuncu KAPTAN kalıyordu.** Satış ve fesih `ClubId`i değiştiriyor ama
+   `KaptanPlayerId`e dokunmuyordu: hash'lenen kalıcı durum kadroda olmayan birini kaptan gösterirdi.
+6. **(P2) Teklif kimliği katalog bandını aşıyordu.** `SonrakiTeklifId` "açık yuvaların en büyüğü + 1"
+   idi. PR açıklamasında bunu "yuvalar boşalınca sıfırlanır, sorun değil" diye NOT olarak yazmıştım —
+   **yanlış**: teklifler ÇAKIŞIRSA max hiç sıfırlanmaz, kimlik sınırsız büyür ve 4096'yı aşan teklif
+   OLUŞTURULABİLİR ama `transfer.teklifId` bandı yüzünden asla CEVAPLANAMAZ. Çözüm: en küçük
+   kullanılmayan kimlik, tavan `yapi.transferTeklifIdMax` [KALİBRE] ve bir kapı bu tavanın katalog
+   bandıyla AYNI kalmasını zorluyor (K4'ün `MaxSubs` dersinin kardeşi).
+
+- **Kapı:** `K5IncelemeBulgulari` (6 bulgu tek kapıda). Dördü ters çevrilip ölçüldü — yuva geri
+  kazanımı kapatılınca "yuva geri kazanılmadı(teklif yuvası dolu)", sahiplik denetimi kalkınca
+  "bayat satış kasaya para yazdı", kardeş/kaptan temizliği kalkınca "kardeş teklif 1 açık kaldı ·
+  satışta kaptanlık düşmedi", eski kimlik algoritması geri konunca "teklif kimliği bandı aştı
+  (4097 > 4096)".
+
+**Bu turun dersi:** PR açıklamasına "biliyorum ama önemsiz" diye yazdığım bir NOT (kimlik tekilliği)
+gerçek bir hataydı — gerekçem "yuvalar periyodik olarak boşalır" varsayımına dayanıyordu ve o
+varsayım hiçbir yerde ZORLANMIYORDU. **Açık uç olarak yazdığım şeyin gerekçesi bir varsayıma
+dayanıyorsa, o varsayımı ya kapıya bağla ya da bulgu say.**
+
 ## Bekleyen kararlar
 - **CB 4.2 tablosu ile ME komut kümesi çelişiyor (K4 bulgusu, 2026-08-29):** spec `squad.set_player_anchor`/
   `set_player_role`/`set_instruction`'ı "Hub + Maç" sayıyor; motorda anchor/rol maç komutu yok,
