@@ -20,7 +20,7 @@ namespace TheBadge.World
             if (st == null) return 0UL;
             int talimatYuva = st.Oyuncular.Length > 0 && st.Oyuncular[0].Talimatlar != null
                               ? st.Oyuncular[0].Talimatlar.Length : 0;
-            var b = new Buf(210 + st.Presetler.Length * 16
+            var b = new Buf(230 + st.Club.Personel.Length * 4 + st.Presetler.Length * 16
                             + st.Oyuncular.Length * (64 + talimatYuva * 2) + st.Club.InsaatSlot.Length * 24
                             + st.Club.Krediler.Length * 20 + st.Club.TesisTier.Length
                             + st.Club.SponsorTeklifleri.Length * 20
@@ -98,6 +98,12 @@ namespace TheBadge.World
             b.I32(st.Fiyat.KombineKurus);
             for (int i = 0; i < st.Fiyat.BufeKurus.Length; i++) b.I32(st.Fiyat.BufeKurus[i]);
             for (int i = 0; i < st.Fiyat.MagazaKurus.Length; i++) b.I32(st.Fiyat.MagazaKurus[i]);
+
+            // --- Personel (CB 4.3) ---
+            b.I32(st.Club.Personel.Length);
+            for (int i = 0; i < st.Club.Personel.Length; i++)
+            { var pr2 = st.Club.Personel[i]; b.U8(pr2.Tip); b.U8(pr2.Tier); b.U16(pr2.KalanHafta); }
+            b.I32(st.Club.AktifPremiumId);
 
             // --- Lig (CB 4.4) ---
             b.I32(st.Lig.LigId); b.I64(st.Lig.KurucuUserId);

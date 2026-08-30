@@ -29,6 +29,14 @@ namespace TheBadge.World
 
     /// <summary>Sponsor teklifi — GDD 4.2 "Sponsorluk Anlaşmaları". `tycoon.sign_sponsor`
     /// bunlardan birini seçer. Teklifler K5/LiveOps tarafından doldurulur; K3 imzalamayı yürütür.</summary>
+    /// <summary>Personel — CB 4.3 `staff.hire`. `Tip` 0 = boş yuva.</summary>
+    public struct StaffMember
+    {
+        public byte Tip;              // katalog bandı 1-16
+        public byte Tier;             // 1-5
+        public ushort KalanHafta;
+    }
+
     /// <summary>Lig üyeliği — CB 4.4 `league.create` / `join` / `set_rules`. `LigId` 0 = ligsiz.
     /// Kurallar (chaos/hız) lig KURUCUSUNUNdur; `Kurucu` alanı yetkiyi taşır ve `set_rules`
     /// yalnız ona açıktır. GDD 6.2 "Kurucu ligin kurallarını belirler".</summary>
@@ -105,6 +113,11 @@ namespace TheBadge.World
         /// `yapi.transferTeklifSlotSayisi`]. Hem verilen hem alınan teklifler burada durur;
         /// yön `TeklifEdenClubId`den okunur.</summary>
         public TransferOffer[] TransferTeklifleri;
+        /// <summary>Personel kadrosu [KALİBRE `yapi.personelSlotSayisi`].</summary>
+        public StaffMember[] Personel;
+        /// <summary>Aktif premium envanter kimliği — 0 = yok. IAP MAKBUZU AYRI doğrulanır
+        /// (CB 4.3); burada yalnız aktivasyonun kalıcı izi durur.</summary>
+        public int AktifPremiumId;
         public int KaptanPlayerId;          // GDD 3.2 — 0 = kaptan yok
         public byte AntrenmanPlanId, AntrenmanYogunluk;   // GDD 4.3 / CB 4.2
         public byte Form;                   // 0-100 — seyirci modelinin form ayağı (maç sonuçları besler)
@@ -218,7 +231,8 @@ namespace TheBadge.World
         {
             Club = new ClubState { TesisTier = new byte[0], InsaatSlot = new Construction[0], Krediler = new Loan[0],
                                    SponsorTeklifleri = new SponsorOffer[0],
-                                   TransferTeklifleri = new TransferOffer[0] },
+                                   TransferTeklifleri = new TransferOffer[0],
+                                   Personel = new StaffMember[0] },
             Oyuncular = new PlayerState[0],
             Takvim = new CalendarState(),
             Fiyat = BosFiyat(),
@@ -247,6 +261,7 @@ namespace TheBadge.World
                     Krediler = new Loan[rules.yapi.krediSlotSayisi],
                     SponsorTeklifleri = new SponsorOffer[rules.yapi.sponsorTeklifSlotSayisi],
                     TransferTeklifleri = new TransferOffer[rules.yapi.transferTeklifSlotSayisi],
+                    Personel = new StaffMember[rules.yapi.personelSlotSayisi],
                 },
                 Oyuncular = new PlayerState[0],
                 Takvim = new CalendarState { Sezon = 1, Hafta = 1, Pencere = TransferWindow.Kapali },
@@ -288,7 +303,7 @@ namespace TheBadge.World
                 || Fiyat.MagazaKurus == null || Fiyat.MagazaKurus.Length != 3)
                 throw new ArgumentException("GameState: Fiyat dizileri eksik (5 tribün / 3 büfe / 3 mağaza).");
             if (Club.TesisTier == null || Club.InsaatSlot == null || Club.Krediler == null
-                || Club.SponsorTeklifleri == null || Club.TransferTeklifleri == null)
+                || Club.SponsorTeklifleri == null || Club.TransferTeklifleri == null || Club.Personel == null)
                 throw new ArgumentException("GameState: kulüp dizileri boş.");
             for (int i = 1; i < Oyuncular.Length; i++)
             {

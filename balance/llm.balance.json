@@ -1,0 +1,8 @@
+{
+  "surum": 1,
+  "aciklama": "FAZ 04 K7 LLM girdi hijyeni esikleri. config_hash DISI: oyun mekanigini degil girdi temizligini ayarlar, replay'i etkilemez. CB Spec 7.1.",
+  "girdi": {
+    "maxKarakter": 500,
+    "tekrarSpamOrani": 0.6
+  }
+}

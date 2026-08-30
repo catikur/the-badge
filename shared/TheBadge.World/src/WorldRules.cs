@@ -44,6 +44,7 @@ namespace TheBadge.World
             public int transferTeklifSlotSayisi; // [KALİBRE] eşzamanlı açık transfer teklifi
             public int transferTeklifIdMax;      // [KALİBRE] katalog bandı `transfer.teklifId` ÜST SINIRIYLA aynı olmalı
             public int cevrimdisiKuyrukTavani;   // [KALİBRE] CB 8.3 offline kuyruk uzunluğu
+            public int personelSlotSayisi;       // [KALİBRE] eşzamanlı personel
         }
 
         /// <summary>Aksiyon transfer penceresi istiyor mu. Liste küçüktür (tek haneli); sırasız
@@ -73,6 +74,7 @@ namespace TheBadge.World
             if (yapi.talimatYuvaSayisi <= 0) throw new ArgumentException("world.balance: yapi.talimatYuvaSayisi > 0 olmalı.");
             if (yapi.transferTeklifSlotSayisi <= 0) throw new ArgumentException("world.balance: yapi.transferTeklifSlotSayisi > 0 olmalı.");
             if (yapi.cevrimdisiKuyrukTavani <= 0) throw new ArgumentException("world.balance: yapi.cevrimdisiKuyrukTavani > 0 olmalı.");
+            if (yapi.personelSlotSayisi <= 0) throw new ArgumentException("world.balance: yapi.personelSlotSayisi > 0 olmalı.");
             if (yapi.transferTeklifIdMax < yapi.transferTeklifSlotSayisi)
                 throw new ArgumentException("world.balance: yapi.transferTeklifIdMax ≥ transferTeklifSlotSayisi olmalı.");
             if (taktik.adim <= 0) throw new ArgumentException("world.balance: taktik.adim > 0 olmalı.");

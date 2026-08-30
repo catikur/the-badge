@@ -1632,6 +1632,53 @@ türeyen herhangi bir şey sızarsa iki FARKLI şifre mutlaka ayrışır, bu şa
 çağıramaz. `IOnlineSink` artık `commandId` taşıyor — ikinci kopyayı elemek köprünün bu anahtarla
 yapacağı dedup'ın (outbox) işi. Anahtarsız arayüz bu güvenceyi yapısal olarak imkânsız kılardı.
 
+### K7: LLM hattı + injection savunması — katalog 32/32 kapandı — ✅ TAMAM (2026-08-30)
+**Kapsam (K6 ile aynı ilke):** LLM ÇAĞRISININ KENDİSİ kapsam dışı — API erişimi bu ortamda
+kanıtlanamaz ve prompt'lar `docs/prompts/` altında versiyonlu dosyalarda yaşar (CLAUDE.md).
+Burada olan şey **savunma**: modelin ne söylediğinden BAĞIMSIZ olarak çıktının katalog dışına,
+bant dışına ya da onaysız yürütmeye dönüşemeyeceğini yapısal kılan katman. CB 7.2'nin güvencesi
+zaten buna dayanır — "en başarılı injection bile yalnızca bir öneri kartı üretebilir".
+
+- **`SuggestionPipeline`:** LLM çıktısı ya SOHBET, ya katalog içi ÖNERİ, ya da DÜŞÜRÜLÜR; üçüncü
+  olasılık yok. `actionType` katalogda yoksa düşer; `Tier` çıktıdan DEĞİL katalogdan okunur
+  (CB 6 — "LLM tier'ını asla düşüremez"); payload bant ön denetiminden geçer.
+- **Girdi temizliği (CB 7.1):** boş, uzunluk [KALİBRE 500], kontrol karakteri, tekrar spam.
+  Sekme ve satır sonu SERBEST — meşru çok satırlı girdi reddedilmez.
+- **`SuggestionId` (CB 7.4):** `Guid.NewGuid()` YASAK; girdi özeti + kayıt tohumundan TÜRETİLİR,
+  yani replay'de zincir yeniden kurulur.
+- **Son 4 aksiyon:** `social.arrange_talk`, `social.press_response`, `staff.hire`,
+  `staff.activate_premium`. **Katalog 32/32 bağlı — FAZ 04 aksiyon hattı tamam.**
+- **Injection korpusu:** `evals/injection/korpus_v1.jsonl` — **28 kalıp × 11 kategori**
+  (CB 10.2'nin yedisi + tier düşürme, bant aşımı, enum dışı, eksik alan). Sonuç: 6 sohbet,
+  15 düşürüldü, 7 katalog içi öneri. Hiçbiri katalog dışı çıktı, bant dışı parametre ya da
+  onaysız yürütme üretemedi.
+
+**Journal'da SESSİZ YANLIŞ YAZMA bulundu (kendi kapım yakaladı).** `ClubField` uygulama zinciri
+`else st.Club.Form = v` ile bitiyordu. `AktifPremium` alanını ekleyince aralık denetimi onu tanıdı
+ama uygulama zinciri tanımadı ve yazma **yakala-hepsini else'e düşüp FORM'a gitti**: aktivasyon izi
+yazılmadı, kulüp formu bozuldu ve komut **BAŞARILI döndü**. Düşürülmüş bir yazmadan da kötü — yanlış
+alana yazma. Çözüm: yakala-hepsini kaldırıldı, `Form` kendi dalına alındı, bilinmeyen alan artık
+**patlıyor**. Aralık denetleyebildiği ama uygulayamadığı bir alan journal için KOD hatasıdır ve
+sessiz kalamaz. Diş ölçümü: eski `else` geri konunca `premium izi yazilmadi`.
+
+**Dördüncü kez aynı tuzak: ölü kural.** `KonusmaHandler`'a ton için enum denetimi yazmıştım;
+katalog `ton`u `ParamType.Enum` + `TonEnum` ile tanımlıyor ve **KAPI 1 şema denetimi** enum dışını
+benden ÖNCE eliyor. Denetimi kaldırıp ölçtüğümde suite YEŞİL kaldı — kural gereksizdi, kapı zayıf
+değildi. Kapı artık otoriteyi (bus'ın `SchemaViolation`ı) ölçüyor. K5'te sahiplik ve kadro
+sınırında, K6'da lig üye sayısında, burada enum'da: **yeni bir denetim yazmadan önce daha derin
+katmanın o aksiyon için ne yaptığına bakılır.** Bu artık bir alışkanlık değil, kural.
+
+- **Kapılar (6):** `K7KatalogKapandi` · `K7GirdiTemizligi` · `K7InjectionKorpusu` ·
+  `K7OneriYurutmeDegil` · `K7SonDortAksiyon` · `K7Izlenebilirlik`. Üçü ters çevrilip ölçüldü:
+  katalog kısıtı kalkınca `admin.grant_all` öneri olarak geçiyor, Tier katalogdan okunmayınca
+  6 kalıpta `Tier dusuruldu(T0 != T2)`, yakala-hepsini else geri gelince premium izi kayboluyor.
+- `K2HashKapsami` beşinci dilim üst üste yeni alanı yakaladı (`Personel`, `AktifPremiumId`).
+
+**Açık uç:** LLM'in KALİTESİ (golden set eval, CLAUDE.md "skor < %85 merge yok") bu dilimde
+ölçülmedi — model çağrısı gerektirir. `evals/golden/` iskeleti duruyor; kalite kapısı, model
+erişimi olan ortamda koşacak ayrı iş. Bu dilim GÜVENLİĞİ test eder, KALİTEYİ değil — CLAUDE.md'nin
+kendisi bunların ayrı kapılar olduğunu söylüyor.
+
 ## Bekleyen kararlar
 - **CB 4.2 tablosu ile ME komut kümesi çelişiyor (K4 bulgusu, 2026-08-29):** spec `squad.set_player_anchor`/
   `set_player_role`/`set_instruction`'ı "Hub + Maç" sayıyor; motorda anchor/rol maç komutu yok,

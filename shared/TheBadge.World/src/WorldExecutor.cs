@@ -55,6 +55,7 @@ namespace TheBadge.World
         readonly WorldJournal journal = new WorldJournal();
         IMatchCommandSink macKuyrugu;
         IOnlineSink onlineKanal;
+        IPersonaSink personaKanal;
 
         GameState st => depo.State;
 
@@ -84,6 +85,13 @@ namespace TheBadge.World
         {
             if (onlineKanal != null) throw new InvalidOperationException("online kanal zaten bağlı");
             onlineKanal = sink;
+        }
+
+        /// <summary>Persona kanalı — online kanalla aynı gerekçe.</summary>
+        public void PersonaKanalBagla(IPersonaSink sink)
+        {
+            if (personaKanal != null) throw new InvalidOperationException("persona kanalı zaten bağlı");
+            personaKanal = sink;
         }
 
         /// <summary>K3-K5 aksiyonlarını buraya bağlar.</summary>
@@ -213,6 +221,26 @@ namespace TheBadge.World
                             var y = journal.OnlineYayinlar[i];
                             if (y.Klip) onlineKanal.KlipPaylas(y.CommandId, y.MacId, y.PencereSn, y.Kod, y.UserId);
                             else onlineKanal.OyuncuRaporla(y.CommandId, y.HedefUserId, y.Kod, y.Notlar, y.UserId);
+                        }
+                    }
+                    catch { journal.Geri(st); throw; }
+                }
+
+                if (journal.PersonaYayinlar.Count > 0)
+                {
+                    if (personaKanal == null)
+                    {
+                        journal.Geri(st);
+                        detail = "persona kanalı bağlı değil";
+                        return RejectionReason.StateConflict;
+                    }
+                    try
+                    {
+                        for (int i = 0; i < journal.PersonaYayinlar.Count; i++)
+                        {
+                            var pv = journal.PersonaYayinlar[i];
+                            if (pv.Konusma) personaKanal.KonusmaAyarlandi(pv.CommandId, pv.Id, pv.Kod, pv.UserId);
+                            else personaKanal.BasinYaniti(pv.CommandId, pv.Id, pv.Kod, pv.UserId);
                         }
                     }
                     catch { journal.Geri(st); throw; }
