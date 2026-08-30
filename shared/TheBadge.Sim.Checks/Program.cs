@@ -3435,32 +3435,34 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     // KÖTÜLEŞMESİNİ engeller; hedef sıfırdır. Karar `docs/DECISIONS.md` bekleyen kararlarda.
     {
         const int N = 2000;
-        // Gauss01'in İÇİNİ ölç: 12 çekilişin ÇOKLUK KÜMESİ aynıysa gauss değeri de aynıdır
-        // (yalnız toplama sırası değişir → kayan noktada son bitler ayrışabilir). Asıl bağımsızlık
-        // kaybı budur; tam eşitlik oranı onu OLDUĞUNDAN KÜÇÜK gösterir.
-        double[] Kume(ulong sd, uint tick)
-        {
-            var a = new double[12];
-            for (uint i = 0; i < 12; i++)
-                a[i] = TheBadge.Sim.Determinism.Rng.Rand01(sd, TheBadge.Sim.Determinism.Domain.Physics, 5, tick, 16 + i);
-            Array.Sort(a);
-            return a;
-        }
-        bool Ayni(double[] x, double[] y)
-        { for (int i = 0; i < 12; i++) if (x[i] != y[i]) return false; return true; }
+        // GERÇEK `Gauss01` ÖLÇÜLÜR — içinin KOPYASI DEĞİL. İlk yazımda bu kapı `salt*16 + i`
+        // adres formülünü BURADA yeniden kuruyor ve 12 çekilişi `Rand01`den kendisi topluyordu;
+        // yani gözcü, gözetlediği fonksiyonu hiç çağırmıyordu. Ölçüldü (2026-08-30): önerilen
+        // düzeltme kaynağa uygulandığında bu kapının İDDİA ETTİĞİ sayılar %50,0/%100,0'da
+        // ÇAKILI kaldı, yalnız yazdırıp iddia etmediği tam eşitlik %0,0'a indi. Borç ödense
+        // kapı bunu göremezdi; `Gauss01` başka türlü bozulsa da göremezdi.
+        //
+        // Çokluk kümesi yerine YAKIN EŞİTLİK ölçülür: küme aynıysa toplam yalnız toplama
+        // sırasında ayrışır (hata sınırı ~12·eps·6 ≈ 1,6e-14), dolayısıyla |Δ| < 1e-12 aynı
+        // kümeyi public API üzerinden yakalar. Farklı iki kümenin tesadüfen bu kadar yakın
+        // düşme olasılığı ~1e-12 — 2000 örnekte ihmal edilebilir.
+        const double Eps = 1e-12;
+        static bool Yakin(double a, double b) => Math.Abs(a - b) < Eps;
 
         int kumeTick = 0, kumeSeed = 0, tamTick = 0, tamSeed = 0;
         for (uint t = 1; t <= N; t++)
         {
-            if (Ayni(Kume(999UL, t), Kume(999UL, t + 1))) kumeTick++;
-            if (TheBadge.Sim.Determinism.Rng.Gauss01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t, 1)
-                == TheBadge.Sim.Determinism.Rng.Gauss01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t + 1, 1)) tamTick++;
+            double a = TheBadge.Sim.Determinism.Rng.Gauss01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t, 1);
+            double b = TheBadge.Sim.Determinism.Rng.Gauss01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t + 1, 1);
+            if (Yakin(a, b)) kumeTick++;
+            if (a == b) tamTick++;
         }
         for (ulong sd = 1000; sd < 3000; sd += 2)
         {
-            if (Ayni(Kume(sd, 77), Kume(sd + 1, 77))) kumeSeed++;
-            if (TheBadge.Sim.Determinism.Rng.Gauss01(sd, TheBadge.Sim.Determinism.Domain.Physics, 5, 77, 1)
-                == TheBadge.Sim.Determinism.Rng.Gauss01(sd + 1, TheBadge.Sim.Determinism.Domain.Physics, 5, 77, 1)) tamSeed++;
+            double a = TheBadge.Sim.Determinism.Rng.Gauss01(sd, TheBadge.Sim.Determinism.Domain.Physics, 5, 77, 1);
+            double b = TheBadge.Sim.Determinism.Rng.Gauss01(sd + 1, TheBadge.Sim.Determinism.Domain.Physics, 5, 77, 1);
+            if (Yakin(a, b)) kumeSeed++;
+            if (a == b) tamSeed++;
         }
         double kt = kumeTick * 100.0 / N, ks = kumeSeed * 100.0 / 1000;
         // Rand01 karşılaştırması: kusur TOPLAMA desenindedir, çekirdek hash'te DEĞİL
@@ -3469,15 +3471,15 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             if (TheBadge.Sim.Determinism.Rng.Rand01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t, 1)
                 == TheBadge.Sim.Determinism.Rng.Rand01(999UL, TheBadge.Sim.Determinism.Domain.Physics, 5, t + 1, 1))
                 rndKomsu++;
-        Console.WriteLine($"[info] K3 RNG borcu: Gauss01 aynı çekiliş kümesi — komşu tick %{kt:F1} · bit0-seed %{ks:F1} " +
+        Console.WriteLine($"[info] K3 RNG borcu: Gauss01 ayırt edilemez değer — komşu tick %{kt:F1} · bit0-seed %{ks:F1} " +
                           $"(tam eşitlik %{tamTick * 100.0 / N:F1} / %{tamSeed * 100.0 / 1000:F1}) · Rand01 %{rndKomsu * 100.0 / N:F1}");
         string hata = "";
         if (rndKomsu != 0) hata += "Rand01 çarpışıyor (çekirdek hash bozuk — bu borç DEĞİL, REGRESYON) ";
         if (kt > 50.0) hata += $"Gauss01 komşu tick bağımsızlığı KÖTÜLEŞTİ (%{kt:F1} > %50) ";
         if (ks > 100.0) hata += $"Gauss01 bit0-seed bağımsızlığı KÖTÜLEŞTİ (%{ks:F1}) ";
         if (hata.Length > 0) failures += Fail("K3RngGauss01Borcu", hata);
-        else Pass($"K3RngGauss01Borcu(aynı çekiliş kümesi: komşu tick %{kt:F1} · bit0-seed %{ks:F1} — HEDEF %0; " +
-                  $"düzeltme 50 golden replay + M16-E kalibrasyonunu kaydırır, ayrı dilim · Rand01 temiz)");
+        else Pass($"K3RngGauss01Borcu(ayırt edilemez değer: komşu tick %{kt:F1} · bit0-seed %{ks:F1} — HEDEF %0; " +
+                  $"gerçek Gauss01 ölçülüyor, borç ödenirse bu satır DÜŞER · Rand01 temiz)");
     }
 
     // ===================== K3-B — 9 TYCOON AKSİYONU (CB 4.1) =====================

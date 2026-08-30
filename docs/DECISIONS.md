@@ -1741,6 +1741,53 @@ Bu, K7'nin "yeni denetim yazmadan önce daha derin katmana bak" kuralının kard
 kapı bunu da ölçüyor — yoksa "bus reddedecek" varsayımı dayanaksız kalırdı. K5'in "açık uç olarak
 yazdığın şeyin gerekçesi varsayıma dayanıyorsa kapıya bağla" dersinin uygulaması.
 
+### 🔴 BULGU: `Rng.Gauss01` borç gözcüsü, gözetlediği fonksiyonu ÖLÇMÜYORDU (2026-08-30)
+K7 merge edildikten sonra bekleyen kararın (b) şıkkının tetikleyici koşulu geldi ("FAZ 04 sonunda,
+K7 bittikten sonra"). Kararı fiyatlamak için önerilen düzeltme GEÇİCİ olarak uygulanıp tam kapı
+koşuldu. Düzeltme commit EDİLMEDİ — `Gauss01`'in gövdesi ME Spec 3.1'de normatif kod bloğu olarak
+duruyor (`s * 16 + i` dahil), yani değişiklik bir spec çelişkisidir ve kararı Atilla verir.
+
+- **Gözcü kapı sahteydi.** `K3RngGauss01Borcu`, `salt*16 + i` adres formülünü kapının İÇİNDE yeniden
+  kuruyor ve 12 çekilişi `Rand01`den kendisi topluyordu. `Gauss01` yalnız yazdırılan ama İDDİA
+  EDİLMEYEN tam-eşitlik satırında çağrılıyordu. Yani gözcü, gözetlediği fonksiyona hiç bakmıyordu.
+- **Kanıt (tek satır):** düzeltme kaynağa uygulandığında kapının iddia ettiği sayılar **%50,0 /
+  %100,0'da çakılı kaldı**; yalnız iddia edilmeyen tam eşitlik %26,9/%55,3 → **%0,0/%0,0**'a indi.
+  Borç ödense kapı bunu göremezdi; `Gauss01` başka türlü bozulsa da göremezdi.
+- **DÜZELTİLDİ (kapı, kaynak değil):** kapı artık gerçek `Gauss01`'i çağırıp YAKIN EŞİTLİK ölçüyor
+  (|Δ| < 1e-12). Küme aynıysa toplam yalnız toplama sırasında ayrışır (hata sınırı ~12·eps·6 ≈
+  1,6e-14), dolayısıyla yakın eşitlik aynı kümeyi public API üzerinden yakalar. Mevcut kodda AYNI
+  sayıları veriyor (%50,0 / %100,0) — hiçbir eşik gevşemedi ya da sıkılmadı, yalnız ölçü dürüstleşti.
+- **Diş ölçümü (üç yön):** borç dururken %50,0/%100,0 → PASS · düzeltme uygulanınca %0,0/%0,0 → PASS
+  (borcun ödendiği artık GÖRÜNÜYOR) · `tick & ~3u` ile kötüleştirilince %75,0 → **FAIL**. İlk
+  kötüleştirme denemem (`tick & ~1u`) mevcut kusurla aynı yere düştü ve %50'de kaldı: perturbasyon
+  yanlıştı, ölçü değil — tam eşitlik %26,9→%50,0 hareket ederek değişikliği yine de gördü.
+- **Kural:** bir borcu "görünür tutan" gözcü kapı, borcun **ÖDENDİĞİNİ de gösterebilmelidir**.
+  Gösteremiyorsa gözetlediği şeyi değil kendi kopyasını ölçüyordur. Kapının içine, gözetlediği
+  kodun formülünü ikinci kez yazmak bu hatanın taşıyıcısıdır.
+
+### 📏 ÖLÇÜM: `Gauss01` düzeltmesinin gerçek maliyeti — tahminden ÇOK ucuz (2026-08-30)
+Bekleyen karar "golden set yeniden üretilir, M16-E'nin 12 metriği yeniden ölçülür ve **muhtemelen
+yeniden kalibre edilir (1-2 dilim)**" diyordu. Ölçüldü; bu tahmin fazla kötümsermiş.
+
+- **Kırmızıya dönen 6 kapı:** `MatchSkeletonGolden` · `M2Golden` · `M4Golden` · `M6Golden` ·
+  `M17GoldenReplay` (50/50) — beşi de golden HASH kapısı, yani mekanik yeniden üretim işi
+  (üretici komut zaten var). Altıncısı `M4CalibrationBands`.
+- **`M16ECalibGenis` GEÇTİ — 12 metriğin hepsi bantta kaldı.** gol 2,41→2,57 · şut 27,6→27,4 ·
+  isabetli 7,5→7,6 · korner 8,5→8,2 · faul 21,2→21,0 · sarı 3,32→3,21 · kırmızı 0,21→0,23 ·
+  penaltı 0,30→0,32 · ofsayt 4,9→4,9 · sakatlık 0,48→0,52 · pas %81,3→%81,4 · xG sapma %1,1→%5,7.
+  **Yeniden kalibrasyon gerekmiyor.**
+- **`M4CalibrationBands` gürültüden düştü, motordan değil.** N=12'de gol 1,58 (taban 2,0) verdi.
+  Aynı fikstürde N=200 ölçümü: taban **2,43** → düzeltmeli **2,40**. Yani gerçek etki 0,03 gol;
+  1,58 tamamen örneklem gürültüsü. **TUZAK:** düzeltmeyi yapan kişi bu kırmızıyı görüp motoru
+  "yeniden kalibre" etmeye kalkarsa gürültüye kalibre etmiş olur.
+- **Yan bulgu:** `M4CalibrationBands` 12 maçlık örneklemde gerçek değeri 2,40 olan bir metriği 1,58
+  ölçebiliyor ve bandın tabanı 2,0. Yani bu kapı **tek başına gürültüden kırmızıya dönebilir**.
+  Gürültüden düşebilen kapı, geçtiğinde de az şey söyler. Ayrı bir öneri olarak bekleyen kararlarda.
+- **Açık kalan tek soru:** xG sapma %1,1 → %5,7 (tavan %10). Bantta ama oransal olarak en çok
+  hareket eden metrik; düzeltme dilimi bunu kabul etmeden önce bakmalı.
+- **Yeniden fiyatlama:** golden yeniden üretimi + xG sapmasına bir bakış = **tek küçük dilim**,
+  "1-2 dilim + yeniden kalibrasyon" değil.
+
 ## Bekleyen kararlar
 - **CB 4.2 tablosu ile ME komut kümesi çelişiyor (K4 bulgusu, 2026-08-29):** spec `squad.set_player_anchor`/
   `set_player_role`/`set_instruction`'ı "Hub + Maç" sayıyor; motorda anchor/rol maç komutu yok,
@@ -1758,12 +1805,19 @@ yazdığın şeyin gerekçesi varsayıma dayanıyorsa kapıya bağla" dersinin u
   capex dahil yeniden tanımlansın ve yeniden kalibre edilsin. **Öneri: (a)** — yığınsal harcamayı
   sürekli dengeye karıştırmak bandı bulanıklaştırır ve kulübün yatırım yapmasını cezalandırır gibi
   okunur. Karar balance sprintine ait, K4-K5'i bloklamaz.
-- **`Rng.Gauss01` çarpışması ne zaman düzeltilsin? (K3 bulgusu, 2026-08-25)** Ölçüm ve mekanizma
-  yukarıdaki bulgu kaydında. Seçenekler: (a) ŞİMDİ düzelt → golden set yeniden üretilir, M16-E'nin
-  12 metriği yeniden ölçülür ve muhtemelen yeniden kalibre edilir (1-2 dilim); (b) FAZ 04 sonunda,
-  K7 bittikten sonra tek seferde; (c) FAZ 05 öncesi, cihaz testlerinden önce. **Öneri: (b)** —
-  gürültü kalitesi bugün hiçbir kapıyı düşürmüyor, ama FAZ 05'e taşınırsa kalibrasyon borcu asset
-  üretimiyle aynı sprinte biner. Gözcü kapı bu arada borcu görünür tutuyor.
+- **`Rng.Gauss01` çarpışması ne zaman düzeltilsin? (K3 bulgusu, 2026-08-25 — YENİDEN FİYATLANDI
+  2026-08-30)** (b) şıkkının koşulu GELDİ: K7 merge edildi, FAZ 04 aksiyon hattı bitti. Maliyet
+  artık tahmin değil ölçüm (yukarıdaki 📏 kaydı): 5 golden hash kapısı yeniden üretilir,
+  **M16-E'nin 12 metriği bantta kalıyor — yeniden kalibrasyon YOK**, `M4CalibrationBands`
+  kırmızısı örneklem gürültüsü (N=200'de 2,43→2,40). Kalan tek soru xG sapması %1,1→%5,7.
+  **Öneri: ŞİMDİ yap** — tek küçük dilim; FAZ 05'e taşınırsa golden yeniden üretimi asset
+  sprintiyle aynı yere biner. `Gauss01` gövdesi ME Spec 3.1'de normatif kod bloğudur, bu yüzden
+  düzeltme spec çelişkisidir ve kararı Atilla verir; onay gelmeden kaynağa dokunulmadı.
+- **`M4CalibrationBands` örneklemi 12 maç — gürültüden kırmızıya dönebiliyor.** Gerçek değeri 2,40
+  olan gol ortalamasını 1,58 ölçtü, bandın tabanı 2,0. Seçenekler: (a) N'i 100+ yap (kapı süresi
+  artar); (b) bandı gürültüyü kapsayacak kadar genişlet (kapıyı zayıflatır — istenmez); (c) bu
+  kapıyı `M16ECalibGenis`'e devret ve M4'ü yalnız duman testi olarak bırak. **Öneri: (a)** —
+  ölçüm süresi ucuz, yanlış kırmızı pahalı.
 - ~~ME 13.4 upset büyüklüğü~~ → **KARAR (2026-08-19, Atilla): (d) HİBRİT.** Dört seçenek
   sunuldu — (a) tam zincir normalizasyonu (2 dilim motor işi), (b) yalnız hedef revizyonu
   (%93 revize hedefin de üstünde kalır), (c) skor üstü yeniden örnekleme (tek-kaynak ilkesi +
