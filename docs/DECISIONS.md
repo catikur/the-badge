@@ -1855,6 +1855,45 @@ aralığında "topluyor" — oysa aynı commit borcu kapatıp eşiği sıkmışt
 - **Diş ölçümü YOK — bilinçli.** Değişiklik yalnız yorum; bir kapının yakalayacağı davranış yok.
   Diş ölçtüğünü iddia etmek gösteri olurdu.
 
+## FAZ 04 kapanış borçları (K9)
+
+### K9-A: RNG adres çakışma kapısı — ✅ TAMAM (2026-08-30)
+Bekleyen karardaki öneri (b) uygulandı: tek örneği elle düzeltmek yerine TÜM çağrı yerlerini tarayan
+bir kapı yazıldı. Doğru karar çıktı — elle düzeltme, aşağıdaki iki bulgunun ikisini de kaçırırdı.
+
+- **Kapı ne yapıyor:** `MatchEngine.cs` kaynağını tarar, her `Rng.Gauss01/Rand01` çağrısının
+  (domain, entity tabanı, tick, salt) adresini çıkarır ve **işgal ettiği ham salt kümesini** hesaplar.
+  `Rand01(s)` yalnız `s`'yi tüketir; `Gauss01(s)` K8 sonrası `s·0x9E3779B1 + i·0x85EBCA6B` (i∈[0,12))
+  alt-saltlarını tüketir. İki çağrı ancak bu kümeler KESİŞİRSE çakışır.
+- **ÇÖZEMEDİĞİNİ ATLAMAZ:** sarmalayıcı üzerinden gelen değişken entity/salt'lar bildirilmiş bir
+  tabloyla çözülür; tabloda olmayan bir sarmalayıcı ya da çözülemeyen bir argüman kapıyı KIRMIZIYA
+  döndürür. Bugünkü tarama: **53 adres → 20 ayrık dörtlü, çakışan 0, çözülemeyen 0.**
+- **Bulgu 1 (bilinen):** `ExecuteOpenCross` (orta nişanı) ve `ResolveAerial` (hava topu temizliği)
+  ikisi de `Physics·(700+ajan)·st.Tick·63` kullanıyordu. **Erişilebilirlik ÖLÇÜLDÜ: 200 maçta maç
+  İÇİ çakışma 0.** İlk ölçümüm yanlıştı — adres kümesini 200 maç boyunca biriktirmiştim, oysa adres
+  `seed`'i de içerir ve farklı tohumlu iki maçtaki aynı (entity,tick) çakışma değildir; maç içi
+  ölçünce 0 çıktı. Yani koruma adres şemasından değil **"tek top" değişmezinden** geliyordu (orta ve
+  hava topu temizliği aynı tick'te aynı ajana düşemez). Salt 67'ye taşındı.
+- **Bulgu 2 (kapının ortaya çıkardığı, DAHA ÖNEMLİ): bir salt aralığının GENİŞLİĞİNİ balance
+  belirliyor.** `Gurultu(35+c)` ve `Gurultu(40+c)` döngüleri `taban..taban+kisaMax-1` aralığını işgal
+  ediyor ve `kisaMax = min(longball.gkKisaN, n)`. Bugün `gkKisaN = 3` → 35-37 · 40-42 · sabit 45,
+  ayrık. **`gkKisaN ≥ 6` olsaydı iki karar-gürültüsü akışı SESSİZCE çakışırdı.** Bir balance
+  düzenlemesi ("kaleci daha çok kısa seçenek düşünsün") determinizm varsayımını bozardı ve JSON'da
+  tek sayı değişikliği olarak incelemeden geçerdi. Kapı span'ı balance'tan OKUR: o düzenleme artık
+  kırmızıya döner.
+- **Diş ölçümü (üç yön):** salt 67→63 → **FAIL** (satır 1136+3157) · `gkKisaN` 3→6 → **FAIL**
+  (satır 1244+1253 ve 1253+1270) · `gkKisaN` 3→**5** (tam sınır) → **PASS**. Sonuncusu kapının kaba
+  değil TAM olduğunu gösteriyor: sınırda kurt masalı anlatmıyor.
+- **Kapının kendi kör noktası diş ölçümüyle bulundu.** İlk yazımda sarmalayıcının bütün çağrıları
+  `Rng` satırına atfediliyordu ve "aynı satır = aynı çağrı yeri" elemesi yüzünden **iki farklı
+  ÇAĞIRANIN birbiriyle çakışması tamamen görünmezdi** — `gkKisaN=6` denemesi kapıyı yeşil bıraktı.
+  Çağıranın satırı kaydedilerek düzeltildi. Kapıyı ölçmeseydim, kapı bulguyu bulamayacaktı.
+- **Golden yeniden üretimi:** salt değişikliği 5 kapıyı kaydırdı; `MatchSkeletonGolden`
+  0x1A872CD9CB06B721 · `M2Golden` 0x03F1FB2C645841A1 · `M4Golden` 0xD8C76BF965937DC2 · `M6Golden`
+  0x675BCD0B9EF7AB84 · `M17GoldenReplay` 50/50. balanceHash/bandsHash değişmedi.
+- **Kural:** **bir salt aralığının genişliğini ayarlanabilir bir sayı belirliyorsa, o sayı artık
+  balance değil determinizm parametresidir.** Ya kapıya bağlanır ya da koddan sabitlenir.
+
 ## Bekleyen kararlar
 
 - **xG katsayıları %5,7 az tahmin ediyor (K8 sonrası, 2026-08-30).** `Gauss01` düzeltmesi gol
@@ -1863,11 +1902,9 @@ aralığında "topluyor" — oysa aynı commit borcu kapatıp eşiği sıkmışt
   nudge et; (b) dönüşüm oranının NEDEN çıktığını önce bul (mekanizma K8'de kanıtlanamadı), sonra
   karar ver; (c) dokunma — bantta. **Öneri: (b) sonra (a)** — katsayıyı anlamadan nudge etmek,
   bir sonraki motor değişikliğinde aynı işi tekrar yaptırır.
-- **`Physics · 700+entity · salt 63` adres paylaşımı (yukarıdaki 🟡 bulgu).** Seçenekler:
-  (a) uzaklaştırmayı ayrı salta taşı (tek satır, golden'ları kaydırır — K8'in golden turu HENÜZ
-  taze olduğu için ucuz); (b) tüm çağrı yerlerini tarayan bir adres-çakışma kapısı yaz, sonra
-  hepsini birden düzelt; (c) erişilebilirliği önce kanıtla. **Öneri: (b)** — bu tek örneği elle
-  düzeltmek, aynı sınıftan başka çakışma var mı sorusunu cevapsız bırakır.
+- ~~**`Physics · 700+entity · salt 63` adres paylaşımı.**~~ → **YAPILDI (2026-08-30, K9-A):**
+  seçenek (b) — tarayan kapı yazıldı, sonra düzeltildi. Kapı ikinci bir bulgu daha çıkardı
+  (balance'ın salt aralığı genişliğini belirlemesi); elle düzeltme ikisini de kaçırırdı.
 - **CB 4.2 tablosu ile ME komut kümesi çelişiyor (K4 bulgusu, 2026-08-29):** spec `squad.set_player_anchor`/
   `set_player_role`/`set_instruction`'ı "Hub + Maç" sayıyor; motorda anchor/rol maç komutu yok,
   `PlayerInstr` kataloğu boş. Seçenekler: (a) ME komut kümesini üç komutla genişlet (determinizm kapısı +

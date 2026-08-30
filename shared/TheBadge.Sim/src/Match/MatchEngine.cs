@@ -3147,8 +3147,14 @@ namespace TheBadge.Sim.Match
                     return;
                 }
                 st.Ball.Vx = Units.QuantizeMm(away * envUzaklastirmaHizi * 0.9);
+                // SALT 63 DEĞİL 67: 63'ü `ExecuteOpenCross` (orta nişanı) da `Physics·(700+ajan)·
+                // st.Tick` adresinde kullanıyordu — iki AYRI alt sistem aynı adresi paylaşıyordu.
+                // 200 maçlık ölçümde maç içi çakışma 0 çıktı, yani bugün erişilemiyor; ama koruma
+                // adres şemasından değil "tek top" değişmezinden geliyordu (orta ve hava topu
+                // temizliği aynı tick'te aynı ajana düşemiyor). Değişmez kırılırsa hata SESSİZ
+                // olurdu: iki alt sistem birebir aynı gürültüyü çeker. — K9
                 st.Ball.Vy = Units.QuantizeMm(envUzaklastirmaHizi * 0.3 *
-                    Rng.Gauss01(seed, Domain.Physics, (uint)(700 + def), st.Tick, 63));
+                    Rng.Gauss01(seed, Domain.Physics, (uint)(700 + def), st.Tick, 67));
                 st.Ball.Vz = 0;
                 st.Ball.LastTouchTeam = d2.TeamIdx; lastToucher = (short)def;
             }

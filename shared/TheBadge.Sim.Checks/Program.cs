@@ -416,7 +416,7 @@ if (runA.finalHash != runB.finalHash || runA.at600 != runB.at600)
 else Pass("MatchSkeletonDeterminism");
 
 // 7b) Golden: durum hash'i sabitlendi — alan/sıra değişikliği bilinçli golden güncellemesi ister
-const ulong MATCH_GOLDEN = 0x896E1495EFF5C34CUL; // Gauss01 alt-salt yayılımıyla yeniden sabitlendi (2026-08-30, Atilla onayı — bilinçli)
+const ulong MATCH_GOLDEN = 0x1A872CD9CB06B721UL; // K9 adres ayrımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
 if (MATCH_GOLDEN != 0 && runA.finalHash != MATCH_GOLDEN)
     failures += Fail("MatchSkeletonGolden", $"0x{runA.finalHash:X} != 0x{MATCH_GOLDEN:X}");
 else Pass("MatchSkeletonGolden");
@@ -618,7 +618,7 @@ Console.WriteLine($"[info] M2 durum hash: 0x{mA2.h:X}");
 if (mA2.h != mB2.h) failures += Fail("M2Determinism", $"0x{mA2.h:X} != 0x{mB2.h:X}");
 else Pass("M2Determinism");
 
-const ulong M2_GOLDEN = 0x2950BCCD69FEACA4UL; // Gauss01 alt-salt yayılımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
+const ulong M2_GOLDEN = 0x03F1FB2C645841A1UL; // K9 adres ayrımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
 if (M2_GOLDEN != 0 && mA2.h != M2_GOLDEN) failures += Fail("M2Golden", $"0x{mA2.h:X}");
 else Pass("M2Golden");
 
@@ -703,7 +703,7 @@ if (f1.hash != f2.hash || f1.res.TotalTicks != f2.res.TotalTicks)
     failures += Fail("M4Determinism", $"0x{f1.hash:X} != 0x{f2.hash:X}");
 else Pass("M4Determinism");
 
-const ulong M4_GOLDEN = 0x66A1E641E68B66B2UL; // Gauss01 alt-salt yayılımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
+const ulong M4_GOLDEN = 0xD8C76BF965937DC2UL; // K9 adres ayrımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
 if (M4_GOLDEN != 0 && f1.hash != M4_GOLDEN) failures += Fail("M4Golden", $"0x{f1.hash:X}");
 else Pass("M4Golden");
 
@@ -999,7 +999,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     Console.WriteLine($"[info] M6 komutlu maç hash: 0x{hA:X}");
     if (hA != hB) failures += Fail("M6Determinism", $"0x{hA:X} != 0x{hB:X}");
     else Pass("M6Determinism");
-    const ulong M6_GOLDEN = 0x12F21C303ACF022EUL; // Gauss01 alt-salt yayılımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
+    const ulong M6_GOLDEN = 0x675BCD0B9EF7AB84UL; // K9 adres ayrımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
     if (M6_GOLDEN != 0 && hA != M6_GOLDEN) failures += Fail("M6Golden", $"0x{hA:X}");
     else Pass("M6Golden");
 }
@@ -5635,6 +5635,239 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         if (hata.Length > 0) failures += Fail("K7Izlenebilirlik", hata);
         else Pass("K7Izlenebilirlik(CB 7.4: SuggestionId deterministik - girdi ozeti - metin ve kayit ayristiriyor)");
     }
+}
+
+// 32) K9 — RNG ADRES ÇAKIŞMA KAPISI (ME 3.1 domain/entity/salt şemasının koruduğu şey).
+// Sayaç-tabanlı RNG'nin güvencesi şudur: her değer KENDİ adresinden türer ve iki ALT SİSTEM
+// birbirinin çekilişini göremez. Bu güvence yalnız adreslerin AYRIK olmasıyla ayakta durur;
+// iki çağrı yeri aynı (domain, entity, tick, salt) dörtlüsünü kullanırsa BİREBİR aynı değeri
+// çeker ve bağımsız sandığımız iki gürültü tam korelasyonlu olur.
+//
+// K9'da bulunan örnek: `ExecuteOpenCross` (orta nişanı) ile `ResolveAerial` (hava topu
+// temizliği) ikisi de `Physics·(700+ajan)·st.Tick·63` kullanıyordu. 200 maçlık ölçümde maç
+// İÇİ çakışma 0 çıktı — yani bugün erişilemiyordu. Ama koruma adres şemasından DEĞİL, kodun
+// bir değişmezinden geliyordu ("tek top": orta ve hava topu temizliği aynı tick'te aynı ajana
+// düşemez). Değişmez kırılsa hata sessiz olurdu. Salt 67'ye taşındı; bu kapı tekrarını önler.
+//
+// KAPI ÇÖZEMEDİĞİNİ ATLAMAZ: helper üzerinden gelen değişken entity/salt'lar aşağıdaki TABLOda
+// bildirilir. Tabloda olmayan bir sarmalayıcı ya da çözülemeyen bir argüman kapıyı KIRMIZIYA
+// döndürür — "anlamadım, geçtim" bu kapıda yoktur.
+{
+    string meYol = FindRepoFile("shared/TheBadge.Sim/src/Match/MatchEngine.cs");
+    string src = System.IO.File.ReadAllText(meYol);
+
+    // SPAN TABLOSU — salt'ı bir DÖNGÜ DEĞİŞKENİNDEN gelen çağrılar. Bir döngü, `taban..taban+span-1`
+    // aralığındaki TÜM saltları işgal eder; kapı bu aralığı bilmeden çakışmayı göremez.
+    // `gkKisaN` bir BALANCE değeridir: yani bir salt aralığının GENİŞLİĞİNİ ayarlanabilir bir sayı
+    // belirliyor. Bugün 3 (35-37 · 40-42 · sabit 45 → ayrık), ama 6 yapılsaydı iki karar-gürültüsü
+    // akışı SESSİZCE çakışırdı. Kapı span'ı balance'tan OKUR, böylece o düzenleme kırmızıya döner.
+    int spanCand = 10;                                  // kod sınırı: `stackalloc int[10]`
+    int spanGkKisa = simBal.longball.gkKisaN;           // BALANCE sınırı — kapı buradan okur
+    var spanTablosu = new System.Collections.Generic.Dictionary<string, (int Taban, int Span, string Kaynak)>
+    {
+        ["(uint)(3 + c)"]  = (3,  spanCand,   "kod: stackalloc int[10]"),
+        ["(uint)(20 + c)"] = (20, spanCand,   "kod: stackalloc int[10]"),
+        ["(uint)(35 + c)"] = (35, spanGkKisa, "balance: longball.gkKisaN"),
+        ["(uint)(40 + c)"] = (40, spanGkKisa, "balance: longball.gkKisaN"),
+    };
+
+    // (Ad, EntityArgIdx, TickArgIdx, SaltArgIdx) — -1: o argüman Rng çağrısında zaten sabit.
+    var helperler = new (string Ad, int EntityArg, int TickArg, int SaltArg)[]
+    {
+        ("Noise",           -1, -1, 0),
+        ("Gurultu",         -1, -1, 0),
+        ("ExecuteLongBall", -1, -1, 5),
+        ("DuelWin",          2,  3, 4),
+    };
+
+    // --- yardımcılar -------------------------------------------------------------------
+    static int KapanisParantezi(string s, int acilis)
+    {
+        int derinlik = 0;
+        for (int i = acilis; i < s.Length; i++)
+        {
+            if (s[i] == '(') derinlik++;
+            else if (s[i] == ')') { derinlik--; if (derinlik == 0) return i; }
+        }
+        return -1;
+    }
+    static System.Collections.Generic.List<string> ArgAyir(string ic)
+    {
+        var liste = new System.Collections.Generic.List<string>();
+        int derinlik = 0, bas = 0;
+        for (int i = 0; i < ic.Length; i++)
+        {
+            char c = ic[i];
+            if (c == '(' || c == '[') derinlik++;
+            else if (c == ')' || c == ']') derinlik--;
+            else if (c == ',' && derinlik == 0) { liste.Add(ic.Substring(bas, i - bas).Trim()); bas = i + 1; }
+        }
+        liste.Add(ic.Substring(bas).Trim());
+        return liste;
+    }
+    static int SatirNo(string s, int idx) { int n = 1; for (int i = 0; i < idx && i < s.Length; i++) if (s[i] == '\n') n++; return n; }
+
+    // "(uint)(700 + i)" → 700 · "990" → 990 · "entity" → -1 (değişken)
+    static int EntityTabani(string ifade)
+    {
+        string t = ifade.Replace("(uint)", "").Trim();
+        while (t.StartsWith("(") && t.EndsWith(")") && KapanisParantezi(t, 0) == t.Length - 1)
+            t = t.Substring(1, t.Length - 2).Trim();
+        var m = System.Text.RegularExpressions.Regex.Match(t, @"^(\d+)");
+        return m.Success ? int.Parse(m.Groups[1].Value) : -1;
+    }
+    // "63" → (63,true) · "salt + 200" → (200,false) · "salt" → (0,false)
+    static (long Deger, bool Sabit, long Ofset) SaltCoz(string ifade)
+    {
+        string t = ifade.Trim();
+        if (long.TryParse(t, out long d)) return (d, true, 0);
+        var m = System.Text.RegularExpressions.Regex.Match(t, @"^\w+\s*\+\s*(\d+)$");
+        return (0, false, m.Success ? long.Parse(m.Groups[1].Value) : 0);
+    }
+    static string TickNormal(string ifade)
+    {
+        string t = ifade.Trim();
+        return (t == "st.Tick" || t == "tick") ? "TICK" : t;
+    }
+
+    // --- helper çağrı yerlerini topla --------------------------------------------------
+    // ÇAĞIRANIN SATIRI kaydedilir. İlk yazımda helper'ın bütün çağrıları `Rng` satırına
+    // atfediliyordu; "aynı satır = aynı çağrı yeri" elemesi yüzünden İKİ FARKLI ÇAĞIRANIN
+    // birbiriyle çakışması tamamen görünmezdi. Diş ölçümü bunu yakaladı: `gkKisaN` 6 yapılınca
+    // `Gurultu(35+c)` ile `Gurultu(40+c)` salt 40'ta çakışıyor ve kapı YEŞİL kalıyordu.
+    var helperCagrilari = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<(System.Collections.Generic.List<string> Args, int Satir)>>();
+    foreach (var h in helperler)
+    {
+        var liste = new System.Collections.Generic.List<(System.Collections.Generic.List<string>, int)>();
+        foreach (System.Text.RegularExpressions.Match m in
+                 System.Text.RegularExpressions.Regex.Matches(src, @"\b" + h.Ad + @"\s*\("))
+        {
+            int ac = src.IndexOf('(', m.Index);
+            int kap = KapanisParantezi(src, ac);
+            if (kap < 0) continue;
+            // BİLDİRİM satırını atla (tip imzası: "void X(", "bool X(", "double X(" ...)
+            int satirBas = src.LastIndexOf('\n', m.Index) + 1;
+            string onEk = src.Substring(satirBas, m.Index - satirBas).Trim();
+            if (onEk.EndsWith("void") || onEk.EndsWith("bool") || onEk.EndsWith("double") ||
+                onEk.EndsWith("int") || onEk.EndsWith("uint") || onEk.EndsWith("float")) continue;
+            liste.Add((ArgAyir(src.Substring(ac + 1, kap - ac - 1)), SatirNo(src, m.Index)));
+        }
+        helperCagrilari[h.Ad] = liste;
+    }
+
+    // --- tüm Rng çağrılarını adres tanımlayıcısına çevir --------------------------------
+    // Bir çağrının GERÇEKTEN tükettiği ham salt kümesi. `Rand01(s)` yalnız s'yi tüketir;
+    // `Gauss01(s)` K8 düzeltmesinden sonra `s·0x9E3779B1 + i·0x85EBCA6B` (i∈[0,12)) alt-saltlarını
+    // tüketir — yani ham s'yi DEĞİL. İki çağrı ancak bu kümeler kesişirse çakışır. Kapının ilk
+    // yazımı ikisini aynı uzayda sayıp `Gauss01(...,15)` ile `Rand01(...,15)`'i çakışma sandı;
+    // oysa K8 dönüşümü tam da bu iki uzayı ayırıyor.
+    static System.Collections.Generic.HashSet<uint> IsgalEdilenSaltlar(string fonk, uint salt, int span = 1)
+    {
+        var k = new System.Collections.Generic.HashSet<uint>();
+        for (int j = 0; j < span; j++)
+        {
+            uint s0 = unchecked(salt + (uint)j);
+            if (fonk == "Rand01") { k.Add(s0); continue; }
+            for (uint i = 0; i < 12; i++) k.Add(unchecked(s0 * 0x9E3779B1u + i * 0x85EBCA6Bu));
+        }
+        return k;
+    }
+
+    var adresler = new System.Collections.Generic.List<(string Adres, System.Collections.Generic.HashSet<uint> Saltlar, int Satir, string Cagri)>();
+    string cozulemeyen = "";
+    foreach (System.Text.RegularExpressions.Match m in
+             System.Text.RegularExpressions.Regex.Matches(src, @"Rng\.(Gauss01|Rand01)\s*\("))
+    {
+        int ac = src.IndexOf('(', m.Index);
+        int kap = KapanisParantezi(src, ac);
+        if (kap < 0) { cozulemeyen += $"satir {SatirNo(src, m.Index)}: parantez kapanmadi "; continue; }
+        var argl = ArgAyir(src.Substring(ac + 1, kap - ac - 1));
+        if (argl.Count != 5) { cozulemeyen += $"satir {SatirNo(src, m.Index)}: 5 argüman değil ({argl.Count}) "; continue; }
+        int satir = SatirNo(src, m.Index);
+        string fonk = m.Groups[1].Value;
+        string domain = argl[1].Replace("Domain.", "").Trim();
+        int entity = EntityTabani(argl[2]);
+        string tick = TickNormal(argl[3]);
+        var salt = SaltCoz(argl[4]);
+
+        if (entity >= 0 && salt.Sabit)
+        {
+            adresler.Add(($"{domain}·{entity}·{tick}", IsgalEdilenSaltlar(fonk, (uint)salt.Deger), satir, fonk));
+            continue;
+        }
+
+        // Değişken argüman → sarmalayıcıyı bul (Rng çağrısını içeren en yakın bildirim)
+        string bulunan = null;
+        foreach (var h in helperler)
+        {
+            int bild = src.LastIndexOf(h.Ad, m.Index, StringComparison.Ordinal);
+            if (bild < 0) continue;
+            // bildirimin Rng çağrısından önce ve makul yakınlıkta olması yeterli;
+            // birden çok aday varsa EN YAKIN olan seçilir
+            if (bulunan == null || bild > src.LastIndexOf(bulunan, m.Index, StringComparison.Ordinal))
+                bulunan = h.Ad;
+        }
+        if (bulunan == null || helperCagrilari[bulunan].Count == 0)
+        {
+            cozulemeyen += $"satir {satir}: entity/salt degisken ve sarmalayici TABLODA YOK ";
+            continue;
+        }
+        var ht = System.Array.Find(helperler, x => x.Ad == bulunan);
+        foreach (var (cagriArgs, cagiranSatir) in helperCagrilari[bulunan])
+        {
+            int e2 = ht.EntityArg >= 0
+                ? (ht.EntityArg < cagriArgs.Count ? EntityTabani(cagriArgs[ht.EntityArg]) : -1)
+                : entity;
+            string t2 = ht.TickArg >= 0
+                ? (ht.TickArg < cagriArgs.Count ? TickNormal(cagriArgs[ht.TickArg]) : "?")
+                : tick;
+            long s2 = -1; int span2 = 1; string spanKaynak = "";
+            if (ht.SaltArg >= 0 && ht.SaltArg < cagriArgs.Count)
+            {
+                string saltIfade = cagriArgs[ht.SaltArg];
+                var sc = SaltCoz(saltIfade);
+                if (sc.Sabit) s2 = sc.Deger + salt.Ofset;
+                else if (spanTablosu.TryGetValue(saltIfade.Trim(), out var sp))
+                { s2 = sp.Taban + salt.Ofset; span2 = sp.Span; spanKaynak = sp.Kaynak; }
+            }
+            if (e2 < 0 || s2 < 0 || t2 == "?")
+            {
+                cozulemeyen += $"satir {cagiranSatir} ({bulunan}[{string.Join("|", cagriArgs)}]): salt SPAN TABLOSUNDA da yok ";
+                continue;
+            }
+            adresler.Add(($"{domain}·{e2}·{t2}", IsgalEdilenSaltlar(fonk, (uint)s2, span2), cagiranSatir,
+                          span2 > 1 ? $"{fonk}@{bulunan}[{s2}..{s2 + span2 - 1}·{spanKaynak}]" : $"{fonk}@{bulunan}"));
+        }
+    }
+
+    // --- çakışma tespiti: aynı (domain,entity,tick) içinde SALT KÜMELERİ kesişiyor mu ----
+    var gruplar = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<(System.Collections.Generic.HashSet<uint> S, int Satir, string Cagri)>>();
+    foreach (var a in adresler)
+    {
+        if (!gruplar.TryGetValue(a.Adres, out var liste)) gruplar[a.Adres] = liste = new System.Collections.Generic.List<(System.Collections.Generic.HashSet<uint>, int, string)>();
+        liste.Add((a.Saltlar, a.Satir, a.Cagri));
+    }
+    string cakisma = "";
+    int cakisanGrup = 0;
+    foreach (var g in gruplar)
+        for (int x = 0; x < g.Value.Count; x++)
+            for (int y = x + 1; y < g.Value.Count; y++)
+            {
+                if (g.Value[x].Satir == g.Value[y].Satir) continue;   // aynı çağrı yeri
+                if (!g.Value[x].S.Overlaps(g.Value[y].S)) continue;
+                cakisanGrup++;
+                cakisma += $"{g.Key} ← satir {g.Value[x].Satir}({g.Value[x].Cagri}) + {g.Value[y].Satir}({g.Value[y].Cagri}) ";
+            }
+
+    Console.WriteLine($"[info] K9 adres haritasi: {adresler.Count} adres · {gruplar.Count} ayrik dortlu · " +
+                      $"cakisan {cakisanGrup} · cozulemeyen {(cozulemeyen.Length == 0 ? "0" : "VAR")}");
+    string k9hata = "";
+    if (cozulemeyen.Length > 0) k9hata += "COZULEMEYEN ADRES (kapi sessizce atlamaz): " + cozulemeyen;
+    if (cakisanGrup > 0) k9hata += "ADRES CAKISMASI: " + cakisma;
+    if (adresler.Count < 30) k9hata += $"adres sayisi beklenenden az ({adresler.Count}) - tarama bozulmus olabilir ";
+    if (k9hata.Length > 0) failures += Fail("K9AdresCakismasi", k9hata);
+    else Pass($"K9AdresCakismasi({adresler.Count} adres taranip {gruplar.Count} ayrik dortluye dustu - " +
+              $"iki alt sistem ayni (domain,entity,tick,salt) dortlusunu paylasmiyor)");
 }
 
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");
