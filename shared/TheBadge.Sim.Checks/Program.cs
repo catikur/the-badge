@@ -5870,5 +5870,186 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
               $"iki alt sistem ayni (domain,entity,tick,salt) dortlusunu paylasmiyor)");
 }
 
+// 33) K9-C — RPC KÖPRÜSÜ + TRANSACTIONAL OUTBOX (CB 8.1/8.2/8.3)
+//
+// CB 8.1'in 24 saatlik dedup'ı ZATEN VARDI (K1, `IdempotencyStore`) — yeniden yazılmadı; bu
+// dilim onun ÜSTÜNE iki eksiği koyar: (1) yayının SÜREÇ ÖLÜMÜNE dayanıklılığı, (2) CB 8.2'nin
+// `newStateVersion` alanının yanıtta dönmesi.
+//
+// KAPSAM SINIRI (dürüst olan): gerçek Nakama ağ bağlaması bu ortamda KOŞTURULAMAZ ve bu
+// kapılarla ÖLÇÜLMEZ. Ölçülen şey taşımadan BAĞIMSIZ olan katman: dedup, atomiklik, teslim
+// dayanıklılığı, sıra ve yanıt sözleşmesi. Nakama adaptörü `IKomutTasima`ya takılır.
+{
+    var k9Opts = new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true };
+    string k9BalDir = System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json"));
+    var k9Rules = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.WorldRules>(
+        System.IO.File.ReadAllText(System.IO.Path.Combine(k9BalDir, "world.balance.json")), k9Opts);
+    k9Rules.Validate();
+    var k9Eco = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.EconomyBalance>(
+        System.IO.File.ReadAllText(System.IO.Path.Combine(k9BalDir, "economy.balance.json")), k9Opts);
+    var k9Bands = new TheBadge.Checks.TestBands();
+    var k9RlCfg = new Dictionary<RateClass, RateLimitCfg[]>();
+    {
+        using var bd9 = System.Text.Json.JsonDocument.Parse(
+            System.IO.File.ReadAllText(System.IO.Path.Combine(k9BalDir, "command.bands.json")));
+        foreach (var b in bd9.RootElement.GetProperty("bantlar").EnumerateObject())
+            k9Bands.Add(b.Name, b.Value[0].GetDouble(), b.Value[1].GetDouble());
+        foreach (var r in bd9.RootElement.GetProperty("rateLimit").EnumerateObject())
+        {
+            var l9 = new List<RateLimitCfg>();
+            foreach (var w in r.Value.EnumerateArray()) l9.Add(new RateLimitCfg(w[0].GetInt32(), w[1].GetInt64() * 1000));
+            k9RlCfg[(RateClass)Enum.Parse(typeof(RateClass), r.Name)] = l9.ToArray();
+        }
+    }
+    const long K9Host = 1_700_000_000_000L, K9User = 42L;
+    CommandEnvelope K9Env(string act, Guid? id = null)
+        => new CommandEnvelope
+        {
+            CommandId = id ?? Guid.NewGuid(), CatalogVersion = Catalog.Version, Source = CommandSource.UI,
+            ActionType = act, IssuedAtUnixMs = K9Host, MatchTick = 0, UserId = K9User,
+            SaveSlotId = 1, TeamIdx = 0, PayloadJson = new byte[0]
+        };
+
+    (TheBadge.World.WorldStore depo, TheBadge.World.WorldExecutor exec, TheBadge.CommandBus.CommandBus bus,
+     TheBadge.World.BellekOutboxStore outbox, TheBadge.Checks.SpyOnlineSink ag, TheBadge.World.RpcKopru kopru)
+    K9Kur()
+    {
+        var g = TheBadge.Checks.EkonomiFixture.Kur(k9Rules, k9Eco, 500L, K9User);
+        g.Takvim.Pencere = TheBadge.World.TransferWindow.Yaz;
+        var depo = new TheBadge.World.WorldStore(g);
+        var ctx = new TheBadge.World.WorldContext(depo, k9Rules)
+        { Active = TheBadge.CommandBus.Context.Hub | TheBadge.CommandBus.Context.Online };
+        var exec = new TheBadge.World.WorldExecutor(depo, ctx);
+        var outbox = new TheBadge.World.BellekOutboxStore();
+        var ag = new TheBadge.Checks.SpyOnlineSink();
+        // Yürütücüye bağlanan kanal AĞ DEĞİL, OUTBOX'tır — atomik bölge içinde yalnız kayıt yazılır.
+        var sink = new TheBadge.World.OutboxSink(outbox, () => K9Host);
+        TheBadge.World.OnlineActions.Baglan(ctx, exec, k9Rules, sink);
+        TheBadge.World.TycoonActions.Baglan(ctx, exec, k9Eco);   // durum DEĞİŞTİREN aksiyon gerekiyor
+        var bus = new TheBadge.CommandBus.CommandBus(k9Bands, ctx,
+            new SlidingWindowRateLimiter(k9RlCfg, 8, 300_000), new IdempotencyStore());
+        var pompa = new TheBadge.World.OutboxPompasi(outbox, ag);
+        var kopru = new TheBadge.World.RpcKopru(bus, exec, pompa);
+        return (depo, exec, bus, outbox, ag, kopru);
+    }
+
+    TheBadge.Checks.TestPayload Klip(long macId) =>
+        new TheBadge.Checks.TestPayload().Set("macId", macId).Set("pencereSn", 15L).Set("hedef", "lig");
+
+    // 33a) SÜREÇ ÖLÜMÜ — yayın outbox'ta DURUR, yeniden başlatmada teslim edilir
+    {
+        string hata = "";
+        var w = K9Kur();
+        var zarf = K9Env("replay.share_clip");
+        var y = w.kopru.Gonder(zarf, Klip(101), K9User, K9Host);
+        if (!y.Ok) hata += $"komut basarisiz({y.Sebep}/{y.Detay}) ";
+        // Pompa köprü içinde koştu → teslim edilmiş olmalı
+        if (w.ag.Klipler.Count != 1) hata += $"pompa teslim etmedi({w.ag.Klipler.Count}) ";
+        if (w.outbox.BekleyenSayisi != 0) hata += "teslim edilen kayit outbox'ta kaldi ";
+
+        // ŞİMDİ SÜREÇ ÖLÜMÜ: pompasız köprü = commit oldu ama teslim edilemedi
+        var w2 = K9Kur();
+        var bus2 = w2.bus; var exec2 = w2.exec;
+        var kopruPompasiz = new TheBadge.World.RpcKopru(bus2, exec2, null);
+        var y2 = kopruPompasiz.Gonder(K9Env("replay.share_clip"), Klip(202), K9User, K9Host);
+        if (!y2.Ok) hata += $"pompasiz komut basarisiz({y2.Sebep}) ";
+        if (w2.ag.Klipler.Count != 0) hata += "pompa yokken ag'a gitti (teslim ertelenmemis) ";
+        if (w2.outbox.BekleyenSayisi != 1) hata += $"kayit outbox'ta DURMADI({w2.outbox.BekleyenSayisi}) - surec olumunde yayin KAYBOLURDU ";
+
+        // YENİDEN BAŞLATMA: aynı depo, yeni pompa
+        var pompa2 = new TheBadge.World.OutboxPompasi(w2.outbox, w2.ag);
+        int n = pompa2.Sur(32, out string takili);
+        if (n != 1 || w2.ag.Klipler.Count != 1) hata += $"yeniden baslatmada teslim edilmedi(n={n}) ";
+        if (takili != null) hata += $"pompa takildi({takili}) ";
+        if (w2.ag.Klipler.Count == 1 && w2.ag.Klipler[0].macId != 202) hata += "yanlis kayit teslim edildi ";
+        if (w2.outbox.BekleyenSayisi != 0) hata += "teslimden sonra outbox bosalmadi ";
+
+        if (hata.Length > 0) failures += Fail("K9OutboxDayanikliligi", hata);
+        else Pass("K9OutboxDayanikliligi(commit ile yayin ayri - surec olumunde kayit DURUYOR - yeniden baslatmada teslim)");
+    }
+
+    // 33b) SIRA + YENİDEN DENEME — takılan kayit ARKASINDAKILERI de bekletir (CB 8.2)
+    {
+        string hata = "";
+        var w = K9Kur();
+        var kopruPompasiz = new TheBadge.World.RpcKopru(w.bus, w.exec, null);
+        for (long i = 1; i <= 3; i++)
+            kopruPompasiz.Gonder(K9Env("replay.share_clip"), Klip(300 + i), K9User, K9Host);
+        if (w.outbox.BekleyenSayisi != 3) hata += $"3 kayit beklenirken {w.outbox.BekleyenSayisi} ";
+
+        // YALNIZ İLKİ patlıyor: arkadakiler teslim EDİLEBİLİR durumda ama SIRA yüzünden
+        // edilmemeli. Hepsini birden patlatmak bu iddiayı ölçemez — o durumda "başta takıldı"
+        // ile "hepsini denedi, hepsi patladı" aynı sonucu verir (diş ölçümü bunu yakaladı).
+        var secmeli = new TheBadge.Checks.SecmeliPatlayanSink { PatlayanMacId = 301 };
+        var pompa = new TheBadge.World.OutboxPompasi(w.outbox, secmeli);
+        int n0 = pompa.Sur(32, out string takili0);
+        if (n0 != 0) hata += $"ilk kayit takiliyken {n0} teslim edildi - SIRA ATLANDI ";
+        if (secmeli.Klipler.Count != 0) hata += $"arkadaki kayitlar one gecti({secmeli.Klipler.Count}) ";
+        if (takili0 == null) hata += "pompa takildigini bildirmedi ";
+        if (w.outbox.BekleyenSayisi != 3) hata += $"patlayinca kayit dustu({w.outbox.BekleyenSayisi}) ";
+
+        // Ağ düzeliyor: üçü de SIRAYLA teslim
+        secmeli.PatlayanMacId = -1;
+        int n1 = pompa.Sur(32, out string takili1);
+        if (n1 != 3) hata += $"duzelince 3 yerine {n1} teslim ";
+        if (takili1 != null) hata += $"duzelmisken takildi({takili1}) ";
+        if (secmeli.Klipler.Count == 3)
+        {
+            if (secmeli.Klipler[0].macId != 301 || secmeli.Klipler[1].macId != 302 || secmeli.Klipler[2].macId != 303)
+                hata += $"SIRA bozuldu({secmeli.Klipler[0].macId},{secmeli.Klipler[1].macId},{secmeli.Klipler[2].macId}) ";
+            for (int i = 0; i < 3; i++) if (secmeli.Klipler[i].cid == Guid.Empty) hata += "commandId tasinmadi (uzak dedup imkansiz) ";
+        }
+        else hata += $"teslim sayisi 3 degil({secmeli.Klipler.Count}) ";
+
+        if (hata.Length > 0) failures += Fail("K9OutboxSirasi", hata);
+        else Pass("K9OutboxSirasi(takilan kayit arkasindakileri bekletir - duzelince SIRAYLA teslim - commandId tasiniyor)");
+    }
+
+    // 33c) YANIT SÖZLEŞMESİ — CB 8.2 newStateVersion + CB 8.1 tekrar yanıtı AYNEN
+    {
+        string hata = "";
+        var w = K9Kur();
+        // Durum DEĞİŞTİREN bir komut gerekiyor (klip kalıcı durumu değiştirmez)
+        var zarf = K9Env("tycoon.set_season_ticket_price");
+        var yuk = new TheBadge.Checks.TestPayload().Set("fiyat", 120.0);
+        ulong v0 = w.exec.StateVersion;
+        var y1 = w.kopru.Gonder(zarf, yuk.Copy(), K9User, K9Host);
+        if (!y1.Ok) hata += $"ilk komut basarisiz({y1.Sebep}/{y1.Detay}) ";
+        if (y1.YeniStateVersion <= v0) hata += $"newStateVersion artmadi({v0}->{y1.YeniStateVersion}) ";
+        if (y1.Tekrar) hata += "ilk komut TEKRAR isaretli geldi ";
+
+        ulong hAra = w.depo.Hash();
+        // AYNI zarf (aynı CommandId) → yürütülmez, önceki yanıt döner
+        var y2 = w.kopru.Gonder(zarf, yuk.Copy(), K9User, K9Host);
+        if (!y2.Tekrar) hata += "ikinci gonderim TEKRAR isaretli DEGIL (CB 8.1 ihlali) ";
+        if (y2.Sebep != y1.Sebep) hata += $"tekrar yaniti farkli sebep({y1.Sebep}->{y2.Sebep}) ";
+        if (y2.Detay != y1.Detay) hata += "tekrar yaniti farkli detay ";
+        if (w.depo.Hash() != hAra) hata += "tekrar gonderim durumu DEGISTIRDI (yeniden yurutuldu) ";
+        if (y2.YeniStateVersion != y1.YeniStateVersion) hata += "tekrar yaniti farkli stateVersion ";
+
+        if (hata.Length > 0) failures += Fail("K9RpcYaniti", hata);
+        else Pass("K9RpcYaniti(CB 8.2 newStateVersion doner - CB 8.1 tekrar yaniti AYNEN, durum degismiyor)");
+    }
+
+    // 33d) POMPA HATASI KOMUTU DÜŞÜRMEZ — outbox'ın varlık sebebi
+    {
+        string hata = "";
+        var w = K9Kur();
+        w.ag.Patlat = true;
+        var y = w.kopru.Gonder(K9Env("replay.share_clip"), Klip(999), K9User, K9Host);
+        if (!y.Ok) hata += $"pompa patlayinca KOMUT dusuruldu({y.Sebep}/{y.Detay}) - outbox'in cozdugu bagimlilik geri gelmis ";
+        if (w.kopru.SonPompaDetayi == null) hata += "pompa hatasi telemetriye dusmedi ";
+        if (w.outbox.BekleyenSayisi != 1) hata += $"kayit outbox'ta durmadi({w.outbox.BekleyenSayisi}) ";
+        // Ağ düzelince aynı kayıt teslim edilir
+        w.ag.Patlat = false;
+        w.kopru.PompayiSur(out string t2);
+        if (w.ag.Klipler.Count != 1) hata += "duzelince teslim edilmedi ";
+        if (t2 != null) hata += $"duzelmisken takili bildirildi({t2}) ";
+
+        if (hata.Length > 0) failures += Fail("K9PompaKomutuDusurmez", hata);
+        else Pass("K9PompaKomutuDusurmez(yayin kanalinin sagligi komutun sonucunu BELIRLEMIYOR - kayit duruyor, sonra teslim)");
+    }
+}
+
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");
 return failures == 0 ? 0 : 1;

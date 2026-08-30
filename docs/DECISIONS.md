@@ -1921,6 +1921,43 @@ Tek 500 maçlık ölçüme dayanan bu okuma **yanlıştı**.
   kendi yayılımını ölç; fark yayılımın içindeyse ortada bulgu yoktur. K8'de bunu yapmadım ve
   olmayan bir nedensellik yazdım.
 
+### K9-C: RPC köprüsü + transactional outbox — ✅ TAMAM (2026-08-30)
+K6'da ertelenen "gerçek Nakama köprüsü" dilimi. Yazmaya başlamadan önce mevcut katmana bakıldı ve
+**24 saatlik dedup'ın ZATEN var olduğu** görüldü (K1, `IdempotencyStore`: 24 saat pencere, önceki
+yanıt aynen, (kullanıcı, CommandId) anahtarı, güvenlik turu düzeltmeleri dahil). Neredeyse ikinci
+bir kopyası yazılacaktı — "yeni denetim yazmadan önce daha derin katmana bak" kuralı işe yaradı.
+
+- **Gerçek boşluk neydi:** yayın bugün `WorldExecutor` içinde, durum commit'iyle aynı kilitte ve
+  hata halinde geri alınarak yapılıyor. Bu SÜREÇ İÇİ hataya karşı doğru ama SÜREÇ ÖLÜMÜNE karşı
+  değil: durum yazıldıktan sonra ağ çağrısı yarıda kalırsa yayın KAYBOLUR ve durum "yayınlandı" der.
+- **Transactional outbox:** `IOutboxStore` (dayanıklılık dikişi) · `OutboxSink : IOnlineSink`
+  (mevcut dikişe takılır, **executor'da değişiklik gerekmez** — böylece outbox yazması zaten atomik
+  bölgenin içinde olur) · `OutboxPompasi` (teslim). Teslim en-az-bir-kez olduğu için uzak taraf
+  `CommandId` ile dedup yapmak ZORUNDA; arayüz o anahtarı K6'dan beri taşıyordu.
+- **Sıra:** takılan kayıt ARKASINDAKİLERİ de bekletir (CB 8.2 "varış sırası esastır"). Sırayı atlayıp
+  devam etmek, bağımlı iki yayını uzak tarafa ters sırada ulaştırabilirdi.
+- **`RpcKopru` + CB 8.2:** `CommandOutcome` `newStateVersion` taşımıyordu (bus durum katmanını
+  tanımaz, tanımamalı da); köprü yürütücüden okuyup `KomutYaniti`ye ekliyor.
+- **KRİTİK TASARIM: pompa hatası komutu DÜŞÜRMEZ.** Durum commit edilmiştir ve kayıt outbox'ta durur.
+  Pompa hatasında komutu reddetmek, outbox'ın çözdüğü bağımlılığı geri kurardı — yayın kanalının
+  sağlığı komutun sonucunu belirlemeye devam ederdi.
+- **Diş ölçümü (dört yön):** outbox kaydı kalıcı değil → `K9OutboxDayanikliligi` FAIL · pompa sırayı
+  atlıyor → `K9OutboxSirasi` FAIL (`SIRA bozuldu(302,303,301)`) · köprü pompa hatasında komutu
+  düşürüyor → `K9PompaKomutuDusurmez` FAIL · yanıt stateVersion taşımıyor → `K9RpcYaniti` FAIL.
+- **SIRA KAPISI İLK YAZIMDA DİŞSİZDİ.** `SpyOnlineSink.Patlat` hepsini birden patlatıyor; o durumda
+  "başta takıldı" ile "hepsini denedi, hepsi patladı" AYNI sonucu veriyor ve pompayı sırayı atlayacak
+  şekilde bozduğumda kapı YEŞİL kaldı. `SecmeliPatlayanSink` eklendi: yalnız ilki patlar, arkadakiler
+  teslim EDİLEBİLİR durumdadır — iddia ancak böyle ölçülebiliyor.
+- **SimWorker gerçekten ayağa kalkıyor:** köprü test koşumuna hapis değil. `dotnet run --project
+  server/TheBadge.SimWorker` → `submit#1 → ok=True stateVersion=1 tekrar=False`,
+  `submit#2 (ayni CommandId) → tekrar=True`.
+- **YAPILMADI, açıkça:** Nakama RPC kaydının kendisi ve PostgreSQL outbox deposu. Bu ortamda
+  koşturulamaz, dolayısıyla yazılmadı (kanıtlanamayan kod eklenmez). Dikişler hazır: `IKomutTasima`
+  ve `IOutboxStore`. Gerçek deponun TEK şartı, outbox yazmasının durum yazmasıyla aynı işlemde
+  commit edilmesidir — outbox'ın bütün değeri o özellikten gelir. `server/SERVER_SETUP.md` güncellendi.
+- **Kural:** **"hepsi başarısız" senaryosu, sıra iddiasını ölçemez.** Bir sıralama garantisini test
+  etmek için, atlanabilecek olanın atlanabilir DURUMDA olması gerekir.
+
 ## Bekleyen kararlar
 
 - ~~**xG katsayıları az tahmin ediyor.**~~ → **YAPILDI (2026-08-30, K9-B):** seçenek (b)

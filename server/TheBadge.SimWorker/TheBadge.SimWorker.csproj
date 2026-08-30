@@ -6,5 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../shared/TheBadge.Sim/TheBadge.Sim.csproj" />
+    <ProjectReference Include="../../shared/TheBadge.CommandBus/TheBadge.CommandBus.csproj" />
+    <ProjectReference Include="../../shared/TheBadge.World/TheBadge.World.csproj" />
   </ItemGroup>
 </Project>

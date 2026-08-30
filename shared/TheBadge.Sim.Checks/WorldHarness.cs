@@ -175,6 +175,22 @@ namespace TheBadge.Checks
 
     /// <summary>Online yayın casusu — K6. Klip ve rapor ayrı listelerde tutulur ki
     /// "yayınlandı mı" ve "hangisi yayınlandı" ayrı ayrı ölçülebilsin.</summary>
+    /// <summary>YALNIZ belirli bir kaydı patlatan kanal. `SpyOnlineSink.Patlat` hepsini birden
+    /// patlatır ve o yüzden SIRA iddiasını ÖLÇEMEZ: hepsi patlayınca "başta takıldı" ile "hepsini
+    /// denedi, hepsi patladı" aynı sonucu verir. Sıra korunuyor mu sorusunu ancak ilki patlarken
+    /// arkadakiler BAŞARILI OLABİLİYORKEN sorabilirsin.</summary>
+    public sealed class SecmeliPatlayanSink : TheBadge.World.IOnlineSink
+    {
+        public readonly List<(System.Guid cid, int macId)> Klipler = new List<(System.Guid, int)>();
+        public int PatlayanMacId = -1;
+        public void KlipPaylas(System.Guid commandId, int macId, int pencereSn, byte hedef, long userId)
+        {
+            if (macId == PatlayanMacId) throw new InvalidOperationException($"mac {macId} icin ag hatasi (test)");
+            Klipler.Add((commandId, macId));
+        }
+        public void OyuncuRaporla(System.Guid commandId, long hedefUserId, byte sebep, string notlar, long userId) { }
+    }
+
     public sealed class SpyOnlineSink : TheBadge.World.IOnlineSink
     {
         public readonly List<(System.Guid cid, int macId, int pencereSn, byte hedef, long userId)> Klipler
