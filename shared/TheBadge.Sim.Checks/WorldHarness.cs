@@ -175,6 +175,63 @@ namespace TheBadge.Checks
 
     /// <summary>Online yayın casusu — K6. Klip ve rapor ayrı listelerde tutulur ki
     /// "yayınlandı mı" ve "hangisi yayınlandı" ayrı ayrı ölçülebilsin.</summary>
+    /// <summary>YALNIZ belirli bir kaydı patlatan kanal. `SpyOnlineSink.Patlat` hepsini birden
+    /// patlatır ve o yüzden SIRA iddiasını ÖLÇEMEZ: hepsi patlayınca "başta takıldı" ile "hepsini
+    /// denedi, hepsi patladı" aynı sonucu verir. Sıra korunuyor mu sorusunu ancak ilki patlarken
+    /// arkadakiler BAŞARILI OLABİLİYORKEN sorabilirsin.</summary>
+    public sealed class SecmeliPatlayanSink : TheBadge.World.IOnlineSink
+    {
+        public readonly List<(System.Guid cid, int macId)> Klipler = new List<(System.Guid, int)>();
+        public int PatlayanMacId = -1;
+        public void KlipPaylas(System.Guid commandId, int macId, int pencereSn, byte hedef, long userId)
+        {
+            if (macId == PatlayanMacId) throw new InvalidOperationException($"mac {macId} icin ag hatasi (test)");
+            Klipler.Add((commandId, macId));
+        }
+        public void OyuncuRaporla(System.Guid commandId, long hedefUserId, byte sebep, string notlar, long userId) { }
+    }
+
+    /// <summary>Durumu DEĞİŞTİREN ve AYNI komutta yayın YAPAN teste özel handler. Katalogda böyle
+    /// bir aksiyon yok (mevcut yayıncı aksiyonlar durumu değiştirmiyor), ama `WorldExecutor`in
+    /// commit SIRASI bu birleşimde anlam kazanıyor: olaylar yayınlardan ÖNCE önbelleğe yazılırsa,
+    /// yayın patlayıp durum geri alındığında önbellekte hayalet olaylar kalır.</summary>
+    public sealed class HemDegistirHemYayinla : TheBadge.World.IActionHandler
+    {
+        public RejectionReason Apply(TheBadge.World.GameState st, TheBadge.World.WorldJournal j,
+                                     CommandEnvelope env, ActionDef a, IPayloadView p, out string detail)
+        {
+            detail = null;
+            j.Set(TheBadge.World.MutTarget.Kulup, 0, TheBadge.World.ClubField.Form, 55);
+            j.Emit(new TheBadge.World.WorldEvent(TheBadge.World.WorldEventType.TaktikGuncellendi, 0, 55,
+                                                 st.Takvim.Sezon, st.Takvim.Hafta));
+            j.PersonaKonusma(env.CommandId, 1, 0, env.UserId);
+            return RejectionReason.None;
+        }
+    }
+
+    /// <summary>Olay kanalı patlatan sink — sözleşme "FIRLATMAMALI, fırlatırsa yutulur" diyor.
+    /// Bu tip o sözleşmeyi sınar: patlayan bir kanal komutu DÜŞÜRMEMELİ ve durumu geri ALMAMALI.</summary>
+    public sealed class PatlayanOlayKanali : TheBadge.World.IKomutOlaySinki
+    {
+        public void Yaz(System.Guid commandId, long userId, long anUnixMs,
+                        IReadOnlyList<TheBadge.World.WorldEvent> olaylar)
+            => throw new InvalidOperationException("olay kanali patladi (test)");
+    }
+
+    public sealed class PatlayanPersona : TheBadge.World.IPersonaSink
+    {
+        public void KonusmaAyarlandi(System.Guid commandId, int personaId, byte tonIndeksi, long userId)
+            => throw new InvalidOperationException("persona kanali patladi (test)");
+        public void BasinYaniti(System.Guid commandId, int soruId, byte cevapSinifi, long userId)
+            => throw new InvalidOperationException("persona kanali patladi (test)");
+    }
+
+    public sealed class SessizPersona : TheBadge.World.IPersonaSink
+    {
+        public void KonusmaAyarlandi(System.Guid commandId, int personaId, byte tonIndeksi, long userId) { }
+        public void BasinYaniti(System.Guid commandId, int soruId, byte cevapSinifi, long userId) { }
+    }
+
     public sealed class SpyOnlineSink : TheBadge.World.IOnlineSink
     {
         public readonly List<(System.Guid cid, int macId, int pencereSn, byte hedef, long userId)> Klipler

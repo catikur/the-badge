@@ -31,6 +31,30 @@ namespace TheBadge.World
     /// birlikte kalıcı olur ya hiç olmaz" sözleşmesinin host ayağı: K6'da bu çağrı veritabanı
     /// transaction'ının İÇİNDE koşar. Fırlatırsa istisna bus'a kadar çıkar, bus rezervasyonu
     /// bırakır ve host transaction'ı geri alır — bellek içi durum da o geri almanın parçasıdır.</summary>
+    /// <summary>KOMUT OLAY KANALI — CB Spec 3'ün yanıt şeması `{ status, resultingEvents,
+    /// newStateVersion }` diyor. Domain event'leri YALNIZ denetim sink'ine gidiyordu (inceleme
+    /// bulgusu, P1): RPC köprüsünü kullanan istemci komutun sonucunu UYGULAYAMIYOR, tanımsız bir
+    /// tam/delta çekimi yapmak zorunda kalıyordu. Bu kanal olayları YANITA taşır.
+    ///
+    /// SÖZLEŞME — DENETİM SİNK'İYLE AYNI DEĞİLDİR (inceleme bulgusu, Bugbot). Bu kanal
+    /// transaction TAMAMLANDIKTAN sonra, tüm yayınların ARDINDAN çağrılır ve **FIRLATMAMALIDIR**;
+    /// fırlatırsa istisna YUTULUR. Gerekçe: o noktada durum uygulanmış ve yayınlar ÇIKMIŞTIR —
+    /// yayın geri çağrılamaz. Orada geri almak "yarısı yayınlanmış" bir işlem bırakırdı; istisnayı
+    /// yukarı bırakmak ise rezervasyonu tamamlanmamış hâlde bırakıp istemci tekrarında handler'ı
+    /// İKİNCİ KEZ çalıştırırdı (ÇİFT UYGULAMA). Yanıt önbelleğini kaybetmek bu ikisinden de ucuz:
+    /// istemci yalnız delta yerine tam çekim yapar.
+    ///
+    /// KALICI olay saklama İSTENİYORSA bu kanal DOĞRU YER DEĞİLDİR — o, denetim sink'i yoluna
+    /// aittir (yayınlardan ÖNCE koşar ve fırlatırsa durum gerçekten geri alınır).</summary>
+    public interface IKomutOlaySinki
+    {
+        /// <summary>`userId` ve `anUnixMs` `AuditRecord`tan gelir — alıcı ne kullanıcıyı tahmin
+        /// eder ne de ortam saatine bakar. Kullanıcı anahtarın PARÇASIDIR: yalnız `CommandId`
+        /// anahtarı, aynı Id'yi kullanan başka bir oturuma bu komutun olaylarını sızdırırdı
+        /// (`IdempotencyStore`un 2026-08-24 güvenlik bulgusuyla aynı gerekçe).</summary>
+        void Yaz(Guid commandId, long userId, long anUnixMs, IReadOnlyList<WorldEvent> olaylar);
+    }
+
     public interface IWorldAuditSink
     {
         void Persist(WorldAuditEntry entry, IReadOnlyList<WorldEvent> events);
@@ -88,6 +112,17 @@ namespace TheBadge.World
         }
 
         /// <summary>Persona kanalı — online kanalla aynı gerekçe.</summary>
+        IKomutOlaySinki olaySinki;
+        /// <summary>Olay kanalının yuttuğu hata sayısı — sessizlik ÖLÇÜLEBİLİR kalsın diye.</summary>
+        public int OlayKanaliHatasi { get; private set; }
+        /// <summary>Komut olay kanalını bağlar (CB 3 yanıt şeması). Bağlı değilse olaylar yalnız
+        /// denetime gider — davranış eskisi gibi kalır, sessiz bir kayıp olmaz.</summary>
+        public void OlayKanaliBagla(IKomutOlaySinki sink)
+        {
+            if (olaySinki != null) throw new InvalidOperationException("olay kanalı zaten bağlı");
+            olaySinki = sink ?? throw new ArgumentNullException(nameof(sink));
+        }
+
         public void PersonaKanalBagla(IPersonaSink sink)
         {
             if (personaKanal != null) throw new InvalidOperationException("persona kanalı zaten bağlı");
@@ -237,6 +272,28 @@ namespace TheBadge.World
                     }
                     catch { journal.Geri(st); throw; }
                 }
+
+                // OLAYLAR YANITA — EN SONDA (inceleme bulgusu, Bugbot). İlk yazımda denetimden
+                // hemen sonra yazılıyordu, yani ARDINDAN gelen üç yayın bloğundan biri patlayıp
+                // `Geri` çağırırsa durum geri alınıyor ama önbellekte olaylar KALIYORDU: yanıt,
+                // hiç gerçekleşmemiş bir durum geçişinin olaylarını taşırdı. Buraya taşındı —
+                // buraya ulaşan her yol "işlem tamamlandı" demektir, geriye dönüş yok.
+                // `auditRecord.UserId` burada KİMLİĞİ DOĞRULANMIŞ kullanıcıdır: bus, yürütmeden
+                // önce `env.UserId != authenticatedUserId` ise komutu reddeder, dolayısıyla bu
+                // noktaya gelen zarfın kullanıcısı oturumun kullanıcısıdır. (Okuma tarafı aynı
+                // güvenceye sahip DEĞİLDİR — orası red yolunda da çalışır ve oturum kimliğini
+                // kullanmak zorundadır; bkz. `RpcKopru.Gonder`.)
+                if (olaySinki != null)
+                {
+                    // YUTULUR — bilinçli. Buraya gelindiğinde durum uygulanmış ve YAYINLAR ÇIKMIŞTIR.
+                    // Geri almak yayını geri çağıramaz; istisnayı yukarı bırakmak rezervasyonu
+                    // tamamlanmamış bırakıp tekrarda ÇİFT UYGULAMAYA yol açar. Sayaç, sessizliğin
+                    // ölçülebilir kalması için: "yutuldu" ile "hiç olmadı" ayırt edilebilmeli.
+                    try { olaySinki.Yaz(auditRecord.CommandId, auditRecord.UserId,
+                                        auditRecord.ReceivedAtUnixMs, journal.Events); }
+                    catch { OlayKanaliHatasi++; }
+                }
+
                 return RejectionReason.None;
             }
         }

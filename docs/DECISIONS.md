@@ -1855,19 +1855,300 @@ aralığında "topluyor" — oysa aynı commit borcu kapatıp eşiği sıkmışt
 - **Diş ölçümü YOK — bilinçli.** Değişiklik yalnız yorum; bir kapının yakalayacağı davranış yok.
   Diş ölçtüğünü iddia etmek gösteri olurdu.
 
+## FAZ 04 kapanış borçları (K9)
+
+### K9-A: RNG adres çakışma kapısı — ✅ TAMAM (2026-08-30)
+Bekleyen karardaki öneri (b) uygulandı: tek örneği elle düzeltmek yerine TÜM çağrı yerlerini tarayan
+bir kapı yazıldı. Doğru karar çıktı — elle düzeltme, aşağıdaki iki bulgunun ikisini de kaçırırdı.
+
+- **Kapı ne yapıyor:** `MatchEngine.cs` kaynağını tarar, her `Rng.Gauss01/Rand01` çağrısının
+  (domain, entity tabanı, tick, salt) adresini çıkarır ve **işgal ettiği ham salt kümesini** hesaplar.
+  `Rand01(s)` yalnız `s`'yi tüketir; `Gauss01(s)` K8 sonrası `s·0x9E3779B1 + i·0x85EBCA6B` (i∈[0,12))
+  alt-saltlarını tüketir. İki çağrı ancak bu kümeler KESİŞİRSE çakışır.
+- **ÇÖZEMEDİĞİNİ ATLAMAZ:** sarmalayıcı üzerinden gelen değişken entity/salt'lar bildirilmiş bir
+  tabloyla çözülür; tabloda olmayan bir sarmalayıcı ya da çözülemeyen bir argüman kapıyı KIRMIZIYA
+  döndürür. Bugünkü tarama: **53 adres → 20 ayrık dörtlü, çakışan 0, çözülemeyen 0.**
+- **Bulgu 1 (bilinen):** `ExecuteOpenCross` (orta nişanı) ve `ResolveAerial` (hava topu temizliği)
+  ikisi de `Physics·(700+ajan)·st.Tick·63` kullanıyordu. **Erişilebilirlik ÖLÇÜLDÜ: 200 maçta maç
+  İÇİ çakışma 0.** İlk ölçümüm yanlıştı — adres kümesini 200 maç boyunca biriktirmiştim, oysa adres
+  `seed`'i de içerir ve farklı tohumlu iki maçtaki aynı (entity,tick) çakışma değildir; maç içi
+  ölçünce 0 çıktı. Yani koruma adres şemasından değil **"tek top" değişmezinden** geliyordu (orta ve
+  hava topu temizliği aynı tick'te aynı ajana düşemez). Salt 67'ye taşındı.
+- **Bulgu 2 (kapının ortaya çıkardığı, DAHA ÖNEMLİ): bir salt aralığının GENİŞLİĞİNİ balance
+  belirliyor.** `Gurultu(35+c)` ve `Gurultu(40+c)` döngüleri `taban..taban+kisaMax-1` aralığını işgal
+  ediyor ve `kisaMax = min(longball.gkKisaN, n)`. Bugün `gkKisaN = 3` → 35-37 · 40-42 · sabit 45,
+  ayrık. **`gkKisaN ≥ 6` olsaydı iki karar-gürültüsü akışı SESSİZCE çakışırdı.** Bir balance
+  düzenlemesi ("kaleci daha çok kısa seçenek düşünsün") determinizm varsayımını bozardı ve JSON'da
+  tek sayı değişikliği olarak incelemeden geçerdi. Kapı span'ı balance'tan OKUR: o düzenleme artık
+  kırmızıya döner.
+- **Diş ölçümü (üç yön):** salt 67→63 → **FAIL** (satır 1136+3157) · `gkKisaN` 3→6 → **FAIL**
+  (satır 1244+1253 ve 1253+1270) · `gkKisaN` 3→**5** (tam sınır) → **PASS**. Sonuncusu kapının kaba
+  değil TAM olduğunu gösteriyor: sınırda kurt masalı anlatmıyor.
+- **Kapının kendi kör noktası diş ölçümüyle bulundu.** İlk yazımda sarmalayıcının bütün çağrıları
+  `Rng` satırına atfediliyordu ve "aynı satır = aynı çağrı yeri" elemesi yüzünden **iki farklı
+  ÇAĞIRANIN birbiriyle çakışması tamamen görünmezdi** — `gkKisaN=6` denemesi kapıyı yeşil bıraktı.
+  Çağıranın satırı kaydedilerek düzeltildi. Kapıyı ölçmeseydim, kapı bulguyu bulamayacaktı.
+- **Golden yeniden üretimi:** salt değişikliği 5 kapıyı kaydırdı; `MatchSkeletonGolden`
+  0x1A872CD9CB06B721 · `M2Golden` 0x03F1FB2C645841A1 · `M4Golden` 0xD8C76BF965937DC2 · `M6Golden`
+  0x675BCD0B9EF7AB84 · `M17GoldenReplay` 50/50. balanceHash/bandsHash değişmedi.
+- **Kural:** **bir salt aralığının genişliğini ayarlanabilir bir sayı belirliyorsa, o sayı artık
+  balance değil determinizm parametresidir.** Ya kapıya bağlanır ya da koddan sabitlenir.
+
+### K9-B: xG sapması — K8'deki OKUMAM YANLIŞTI, gerçek bulgu daha eski ve sistematik (2026-08-30)
+K8'de "gol 2,41→2,57 çıktı, xG sabit kaldı, yani düzeltme dönüşüm oranını artırdı" yazmıştım.
+Tek 500 maçlık ölçüme dayanan bu okuma **yanlıştı**.
+
+- **Ölçüm:** 8 BAĞIMSIZ tohum ailesi × 500 maç, işaretli sapma. Sonuç **ORT +%4,26 · SD 2,52 ·
+  aralık [+1,44, +8,52]**. Yani tek bir 500 maçlık ölçümün doğal yayılımı ±2,5 puan; K8'deki %5,7
+  ile K9-A'daki %2,5 bu yayılımın İÇİNDE. İkisi de motor değişikliği hakkında bir şey söylemiyordu.
+- **Asıl bulgu 8/8 ailenin POZİTİF olması** (tesadüf olasılığı ≈ %0,8): xG sistematik olarak az
+  tahmin ediyordu ve bu K8'DEN ÖNCE DE BÖYLEYDİ — o zaman sadece düşük bir örnek (%1,1) çekmişiz.
+- **Kaynak ayrıştırıldı — penaltı DEĞİL.** Penaltı modelinin beklenen dönüşümü ≈0,753
+  (pCenter/tahmin dağılımından, direk 0,04 düşülerek); kaydedilen `hedefOrtalama` 0,76. Fark <%1 ve
+  penaltı hacmi 0,24/maç — toplam sapmanın kaynağı olamaz. Sapma **açık oyun xG'sinde**.
+- **DÜZELTME BALANCE İŞİ, SPEC İŞİ DEĞİL:** ME 15.2 xG'nin FORMÜLÜNÜ (lojistik + terimler)
+  belirtir; katsayılar `balance/sim.balance.json` → `shot.xg` altında [KALİBRE]'dir. Formüle
+  dokunulmadı, yalnız `b0` ayarlandı: **-2,48 → -2,43**.
+- **Nudge ölçülerek seçildi** (aynı 8 aile): b0 -2,48 → ORT +%4,26 · b0 **-2,43 → ORT +%0,33**
+  (aralık [-2,37, +4,42]) · b0 -2,40 → ORT −%1,95. Ortayı tutturan -2,43.
+- **Yan kazanç — kapı sağlamlaştı, bant GEVŞEMEDİ.** `M16ECalibGenis`'in xG sapma tavanı %10;
+  eski merkezle en kötü gözlem 8,52 (pay 1,5 puan), yeni merkezle 4,42 (pay 5,6 puan). Yani
+  "gürültüden kırmızıya dönme" riski bandı gevşetmeden yarıya indi. Gerçek yanlılığı düzeltmek,
+  kapının kırılganlığını da düzeltti — bandı esnetmek bunu yapmazdı, yalnız gizlerdi.
+- **`balanceHash` DEĞİŞTİ** (0xCE04A7006C62F2C2 → 0x4A949442E9BE564C): bu bir balance değişikliğidir,
+  golden set yeniden üretildi. K9-A'nın motor değişikliğinden farkı burada görünür.
+- **Kural:** **tek bir örneklemden "şu değişiklik şunu yaptı" sonucu çıkarma.** Önce o ölçünün
+  kendi yayılımını ölç; fark yayılımın içindeyse ortada bulgu yoktur. K8'de bunu yapmadım ve
+  olmayan bir nedensellik yazdım.
+
+### K9-C: RPC köprüsü + transactional outbox — ✅ TAMAM (2026-08-30)
+K6'da ertelenen "gerçek Nakama köprüsü" dilimi. Yazmaya başlamadan önce mevcut katmana bakıldı ve
+**24 saatlik dedup'ın ZATEN var olduğu** görüldü (K1, `IdempotencyStore`: 24 saat pencere, önceki
+yanıt aynen, (kullanıcı, CommandId) anahtarı, güvenlik turu düzeltmeleri dahil). Neredeyse ikinci
+bir kopyası yazılacaktı — "yeni denetim yazmadan önce daha derin katmana bak" kuralı işe yaradı.
+
+- **Gerçek boşluk neydi:** yayın bugün `WorldExecutor` içinde, durum commit'iyle aynı kilitte ve
+  hata halinde geri alınarak yapılıyor. Bu SÜREÇ İÇİ hataya karşı doğru ama SÜREÇ ÖLÜMÜNE karşı
+  değil: durum yazıldıktan sonra ağ çağrısı yarıda kalırsa yayın KAYBOLUR ve durum "yayınlandı" der.
+- **Transactional outbox:** `IOutboxStore` (dayanıklılık dikişi) · `OutboxSink : IOnlineSink`
+  (mevcut dikişe takılır, **executor'da değişiklik gerekmez** — böylece outbox yazması zaten atomik
+  bölgenin içinde olur) · `OutboxPompasi` (teslim). Teslim en-az-bir-kez olduğu için uzak taraf
+  `CommandId` ile dedup yapmak ZORUNDA; arayüz o anahtarı K6'dan beri taşıyordu.
+- **Sıra:** takılan kayıt ARKASINDAKİLERİ de bekletir (CB 8.2 "varış sırası esastır"). Sırayı atlayıp
+  devam etmek, bağımlı iki yayını uzak tarafa ters sırada ulaştırabilirdi.
+- **`RpcKopru` + CB 8.2:** `CommandOutcome` `newStateVersion` taşımıyordu (bus durum katmanını
+  tanımaz, tanımamalı da); köprü yürütücüden okuyup `KomutYaniti`ye ekliyor.
+- **KRİTİK TASARIM: pompa hatası komutu DÜŞÜRMEZ.** Durum commit edilmiştir ve kayıt outbox'ta durur.
+  Pompa hatasında komutu reddetmek, outbox'ın çözdüğü bağımlılığı geri kurardı — yayın kanalının
+  sağlığı komutun sonucunu belirlemeye devam ederdi.
+- **Diş ölçümü (dört yön):** outbox kaydı kalıcı değil → `K9OutboxDayanikliligi` FAIL · pompa sırayı
+  atlıyor → `K9OutboxSirasi` FAIL (`SIRA bozuldu(302,303,301)`) · köprü pompa hatasında komutu
+  düşürüyor → `K9PompaKomutuDusurmez` FAIL · yanıt stateVersion taşımıyor → `K9RpcYaniti` FAIL.
+- **SIRA KAPISI İLK YAZIMDA DİŞSİZDİ.** `SpyOnlineSink.Patlat` hepsini birden patlatıyor; o durumda
+  "başta takıldı" ile "hepsini denedi, hepsi patladı" AYNI sonucu veriyor ve pompayı sırayı atlayacak
+  şekilde bozduğumda kapı YEŞİL kaldı. `SecmeliPatlayanSink` eklendi: yalnız ilki patlar, arkadakiler
+  teslim EDİLEBİLİR durumdadır — iddia ancak böyle ölçülebiliyor.
+- **SimWorker gerçekten ayağa kalkıyor:** köprü test koşumuna hapis değil. `dotnet run --project
+  server/TheBadge.SimWorker` → `submit#1 → ok=True stateVersion=1 tekrar=False`,
+  `submit#2 (ayni CommandId) → tekrar=True`.
+- **YAPILMADI, açıkça:** Nakama RPC kaydının kendisi ve PostgreSQL outbox deposu. Bu ortamda
+  koşturulamaz, dolayısıyla yazılmadı (kanıtlanamayan kod eklenmez). Dikişler hazır: `IKomutTasima`
+  ve `IOutboxStore`. Gerçek deponun TEK şartı, outbox yazmasının durum yazmasıyla aynı işlemde
+  commit edilmesidir — outbox'ın bütün değeri o özellikten gelir. `server/SERVER_SETUP.md` güncellendi.
+- **Kural:** **"hepsi başarısız" senaryosu, sıra iddiasını ölçemez.** Bir sıralama garantisini test
+  etmek için, atlanabilecek olanın atlanabilir DURUMDA olması gerekir.
+
+### K9-D: LLM kalite kapısı — alet burada, ölçüm model erişimi olan ortamda (2026-08-30)
+K7'nin açık ucu. **Kapsam sınırı en baştan:** bu ortamda canlı model YOK, dolayısıyla burada koşan
+şey "modelin kalitesi" değil kalite kapısının ALETİdir. Bu ayrımı bulanıklaştırmak — elle yazılmış
+cümleleri model çıktısı sayıp yüksek bir skor raporlamak — ölçmediği şeye puan vermek olurdu.
+
+- **Golden set 5 → 24 örnek** (`docs/evals` bandı 20-50 ✓). Her satıra `boyut` alanı eklendi
+  (olgu · ton · yasak · uzunluk); `K9GoldenSetKapsami` dört boyutun da temsil edilmesini zorunlu
+  kılıyor, id tekrarını ve eksik `ton`/`max_cumle`yi reddediyor.
+- **`EvalScorer` — `yasak` anahtarları KAVRAMDIR, düz metin değil.** "uydurma istatistik", "alay",
+  "tibbi teshis" gibi anahtarlar altdizi araması olamaz; her biri deterministik bir DEDEKTÖRE
+  bağlandı (girdide olmayan sayı · girdide geçmeyen skor kalıbı · sözlükler · jargon yoğunluğu ·
+  ark bağlamı). **Tanınmayan anahtar kapıyı KIRMIZIYA döndürür** — rubrikte yazılı ama hiç
+  denetlenmeyen bir kural, sessiz zayıflamadır (K9-A'daki "çözemediğini atlama" disiplini).
+- **Makinenin YARGILAMADIĞI boyutlar ayrı raporlanır.** Prose kalitesi ve üslup inceliği
+  `InsanBakisi` listesine düşer, puana GİRMEZ. `evals/golden/README` zaten "script + insan bakışı
+  karışımı" diyordu; puanlayıcı o sözleşmeye uyuyor.
+- **`scorer_fixtures.jsonl` MODEL ÇIKTISI DEĞİLDİR** ve dosyanın ilk satırı bunu söylüyor: elle
+  yazılmış, her biri bir dedektörü hedefleyen 20 fikstür. `K9EvalRubrigi` her birinin beklenen
+  makine kararını verdiğini denetliyor.
+- **Fikstür gerçek bir hata yakaladı (g019):** "yanlis skor" dedektörü yalnız `skor` alanına
+  bakıyordu; girdinin `one_cikan` alanı "3-0 onde iken" diyorken maçın skoru 3-3 olduğu için doğru
+  cümle hatalı sayılıyordu. Referans girdinin TAMAMI yapıldı — kural zaten "memory_facts dışına
+  çıkma"ydı, `skor` alanına daraltmak kuralın kendisini daraltıyordu.
+- **Koşucu:** `-- eval-run <cevaplar.jsonl>`, eşik `balance/llm.balance.json` →
+  `eval.gecmeEsigiYuzde` = **85** [KALİBRE]. **Cevabı olmayan golden satırı BAŞARISIZ sayılır**;
+  atlansaydı eksik üretim yüzde payını yükseltirdi (az örnekle yüksek skor). Aletin gösterimi:
+  24 satırın 9'una cevap verilince %37,5 → "MERGE YOK" döndü.
+- **Diş ölçümü (üç yön):** bilinmeyen `yasak` anahtarı sessizce geçsin → `K9EvalRubrigi` FAIL ·
+  golden set 24→18 → `K9GoldenSetKapsami` FAIL · `Kos`un sayı denetimi kaldırılsın →
+  `K9EvalKosuSozlesmesi` FAIL.
+- **ÜÇÜNCÜ KAPI İLK YAZIMDA DİŞSİZDİ.** `catch (ArgumentException)` yazmıştım; ama
+  `ArgumentOutOfRangeException` ondan TÜREDİĞİ için, koruma kaldırılınca patlayan indeks çökmesini
+  "koruma çalıştı" sanıyordu. Kapı artık açık korumanın MESAJINI arıyor. Fark önemli: koruma varken
+  anlamlı bir hata, yokken anlamsız bir indeks çökmesi olur.
+- **YAPILMADI, açıkça:** gerçek model çıktılarıyla kalite koşusu. Model erişimi gerektirir; CI
+  adımı olarak `-- eval-run` ile bağlanır. `docs/prompts/templates/mac_sonu_roportaj.md`'nin
+  `son_eval: bekliyor` alanı DOĞRU kalıyor — canlı eval koşulmadı, koşulmuş gibi yazılmadı.
+- **Kural:** **bir istisna tipini yakalamak, o istisnayı yakaladığını kanıtlamaz** — türemiş tipler
+  aynı `catch`e düşer. Bir korumayı ölçen kapı, korumanın KENDİ imzasını (mesaj/tip) aramalıdır.
+
+### K9 inceleme turu — ✅ TAMAM (2026-08-31)
+Üç bulgu (Codex): iki P1, bir P2. Üçü de geçerli çıktı.
+
+- **P1 — teslim İSTEK YOLUNDAYDI.** `RpcKopru.Gonder` pompayı SENKRON çağırıyordu: yavaş ya da
+  asılı bir yayın kanalı, ÇOKTAN COMMIT EDİLMİŞ bir komutun yanıtını bekletiyordu. Yani outbox'ın
+  kaldırdığı geri-alma bağımlılığının yerine GECİKME bağımlılığı duruyordu ve CB Spec'in
+  "Hub RTT ≤ 300 ms (p95)" hedefi yayın kanalının sağlığına bağlanıyordu. **Hatanın ironisi,
+  ayrımı anlatan yorumun hemen altında olmasıydı** — bağımlılığın bir eksenini kesip diğerini
+  görmemişim. Teslim artık yalnız `PompayiSur` ile, host'un arka plan döngüsünden sürülüyor.
+  Kapı bunu doğrudan ölçüyor: `Gonder`den sonra ağ kanalı BOŞ olmalı.
+- **P1 — `resultingEvents` yanıtta yoktu.** CB Spec 3'ün şeması `{ status, resultingEvents,
+  newStateVersion }`. `newStateVersion` için 8.2'yi referans gösterip AYNI diyagramdaki üçüncü
+  alanı atlamışım. Domain event'leri zaten üretiliyordu (`journal.Events`) ama yalnız denetim
+  sink'ine gidiyordu; RPC köprüsünü kullanan istemci komutun sonucunu uygulayamıyor, tanımsız bir
+  tam/delta çekimi yapmak zorunda kalıyordu. `IKomutOlaySinki` eklendi — denetimle AYNI transaction,
+  aynı geri alma sözleşmesi. Tekrar yanıtı da AYNI olayları taşıyor (CB 8.1 "önceki yanıt aynen";
+  durumu yalnız statüden ibaret saymak, tekrar eden istemciyi olaysız bırakırdı). Önbellek dedup
+  penceresiyle aynı ömre budanıyor — aksi halde pencere içinde bir tekrar boş liste alır ve
+  "aynen" iddiası delinirdi.
+- **P2 — kapı yalnız `MatchEngine.cs`'i tarıyordu.** `Lod2Resolver.cs`'teki dört üretim çağrısı
+  kapının DIŞINDAYDI: kapı, iddia ettiği kapsamın bir bölümünü hiç görmüyordu. Artık
+  `shared/TheBadge.Sim` altındaki TÜM kaynaklar taranıyor (69 adres, 2 dosya) ve RNG'li yeni bir
+  dosya kendiliğinden kapsama giriyor.
+- **P2'nin zorunlu kıldığı ikinci değişiklik: ENTITY ARTIK ARALIK.** `7100 + team*20 + idx` gibi
+  ifadelerde taban tek başına yanıltıcı; aralık modellemeden `7100` ile `7120`nin çakışıp
+  çakışmadığı görülemez. Her entity ifadesi tabloda bildirilir, bildirilmeyen kapıyı kırmızıya
+  döndürür.
+- **KASITLI PAYLAŞIM BİLDİRİLİR (Codex'in kendi önerisi).** `Lod2Resolver` satır 92 ve 105 aynı
+  çekilişi BİLEREK iki kez okuyor: 92 sarı kart toplamını, 105 aynı saltlarla taraf başına
+  değerleri türetiyor. Farklı adres kullanmak ikisini ayrıştırırdı (toplam ≠ parçaların toplamı).
+  Gerekçesiyle listede duruyor; bildirilmemiş her paylaşım hata sayılıyor.
+- **Diş ölçümü (beş yön):** pompa istek yoluna geri kondu → `K9OutboxDayanikliligi` FAIL
+  (`TESLIM ISTEK YOLUNDA YAPILDI`) · olaylar yanıta konmadı → `K9RpcYaniti` FAIL · tekrar
+  önbelleği okumadı → `K9RpcYaniti` FAIL (`farkli olay sayisi(1/0)`) · `Lod2Resolver`a çakışma
+  sokuldu → `K9AdresCakismasi` FAIL (yeni dosyanın gerçekten kapsandığının kanıtı) · kasıtlı
+  paylaşım bildirimi kaldırıldı → FAIL.
+- **Kural:** **bir bağımlılığı kesmek, onun TÜM eksenlerini kesmek demek değildir.** Outbox
+  geri-alma eksenini kesiyordu; gecikme ekseni duruyordu ve tam da ayrımı anlatan yorumun altında
+  görünmez kalmıştı. Bir ayrıştırma iddiası, ayrıştırdığı her ekseni ayrı ayrı ölçmelidir.
+
+**İki bulgu daha (Cursor Bugbot, ikisi de Medium, ikisi de geçerli) — ikisi de "kapının MODELİ
+gerçeklikten kopabilir" temasında:**
+
+- **Bilinmeyen sarmalayıcı YANLIŞ ATFEDİLİYORDU.** Değişken argümanlı bir `Rng` çağrısını "en yakın
+  helper ADI"na `LastIndexOf` ile bağlıyordum. Tabloda OLMAYAN bir sarmalayıcı, kendinden önce adı
+  geçen BAŞKA bir helper'a atfediliyor ve onun çağrılarıyla genişletiliyordu — `cozulemeyen`e hiç
+  düşmüyordu. Yani kapının en çok övündüğüm özelliği ("sessizce atlamaz") tam da bu yolda
+  tutmuyordu. Artık KAPSAYAN BİLDİRİMİN adı çıkarılıyor; ad tabloda yoksa kapı kırmızıya dönüyor.
+  Diş: `Lod2Resolver`a tablosuz bir sarmalayıcı eklendi → `kapsayan bildirim
+  'BilinmeyenSarmalayici' TABLODA YOK`.
+- **KAPI, `Gauss01`İN İŞGAL MODELİNİ YENİDEN KURUYORDU** — üretimde formül değişse model eskir ve
+  kapı yeşil kalırdı. **Bu, K8'de kendi bulduğum hata sınıfının aynısı, üstelik onu düzeltmek için
+  yazdığım kapının içinde.** Alt-saltlar public API'den gözlenemez, ama model DOĞRULANABİLİR:
+  modellenen alt-saltlarda `Rand01` toplanıp 6 çıkarıldığında gerçek `Gauss01` çıkmalıdır. Beş
+  farklı saltta denetleniyor. Diş: üretimdeki çarpanı değiştirdim → `ISGAL MODELI GERCEK Gauss01'i
+  URETMIYOR (salt 0: model -1,087 != gercek -0,185)`.
+- **Kural (ikisinin ortak dersi):** **bir kapının kaynak kod hakkındaki MODELİ de kodun kendisi
+  kadar eskiyebilir.** Model gözlenemeyen bir şeyi anlatıyorsa, gözlenebilir bir sonucuna karşı
+  DOĞRULANMALIDIR; "aynı formülü ben de yazdım" bir kanıt değil, ikinci bir kopyadır.
+
+**İki bulgu daha (Bugbot, `5d8d66e` üzerinde) — ikisi de olay önbelleğinde, ikisi de benim:**
+
+- **ÖNBELLEK KULLANICIYI ANAHTARA KOYMUYORDU.** Doc yorumuna, `IdempotencyStore`un 2026-08-24
+  güvenlik bulgusunu referans göstererek "(kullanıcı, CommandId) anahtarı — yalnız `CommandId`
+  DEĞİL" yazmışım; sözlüğü tek anahtarla kurmuşum ve `userId` parametresini hiç kullanmamışım.
+  **Yorum bir güvenlik özelliğini anlatıyor, kod onu uygulamıyordu.** Aynı Id'yi kullanan başka bir
+  oturum ötekinin `resultingEvents`ini alabilir ya da üzerine yazabilirdi.
+- **OLAYLAR YAYINLARDAN ÖNCE ÖNBELLEĞE YAZILIYORDU.** `Yaz`, denetimden hemen sonra çağrılıyordu;
+  ardından gelen üç yayın bloğundan biri patlayıp `Geri` çağırırsa durum geri alınıyor ama önbellek
+  KALIYORDU — yanıt, hiç gerçekleşmemiş bir durum geçişinin olaylarını taşırdı. Yayınların en
+  sonuna taşındı: oraya ulaşan her yol "işlem tamamlandı" demektir. Ayrıca `AlVeyaBos` artık okuma
+  anında da süre denetliyor (budama amorti edilmiş olduğu için henüz budanmamış bayat kayıt
+  okunabiliyordu).
+- **Bugün erişilebilir DEĞİL, ama sözleşme gerçek:** katalogda durumu HEM değiştirip HEM yayın
+  yapan bir aksiyon yok. Bu yüzden executor'ın commit SIRASI teste özel bir handler'la doğrudan
+  sınandı — bulgu erişilebilirlikle değil sırayla ilgiliydi.
+- **Diş ölçümü (üç yön):** anahtardan kullanıcı çıkarıldı → FAIL (`BASKA KULLANICI otekinin
+  resultingEvents'ini aldi`) · okuma anındaki süre denetimi kaldırıldı → FAIL · `Yaz` yayınlardan
+  öncesine alındı → FAIL (`GERI ALINAN komutun olaylari onbellekte kaldi`).
+- **ÜÇÜNCÜ DİŞİ İKİ KEZ YANLIŞ KURDUM.** Önce geri almadan sonra YENİ bir `CommandId` ile denedim —
+  hayalet kaydı hiç sorgulamıyordu. Sonra aynı payload'la denedim — komut yeniden yürütülüp TAZE
+  olay üretiyordu ve hayaletle ayırt edilemiyordu. Doğrusu: aynı `CommandId`, ama BANT DIŞI payload
+  — handler hiç koşmaz, dolayısıyla yanıttaki her olay hayalettir.
+- **Kural:** **bir "artık olmamalı" iddiasını ölçerken, ölçüm yolunun o şeyi ÜRETMEDİĞİNDEN emin
+  ol.** Testin kendisi taze veri üretiyorsa, bayat veriyi göremezsin.
+
+**🔒 GÜVENLİK BULGUSU (Cursor Security Agent, MEDIUM) — çapraz kullanıcı ifşası:**
+
+- **`Gonder` önbelleği İSTEMCİ KONTROLÜNDEKİ `zarf.UserId` ile okuyordu**, host oturumundan gelen
+  `userId` ile değil. Bus, `env.UserId != authenticatedUserId` ise komutu `NotOwned` ile reddeder —
+  **ama önbellek okuması red yolunda da çalışıyor.** Saldırgan kendi oturumuyla bağlanıp zarfa
+  KURBANIN kimliğini ve `CommandId`sini yazarak, komut reddedilirken kurbanın olaylarını (kasa,
+  transfer, taktik) alabilirdi.
+- **Bu, bir önceki bulgunun düzeltmesinin ARDINDAN kalan yol.** `(kullanıcı, CommandId)` anahtarını
+  kurdum ama anahtarın KULLANICI bileşenini güvenilmeyen kaynaktan besledim. Anahtarı doğru
+  tasarlayıp yanlış değerle sorgulamak, anahtarı hiç koymamakla aynı sonucu verir.
+- **`IdempotencyStore` bunu K1'den beri DOĞRU yapıyordu** (`TryReserve(authenticatedUserId, …)`).
+  Onun yanına, ona bakarak kurduğum yapıda güvenilmeyen alanı kullanmışım.
+- **Kapım bu yolu göremiyordu:** iki kullanıcılı yalıtım testimde her iki çağrıda da zarfın
+  kullanıcısı OTURUMUN kullanıcısına eşitti. Yani "yalıtım" testi, yalıtımın kırıldığı asıl
+  senaryoyu hiç kurmuyordu. Kapıya zarf/oturum UYUŞMAZLIĞI yolu eklendi.
+- **Diş:** okuma `zarf.UserId`'ye geri bağlandı → `ZARF/OTURUM UYUSMAZLIGINDA kurbanin olaylari
+  sizdi(1)`.
+- **Kural:** **bir yetkilendirme anahtarının değeri, anahtarın kendisi kadar önemlidir.** Kimlik
+  bileşenini istemciden almak, anahtarı hiç koymamakla aynı kapıyı açar. Ve bir yalıtım testi,
+  yalıtımın kırılabileceği yolu KURMUYORSA yalıtımı ölçmüyordur.
+
+**BULGU: bir önceki düzeltmenin kendisi yeni bir sözleşme ihlali yarattı (Bugbot, MEDIUM).**
+
+- `Yaz`ı yayınların ardına taşırken **etrafındaki `try`/`Geri` sarmalayıcısını da düşürmüşüm.**
+  Sonuç: `Yaz` fırlatırsa durum uygulanmış, yayınlar çıkmış, ama rezervasyon TAMAMLANMAMIŞ kalıyor
+  → istemci tekrarı handler'ı İKİNCİ KEZ çalıştırıyor (çift uygulama). Üstelik `IKomutOlaySinki`
+  doc yorumu hâlâ "denetimle aynı sözleşme: fırlatırsa durum geri alınır" diyordu — **yine yorum
+  bir şey, kod başka şey.**
+- **Doğru sözleşme, geri almak DEĞİL:** o noktada yayınlar ÇIKMIŞTIR ve geri çağrılamaz. Geri
+  almak "yarısı yayınlanmış" bir işlem bırakırdı; istisnayı yukarı bırakmak çift uygulama yaratırdı.
+  Kanal artık **FIRLATMAMALIDIR** ve fırlatırsa istisna YUTULUR — yanıt önbelleğini kaybetmek ikisinden
+  de ucuzdur (istemci delta yerine tam çekim yapar). Yutulan hata `OlayKanaliHatasi` ile SAYILIR:
+  sessizlik ölçülebilir kalmalı.
+- **Kalıcı olay saklama isteniyorsa bu kanal doğru yer değildir** — o, denetim sink'i yoluna aittir
+  (yayınlardan önce koşar ve fırlatırsa durum gerçekten geri alınır). Doc'a yazıldı.
+- **Diş:** yutma kaldırıldı → istisna yukarı çıkıp koşuyu çökertiyor (temiz FAIL satırı değil, ama
+  süreç sıfırdan farklı kodla düşüyor).
+- **Kural:** **bir çağrıyı taşırken etrafındaki hata sözleşmesini de taşıdığından emin ol.** Konum
+  değişince doğru sözleşme de değişebilir; eski sarmalayıcıyı körü körüne taşımak da onu düşürmek
+  kadar yanlıştır — bu vakada doğru cevap üçüncü bir şeydi (fırlatmayan kanal).
+
+### 🟡 BULGU (açık): `OzetKart` entity ayrımı yapısal olarak garantili değil
+K9 inceleme turunda entity aralıkları modellenirken görüldü.
+
+- `Lod2Resolver.OzetGol` / `OzetKart` entity'si `7100 + team*20 + idx` ve `7200 + team*20 + idx`.
+  `team*20` ayrımı yalnız `idx < 20` iken doğrudur.
+- **Gol tarafı GÜVENLİ:** `PoissonDraw` gol sayısını `k < 15` ile kapatıyor → idx ≤ 14 < 20, yapısal.
+- **Kart tarafı DEĞİL:** `sariEv = Yuvarla(table.sari, …)` bir kalibrasyon ızgarasından geliyor ve
+  yapısal bir üst sınırı yok; döngü yalnız `summaryCount < SummaryCapacity` (32) ile kapalı.
+  `sariEv ≥ 20` olsaydı takım 0'ın 20. kartı, takım 1'in 0. kartıyla AYNI adresi çekerdi.
+- Bugün erişilemez (ızgara değerleri ~2-3), ama koruma yapıdan değil DEĞERDEN geliyor — `gkKisaN`
+  ile aynı sınıf. Seçenekler: (a) `idx`i 20'de kapat (tek satır, golden'ları kaydırır);
+  (b) ayrımı 20'den `SummaryCapacity`ye çıkar; (c) kapıya `idx < 20` iddiasını bağla.
+  **Öneri: (a)** — kapatma hem ucuz hem de garantiyi yapıya taşır.
+
 ## Bekleyen kararlar
 
-- **xG katsayıları %5,7 az tahmin ediyor (K8 sonrası, 2026-08-30).** `Gauss01` düzeltmesi gol
-  ortalamasını 2,41 → 2,57 çıkardı; xG 2,43'te sabit kaldı. Sapma tavanın (%10) altında ama
-  1,1'den 5,7'ye çıktı. Seçenekler: (a) balance sprintinde xG katsayılarını yeni dönüşüm oranına
-  nudge et; (b) dönüşüm oranının NEDEN çıktığını önce bul (mekanizma K8'de kanıtlanamadı), sonra
-  karar ver; (c) dokunma — bantta. **Öneri: (b) sonra (a)** — katsayıyı anlamadan nudge etmek,
-  bir sonraki motor değişikliğinde aynı işi tekrar yaptırır.
-- **`Physics · 700+entity · salt 63` adres paylaşımı (yukarıdaki 🟡 bulgu).** Seçenekler:
-  (a) uzaklaştırmayı ayrı salta taşı (tek satır, golden'ları kaydırır — K8'in golden turu HENÜZ
-  taze olduğu için ucuz); (b) tüm çağrı yerlerini tarayan bir adres-çakışma kapısı yaz, sonra
-  hepsini birden düzelt; (c) erişilebilirliği önce kanıtla. **Öneri: (b)** — bu tek örneği elle
-  düzeltmek, aynı sınıftan başka çakışma var mı sorusunu cevapsız bırakır.
+- **`OzetKart` entity ayrımı (yukarıdaki 🟡 bulgu).** Öneri: (a) `idx`i 20'de kapat. K9'un golden
+  turu taze olduğu için maliyeti bugün düşük.
+- ~~**xG katsayıları az tahmin ediyor.**~~ → **YAPILDI (2026-08-30, K9-B):** seçenek (b)
+  sonra (a) — önce neden arandı. "%5,7" ölçüm gürültüsüydü; gerçek yanlılık +%4,26 ve K8'den
+  eskiydi. `shot.xg.b0` -2,48 → -2,43 ile merkeze oturtuldu (+%0,33).
+- ~~**`Physics · 700+entity · salt 63` adres paylaşımı.**~~ → **YAPILDI (2026-08-30, K9-A):**
+  seçenek (b) — tarayan kapı yazıldı, sonra düzeltildi. Kapı ikinci bir bulgu daha çıkardı
+  (balance'ın salt aralığı genişliğini belirlemesi); elle düzeltme ikisini de kaçırırdı.
 - **CB 4.2 tablosu ile ME komut kümesi çelişiyor (K4 bulgusu, 2026-08-29):** spec `squad.set_player_anchor`/
   `set_player_role`/`set_instruction`'ı "Hub + Maç" sayıyor; motorda anchor/rol maç komutu yok,
   `PlayerInstr` kataloğu boş. Seçenekler: (a) ME komut kümesini üç komutla genişlet (determinizm kapısı +

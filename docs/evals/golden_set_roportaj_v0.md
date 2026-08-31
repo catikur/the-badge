@@ -1,4 +1,20 @@
-# Golden Set v0 — Maç Sonu Röportajı (hedef: 30 örneğe büyüt)
+# Golden Set v0 — Maç Sonu Röportajı
+
+**Durum (K9-D, 2026-08-30): makine-okunur set 24 örneğe çıkarıldı** →
+`evals/golden/mac_sonu_roportaj.golden.jsonl` (docs/evals bandı 20-50 ✓). Her satırda `boyut`
+alanı var (olgu · ton · yasak · uzunluk) ve `K9GoldenSetKapsami` dört boyutun da temsil
+edilmesini zorunlu kılıyor.
+
+Puanlayıcı: `TheBadge.World.EvalScorer` — `yasak` anahtarlarının HER BİRİ deterministik bir
+dedektöre bağlıdır; tanınmayan anahtar kapıyı kırmızıya döndürür. Prose kalitesi ve üslup
+İNCELİĞİ makineyle puanlanmaz, `InsanBakisi` listesine düşer (bkz. evals/golden/README:
+"script + insan bakışı karışımı").
+
+Kalite koşusu: `dotnet run --project shared/TheBadge.Sim.Checks -c Release -- eval-run <cevaplar.jsonl>`
+— eşik %85 (`balance/llm.balance.json` → `eval.gecmeEsigiYuzde`, [KALİBRE]). Cevabı olmayan
+golden satırı BAŞARISIZ sayılır; atlanırsa eksik üretim yüzdeyi yükseltirdi.
+
+Aşağıdaki nitel liste, makine-okunur setin kaynağı ve insan bakışının referansıdır.
 Format: GİRDİ (özet paket) → BEKLENEN NİTELİK
 1. 3-0 galibiyet, hat-trick genç oyuncu → coşkulu ama ölçülü; genç övgüsü; kibir tetiklememe.
 2. 90+5 penaltıyla 1-2 mağlubiyet, VAR kararı → hakem sorusu gelir; cevap şablonları öfke/sükunet/politik; kart riski imasız.
