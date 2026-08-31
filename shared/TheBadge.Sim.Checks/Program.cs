@@ -5906,19 +5906,26 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                 continue;
             }
 
-            // Değişken argüman → sarmalayıcı
+            // Değişken argüman → KAPSAYAN BİLDİRİMİN adı bulunur ve TABLODA aranır.
+            //
+            // İlk yazımda "en yakın helper ADI"nı `LastIndexOf` ile arıyordum (inceleme bulgusu,
+            // Bugbot): tabloda OLMAYAN bir sarmalayıcı, kendinden önce adı geçen BAŞKA bir
+            // helper'a atfediliyor ve onun çağrılarıyla genişletiliyordu — `cozulemeyen`e hiç
+            // düşmüyordu. Yani "sessizce atlamaz" iddiası tam da bu yolda tutmuyordu. Artık
+            // kapsayan bildirimin ADI çıkarılır; ad tabloda yoksa kapı KIRMIZIYA döner.
+            string kapsayan = null;
+            foreach (System.Text.RegularExpressions.Match dm in System.Text.RegularExpressions.Regex.Matches(
+                         src.Substring(0, m.Index),
+                         @"(?m)^\s*(?:(?:public|private|internal|protected|static|readonly|unsafe)\s+)*" +
+                         @"(?:void|bool|byte|int|uint|long|ulong|float|double|string|[A-Z]\w*)\s+(\w+)\s*\("))
+                kapsayan = dm.Groups[1].Value;   // en SONuncusu = en yakın kapsayan bildirim
+
             string bulunan = null;
-            foreach (var h in helperler)
-            {
-                int bild = src.LastIndexOf(h.Ad, m.Index, StringComparison.Ordinal);
-                if (bild < 0) continue;
-                if (bulunan == null || bild > src.LastIndexOf(bulunan, m.Index, StringComparison.Ordinal))
-                    bulunan = h.Ad;
-            }
+            foreach (var h in helperler) if (h.Ad == kapsayan) { bulunan = h.Ad; break; }
             if (bulunan == null || helperCagrilari[bulunan].Count == 0)
             {
-                cozulemeyen += $"{dosya}:{satir} entity/salt cozulemedi ve sarmalayici TABLODA YOK " +
-                               $"(entity='{entityIfade}' salt='{argl[4].Trim()}') ";
+                cozulemeyen += $"{dosya}:{satir} degisken argumanli Rng cagrisi, kapsayan bildirim " +
+                               $"'{kapsayan ?? "?"}' TABLODA YOK (entity='{entityIfade}' salt='{argl[4].Trim()}') ";
                 continue;
             }
             var ht = helperler.Find(x => x.Ad == bulunan);
@@ -5972,6 +5979,27 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             cakisma += $"{a.Dosya} {a.Domain}·[{a.E0}-{a.E1}]·{a.Tick} ← satir {a.Satir}({a.Cagri}) + {b.Satir}({b.Cagri}) ";
         }
 
+    // MODEL DOĞRULAMASI (inceleme bulgusu, Bugbot): kapı `Gauss01`in işgal ettiği alt-saltları
+    // YENİDEN KURUYOR. Üretimde formül değişirse model eskir ve kapı yeşil kalırdı — K8'de kendi
+    // bulduğum hata sınıfının aynısı, üstelik onu düzelten kapının içinde. Alt-saltlar public
+    // API'den GÖZLENEMEZ, ama model DOĞRULANABİLİR: modellenen alt-saltlarda `Rand01` toplanıp
+    // 6 çıkarıldığında gerçek `Gauss01` çıkmalıdır. Formül değişirse bu eşitlik bozulur.
+    string modelHatasi = "";
+    {
+        foreach (uint denemeSalt in new uint[] { 0, 1, 15, 63, 91 })
+        {
+            double beklenen = 0;
+            foreach (uint alt in IsgalEdilenSaltlar("Gauss01", denemeSalt))
+                beklenen += TheBadge.Sim.Determinism.Rng.Rand01(
+                    12345UL, TheBadge.Sim.Determinism.Domain.Physics, 7, 99, alt);
+            beklenen -= 6.0;
+            double gercek = TheBadge.Sim.Determinism.Rng.Gauss01(
+                12345UL, TheBadge.Sim.Determinism.Domain.Physics, 7, 99, denemeSalt);
+            if (Math.Abs(beklenen - gercek) > 1e-12)
+            { modelHatasi = $"salt {denemeSalt}: model {beklenen:F15} != gercek {gercek:F15}"; break; }
+        }
+    }
+
     Console.WriteLine($"[info] K9 adres haritasi: {tarananDosya} dosya · {adresler.Count} adres · " +
                       $"cakisan {cakisanCift} · kasitli paylasim {kasitliSayilan} · cozulemeyen {(cozulemeyen.Length == 0 ? "0" : "VAR")}");
     string k9hata = "";
@@ -5979,9 +6007,11 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     if (cakisanCift > 0) k9hata += "ADRES CAKISMASI: " + cakisma;
     if (tarananDosya < 2) k9hata += $"taranan dosya {tarananDosya} - tarama kapsami daralmis ";
     if (adresler.Count < 50) k9hata += $"adres sayisi beklenenden az ({adresler.Count}) ";
+    if (modelHatasi.Length > 0)
+        k9hata += $"ISGAL MODELI GERCEK Gauss01'i URETMIYOR ({modelHatasi}) - kapinin modeli eskimis ";
     if (k9hata.Length > 0) failures += Fail("K9AdresCakismasi", k9hata);
-    else Pass($"K9AdresCakismasi({tarananDosya} Sim dosyasi · {adresler.Count} adres · entity ARALIK olarak " +
-              $"modellendi · {kasitliSayilan} kasitli paylasim bildirilmis · cakisan 0)");
+    else Pass($"K9AdresCakismasi({tarananDosya} Sim dosyasi · {adresler.Count} adres · entity ARALIK · " +
+              $"{kasitliSayilan} kasitli paylasim bildirilmis · isgal modeli GERCEK Gauss01'e karsi dogrulandi · cakisan 0)");
 }
 
 // 33) K9-C — RPC KÖPRÜSÜ + TRANSACTIONAL OUTBOX (CB 8.1/8.2/8.3)

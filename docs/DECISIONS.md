@@ -2038,6 +2038,26 @@ cümleleri model çıktısı sayıp yüksek bir skor raporlamak — ölçmediği
   geri-alma eksenini kesiyordu; gecikme ekseni duruyordu ve tam da ayrımı anlatan yorumun altında
   görünmez kalmıştı. Bir ayrıştırma iddiası, ayrıştırdığı her ekseni ayrı ayrı ölçmelidir.
 
+**İki bulgu daha (Cursor Bugbot, ikisi de Medium, ikisi de geçerli) — ikisi de "kapının MODELİ
+gerçeklikten kopabilir" temasında:**
+
+- **Bilinmeyen sarmalayıcı YANLIŞ ATFEDİLİYORDU.** Değişken argümanlı bir `Rng` çağrısını "en yakın
+  helper ADI"na `LastIndexOf` ile bağlıyordum. Tabloda OLMAYAN bir sarmalayıcı, kendinden önce adı
+  geçen BAŞKA bir helper'a atfediliyor ve onun çağrılarıyla genişletiliyordu — `cozulemeyen`e hiç
+  düşmüyordu. Yani kapının en çok övündüğüm özelliği ("sessizce atlamaz") tam da bu yolda
+  tutmuyordu. Artık KAPSAYAN BİLDİRİMİN adı çıkarılıyor; ad tabloda yoksa kapı kırmızıya dönüyor.
+  Diş: `Lod2Resolver`a tablosuz bir sarmalayıcı eklendi → `kapsayan bildirim
+  'BilinmeyenSarmalayici' TABLODA YOK`.
+- **KAPI, `Gauss01`İN İŞGAL MODELİNİ YENİDEN KURUYORDU** — üretimde formül değişse model eskir ve
+  kapı yeşil kalırdı. **Bu, K8'de kendi bulduğum hata sınıfının aynısı, üstelik onu düzeltmek için
+  yazdığım kapının içinde.** Alt-saltlar public API'den gözlenemez, ama model DOĞRULANABİLİR:
+  modellenen alt-saltlarda `Rand01` toplanıp 6 çıkarıldığında gerçek `Gauss01` çıkmalıdır. Beş
+  farklı saltta denetleniyor. Diş: üretimdeki çarpanı değiştirdim → `ISGAL MODELI GERCEK Gauss01'i
+  URETMIYOR (salt 0: model -1,087 != gercek -0,185)`.
+- **Kural (ikisinin ortak dersi):** **bir kapının kaynak kod hakkındaki MODELİ de kodun kendisi
+  kadar eskiyebilir.** Model gözlenemeyen bir şeyi anlatıyorsa, gözlenebilir bir sonucuna karşı
+  DOĞRULANMALIDIR; "aynı formülü ben de yazdım" bir kanıt değil, ikinci bir kopyadır.
+
 ### 🟡 BULGU (açık): `OzetKart` entity ayrımı yapısal olarak garantili değil
 K9 inceleme turunda entity aralıkları modellenirken görüldü.
 
