@@ -10,7 +10,8 @@ namespace TheBadge.World
     {
         public const byte Kasa = 1, StadyumKapasite = 2, HaftalikMaasGider = 3,
                           SponsorHaftalik = 4, Form = 5, SponsorKalanHafta = 6, DonemInsaatGideri = 7,
-                          Kaptan = 8, AntrenmanPlan = 9, AntrenmanYogunluk = 10, AktifPremium = 11;
+                          Kaptan = 8, AntrenmanPlan = 9, AntrenmanYogunluk = 10, AktifPremium = 11,
+                          DonemTransferGideri = 12;
     }
 
     /// <summary>Fiyat alanları — `Index` slot (tribün 0-4 / ürün 0-2), değer KURUŞ.
@@ -245,6 +246,7 @@ namespace TheBadge.World
                         case ClubField.Form: mevcut = st.Club.Form; min = 0; max = 100; return true;
                         case ClubField.SponsorKalanHafta: mevcut = st.Club.SponsorKalanHafta; min = 0; max = ushort.MaxValue; return true;
                         case ClubField.DonemInsaatGideri: mevcut = st.Club.DonemInsaatGideriTl; return true;
+                        case ClubField.DonemTransferGideri: mevcut = st.Club.DonemTransferGideriTl; return true;
                         case ClubField.Kaptan: mevcut = st.Club.KaptanPlayerId; min = 0; max = int.MaxValue; return true;
                         case ClubField.AntrenmanPlan: mevcut = st.Club.AntrenmanPlanId; min = 0; max = 255; return true;
                         case ClubField.AntrenmanYogunluk: mevcut = st.Club.AntrenmanYogunluk; min = 0; max = 255; return true;
@@ -417,6 +419,7 @@ namespace TheBadge.World
                     else if (m.Field == ClubField.SponsorHaftalik) st.Club.SponsorHaftalikTl = v;
                     else if (m.Field == ClubField.SponsorKalanHafta) st.Club.SponsorKalanHafta = (ushort)v;
                     else if (m.Field == ClubField.DonemInsaatGideri) st.Club.DonemInsaatGideriTl = v;
+                    else if (m.Field == ClubField.DonemTransferGideri) st.Club.DonemTransferGideriTl = v;
                     else if (m.Field == ClubField.Kaptan) st.Club.KaptanPlayerId = (int)v;
                     else if (m.Field == ClubField.AntrenmanPlan) st.Club.AntrenmanPlanId = (byte)v;
                     else if (m.Field == ClubField.AntrenmanYogunluk) st.Club.AntrenmanYogunluk = (byte)v;

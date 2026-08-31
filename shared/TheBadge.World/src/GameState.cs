@@ -108,6 +108,11 @@ namespace TheBadge.World
         /// harcaması hiçbir sink kalemine girmiyordu (inceleme bulgusu, P1) — oysa ECONOMY_MAP
         /// "inşaat + tesis bakımı"nı açıkça sink sayıyor.</summary>
         public long DonemInsaatGideriTl;
+        /// <summary>KOMUTLA yapılan NET transfer harcaması (satış negatif). `DonemInsaatGideriTl`
+        /// ile aynı desen: kasadan komut anında düşülür, haftalık tick bunu sink RAPORUNA boşaltır.
+        /// ECONOMY_MAP "Transfer bedelleri"ni sink sayıyor; K11'e kadar bu kalem HİÇBİR yere
+        /// girmiyordu — inşaatın K3 incelemesinde yaşadığı hatanın aynısı.</summary>
+        public long DonemTransferGideriTl;
         public SponsorOffer[] SponsorTeklifleri;
         /// <summary>Bu kulübü ilgilendiren AÇIK transfer teklifleri [KALİBRE
         /// `yapi.transferTeklifSlotSayisi`]. Hem verilen hem alınan teklifler burada durur;

@@ -37,6 +37,7 @@ namespace TheBadge.World
             b.I64(st.Club.SponsorHaftalikTl);
             b.U16(st.Club.SponsorKalanHafta);
             b.I64(st.Club.DonemInsaatGideriTl);
+            b.I64(st.Club.DonemTransferGideriTl);
             b.U8(st.Club.Form);
             // Kadro yönetimi kalıcı alanları — GDD 3.2. Kaptan ve antrenman planı durum
             // senkronunun parçasıdır: replay dördülünde ayrışırsa maç girdisi ayrışır.

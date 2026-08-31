@@ -265,6 +265,7 @@ namespace TheBadge.World
                                 { detail = $"kadro tavanı dolu ({kural.yapi.kadroMax})"; return RejectionReason.StateConflict; }
                                 if (!st.CanAfford(t.BedelTl)) return RejectionReason.InsufficientFunds;
                                 j.KasaDelta(-t.BedelTl);
+                                j.Add(MutTarget.Kulup, 0, ClubField.DonemTransferGideri, t.BedelTl);   // sink raporuna girsin
                                 j.OyuncuSet(oi, PlayerField.ClubId, st.Club.ClubId);
                                 // TAM maaş eklenir, FARK değil: oyuncu bizim değildi, eski maaşı
                                 // BAŞKA kulübün gider kaleminde duruyordu. Fark eklemek, pahalı
@@ -276,6 +277,11 @@ namespace TheBadge.World
                                 if (KadroSayisi(st) <= kural.yapi.kadroMin)
                                 { detail = $"kadro tabanı ({kural.yapi.kadroMin}) altına inilemez"; return RejectionReason.StateConflict; }
                                 j.KasaDelta(t.BedelTl);
+                                // SATIŞ NEGATİF: kalem NET transfer harcamasıdır. Satışı ayrı bir
+                                // SOURCE saymak, ECONOMY_MAP'in source listesinde olmayan bir
+                                // gelir kalemi uydurmak olurdu; doküman yalnız "Transfer bedelleri"ni
+                                // sink olarak sayıyor (inşaat iptal iadesiyle aynı mantık).
+                                j.Add(MutTarget.Kulup, 0, ClubField.DonemTransferGideri, -t.BedelTl);
                                 j.OyuncuSet(oi, PlayerField.ClubId, t.TeklifEdenClubId);
                                 j.Add(MutTarget.Kulup, 0, ClubField.HaftalikMaasGider, -st.Oyuncular[oi].HaftalikMaasTl);
                             }
@@ -356,6 +362,7 @@ namespace TheBadge.World
                 long bedel = Valuation.FesihBedeli(oyuncu, tb);
                 if (!st.CanAfford(bedel)) return RejectionReason.InsufficientFunds;
                 j.KasaDelta(-bedel);
+                j.Add(MutTarget.Kulup, 0, ClubField.DonemTransferGideri, bedel);   // fesih bedeli de transfer sink'i
                 j.OyuncuSet(i, PlayerField.ClubId, 0);
                 j.OyuncuSet(i, PlayerField.SozlesmeKalanHafta, 0);
                 j.OyuncuSet(i, PlayerField.Listede, 0);

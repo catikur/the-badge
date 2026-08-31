@@ -18,23 +18,27 @@ namespace TheBadge.World
         /// girmiyordu ve inşaat içeren bir sezonun oranı olduğundan İYİ görünüyordu
         /// (inceleme bulgusu, P1).</summary>
         public long InsaatTl;
+        /// <summary>KOMUTLA yapılan NET transfer harcaması (satış negatif). ECONOMY_MAP
+        /// "Transfer bedelleri" satırı. `InsaatTl` ile aynı gerekçe: kasadan komut anında
+        /// düşüldüğü için `NetTl`e GİRMEZ, yalnız SINK RAPORUdur.</summary>
+        public long TransferTl;
         // --- bilgi ---
         public int Seyirci;
         public long AnaparaOdemeTl;   // bilanço aktarımı — source/sink'e GİRMEZ
 
         public long ToplamGelir => BiletTl + KombineTl + BufeTl + MagazaTl + SponsorTl + YayinTl + PrimTl;
-        public long ToplamGider => MaasTl + BakimTl + PersonelTl + IsletmeTl + FaizTl + InsaatTl;
-        /// <summary>Haftalık KASA hareketi. `InsaatTl` buraya GİRMEZ: inşaat bedeli komut anında
-        /// kasadan zaten düşüldü; burada ikinci kez düşmek çift muhasebe olurdu. `InsaatTl`
-        /// yalnız SINK RAPORUdur (ECONOMY_MAP oranı için).</summary>
-        public long NetTl => ToplamGelir - (ToplamGider - InsaatTl) - AnaparaOdemeTl;
+        public long ToplamGider => MaasTl + BakimTl + PersonelTl + IsletmeTl + FaizTl + InsaatTl + TransferTl;
+        /// <summary>Haftalık KASA hareketi. `InsaatTl` ve `TransferTl` buraya GİRMEZ: ikisi de
+        /// komut anında kasadan zaten düşüldü; burada ikinci kez düşmek çift muhasebe olurdu.
+        /// İkisi de yalnız SINK RAPORUdur (ECONOMY_MAP oranı için).</summary>
+        public long NetTl => ToplamGelir - (ToplamGider - InsaatTl - TransferTl) - AnaparaOdemeTl;
 
         public void Topla(in WeekLedger o)
         {
             BiletTl += o.BiletTl; KombineTl += o.KombineTl; BufeTl += o.BufeTl; MagazaTl += o.MagazaTl;
             SponsorTl += o.SponsorTl; YayinTl += o.YayinTl; PrimTl += o.PrimTl;
             MaasTl += o.MaasTl; BakimTl += o.BakimTl; PersonelTl += o.PersonelTl;
-            IsletmeTl += o.IsletmeTl; FaizTl += o.FaizTl; InsaatTl += o.InsaatTl;
+            IsletmeTl += o.IsletmeTl; FaizTl += o.FaizTl; InsaatTl += o.InsaatTl; TransferTl += o.TransferTl;
             Seyirci += o.Seyirci; AnaparaOdemeTl += o.AnaparaOdemeTl;
         }
     }

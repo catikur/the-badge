@@ -2689,6 +2689,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             ("ClubState.SponsorHaftalikTl",   s => s.Club.SponsorHaftalikTl += 1),
             ("ClubState.SponsorKalanHafta",   s => s.Club.SponsorKalanHafta += 1),
             ("ClubState.DonemInsaatGideriTl", s => s.Club.DonemInsaatGideriTl += 1),
+            ("ClubState.DonemTransferGideriTl", s => s.Club.DonemTransferGideriTl += 1),
             ("ClubState.Form",                s => s.Club.Form += 1),
             ("ClubState.SponsorTeklifleri",   s => s.Club.SponsorTeklifleri[0].TeklifId += 1),
             ("Construction.InsaatId",         s => s.Club.InsaatSlot[1].InsaatId += 1),
@@ -4558,6 +4559,116 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         var bus = new TheBadge.CommandBus.CommandBus(k4Bands, ctx,
             new SlidingWindowRateLimiter(k4RlCfg, 3, 300_000), new IdempotencyStore());
         return (depo, ctx, exec, bus);
+    }
+
+    // 29z) K11-E — TRANSFER SINK'İ LEDGER'A BAĞLI (ECONOMY_MAP "Transfer bedelleri")
+    // AÇIK UÇ: ECONOMY_MAP beş sink satırı sayıyor; transfer bedelleri HİÇBİR kaleme girmiyordu.
+    // İnşaatın K3 incelemesinde yaşadığı hatanın birebir aynısı: transfer YAPAN bir sezonun
+    // source/sink oranı olduğundan İYİ görünüyordu, çünkü harcama sink'e hiç yazılmıyordu.
+    {
+        string hata = "";
+        long TickBosalt(TheBadge.World.GameState g, out TheBadge.World.WeekLedger L)
+        {
+            var j = new TheBadge.World.WorldJournal();
+            L = TheBadge.World.EconomyTick.Hafta(g, k4Eco, k4Rules, 7UL,
+                                                 TheBadge.World.WeekResult.Beraberlik, false, j);
+            if (!j.Validate(g, out string hj)) throw new InvalidOperationException("tick journal: " + hj);
+            j.Apply(g);
+            return L.TransferTl;
+        }
+
+        // (1) ALIŞ → SINK POZİTİF, tutar bedelle TAM EŞİT.
+        {
+            var w = K5Kur();
+            var g = w.depo.State;
+            g.Club.KasaTl = 500_000_000L;
+            int hedef = -1;
+            for (int i = 0; i < g.Oyuncular.Length; i++)
+                if (g.Oyuncular[i].ClubId == 900L) { hedef = g.Oyuncular[i].PlayerId; break; }
+            const long Bedel = 4_000_000L;
+            g.Club.TransferTeklifleri[0] = new TheBadge.World.TransferOffer
+            {
+                TeklifId = 41, OyuncuId = hedef, TeklifEdenClubId = 500L, BedelTl = Bedel, HaftalikMaasTl = 80_000,
+                SonGecerlilikSezon = g.Takvim.Sezon, SonGecerlilikHafta = (ushort)(g.Takvim.Hafta + 2),
+                SiraTeklifEdende = true, TurSayisi = 2
+            };
+            long kasa0 = g.Club.KasaTl;
+            var o = w.bus.Submit(K4Env("transfer.respond_offer"),
+                new TheBadge.Checks.TestPayload().Set("teklifId", 41L).Set("cevap", "kabul"), w.exec, K4Host, K4User);
+            if (!o.Ok) hata += $"[alış] kabul geçmedi({o.Reason}) ";
+            if (kasa0 - g.Club.KasaTl != Bedel) hata += "[alış] kasa bedel kadar düşmedi ";
+            if (g.Club.DonemTransferGideriTl != Bedel) hata += $"[alış] biriktirici {g.Club.DonemTransferGideriTl} ≠ {Bedel} ";
+            long sink = TickBosalt(g, out var L1);
+            if (sink != Bedel) hata += $"[alış] sink'e {sink} girdi, {Bedel} bekleniyordu ";
+            if (g.Club.DonemTransferGideriTl != 0) hata += "[alış] biriktirici sıfırlanmadı ";
+            if (L1.ToplamGider < Bedel) hata += "[alış] ToplamGider transferi saymıyor ";
+            // ÇİFT MUHASEBE YOK — bağımsız hesapla. `NetTl` KULLANILMADAN beklenen kasa hareketi
+            // kurulur; `TransferTl` kasıtlı dışarıdadır (komut anında düşüldü). Biri onu `NetTl`e
+            // eklerse kasa `TransferTl` kadar sapar. (İnşaatta aynı koruma K3'te kurulmuştu.)
+            long kasaTickOncesi = kasa0 - Bedel;
+            long beklenen = L1.ToplamGelir
+                            - (L1.MaasTl + L1.BakimTl + L1.PersonelTl + L1.IsletmeTl + L1.FaizTl + L1.InsaatTl)
+                            - L1.AnaparaOdemeTl;
+            if (g.Club.KasaTl - kasaTickOncesi != beklenen)
+                hata += $"[alış] kasa ledger'la tutmuyor ({g.Club.KasaTl - kasaTickOncesi} ≠ {beklenen}; " +
+                        $"transfer {L1.TransferTl} çift sayılmış olabilir) ";
+        }
+
+        // (2) SATIŞ → SINK NEGATİF. Kalem NET transfer harcamasıdır; satışı ayrı bir SOURCE
+        //     saymak, ECONOMY_MAP'in source listesinde OLMAYAN bir gelir kalemi uydurmak olurdu.
+        {
+            var w = K5Kur();
+            var g = w.depo.State;
+            int hedef = -1;
+            for (int i = 0; i < g.Oyuncular.Length; i++)
+                if (g.Oyuncular[i].ClubId == 500L) { hedef = g.Oyuncular[i].PlayerId; break; }
+            const long Bedel = 3_000_000L;
+            g.Club.TransferTeklifleri[0] = new TheBadge.World.TransferOffer
+            {
+                TeklifId = 42, OyuncuId = hedef, TeklifEdenClubId = 900L, BedelTl = Bedel, HaftalikMaasTl = 80_000,
+                SonGecerlilikSezon = g.Takvim.Sezon, SonGecerlilikHafta = (ushort)(g.Takvim.Hafta + 2),
+                SiraTeklifEdende = false, TurSayisi = 1
+            };
+            var o = w.bus.Submit(K4Env("transfer.respond_offer"),
+                new TheBadge.Checks.TestPayload().Set("teklifId", 42L).Set("cevap", "kabul"), w.exec, K4Host, K4User);
+            if (!o.Ok) hata += $"[satış] kabul geçmedi({o.Reason}) ";
+            if (g.Club.DonemTransferGideriTl != -Bedel)
+                hata += $"[satış] biriktirici {g.Club.DonemTransferGideriTl} ≠ {-Bedel} ";
+            long sink = TickBosalt(g, out _);
+            if (sink != -Bedel) hata += $"[satış] sink {sink}, {-Bedel} bekleniyordu ";
+        }
+
+        // (3) FESİH → SINK POZİTİF. Fesih bedeli de kulübün transfer piyasasına ödediği paradır.
+        {
+            var w = K5Kur();
+            var g = w.depo.State;
+            g.Club.KasaTl = 500_000_000L;
+            int hedef = -1;
+            for (int i = 0; i < g.Oyuncular.Length; i++)
+                if (g.Oyuncular[i].ClubId == 500L) { hedef = g.Oyuncular[i].PlayerId; break; }
+            long beklenenFesih = 0;
+            for (int i = 0; i < g.Oyuncular.Length; i++)
+                if (g.Oyuncular[i].PlayerId == hedef)
+                    beklenenFesih = TheBadge.World.Valuation.FesihBedeli(g.Oyuncular[i], k5Tb);
+            var o = w.bus.Submit(K4Env("transfer.release_player"),
+                new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)hedef), w.exec, K4Host, K4User);
+            if (!o.Ok) hata += $"[fesih] geçmedi({o.Reason}) ";
+            if (g.Club.DonemTransferGideriTl != beklenenFesih)
+                hata += $"[fesih] biriktirici {g.Club.DonemTransferGideriTl} ≠ {beklenenFesih} ";
+            long sink = TickBosalt(g, out _);
+            if (sink != beklenenFesih) hata += $"[fesih] sink {sink}, {beklenenFesih} bekleniyordu ";
+        }
+
+        // (4) TRANSFERSİZ HAFTA SIFIR YAZAR — kalem "her hafta bir şey" uydurmuyor.
+        {
+            var w = K5Kur();
+            long sink = TickBosalt(w.depo.State, out _);
+            if (sink != 0) hata += $"[boş] transfersiz haftada sink {sink} ≠ 0 ";
+        }
+
+        if (hata.Length > 0) failures += Fail("K11TransferSinki", hata);
+        else Pass("K11TransferSinki(alış +bedel · satış −bedel · fesih +bedel · transfersiz hafta 0 · " +
+                  "biriktirici sıfırlanıyor · çift muhasebe yok)");
     }
 
     // 29a) BAĞLANTI

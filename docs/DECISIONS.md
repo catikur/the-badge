@@ -2316,6 +2316,36 @@ Atilla "oyunu artık denemek istiyorum" dedi. Denenecek bir şey OLMADIĞI ortay
   projede kapılar hep bir modülün İÇİNİ ölçtü; K11 arayüzü ölçen ilk kapı ve ilk denemede iki
   hata çıkardı.
 
+### K11-E: transfer sink'i ledger'a bağlandı — kalem KURULDU, borç KAPANMADI (2026-08-31)
+"Merdiven sonrası uzun vade sink'i" kararı (a) olarak kapatılmıştı: *referans koşuya transfer
+hattı eklensin, capex kapısı yeniden kalibre edilsin.* Uygulamanın YARISI yapıldı ve ikinci
+yarısının neden yapılamadığı ölçümle netleşti.
+
+- **YAPILDI — kalem var.** `WeekLedger.TransferTl` eklendi (ECONOMY_MAP "Transfer bedelleri"),
+  `ClubState.DonemTransferGideriTl` biriktiricisiyle. Desen `InsaatTl`in BİREBİR aynısı: kasadan
+  komut anında düşülür, haftalık tick sink RAPORUNA boşaltır, `NetTl`e GİRMEZ (çift muhasebe).
+  Alış +bedel, satış −bedel (kalem NET harcamadır — satışı ayrı bir SOURCE saymak, ECONOMY_MAP'in
+  source listesinde OLMAYAN bir gelir kalemi uydurmak olurdu), fesih +bedel.
+- **BULGU: bu kalem K11'e kadar HİÇBİR YERE girmiyordu** — inşaatın K3 incelemesinde yaşadığı
+  hatanın birebir aynısı. Transfer YAPAN bir sezonun source/sink oranı olduğundan İYİ
+  görünüyordu, çünkü harcama sink'e hiç yazılmıyordu.
+- **`K2HashKapsami` yeni alanı hemen yakaladı** ("MUTASYONU YOK — hash kapsamı ölçülmüyor").
+  Yansımayla çalışan bir kapının değeri tam burada görünüyor: kalıcı duruma alan eklemek,
+  hash kapsamını ve determinizmi sessizce delebilirdi.
+- **`K11TransferSinki` kapısı** dört yolu ölçüyor + çift muhasebe koruması bağımsız hesapla
+  kuruluyor (`NetTl` KULLANILMADAN). Diş: `TransferTl`i `NetTl`e sokunca kapı
+  "transfer 4000000 çift sayılmış olabilir" diyor; alışta biriktirici beslenmezse üç iddia birden
+  düşüyor.
+- **YAPILAMADI — borç AÇIK kalıyor, ve sebebi kapsam.** `K10MerdivenSonrasiSink` (merdiven
+  tükenince oran 2,25'te kilitleniyor) kapanmadı. Kalemi bağlamak yetmiyor; borcu kapatmak için
+  referans koşunun SÜREKLİ bir transfer piyasası işletmesi gerekiyor ve **öyle bir piyasa yok**:
+  dünya katmanı tek kulübü modelliyor, oyuncu havuzu fikstürle sınırlı ve yenilenmiyor, rakip
+  kulüplerin ekonomisi yok. Mevcut havuzla ölçülecek cevap "hayır, emmiyor" olurdu — bu bir
+  BULGU değil, senaryonun sınırı. **Uydurulmuş bir piyasayla ölçüp borcu kapatmış saymak,
+  kapının ölçtüğü şeyi değiştirmek olurdu.**
+- **Kalan iş (yeni bekleyen karar):** oyuncu piyasası modeli — havuz yenilenmesi + rakip kulüp
+  bütçeleri. Kalem hazır olduğu için o dilim geldiğinde ölçüm doğrudan koşar.
+
 ## Bekleyen kararlar
 
 - ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —
@@ -2357,6 +2387,14 @@ Atilla "oyunu artık denemek istiyorum" dedi. Denenecek bir şey OLMADIĞI ortay
   edilir.** Dokümanın zaten saydığı sink'i modellemek, yeni mekanik icat etmekten ucuz ve doğru;
   (c) (tesis tavanını açmak) Top Eleven anti-pattern'ine yakın olduğu için elendi, (b) (maaş
   enflasyonu) kadro gücü sistemine bağlı olduğu için sonraki dilime bırakıldı. Uygulama: K11-E.
+- **Oyuncu piyasası modeli — merdiven sonrası sink borcunun ÖN KOŞULU (K11-E, 2026-08-31).**
+  Transfer kalemi ledger'a bağlandı ve kapıyla korunuyor, ama borcu kapatacak ölçüm için
+  SÜREKLİ bir piyasa gerekiyor: bugün oyuncu havuzu fikstürle sınırlı, yenilenmiyor ve rakip
+  kulüplerin bütçesi yok. Seçenekler: (a) havuz yenilenmesi + rakip kulüp bütçeleri (dünya
+  katmanına çok-kulüp ekonomisi girer — büyük dilim); (b) referans koşuya SENTETİK bir piyasa
+  (havuz her sezon yenilenir, karşı taraf sabit bir kabul eşiğiyle davranır — ucuz, ama
+  ölçtüğü şey gerçek piyasa değil, varsayımın kendisi); (c) borç açık kalsın, kapı tavanla
+  korusun. **Öneri: (c) bugün, (a) FAZ 05'te** — (b) kapının ölçtüğünü ayarına çevirir.
 - **Motorun faul/kart kalibrasyonu rol ayrımı olan kadrolarla yeniden yapılsın mı? (K11 bulgusu,
   2026-08-31)** ME 11.2 `marginGap` bir FARK olduğu için rol profili keskinleştikçe büyüyor;
   M4/M5 kalibrasyonu düz kadrolarla yapıldığı için bunu hiç görmedi. Bugün bedeli kadro
