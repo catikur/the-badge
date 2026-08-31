@@ -78,5 +78,14 @@
   },
   "iflas": {
     "esikTl": -25000000
+  },
+  "capex": {
+    "aciklama": "K10-D capex sozlesmesi [KALIBRE]. ECONOMY_MAP source/sink bandi INSAATSIZ referans kosuda olculuyordu; bu bolum insaat YAPAN kosunun kapisidir. merdivenSezonBandi BILEREK genistir: merdiven suresi tier maliyetine oldugu kadar isletme fazlasi oranina da baglidir (olcum: yayin geliri bandin alt ucundayken merdiven 40 sezonda bitmiyor, ust ucunda 10 sezonda bitiyor). Dar bir bant capex'i degil fazla oranini olcerdi; fazla orani zaten K3EkonomiSozlesmesi'nin isi.",
+    "merdivenSezonBandi": [
+      6,
+      24
+    ],
+    "merdivenSonrasiOranTavani": 2.4,
+    "merdivenSonrasiHedefOran": 1.15
   }
 }

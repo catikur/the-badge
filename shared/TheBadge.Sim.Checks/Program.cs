@@ -3367,6 +3367,12 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     var eRules = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.WorldRules>(
         System.IO.File.ReadAllText(wPath), eOpts);
 
+    // ECONOMY_MAP "Denge kuralları" bandı — İKİ kapı da (26a işletme koşusu, K10-D inşaat
+    // koşusu) BU değerleri kullanır. Balance JSON'una TAŞINMADI, bilerek: bu bir ayar değil
+    // SÖZLEŞMEdir; JSON'a taşımak bandı gevşetmeyi kod incelemesinden çıkarıp bir satır
+    // düzenlemesine indirirdi (CLAUDE.md "Checks'i zayıflatma"). Kodda tek yerde durur.
+    const double EkoOranAlt = 1.05, EkoOranUst = 1.15;
+
     // 26a) EKONOMİ SÖZLEŞMESİ — ECONOMY_MAP: sezon source/sink 1,05-1,15 · maaş payı %45-60
     {
         const int Sezon = 10;
@@ -3381,10 +3387,10 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                           $"yayın {T.YayinTl / Sezon / 1e6:F1} · prim {T.PrimTl / Sezon / 1e6:F1} || maaş {T.MaasTl / Sezon / 1e6:F1} · " +
                           $"bakım {T.BakimTl / Sezon / 1e6:F1} · personel {T.PersonelTl / Sezon / 1e6:F1} · işletme {T.IsletmeTl / Sezon / 1e6:F1} · faiz {T.FaizTl / Sezon / 1e6:F1}");
         string hata = "";
-        if (oran < 1.05 || oran > 1.15) hata += $"source/sink {oran:F3} bant dışı [1,05-1,15] ";
+        if (oran < EkoOranAlt || oran > EkoOranUst) hata += $"source/sink {oran:F3} bant dışı [{EkoOranAlt:F2}-{EkoOranUst:F2}] ";
         if (maasPayi < 0.45 || maasPayi > 0.60) hata += $"maaş payı %{maasPayi * 100:F1} bant dışı [%45-60] ";
         if (hata.Length > 0) failures += Fail("K3EkonomiSozlesmesi", hata);
-        else Pass($"K3EkonomiSozlesmesi(source/sink {oran:F3} ∈ [1,05-1,15] · maaş payı %{maasPayi * 100:F1} ∈ [%45-60])");
+        else Pass($"K3EkonomiSozlesmesi(source/sink {oran:F3} ∈ [{EkoOranAlt:F2}-{EkoOranUst:F2}] · maaş payı %{maasPayi * 100:F1} ∈ [%45-60])");
     }
 
     // 26b) DETERMİNİZM — CB 5.2 "aynı durum + aynı komut = aynı sonuç". Ekonomi tick'i
@@ -3595,6 +3601,133 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             ActionType = act, IssuedAtUnixMs = K3Host, MatchTick = 0, UserId = user,
             SaveSlotId = 1, TeamIdx = 0, PayloadJson = new byte[0]
         };
+
+    // ===================== K10-D — CAPEX SÖZLEŞMESİ (ECONOMY_MAP açık ucu) =====================
+    // AÇIK UÇ: `K3EkonomiSozlesmesi` source/sink bandını HİÇ İNŞAAT YAPMAYAN bir referans koşuda
+    // ölçüyor (`InsaatTl == 0`). ECONOMY_MAP ise "İnşaat + tesis bakımı"nı sink sayıyor. Yani
+    // dokümanın saydığı beş sink satırından biri kapısızdı: capex ölçülmüyordu.
+    //
+    // ÖLÇÜLEN SENARYO: `KademeliInsaatKosu` — parametresiz, kredisiz, EN HIZLI inşa politikası
+    // (slot boşsa ve para yetiyorsa yap), referans kulübün kendi tesis merdiveni (stadyum 3→5 +
+    // dört tesis 2→5 = 14 adım), komutlar Command Bus'tan.
+    //
+    // NE ÖĞRENİLDİ (8 seed, hepsinde aynı): merdiven 11 sezonda bitiyor · iflas yok · pencere
+    // içinde source/sink capex HARİÇ 1,48-1,49 (BANT DIŞI), capex DAHİL 1,123-1,132 (BANT İÇİ).
+    // Yani inşaat, büyüyen kulübü bantta tutan sink'in TA KENDİSİdir; `K3EkonomiSozlesmesi`nin
+    // capex'i dışarıda bırakması bir eksiklik değil, hiç inşaat yapmayan bir koşunun tanımıdır.
+    {
+        const int Ufuk = 24;   // koşu ufku — bandın üst ucundan (24) küçük olamaz
+        string hata = "";
+        var st0 = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+        var R = TheBadge.Checks.KademeliInsaatKosu.Kos(st0, eco, eRules, 0xEC0A0D1CUL, Ufuk,
+                                                       k3Bands, k3RlCfg, 42L);
+        long pIsletmeGider = R.MerdivenToplam.ToplamGider - R.MerdivenToplam.InsaatTl;
+        double pTam = R.MerdivenToplam.ToplamGider == 0 ? 0
+                    : (double)R.MerdivenToplam.ToplamGelir / R.MerdivenToplam.ToplamGider;
+        double pIsletme = pIsletmeGider == 0 ? 0 : (double)R.MerdivenToplam.ToplamGelir / pIsletmeGider;
+        double capexPayi = R.MerdivenToplam.ToplamGelir == 0 ? 0
+                         : (double)R.MerdivenToplam.InsaatTl / R.MerdivenToplam.ToplamGelir;
+
+        // SEZON SAVRULMASI — ortalamanın "her sezon böyle" diye okunmasını engelleyen rapor.
+        double sezonMin = double.MaxValue, sezonMax = double.MinValue;
+        int pencere = R.MerdivenSezon > 0 ? R.MerdivenSezon : R.Sezonlar.Count;
+        for (int i = 0; i < pencere; i++)
+        {
+            var L = R.Sezonlar[i];
+            if (L.ToplamGider == 0) continue;
+            double o = (double)L.ToplamGelir / L.ToplamGider;
+            if (o < sezonMin) sezonMin = o;
+            if (o > sezonMax) sezonMax = o;
+        }
+
+        Console.WriteLine($"[info] K10 capex: merdiven {R.MerdivenSezon} sezon (bant [{eco.capex.merdivenSezonBandi[0]}," +
+                          $"{eco.capex.merdivenSezonBandi[1]}]) · {R.BaslatilanInsaat} inşaat · iflas {(R.IflasSezonu < 0 ? "yok" : R.IflasSezonu.ToString())} · " +
+                          $"en düşük kasa {R.MinKasaTl / 1e6:F1}M₺");
+        Console.WriteLine($"[info] K10 capex penceresi: source/sink capex DAHİL {pTam:F3} · capex HARİÇ {pIsletme:F3} · " +
+                          $"capex/gelir %{capexPayi * 100:F1} · sezon savrulması [{sezonMin:F3},{sezonMax:F3}]");
+
+        // (1) MERDİVEN ULAŞILABİLİR ve TRİVİAL DEĞİL. Bant BİLEREK geniştir: ölçüm, sürenin
+        //     tier maliyetine olduğu kadar işletme fazlası oranına da bağlı olduğunu gösterdi
+        //     (yayın geliri ECONOMY_MAP bandının alt ucundayken merdiven 40 sezonda BİTMİYOR,
+        //     üst ucundayken 10 sezonda bitiyor). Dar bir bant capex'i değil fazla oranını
+        //     ölçerdi — fazla oranı zaten `K3EkonomiSozlesmesi`nin işi.
+        int bAlt = eco.capex.merdivenSezonBandi[0], bUst = eco.capex.merdivenSezonBandi[1];
+        if (Ufuk < bUst) hata += $"koşu ufku ({Ufuk}) bandın üst ucundan ({bUst}) küçük — kapı bandı ölçemez ";
+        if (R.MerdivenSezon < 0) hata += $"merdiven {Ufuk} sezonda TAMAMLANMADI (capex ulaşılamaz) ";
+        else if (R.MerdivenSezon < bAlt || R.MerdivenSezon > bUst)
+            hata += $"merdiven {R.MerdivenSezon} sezon, bant [{bAlt},{bUst}] dışı ";
+
+        // (2) ECONOMY_MAP bandı, İNŞAAT YAPAN koşuda ve capex DAHİL — dokümanın harfi harfine
+        //     okunuşu. PENCERE ORTALAMASI ölçülür, sezon sezon DEĞİL: capex yumruludur ve
+        //     sezon oranı savrulur (yukarıdaki rapor bunu gösterir).
+        if (pTam < EkoOranAlt || pTam > EkoOranUst)
+            hata += $"merdiven penceresi source/sink {pTam:F3} bant dışı [{EkoOranAlt:F2}-{EkoOranUst:F2}] ";
+
+        // (3) CAPEX YÜK TAŞIYOR. İnşaat çıkarılınca oran bandın ÜSTÜNE çıkmalı; çıkmıyorsa
+        //     capex ihmal edilebilir hâle gelmiştir ve tycoon katmanı ekonomiyi tutmuyordur.
+        //     (2) tek başına bunu ölçemez: capex sıfıra yaklaşsa da (2) yeşil kalabilirdi.
+        if (pIsletme <= EkoOranUst)
+            hata += $"capex ÇIKARILINCA oran {pIsletme:F3} hâlâ bant içinde — inşaat sink olarak yük taşımıyor ";
+
+        // (4) EN HIZLI İNŞA EDEN KULÜP İFLAS ETMEZ. Politika kredisiz ve "para varsa yap"tır;
+        //     iflas ederse maliyet/iade ayarı kulübü kendi parasıyla batırıyor demektir.
+        if (R.IflasSezonu >= 0) hata += $"en hızlı inşa eden kulüp sezon {R.IflasSezonu}'de iflas etti ";
+        if (R.BeklenmeyenRed > 0) hata += $"{R.BeklenmeyenRed} beklenmeyen kapı reddi (senaryo bozuk) ";
+
+        // (5) MERDİVEN GERÇEKTEN TIRMANILDI. Adım sayısı SABİT YAZILMAZ; fikstürün başlangıç
+        //     tier'larından ve balance'ın tavan tier'ından türetilir — aksi hâlde fikstür ya da
+        //     tavan değiştiğinde kapı "14 bekleniyordu" diye yanlış yerden bağırırdı.
+        int beklenenAdim = 0;
+        {
+            var stRef = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+            int mt = TheBadge.Checks.KademeliInsaatKosu.MaxTier(eco);
+            var liste = TheBadge.Checks.KademeliInsaatKosu.ReferansTesisler;
+            for (int i = 0; i < liste.Length; i++) beklenenAdim += mt - stRef.Club.TesisTier[liste[i]];
+        }
+        if (R.BaslatilanInsaat != beklenenAdim)
+            hata += $"merdiven {R.BaslatilanInsaat} adım ({beklenenAdim} bekleniyordu) ";
+
+        // (6) DETERMİNİZM — koşu Command Bus'tan geçiyor (dedup deposu, rate limiter, host saati).
+        //     Aynı seed iki koşuda BİT EŞİT durum vermeli; vermezse kapının ölçtüğü sayı da
+        //     koşudan koşuya oynardı ve bant bir şey ifade etmezdi.
+        {
+            var stD = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+            var RD = TheBadge.Checks.KademeliInsaatKosu.Kos(stD, eco, eRules, 0xEC0A0D1CUL, Ufuk,
+                                                            k3Bands, k3RlCfg, 42L);
+            if (TheBadge.World.WorldHash.Compute(stD) != TheBadge.World.WorldHash.Compute(st0))
+                hata += "kademeli koşu DETERMİNİSTİK DEĞİL (aynı seed, farklı durum) ";
+            if (RD.MerdivenSezon != R.MerdivenSezon) hata += "merdiven sezonu koşudan koşuya değişti ";
+        }
+
+        if (hata.Length > 0) failures += Fail("K10CapexSozlesmesi", hata);
+        else Pass($"K10CapexSozlesmesi(merdiven {R.MerdivenSezon} sezon ∈ [{bAlt},{bUst}] · iflas yok · " +
+                  $"capex DAHİL {pTam:F3} ∈ [{EkoOranAlt:F2}-{EkoOranUst:F2}] · capex HARİÇ {pIsletme:F3} bandın ÜSTÜNDE = inşaat yük taşıyor)");
+
+        // ---- MERDİVEN SONRASI: KAYITLI BORÇ ----
+        // Merdiven tükendikten sonra referans senaryoda GERİYE SINK KALMIYOR: kapasite 30K→90K
+        // olmuş, bakım tier'la doğrusal artmış ama gelir katlanmış; oran ~2,25'te kilitleniyor.
+        // Bu bir kapı hatası değil SENARYO kapsamının sonucudur: ECONOMY_MAP beş sink satırı
+        // sayıyor, referans koşu bunlardan TRANSFER BEDELLERİNİ hiç işletmiyor. Kapı bugünkü
+        // değeri TAVANLA dondurur (sessizce kötüleşmesin) ve hedefi yazar; hedefe nasıl
+        // inileceği Atilla'nın kararı — DECISIONS "Bekleyen kararlar".
+        {
+            string h2 = "";
+            if (R.MerdivenSezon < 0) h2 += "merdiven tamamlanmadı — sonrası ölçülemez ";
+            else
+            {
+                double sonra = TheBadge.Checks.KademeliInsaatKosu.MerdivenSonrasiOran(
+                    st0, eco, eRules, 0xEC0A0D1CUL, 5, k3Bands, k3RlCfg, 42L);
+                double tavan = eco.capex.merdivenSonrasiOranTavani, hedef = eco.capex.merdivenSonrasiHedefOran;
+                Console.WriteLine($"[info] K10 merdiven sonrası: source/sink {sonra:F3} (tavan {tavan:F2} · hedef {hedef:F2}) — " +
+                                  $"referans senaryoda transfer sink'i İŞLETİLMİYOR");
+                if (sonra > tavan) h2 += $"merdiven sonrası oran {sonra:F3} > kayıtlı tavan {tavan:F2} (borç KÖTÜLEŞTİ) ";
+                if (sonra <= hedef) h2 += $"oran {sonra:F3} ≤ hedef {hedef:F2} — BORÇ KAPANDI, tavan kaldırılmalı ve bu kapı düşmeli ";
+            }
+            if (h2.Length > 0) failures += Fail("K10MerdivenSonrasiSink", h2);
+            else Pass($"K10MerdivenSonrasiSink(BORÇ: merdiven tükenince sink kalmıyor — oran tavanla donduruldu, hedef " +
+                      $"{eco.capex.merdivenSonrasiHedefOran:F2}; transfer sink'i modellenince bu kapı düşer)");
+        }
+    }
 
     // Tycoon senaryo tablosu: geçerli payload + aksiyona ÖZGÜ kapı 3 ihlali reçetesi.
     // Kapı 3 ihlali üç biçimde kurulabilir: BAŞKA kullanıcı, durum kurulumu, ya da farklı payload.

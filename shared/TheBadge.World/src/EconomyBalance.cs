@@ -18,6 +18,7 @@ namespace TheBadge.World
         public KrediCfg kredi = new KrediCfg();
         public InsaatCfg insaat = new InsaatCfg();
         public IflasCfg iflas = new IflasCfg();
+        public CapexCfg capex = new CapexCfg();
 
         [Serializable] public sealed class TribunCfg
         {
@@ -52,6 +53,16 @@ namespace TheBadge.World
             public int[] kapasiteTier = new int[0];
         }
         [Serializable] public sealed class IflasCfg { public long esikTl; }
+        /// <summary>Capex sözleşmesi — K10-D. `merdivenSezonBandi` referans tesis merdiveninin
+        /// (stadyum + dört tesis, tavan tier'a kadar) kaç sezonda tamamlandığını sınırlar;
+        /// `merdivenSonrasiOranTavani` merdiven tükendikten sonraki source/sink TAVANIdır ve bir
+        /// BORÇ tavanıdır: hedef `merdivenSonrasiHedefOran`, bugünkü ölçüm ondan yüksek.</summary>
+        [Serializable] public sealed class CapexCfg
+        {
+            public string aciklama;
+            public int[] merdivenSezonBandi = new int[0];
+            public double merdivenSonrasiOranTavani, merdivenSonrasiHedefOran;
+        }
 
         /// <summary>Yapılandırmanın kendi tutarlılığı — kurulumda bir kez. Eksik balance sessizce
         /// kabul edilirse hata çok sonra ve yanlış yerde görünür.</summary>
@@ -68,6 +79,11 @@ namespace TheBadge.World
             if (insaat.tierSureHafta.Length < 6 || insaat.kapasiteTier.Length < 6)
                 throw new ArgumentException("economy.balance: insaat tier dizileri en az 6 uzunlukta olmalı (index = tier).");
             if (kredi.yillikFaizBp < 0) throw new ArgumentException("economy.balance: faiz negatif olamaz.");
+            if (capex.merdivenSezonBandi.Length != 2 || capex.merdivenSezonBandi[0] < 1
+                || capex.merdivenSezonBandi[1] <= capex.merdivenSezonBandi[0])
+                throw new ArgumentException("economy.balance: capex.merdivenSezonBandi [alt,üst] ve 1 ≤ alt < üst olmalı.");
+            if (capex.merdivenSonrasiOranTavani < capex.merdivenSonrasiHedefOran)
+                throw new ArgumentException("economy.balance: capex tavanı hedefin ALTINA inemez — borç tavanı hedefe düştüğünde borç kapanmıştır, tavan kaldırılmalı.");
         }
 
         /// <summary>Tesis tier'ının inşaat maliyeti — üstel: taban × çarpan^(tier-1).</summary>

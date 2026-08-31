@@ -2221,6 +2221,53 @@ M14 açık ucu, seçenek **(b)**: eşik korunur, çizelge en yüksek N'den besle
   bugün — ikinci bir dosya, motorun iki kaynaktan okuması demek ve tek sunum ayarı için bu maliyet
   yüksek; sunum ayarı sayısı artarsa (b) yeniden değerlendirilir. Bekleyen kararlara yazıldı.
 
+### K10-D: ECONOMY_MAP capex kapısı — ✅ TAMAM, dört bulguyla (2026-08-31)
+K3 inceleme turunun açık ucu, seçenek **(a)**: 1,05-1,15 bandı işletme dengesi olarak kalır, capex
+AYRI bir kapıyla ölçülür. Uygulandı — ama ölçüm önerinin gerekçesini DÜZELTTİ (aşağıda).
+
+- **Ölçülen senaryo:** `KademeliInsaatKosu` — parametresiz, kredisiz, EN HIZLI inşa politikası
+  (slot boşsa ve para yetiyorsa yap), referans kulübün kendi tesis merdiveni (stadyum 3→5 + dört
+  tesis 2→5 = 14 adım), komutlar **Command Bus'tan** (Tek Kapı). Politikaya bilerek "kasa rezervi"
+  eşiği KONMADI: bir eşik olsaydı kapının verdiği cevabı eşiği oynatarak istediğim yere
+  götürebilirdim — ölçtüğünü değil ayarını raporlayan bir kapı olurdu.
+- **BULGU 1 — capex bandı BOZMUYOR, bandı AYAKTA TUTAN sink capex'in kendisi.** Öneri (a)'nın
+  gerekçesi "yığınsal harcama sürekli dengeyi bulanıklaştırır" idi; ölçüm bunun tersini gösterdi.
+  Merdiven penceresinde (11 sezon, 8 seed'de de aynı): source/sink **capex HARİÇ 1,48-1,49
+  (BANT DIŞI)**, **capex DAHİL 1,123-1,132 (BANT İÇİ)**. İnşaat, kapasitesi 30K→90K'ya çıkan
+  kulübün ürettiği fazlayı emen kalemdir. Yani `K3EkonomiSozlesmesi`'nin capex'i dışarıda
+  bırakması bir eksiklik DEĞİL, hiç inşaat yapmayan bir koşunun tanımıdır — ve o koşu bantta
+  kalıyorsa bunun nedeni kulübün büyümemesidir.
+- **BULGU 2 — bant SEZON SEZON değil, PENCERE ORTALAMASI olarak tutuyor.** Capex yumruludur: tek
+  bir tier adımı bir sezon gelirinin %11-38'i. Merdiven penceresinde sezon oranları **0,824 ile
+  2,255 arasında savruluyor**; ortalama 1,131. ECONOMY_MAP "sezon başına net arz bandı" diyor —
+  harfi harfine okunduğunda inşaat yapan hiçbir kulüp bandı tutturamaz. Kapı bilerek pencere
+  ortalamasını ölçer ve savrulmayı ayrıca raporlar (ortalamayı "her sezon böyle" diye okumak,
+  kapının iddiasını ölçtüğünden geniş yapardı).
+- **BULGU 3 — merdiven süresi capex maliyetine olduğu kadar FAZLA ORANINA da bağlı.** Yayın geliri
+  süpürüldüğünde: taban oran 1,041 → merdiven 40 sezonda BİTMİYOR · 1,074 → 18 sezon · 1,133 →
+  11 · 1,159 → 10. Yani ECONOMY_MAP'in kendi bandının ALT ucunda referans merdiven fiilen
+  ulaşılamaz. `merdivenSezonBandi` bu yüzden **bilerek geniş** ([6,24]): dar bir bant capex'i
+  değil fazla oranını ölçerdi, fazla oranı ise zaten `K3EkonomiSozlesmesi`'nin işi. İki kuralın
+  çakıştığı bu nokta "Bekleyen kararlar"a yazıldı.
+- **BULGU 4 (BORÇ) — merdiven tükenince GERİYE SINK KALMIYOR.** 11. sezondan sonra oran **2,25'te
+  kilitleniyor** ve orada kalıyor. Bu bir kapı hatası değil SENARYO kapsamının sonucudur:
+  ECONOMY_MAP beş sink satırı sayıyor, referans koşu bunlardan **transfer bedellerini** hiç
+  işletmiyor. `K10MerdivenSonrasiSink` bugünkü değeri `merdivenSonrasiOranTavani` [KALİBRE] ile
+  DONDURUR (sessizce kötüleşmesin), hedefi (1,15) basar ve borç kapandığında KENDİSİ kırmızıya
+  döner ("tavan kaldırılmalı ve bu kapı düşmeli").
+- **[KALİBRE] eklenenler** (`balance/economy.balance.json` → `capex`): `merdivenSezonBandi [6,24]`,
+  `merdivenSonrasiOranTavani 2,40`, `merdivenSonrasiHedefOran 1,15`.
+- **ECONOMY_MAP bandı koda TEK YERDE indi** (`EkoOranAlt/EkoOranUst`); balance JSON'una
+  TAŞINMADI, bilerek: bu bir ayar değil sözleşmedir, JSON'a taşımak bandı gevşetmeyi kod
+  incelemesinden çıkarıp bir satır düzenlemesine indirirdi.
+- **Diş (altı yön, hepsi ölçüldü):** tier maliyeti ×5 → `merdiven 24 sezonda TAMAMLANMADI` +
+  `capex ÇIKARILINCA oran 1,113 hâlâ bant içinde` · ×0,5 → `merdiven 4 sezon, bant dışı` ·
+  iflas eşiği −5M (kasa dibi −5,8M) → `en hızlı inşa eden kulüp sezon 1'de iflas etti` ·
+  tavan 2,20 → `borç KÖTÜLEŞTİ` · hedef 2,30 → `BORÇ KAPANDI, tavan kaldırılmalı` ·
+  bant üstü 30 > ufuk 24 → `kapı bandı ölçemez`.
+- **Ölçülemeyen:** kapının "capex yük taşıyor" iddiası (3) yalnız BUGÜNKÜ senaryoda anlamlı;
+  transfer sink'i modellendiğinde işletme oranı da düşeceği için o kapı yeniden kalibre edilmeli.
+
 ## Bekleyen kararlar
 
 - ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —
@@ -2238,13 +2285,29 @@ M14 açık ucu, seçenek **(b)**: eşik korunur, çizelge en yüksek N'den besle
   kalibrasyon, çok dilim); (b) CB 4.2'de üçünü de "Hub" yap (spec revizyonu, GDD 3.2 vaadini
   daraltır); (c) bugünkü hâlde bırak, `K10TalimatAtilligi` görünür tutar. **Öneri: (b).**
   KARAR ATİLLA'NIN — kod tarafında yapılacak bir şey yok, üçü de tasarım/spec kararı.
-- **ECONOMY_MAP source/sink bandı sermaye harcamasını (inşaat) kapsasın mı? (K3 inceleme turu,
-  2026-08-29)** Ledger artık inşaatı sink sayıyor, ama referans kalibrasyon senaryosu inşaatsız:
-  1,05-1,15 bandı SÜREKLİ işletme dengesini ölçüyor. Seçenekler: (a) bant işletme dengesi olarak
-  kalsın, capex ayrı bir kapıyla ölçülsün (ör. "sezon başına capex ≤ gelirin %X'i"); (b) bant
-  capex dahil yeniden tanımlansın ve yeniden kalibre edilsin. **Öneri: (a)** — yığınsal harcamayı
-  sürekli dengeye karıştırmak bandı bulanıklaştırır ve kulübün yatırım yapmasını cezalandırır gibi
-  okunur. Karar balance sprintine ait, K4-K5'i bloklamaz.
+- ~~**ECONOMY_MAP source/sink bandı sermaye harcamasını (inşaat) kapsasın mı? (K3 inceleme turu,
+  2026-08-29)**~~ → **YAPILDI (2026-08-31, K10-D):** seçenek (a) — bant işletme dengesi olarak
+  kaldı, capex `K10CapexSozlesmesi` ile ayrı ölçülüyor. Not: önerinin GEREKÇESİ yanlıştı ("capex
+  bandı bulanıklaştırır"); ölçüm capex'in bandı AYAKTA TUTAN sink olduğunu gösterdi. Kararın
+  kendisi doğru çıktı, gerekçesi düzeltildi — yukarıdaki K10-D kaydı.
+- **ECONOMY_MAP'in iki kuralı çakışıyor: 1,05-1,15 bandının ALT ucunda referans tesis merdiveni
+  ulaşılamaz (K10-D ölçümü, 2026-08-31).** Fazla oranı 1,041'de merdiven 40 sezonda bitmiyor,
+  1,074'te 18 sezon, 1,159'da 10 sezon sürüyor. Doküman hangi kuralın öncelikli olduğunu
+  söylemiyor. Seçenekler: (a) bandın alt ucu yükseltilsin (ör. 1,08-1,15) — "yatırım yapılabilir
+  ekonomi" garanti altına alınır, enflasyon marjı daralır; (b) merdiven maliyeti fazla oranına
+  GÖRE ölçeklensin (tier maliyeti sabit ₺ değil, sezonluk fazlanın katı olarak tanımlansın);
+  (c) bugünkü hâlde bırakılsın, `merdivenSezonBandi` geniş kalsın ve kapı yalnız uçları yakalasın.
+  **Öneri: (c)** bugün — (a) spec revizyonu, (b) balance şeması değişikliği; ikisi de balance
+  sprintine ait ve bugünkü kapı ikisini de bloklamıyor. KARAR ATİLLA'NIN.
+- **Merdiven tükendikten sonra uzun vade sink'i ne? (K10-D BULGU 4, 2026-08-31)** Referans
+  senaryoda 11. sezondan sonra source/sink 2,25'te kilitleniyor — ECONOMY_MAP'in "enflasyon
+  kontrolü" gerekçesiyle çelişiyor. Muhtemel cevap dokümanın kendi listesinde: **transfer
+  bedelleri** (referans koşu transfer işletmiyor). Seçenekler: (a) referans koşuya transfer
+  hattı eklensin ve capex kapısı yeniden kalibre edilsin (K5 transfer motoru hazır, kapsam bir
+  dilim); (b) maaş enflasyonu uzun vade sink'i olsun (kadro gücü arttıkça maaş artar);
+  (c) tesis tavanı 5'ten yukarı açılsın (capex sonsuz sink olur — Top Eleven anti-pattern'ine
+  yakın, dikkatli olunmalı). **Öneri: (a)** — dokümanın zaten saydığı sink'i modellemek, yeni
+  bir mekanik icat etmekten ucuz ve doğru. Borç `K10MerdivenSonrasiSink` ile tavanlandı.
 - ~~**`Rng.Gauss01` çarpışması ne zaman düzeltilsin?**~~ → **KARAR (2026-08-30, Atilla): ŞİMDİ
   YAP.** Üç seçenek ölçülmüş maliyetle sunuldu (şimdi / FAZ 05 öncesi / hiç). Uygulandı, aşağıdaki
   K8 kaydına bakınız. Bekleyen karar kapandı.
