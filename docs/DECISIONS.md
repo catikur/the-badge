@@ -2279,35 +2279,36 @@ AYRI bir kapıyla ölçülür. Uygulandı — ama ölçüm önerinin gerekçesin
 - ~~**`Physics · 700+entity · salt 63` adres paylaşımı.**~~ → **YAPILDI (2026-08-30, K9-A):**
   seçenek (b) — tarayan kapı yazıldı, sonra düzeltildi. Kapı ikinci bir bulgu daha çıkardı
   (balance'ın salt aralığı genişliğini belirlemesi); elle düzeltme ikisini de kaçırırdı.
-- **CB 4.2 tablosu ile ME komut kümesi çelişiyor — ÖNERİ DÜZELTİLDİ (K10-B, 2026-08-31).**
-  Eski öneri (c) yanlış varsayıma dayanıyordu: bireysel talimat İKİ TARAFTA DA ATIL (yukarıdaki 🔴
-  kayda bakınız). Yeni seçenekler: (a) talimat sistemini gerçekten uygula (katalog + şema + motor +
-  kalibrasyon, çok dilim); (b) CB 4.2'de üçünü de "Hub" yap (spec revizyonu, GDD 3.2 vaadini
-  daraltır); (c) bugünkü hâlde bırak, `K10TalimatAtilligi` görünür tutar. **Öneri: (b).**
-  KARAR ATİLLA'NIN — kod tarafında yapılacak bir şey yok, üçü de tasarım/spec kararı.
+- ~~**CB 4.2 tablosu ile ME komut kümesi çelişiyor (K10-B).**~~ → **KARAR (2026-08-31, Atilla'nın
+  "hepsini kapat" talimatıyla): (b) — CB 4.2'de üçü de "Hub".** GDD 3.2'nin "maç içi bireysel
+  talimat" vaadi BUGÜN karşılıksız: talimat iki tarafta da atıl, `PlayerInstr` kataloğu boş, şema
+  markaj hedefini taşıyamıyor. Olmayan bir vaadi spec'te taşımak boşluğu kalıcı borç gibi gösterir.
+  Bu kayıt BAĞLAYICIDIR (ME 13.4 precedent'i); spec dosyasına dokunulmadı, GDD/CB sonraki
+  revizyonda işlenir.
+  **KOD HİZALAMASI DENENDİ ve ÖLÇÜMLE REDDEDİLDİ (aynı gün):** kataloğu `Hub | Match` → `Hub`
+  yapmayı denedim; `K4MeArayuzBoslugu` kırmızıya döndü ve haklıydı. Bugünkü tasarım bu üç aksiyonu
+  maç bağlamında BİLEREK kabul edip bir KURALLA açık sebeple reddediyor ("ME karşılığı yok").
+  Bağlamı kataloğdan çıkarmak, o açıklayıcı reddi jenerik bir "yanlış bağlam" hatasına düşürüyordu
+  — oyuncuya daha az bilgi veren bir uygulama. Yani (b)'nin doğru uygulaması, kayıtta zaten yazdığı
+  gibi, **"motor işi yok"tur**: karar spec metnini bağlar, kod açıklayıcı reddi korur. Bu satır
+  kalsın diye yazıldı: bir kararı koda çevirirken kararın kendi "iş yok" notunu okumadım.
+  Gerçek talimat sistemi istendiğinde (a) ayrı bir GDD v4.2 kalemi olarak açılır;
+  `K10TalimatAtilligi` o güne kadar atıllığı görünür tutar.
 - ~~**ECONOMY_MAP source/sink bandı sermaye harcamasını (inşaat) kapsasın mı? (K3 inceleme turu,
   2026-08-29)**~~ → **YAPILDI (2026-08-31, K10-D):** seçenek (a) — bant işletme dengesi olarak
   kaldı, capex `K10CapexSozlesmesi` ile ayrı ölçülüyor. Not: önerinin GEREKÇESİ yanlıştı ("capex
   bandı bulanıklaştırır"); ölçüm capex'in bandı AYAKTA TUTAN sink olduğunu gösterdi. Kararın
   kendisi doğru çıktı, gerekçesi düzeltildi — yukarıdaki K10-D kaydı.
-- **ECONOMY_MAP'in iki kuralı çakışıyor: 1,05-1,15 bandının ALT ucunda referans tesis merdiveni
-  ulaşılamaz (K10-D ölçümü, 2026-08-31).** Fazla oranı 1,041'de merdiven 40 sezonda bitmiyor,
-  1,074'te 18 sezon, 1,159'da 10 sezon sürüyor. Doküman hangi kuralın öncelikli olduğunu
-  söylemiyor. Seçenekler: (a) bandın alt ucu yükseltilsin (ör. 1,08-1,15) — "yatırım yapılabilir
-  ekonomi" garanti altına alınır, enflasyon marjı daralır; (b) merdiven maliyeti fazla oranına
-  GÖRE ölçeklensin (tier maliyeti sabit ₺ değil, sezonluk fazlanın katı olarak tanımlansın);
-  (c) bugünkü hâlde bırakılsın, `merdivenSezonBandi` geniş kalsın ve kapı yalnız uçları yakalasın.
-  **Öneri: (c)** bugün — (a) spec revizyonu, (b) balance şeması değişikliği; ikisi de balance
-  sprintine ait ve bugünkü kapı ikisini de bloklamıyor. KARAR ATİLLA'NIN.
-- **Merdiven tükendikten sonra uzun vade sink'i ne? (K10-D BULGU 4, 2026-08-31)** Referans
-  senaryoda 11. sezondan sonra source/sink 2,25'te kilitleniyor — ECONOMY_MAP'in "enflasyon
-  kontrolü" gerekçesiyle çelişiyor. Muhtemel cevap dokümanın kendi listesinde: **transfer
-  bedelleri** (referans koşu transfer işletmiyor). Seçenekler: (a) referans koşuya transfer
-  hattı eklensin ve capex kapısı yeniden kalibre edilsin (K5 transfer motoru hazır, kapsam bir
-  dilim); (b) maaş enflasyonu uzun vade sink'i olsun (kadro gücü arttıkça maaş artar);
-  (c) tesis tavanı 5'ten yukarı açılsın (capex sonsuz sink olur — Top Eleven anti-pattern'ine
-  yakın, dikkatli olunmalı). **Öneri: (a)** — dokümanın zaten saydığı sink'i modellemek, yeni
-  bir mekanik icat etmekten ucuz ve doğru. Borç `K10MerdivenSonrasiSink` ile tavanlandı.
+- ~~**ECONOMY_MAP'in iki kuralı çakışıyor (K10-D).**~~ → **KARAR (2026-08-31, "hepsini kapat"):
+  (c) — bugünkü hâl korunur, `merdivenSezonBandi` geniş kalır, kapı yalnız uçları yakalar.**
+  Gerekçe: (a) spec revizyonu, (b) balance şeması değişikliği; ikisi de balance sprintinin işi ve
+  bugünkü kapı ikisini de bloklamıyor. Çakışma ÖLÇÜLDÜ ve kayıtlı (fazla oranı 1,041'de merdiven
+  40 sezonda bitmiyor, 1,159'da 10 sezonda bitiyor) — balance sprinti bu sayıyla başlar.
+- ~~**Merdiven tükendikten sonra uzun vade sink'i ne? (K10-D BULGU 4)**~~ → **KARAR (2026-08-31,
+  "hepsini kapat"): (a) — referans koşuya TRANSFER hattı eklenir, capex kapısı yeniden kalibre
+  edilir.** Dokümanın zaten saydığı sink'i modellemek, yeni mekanik icat etmekten ucuz ve doğru;
+  (c) (tesis tavanını açmak) Top Eleven anti-pattern'ine yakın olduğu için elendi, (b) (maaş
+  enflasyonu) kadro gücü sistemine bağlı olduğu için sonraki dilime bırakıldı. Uygulama: K11-E.
 - ~~**`Rng.Gauss01` çarpışması ne zaman düzeltilsin?**~~ → **KARAR (2026-08-30, Atilla): ŞİMDİ
   YAP.** Üç seçenek ölçülmüş maliyetle sunuldu (şimdi / FAZ 05 öncesi / hiç). Uygulandı, aşağıdaki
   K8 kaydına bakınız. Bekleyen karar kapandı.
@@ -2325,22 +2326,51 @@ AYRI bir kapıyla ölçülür. Uygulandı — ama ölçüm önerinin gerekçesin
   Yüksek ~%68/%16/%16.** Spec dosyasına dokunulmaz (yasak); bu kayıt bağlayıcıdır, kapı
   metinleri bu tabloyu basar, GDD/ME v-sonraki revizyonda spec'e işlenir. Uygulama dilimi:
   M16-F (derin blok — aşağıda).
-- **LOD 1'in geleceği (M15 kararı, 2026-08-16):** şu an LOD 0'ın eşleniği. Geri almak için gerekçe
-  CPU olamaz (19 kat marj var); yalnız İSTEMCİ tarafında orta cihaz ölçümü LOD 0'ı 800 ms'nin
-  üstüne çıkarırsa yeniden değerlendirilir. O ölçüm FAZ 05 cihaz testlerine ait.
 - ~~**Highlight eşiği / zaman çizelgesi işareti.**~~ → **YAPILDI (2026-08-31, K10-C):** seçenek (b).
   Eşik korundu (`HighlightCount` hâlâ ME 15.3 tanımı), çizelge `zamanCizelgesiIsaret` [KALİBRE]
   kadar en yüksek andan besleniyor. Ölçüm: eşikle 41/60 maçta sıfır işaret.
-- **Sunum ayarları `config_hash` içinde mi kalsın? (K10-C gözlemi, 2026-08-31)** `zamanCizelgesiIsaret`
-  simülasyonu etkilemiyor (50/50 `stateHash` aynı) ama `balanceHash`i değiştirip golden yenilemesi
-  gerektirdi. (a) kabul et; (b) sunum ayarlarını `config_hash` dışı dosyaya taşı. **Öneri: (a)**
-  bugün — tek ayar için ikinci bir okuma kaynağı pahalı; sayı artarsa (b).
-- Premium etkilerin public ligde şeffaf rozeti (panel M-bulgusu) → tasarım kararı, FAZ 02 öncesi.
+- ~~**Sunum ayarları `config_hash` içinde mi kalsın? (K10-C gözlemi)**~~ → **KARAR (2026-08-31,
+  "hepsini kapat"): (a) — kabul.** Tek sunum ayarı için ikinci bir okuma kaynağı pahalı; "tek
+  balance" hikayesi sade kalır. Golden churn'ün DAVRANIŞ değişikliği olmadığı zaten ölçüldü
+  (50/50 `stateHash` aynı). Yeniden değerlendirme eşiği: sunum ayarı sayısı 5'i geçerse (b).
+- ~~**Premium etkilerin public ligde şeffaf rozeti (panel M-bulgusu).**~~ → **KARAR (2026-08-31,
+  "hepsini kapat"): ROZET GÖSTERİLİR.** Gerekçe GAME_THESIS'in kendi ilkesi: public ligde rekabetin
+  adil OKUNMASI, premium'un gizlenmesinden değerlidir; gizli çarpan, kaybeden oyuncuya "para mı
+  kazandı" şüphesi bırakır ve bu şüphe rozetin maliyetinden pahalıdır (Top Eleven anti-pattern'i).
+  Kapsam: yalnız AKTİF ve oynanışa etki eden premium çarpanlar rozetlenir (kozmetik rozetlenmez —
+  kozmetik zaten ayrı şerittir). Uygulama FAZ 02 UI dilimine ait; bu kayıt tasarımı bağlar.
+
 - ~~3G Greybox Fun Gate GO/NO-GO~~ → **KAPANDI (2026-08-08): NO-GO %40** — uygulama yukarıdaki kapanış bölümünde; sunum revizyonu + mülakatlı doğrulama turu Dikey Dilim öncesi BORÇ.
-- BRIEF_3G_GREYBOX RA#1 metninin pivot sonrası revizyonu (GDD v4.2 turu).
+- ~~**BRIEF_3G_GREYBOX RA#1 metninin pivot sonrası revizyonu.**~~ → **KARAR (2026-08-31,
+  "hepsini kapat"): REVİZE EDİLMEZ, ARŞİV OLARAK KALIR.** FAZ 00.5 kapandı (NO-GO %40); brif o
+  fazın girdisiydi ve revize edilmiş hâli hiçbir işi beslemeyecek. Pivot kararı zaten DECISIONS'ta
+  (2026-08-02, "Model Maçı" tezi) ve GREYBOX_DURUM arşiv başlığında kayıtlı — bilgi kaybı yok.
+  Yeni brif gerektiğinde FAZ 03/04'ün kendi brifi yazılır, eskisi yamanmaz.
+
 - ~~Greybox iterasyon 11 kapsamı~~ → **KARAR (2026-08-07, Atilla): Paket A TAM** — yorgunluk + kart/sakatlık zorunlu karar anları + isimli kadro/değişiklik + koç masası greybox'a girdi (İt.11, GREYBOX_MODEL.md v2). Bu SON içerik iterasyonudur; sırada his onayı + playtest.
 - ~~Greybox iterasyon 12 kapsamı~~ → **KARAR (2026-08-07, Atilla): S1 — Kadro Kimliği** uygulandı: bireysel oyuncu gücü + mevki ağırlıklı Hücum/Savunma kanalları (kaleci savunmada en ağır) + şerit görünürlük satırı (İt.12, GREYBOX_MODEL.md v3). Timebox: playtest 2 haftalık kutunun kenarında — kayarsa bilinçli uzatma bu satıra işlenir.
-- **GDD v4.2 adayları (Atilla fikri, 2026-08-07):** (a) koşullu ön-emirler (ücretsiz katman, offline adaleti); (b) **Oto-Koç** — aylık kiralık OTOMATİK yürüten ajan: GDD 12.1 Taktik Analist "önerir"den sapma, kural-tabanlı deterministik (LLM değil), Tek Kapı + replay izi + public ligde şeffaf rozet + "canlı insan > oto-koç" optimal-altı bant ilkesi; (c) online/offline asimetri ilkesinin net yazımı. Öneri: `docs/GREYBOX_ONERI_IT11.md` §2.
+- ~~**GDD v4.2 adayları (Atilla fikri, 2026-08-07).**~~ → **KARAR (2026-08-31, "hepsini kapat"):
+  (a) ve (c) GDD v4.2'ye GİRER, (b) Oto-Koç GİRMEZ — ERTELENİR.**
+  - **(a) Koşullu ön-emirler → GİRER.** GAME_THESIS Session Shape'in kendi taahhüdünü besliyor:
+    "canlıyı kaçırmak ceza değildir". Ücretsiz katmanın offline adaleti bugün yalnız Tier 0
+    kuyruğuyla (CB 8.3) sağlanıyor ve o kuyruk KOŞULSUZ — "0-1 gerideysek hücuma geç" diyemiyorsun.
+  - **(c) Online/offline asimetri ilkesinin net yazımı → GİRER.** Maliyeti doküman, faydası her
+    sonraki kapsam tartışmasında ölçüt olması. Bugün bu ilke sözlü.
+  - **(b) Oto-Koç → GİRMEZ (bugün).** Gerekçe TASARIM TERCİHİ DEĞİL, projenin kendi kapsam
+    filtresi: **GAME_THESIS Non-goals (v1) listesinde "AUTO komut kaynağı" AÇIKÇA yazıyor**, ve
+    `CommandSource.Auto = 2` kataloğa bu yüzden "tanımlı ama kullanılmaz" olarak duruyor. Oto-Koç
+    tam olarak bir AUTO komut kaynağıdır; kabul etmek v1 non-goal'unu kaldırmak demektir — bu,
+    tek satırlık bir GDD kalemi değil, tez seviyesinde bir karardır ve "adaylar" listesinden
+    sessizce geçmemelidir. Ayrıca fikrin kendi içindeki "canlı insan > oto-koç optimal-altı bant"
+    şartı, P2PF adalet algısını (Riskiest Assumption 3) doğrudan gerginleştirir.
+    **Yeniden açma koşulu:** ücretsiz katmanın offline adaleti (a) ile ölçüldükten SONRA hâlâ
+    yetersizse, Oto-Koç non-goal revizyonu olarak ayrı gündemle açılır.
+- **LOD 1'in geleceği (M15, 2026-08-16) — KAPATILAMAZ, ölçüm bekliyor.** Şu an LOD 0'ın
+  eşleniği; ayrıştırma gerekçesi CPU OLAMAZ (19 kat marj var). Bu satır bir karar değil bir
+  TETİKLEYİCİdir; kararla kapatmak, olmayan bir ölçümü varmış gibi göstermek olurdu.
+  Kapatan şey nettir: FAZ 05 cihaz testinde ORTA seviye cihazda LOD 0'ın bir maçı > 800 ms
+  sürerse LOD 1 ayrışır, sürmezse satır silinir. O güne kadar `M15Lod1Esdeger` eşdeğerliği,
+  ME 16.4 sezon turu da CPU marjını HER koşuda ölçüyor — yani satır bekliyor ama korumasız değil.
 
 ## Karar günlüğü (tarihsel özet)
 | Sürüm | Özet |
