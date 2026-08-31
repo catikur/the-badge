@@ -191,6 +191,38 @@ namespace TheBadge.Checks
         public void OyuncuRaporla(System.Guid commandId, long hedefUserId, byte sebep, string notlar, long userId) { }
     }
 
+    /// <summary>Durumu DEĞİŞTİREN ve AYNI komutta yayın YAPAN teste özel handler. Katalogda böyle
+    /// bir aksiyon yok (mevcut yayıncı aksiyonlar durumu değiştirmiyor), ama `WorldExecutor`in
+    /// commit SIRASI bu birleşimde anlam kazanıyor: olaylar yayınlardan ÖNCE önbelleğe yazılırsa,
+    /// yayın patlayıp durum geri alındığında önbellekte hayalet olaylar kalır.</summary>
+    public sealed class HemDegistirHemYayinla : TheBadge.World.IActionHandler
+    {
+        public RejectionReason Apply(TheBadge.World.GameState st, TheBadge.World.WorldJournal j,
+                                     CommandEnvelope env, ActionDef a, IPayloadView p, out string detail)
+        {
+            detail = null;
+            j.Set(TheBadge.World.MutTarget.Kulup, 0, TheBadge.World.ClubField.Form, 55);
+            j.Emit(new TheBadge.World.WorldEvent(TheBadge.World.WorldEventType.TaktikGuncellendi, 0, 55,
+                                                 st.Takvim.Sezon, st.Takvim.Hafta));
+            j.PersonaKonusma(env.CommandId, 1, 0, env.UserId);
+            return RejectionReason.None;
+        }
+    }
+
+    public sealed class PatlayanPersona : TheBadge.World.IPersonaSink
+    {
+        public void KonusmaAyarlandi(System.Guid commandId, int personaId, byte tonIndeksi, long userId)
+            => throw new InvalidOperationException("persona kanali patladi (test)");
+        public void BasinYaniti(System.Guid commandId, int soruId, byte cevapSinifi, long userId)
+            => throw new InvalidOperationException("persona kanali patladi (test)");
+    }
+
+    public sealed class SessizPersona : TheBadge.World.IPersonaSink
+    {
+        public void KonusmaAyarlandi(System.Guid commandId, int personaId, byte tonIndeksi, long userId) { }
+        public void BasinYaniti(System.Guid commandId, int soruId, byte cevapSinifi, long userId) { }
+    }
+
     public sealed class SpyOnlineSink : TheBadge.World.IOnlineSink
     {
         public readonly List<(System.Guid cid, int macId, int pencereSn, byte hedef, long userId)> Klipler

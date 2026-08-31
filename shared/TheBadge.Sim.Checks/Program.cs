@@ -6196,6 +6196,101 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         else Pass("K9RpcYaniti(CB 3 sema: status + resultingEvents + newStateVersion - CB 8.1 tekrar AYNI olaylari tasiyor - red bos)");
     }
 
+    // 33e) OLAY ÖNBELLEĞİ — kullanıcı yalıtımı · bayat kayıt · geri alma sırası (inceleme, Bugbot)
+    {
+        string hata = "";
+
+        // (1) KULLANICI YALITIMI: aynı CommandId, farklı kullanıcı → ötekinin olaylarını ALMAZ.
+        {
+            var w = K9Kur();
+            var ortakId = Guid.NewGuid();
+            var zA = new CommandEnvelope
+            {
+                CommandId = ortakId, CatalogVersion = Catalog.Version, Source = CommandSource.UI,
+                ActionType = "tycoon.set_season_ticket_price", IssuedAtUnixMs = K9Host, MatchTick = 0,
+                UserId = K9User, SaveSlotId = 1, TeamIdx = 0, PayloadJson = new byte[0]
+            };
+            var yA = w.kopru.Gonder(zA, new TheBadge.Checks.TestPayload().Set("fiyat", 130.0), K9User, K9Host);
+            if (!yA.Ok) hata += $"[yalitim] A basarisiz({yA.Sebep}) ";
+            if (yA.Olaylar.Count == 0) hata += "[yalitim] A olay uretmedi (test anlamsizlasir) ";
+
+            // AYNI CommandId, BAŞKA kullanıcı — dedup deposu da ayrı anahtarladığı için bu komut
+            // yürütülür; olay önbelleği ötekinin kaydını SIZDIRMAMALI.
+            var zB = new CommandEnvelope
+            {
+                CommandId = ortakId, CatalogVersion = Catalog.Version, Source = CommandSource.UI,
+                ActionType = "tycoon.set_season_ticket_price", IssuedAtUnixMs = K9Host, MatchTick = 0,
+                UserId = K9User + 1, SaveSlotId = 1, TeamIdx = 0, PayloadJson = new byte[0]
+            };
+            var yB = w.kopru.Gonder(zB, new TheBadge.Checks.TestPayload().Set("fiyat", 140.0), K9User + 1, K9Host);
+            // B kulübün SAHİBİ değil → reddedilmeli; reddedilen komut olay taşımaz ve
+            // ÖZELLİKLE A'nın olaylarını taşımamalı.
+            if (yB.Ok) hata += "[yalitim] baska kullanici kulubu degistirdi ";
+            if (yB.Olaylar != null && yB.Olaylar.Count > 0)
+                hata += $"[yalitim] BASKA KULLANICI otekinin resultingEvents'ini aldi({yB.Olaylar.Count}) ";
+        }
+
+        // (2) BAYAT KAYIT: pencere dolduktan sonra okunan kayıt DÖNMEZ (budama amorti edilmiştir,
+        //     bu yüzden okuma anında da süre denetlenmeli).
+        {
+            var w = K9Kur();
+            var z = K9Env("tycoon.set_season_ticket_price");
+            var y1 = w.kopru.Gonder(z, new TheBadge.Checks.TestPayload().Set("fiyat", 150.0), K9User, K9Host);
+            if (y1.Olaylar.Count == 0) hata += "[bayat] ilk komut olay uretmedi ";
+            // Pencere dolunca komut YENİDEN YÜRÜTÜLÜR; taze olay üretmesi DOĞRUdur. Bayatlık
+            // riski, yeniden yürütmenin REDDEDİLDİĞİ halde: o zaman taze olay yazılmaz ve eski
+            // kayıt hâlâ oradaysa yanıt, bu isteğin ÜRETMEDİĞİ olayları taşır. Budama amorti
+            // edildiği için okuma anında da süre denetlenmeli (inceleme bulgusu, Bugbot).
+            long pencere = 24L * 60 * 60 * 1000;
+            var y2 = w.kopru.Gonder(z, new TheBadge.Checks.TestPayload().Set("fiyat", 99999999.0),
+                                    K9User, K9Host + pencere + 1);
+            if (y2.Ok) hata += "[bayat] bant disi fiyat kabul edildi (test anlamsizlasir) ";
+            if (y2.Olaylar != null && y2.Olaylar.Count > 0)
+                hata += $"[bayat] REDDEDILEN komut, pencere oncesinden kalan ESKI olaylari dondurdu({y2.Olaylar.Count}) ";
+        }
+
+        // (3) GERİ ALMA SIRASI: durumu DEĞİŞTİREN ve yayın YAPAN bir komutta, yayın patlarsa
+        //     durum geri alınır — olaylar da önbelleğe GİRMEMELİ. Bugün böyle bir katalog aksiyonu
+        //     YOK (mevcut yayıncı aksiyonlar durumu değiştirmiyor), o yüzden executor sözleşmesi
+        //     TESTE ÖZEL bir handler'la doğrudan sınanır. Bulgu erişilebilirlikle değil SIRAYLA
+        //     ilgiliydi: `Yaz` yayınlardan ÖNCE çağrılırsa geri alma önbelleği temizlemez.
+        {
+            var g = TheBadge.Checks.EkonomiFixture.Kur(k9Rules, k9Eco, 500L, K9User);
+            var depo = new TheBadge.World.WorldStore(g);
+            var ctx = new TheBadge.World.WorldContext(depo, k9Rules)
+            { Active = TheBadge.CommandBus.Context.Hub | TheBadge.CommandBus.Context.Online };
+            var exec = new TheBadge.World.WorldExecutor(depo, ctx);
+            exec.RegisterHandler("tycoon.set_season_ticket_price", new TheBadge.Checks.HemDegistirHemYayinla());
+            exec.PersonaKanalBagla(new TheBadge.Checks.PatlayanPersona());
+            var bus = new TheBadge.CommandBus.CommandBus(k9Bands, ctx,
+                new SlidingWindowRateLimiter(k9RlCfg, 8, 300_000), new IdempotencyStore());
+            var kopru = new TheBadge.World.RpcKopru(bus, exec);
+
+            ulong h0 = depo.Hash();
+            var zarf = K9Env("tycoon.set_season_ticket_price");
+            bool patladi = false;
+            try { kopru.Gonder(zarf, new TheBadge.Checks.TestPayload().Set("fiyat", 160.0), K9User, K9Host); }
+            catch (InvalidOperationException) { patladi = true; }
+            if (!patladi) hata += "[geri alma] yayin patlamasi yukari cikmadi ";
+            if (depo.Hash() != h0) hata += "[geri alma] durum GERI ALINMADI ";
+            // AYNI CommandId ile tekrar, ama BANT DIŞI payload ile: komut Kapı 2'de reddedilir,
+            // handler hiç koşmaz, dolayısıyla TAZE olay yazılmaz. Yanıtta olay varsa o, geri
+            // alınmış ilk çağrıdan kalan HAYALETtir.
+            //
+            // Bu kurgu iki kez düzeltildi: (1) yeni bir CommandId ile denemek hayaleti hiç
+            // sorgulamıyordu, (2) aynı payload'la denemek yeniden yürütmeye yol açıp taze olay
+            // üretiyordu — ikisi de dişi ateşlemiyordu.
+            var tekrar = kopru.Gonder(zarf, new TheBadge.Checks.TestPayload().Set("fiyat", 99999999.0),
+                                      K9User, K9Host);
+            if (tekrar.Ok) hata += "[geri alma] bant disi fiyat kabul edildi (test anlamsizlasir) ";
+            if (tekrar.Olaylar != null && tekrar.Olaylar.Count > 0)
+                hata += $"[geri alma] GERI ALINAN komutun olaylari onbellekte kaldi({tekrar.Olaylar.Count}) ";
+        }
+
+        if (hata.Length > 0) failures += Fail("K9OlayOnbellegi", hata);
+        else Pass("K9OlayOnbellegi(kullanici yalitimi · bayat kayit donmuyor · geri alinan komut onbellege girmiyor)");
+    }
+
     // 33d) POMPA HATASI KOMUTU DÜŞÜRMEZ — outbox'ın varlık sebebi
     {
         string hata = "";

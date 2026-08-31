@@ -90,23 +90,36 @@ namespace TheBadge.World
         {
             static readonly WorldEvent[] Bos = new WorldEvent[0];
             readonly object kilit = new object();
-            readonly Dictionary<Guid, (WorldEvent[] olaylar, long at)> kayit = new Dictionary<Guid, (WorldEvent[], long)>();
+            // ANAHTAR (KULLANICI, CommandId) — yalnız `CommandId` DEĞİL. İlk yazımda bu gerekçeyi
+            // yorumda yazıp sözlüğü tek anahtarla kurmuşum (inceleme bulgusu, Bugbot): yorum bir
+            // güvenlik özelliğini anlatıyor, kod onu uygulamıyordu. Aynı Id'yi kullanan başka bir
+            // oturum ötekinin `resultingEvents`ini alabilir ya da üzerine yazabilirdi.
+            readonly Dictionary<(long user, Guid id), (WorldEvent[] olaylar, long at)> kayit
+                = new Dictionary<(long, Guid), (WorldEvent[], long)>();
             readonly long pencereMs;
             long sonBudama = long.MinValue;
             public OlayOnbellegi(long pencereMs) { this.pencereMs = pencereMs; }
 
-            public void Yaz(Guid commandId, IReadOnlyList<WorldEvent> olaylar)
+            public void Yaz(Guid commandId, long userId, long anUnixMs, IReadOnlyList<WorldEvent> olaylar)
             {
                 var kopya = new WorldEvent[olaylar?.Count ?? 0];
                 for (int i = 0; i < kopya.Length; i++) kopya[i] = olaylar[i];
-                lock (kilit) kayit[commandId] = (kopya, sonYazmaAn);
+                lock (kilit) kayit[(userId, commandId)] = (kopya, anUnixMs);
             }
 
-            long sonYazmaAn;
-            public void AnIsaretle(long now) { sonYazmaAn = now; }
-
-            public IReadOnlyList<WorldEvent> AlVeyaBos(long userId, Guid commandId)
-            { lock (kilit) return kayit.TryGetValue(commandId, out var k) ? k.olaylar : Bos; }
+            /// <summary>Süresi DOLMUŞ kayıt döndürülmez. Budama amorti edilmiştir (her çağrıda
+            /// koşmaz), dolayısıyla okuma anında budanmamış eski bir kayıt bulunabilir; sürenin
+            /// burada da denetlenmesi, "budama henüz koşmadı" halinde bayat olay dönmesini
+            /// engeller (inceleme bulgusu, Bugbot).</summary>
+            public IReadOnlyList<WorldEvent> AlVeyaBos(long userId, Guid commandId, long now)
+            {
+                lock (kilit)
+                {
+                    if (!kayit.TryGetValue((userId, commandId), out var k)) return Bos;
+                    if (now - k.at >= pencereMs) { kayit.Remove((userId, commandId)); return Bos; }
+                    return k.olaylar;
+                }
+            }
 
             public void Buda(long now)
             {
@@ -114,7 +127,7 @@ namespace TheBadge.World
                 {
                     if (now - sonBudama < pencereMs / 8) return;   // amorti edilmiş
                     sonBudama = now;
-                    var sil = new List<Guid>();
+                    var sil = new List<(long, Guid)>();
                     foreach (var kv in kayit) if (now - kv.Value.at >= pencereMs) sil.Add(kv.Key);
                     for (int i = 0; i < sil.Count; i++) kayit.Remove(sil[i]);
                 }
@@ -123,7 +136,6 @@ namespace TheBadge.World
 
         public KomutYaniti Gonder(CommandEnvelope zarf, IPayloadView yuk, long userId, long nowUnixMs)
         {
-            onbellek.AnIsaretle(nowUnixMs);
             var sonuc = bus.Submit(zarf, yuk, exec, nowUnixMs, userId);
 
             // StateVersion yürütücüden OKUNUR, bus'tan değil: tekrar yanıtında da güncel sürüm
@@ -132,10 +144,11 @@ namespace TheBadge.World
 
             // OLAYLAR: yürütmede taze üretilenler, TEKRARDA önbellekten (CB 8.1 "önceki yanıt
             // AYNEN döner" — durumu yalnız statüden ibaret saymak, tekrar eden istemciyi olaysız
-            // bırakırdı). Önbellek dedup penceresiyle AYNI ömre budanır; aksi halde pencere
-            // içinde bir tekrar boş olay listesi alır ve "aynen" iddiası delinirdi.
-            var olaylar = onbellek.AlVeyaBos(zarf.UserId, zarf.CommandId);
+            // bırakırdı). Anahtar (KULLANICI, CommandId); süresi dolmuş kayıt DÖNMEZ.
+            var olaylar = onbellek.AlVeyaBos(zarf.UserId, zarf.CommandId, nowUnixMs);
             onbellek.Buda(nowUnixMs);
+
+            // TESLİM BURADA YAPILMAZ — bkz. sınıf yorumundaki KRİTİK 2.
             return new KomutYaniti(sonuc.Reason, sonuc.Detail, sonuc.Replayed, sv, olaylar);
         }
 

@@ -2058,6 +2058,32 @@ gerçeklikten kopabilir" temasında:**
   kadar eskiyebilir.** Model gözlenemeyen bir şeyi anlatıyorsa, gözlenebilir bir sonucuna karşı
   DOĞRULANMALIDIR; "aynı formülü ben de yazdım" bir kanıt değil, ikinci bir kopyadır.
 
+**İki bulgu daha (Bugbot, `5d8d66e` üzerinde) — ikisi de olay önbelleğinde, ikisi de benim:**
+
+- **ÖNBELLEK KULLANICIYI ANAHTARA KOYMUYORDU.** Doc yorumuna, `IdempotencyStore`un 2026-08-24
+  güvenlik bulgusunu referans göstererek "(kullanıcı, CommandId) anahtarı — yalnız `CommandId`
+  DEĞİL" yazmışım; sözlüğü tek anahtarla kurmuşum ve `userId` parametresini hiç kullanmamışım.
+  **Yorum bir güvenlik özelliğini anlatıyor, kod onu uygulamıyordu.** Aynı Id'yi kullanan başka bir
+  oturum ötekinin `resultingEvents`ini alabilir ya da üzerine yazabilirdi.
+- **OLAYLAR YAYINLARDAN ÖNCE ÖNBELLEĞE YAZILIYORDU.** `Yaz`, denetimden hemen sonra çağrılıyordu;
+  ardından gelen üç yayın bloğundan biri patlayıp `Geri` çağırırsa durum geri alınıyor ama önbellek
+  KALIYORDU — yanıt, hiç gerçekleşmemiş bir durum geçişinin olaylarını taşırdı. Yayınların en
+  sonuna taşındı: oraya ulaşan her yol "işlem tamamlandı" demektir. Ayrıca `AlVeyaBos` artık okuma
+  anında da süre denetliyor (budama amorti edilmiş olduğu için henüz budanmamış bayat kayıt
+  okunabiliyordu).
+- **Bugün erişilebilir DEĞİL, ama sözleşme gerçek:** katalogda durumu HEM değiştirip HEM yayın
+  yapan bir aksiyon yok. Bu yüzden executor'ın commit SIRASI teste özel bir handler'la doğrudan
+  sınandı — bulgu erişilebilirlikle değil sırayla ilgiliydi.
+- **Diş ölçümü (üç yön):** anahtardan kullanıcı çıkarıldı → FAIL (`BASKA KULLANICI otekinin
+  resultingEvents'ini aldi`) · okuma anındaki süre denetimi kaldırıldı → FAIL · `Yaz` yayınlardan
+  öncesine alındı → FAIL (`GERI ALINAN komutun olaylari onbellekte kaldi`).
+- **ÜÇÜNCÜ DİŞİ İKİ KEZ YANLIŞ KURDUM.** Önce geri almadan sonra YENİ bir `CommandId` ile denedim —
+  hayalet kaydı hiç sorgulamıyordu. Sonra aynı payload'la denedim — komut yeniden yürütülüp TAZE
+  olay üretiyordu ve hayaletle ayırt edilemiyordu. Doğrusu: aynı `CommandId`, ama BANT DIŞI payload
+  — handler hiç koşmaz, dolayısıyla yanıttaki her olay hayalettir.
+- **Kural:** **bir "artık olmamalı" iddiasını ölçerken, ölçüm yolunun o şeyi ÜRETMEDİĞİNDEN emin
+  ol.** Testin kendisi taze veri üretiyorsa, bayat veriyi göremezsin.
+
 ### 🟡 BULGU (açık): `OzetKart` entity ayrımı yapısal olarak garantili değil
 K9 inceleme turunda entity aralıkları modellenirken görüldü.
 

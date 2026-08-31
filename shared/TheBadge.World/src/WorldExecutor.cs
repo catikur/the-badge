@@ -40,7 +40,11 @@ namespace TheBadge.World
     /// geri alınır — yarım bir "olaylar yayınlandı ama durum yok" hali olamaz.</summary>
     public interface IKomutOlaySinki
     {
-        void Yaz(Guid commandId, IReadOnlyList<WorldEvent> olaylar);
+        /// <summary>`userId` ve `anUnixMs` `AuditRecord`tan gelir — alıcı ne kullanıcıyı tahmin
+        /// eder ne de ortam saatine bakar. Kullanıcı anahtarın PARÇASIDIR: yalnız `CommandId`
+        /// anahtarı, aynı Id'yi kullanan başka bir oturuma bu komutun olaylarını sızdırırdı
+        /// (`IdempotencyStore`un 2026-08-24 güvenlik bulgusuyla aynı gerekçe).</summary>
+        void Yaz(Guid commandId, long userId, long anUnixMs, IReadOnlyList<WorldEvent> olaylar);
     }
 
     public interface IWorldAuditSink
@@ -213,13 +217,6 @@ namespace TheBadge.World
                     catch { journal.Geri(st); throw; }
                 }
 
-                // OLAYLAR YANITA — denetimle aynı transaction, aynı geri alma sözleşmesi.
-                if (olaySinki != null)
-                {
-                    try { olaySinki.Yaz(auditRecord.CommandId, journal.Events); }
-                    catch { journal.Geri(st); throw; }
-                }
-
                 // MAÇ KOMUTLARI EN SONDA YAYINLANIR — journal doğrulaması, uygulama ve denetim
                 // hepsi geçtikten sonra. Buraya kadar gelen her yol "işlem tamamlandı" demektir;
                 // yukarıdaki her erken dönüş ve `Geri` yolu komutları YAYINLANMAMIŞ bırakır.
@@ -265,6 +262,16 @@ namespace TheBadge.World
                     }
                     catch { journal.Geri(st); throw; }
                 }
+
+                // OLAYLAR YANITA — EN SONDA (inceleme bulgusu, Bugbot). İlk yazımda denetimden
+                // hemen sonra yazılıyordu, yani ARDINDAN gelen üç yayın bloğundan biri patlayıp
+                // `Geri` çağırırsa durum geri alınıyor ama önbellekte olaylar KALIYORDU: yanıt,
+                // hiç gerçekleşmemiş bir durum geçişinin olaylarını taşırdı. Buraya taşındı —
+                // buraya ulaşan her yol "işlem tamamlandı" demektir, geriye dönüş yok.
+                if (olaySinki != null)
+                    olaySinki.Yaz(auditRecord.CommandId, auditRecord.UserId,
+                                  auditRecord.ReceivedAtUnixMs, journal.Events);
+
                 return RejectionReason.None;
             }
         }
