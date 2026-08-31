@@ -268,6 +268,11 @@ namespace TheBadge.World
                 // `Geri` çağırırsa durum geri alınıyor ama önbellekte olaylar KALIYORDU: yanıt,
                 // hiç gerçekleşmemiş bir durum geçişinin olaylarını taşırdı. Buraya taşındı —
                 // buraya ulaşan her yol "işlem tamamlandı" demektir, geriye dönüş yok.
+                // `auditRecord.UserId` burada KİMLİĞİ DOĞRULANMIŞ kullanıcıdır: bus, yürütmeden
+                // önce `env.UserId != authenticatedUserId` ise komutu reddeder, dolayısıyla bu
+                // noktaya gelen zarfın kullanıcısı oturumun kullanıcısıdır. (Okuma tarafı aynı
+                // güvenceye sahip DEĞİLDİR — orası red yolunda da çalışır ve oturum kimliğini
+                // kullanmak zorundadır; bkz. `RpcKopru.Gonder`.)
                 if (olaySinki != null)
                     olaySinki.Yaz(auditRecord.CommandId, auditRecord.UserId,
                                   auditRecord.ReceivedAtUnixMs, journal.Events);

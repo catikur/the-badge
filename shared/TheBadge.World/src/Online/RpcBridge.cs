@@ -144,8 +144,17 @@ namespace TheBadge.World
 
             // OLAYLAR: yürütmede taze üretilenler, TEKRARDA önbellekten (CB 8.1 "önceki yanıt
             // AYNEN döner" — durumu yalnız statüden ibaret saymak, tekrar eden istemciyi olaysız
-            // bırakırdı). Anahtar (KULLANICI, CommandId); süresi dolmuş kayıt DÖNMEZ.
-            var olaylar = onbellek.AlVeyaBos(zarf.UserId, zarf.CommandId, nowUnixMs);
+            // bırakırdı). Süresi dolmuş kayıt DÖNMEZ.
+            //
+            // ANAHTAR `userId` — `zarf.UserId` DEĞİL (güvenlik incelemesi bulgusu, MEDIUM).
+            // `zarf.UserId` İSTEMCİ KONTROLÜNDEDİR; `userId` host'un oturumundan gelir. Bus ikisi
+            // uyuşmazsa komutu `NotOwned` ile reddeder, AMA bu okuma red yolunda da çalışıyor:
+            // saldırgan kendi oturumuyla bağlanıp zarfa BAŞKASININ kullanıcı kimliğini ve
+            // `CommandId`sini yazarak, komut reddedilirken o kullanıcının olaylarını (kasa,
+            // transfer, taktik) alabilirdi. `IdempotencyStore` bunu K1'den beri doğru yapıyordu
+            // (`TryReserve(authenticatedUserId, …)`); onun yanına kurduğum yapıda güvenilmeyen
+            // alanı kullanmışım.
+            var olaylar = onbellek.AlVeyaBos(userId, zarf.CommandId, nowUnixMs);
             onbellek.Buda(nowUnixMs);
 
             // TESLİM BURADA YAPILMAZ — bkz. sınıf yorumundaki KRİTİK 2.

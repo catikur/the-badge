@@ -6228,6 +6228,25 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             if (yB.Ok) hata += "[yalitim] baska kullanici kulubu degistirdi ";
             if (yB.Olaylar != null && yB.Olaylar.Count > 0)
                 hata += $"[yalitim] BASKA KULLANICI otekinin resultingEvents'ini aldi({yB.Olaylar.Count}) ";
+
+            // ZARF/OTURUM UYUŞMAZLIĞI (güvenlik incelemesi bulgusu, MEDIUM). Yukarıdaki iki
+            // durumda da zarfın kullanıcısı OTURUMUN kullanıcısına eşitti, bu yüzden asıl saldırı
+            // yolunu hiç sınamıyordu: saldırgan KENDİ oturumuyla bağlanır ama zarfa BAŞKASININ
+            // kimliğini ve CommandId'sini yazar. Bus komutu `NotOwned` ile reddeder — ama önbellek
+            // okuması red yolunda da çalışır. Okuma güvenilmeyen `zarf.UserId` ile yapılırsa
+            // kurbanın olayları döner.
+            var zSahte = new CommandEnvelope
+            {
+                CommandId = ortakId, CatalogVersion = Catalog.Version, Source = CommandSource.UI,
+                ActionType = "tycoon.set_season_ticket_price", IssuedAtUnixMs = K9Host, MatchTick = 0,
+                UserId = K9User,                       // ZARFTA kurbanın kimliği
+                SaveSlotId = 1, TeamIdx = 0, PayloadJson = new byte[0]
+            };
+            var ySahte = w.kopru.Gonder(zSahte, new TheBadge.Checks.TestPayload().Set("fiyat", 145.0),
+                                        K9User + 2, K9Host);   // OTURUM saldırganın
+            if (ySahte.Ok) hata += "[yalitim] zarf/oturum uyusmazligi KABUL edildi ";
+            if (ySahte.Olaylar != null && ySahte.Olaylar.Count > 0)
+                hata += $"[yalitim] ZARF/OTURUM UYUSMAZLIGINDA kurbanin olaylari sizdi({ySahte.Olaylar.Count}) ";
         }
 
         // (2) BAYAT KAYIT: pencere dolduktan sonra okunan kayıt DÖNMEZ (budama amorti edilmiştir,

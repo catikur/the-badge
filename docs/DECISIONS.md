@@ -2084,6 +2084,27 @@ gerçeklikten kopabilir" temasında:**
 - **Kural:** **bir "artık olmamalı" iddiasını ölçerken, ölçüm yolunun o şeyi ÜRETMEDİĞİNDEN emin
   ol.** Testin kendisi taze veri üretiyorsa, bayat veriyi göremezsin.
 
+**🔒 GÜVENLİK BULGUSU (Cursor Security Agent, MEDIUM) — çapraz kullanıcı ifşası:**
+
+- **`Gonder` önbelleği İSTEMCİ KONTROLÜNDEKİ `zarf.UserId` ile okuyordu**, host oturumundan gelen
+  `userId` ile değil. Bus, `env.UserId != authenticatedUserId` ise komutu `NotOwned` ile reddeder —
+  **ama önbellek okuması red yolunda da çalışıyor.** Saldırgan kendi oturumuyla bağlanıp zarfa
+  KURBANIN kimliğini ve `CommandId`sini yazarak, komut reddedilirken kurbanın olaylarını (kasa,
+  transfer, taktik) alabilirdi.
+- **Bu, bir önceki bulgunun düzeltmesinin ARDINDAN kalan yol.** `(kullanıcı, CommandId)` anahtarını
+  kurdum ama anahtarın KULLANICI bileşenini güvenilmeyen kaynaktan besledim. Anahtarı doğru
+  tasarlayıp yanlış değerle sorgulamak, anahtarı hiç koymamakla aynı sonucu verir.
+- **`IdempotencyStore` bunu K1'den beri DOĞRU yapıyordu** (`TryReserve(authenticatedUserId, …)`).
+  Onun yanına, ona bakarak kurduğum yapıda güvenilmeyen alanı kullanmışım.
+- **Kapım bu yolu göremiyordu:** iki kullanıcılı yalıtım testimde her iki çağrıda da zarfın
+  kullanıcısı OTURUMUN kullanıcısına eşitti. Yani "yalıtım" testi, yalıtımın kırıldığı asıl
+  senaryoyu hiç kurmuyordu. Kapıya zarf/oturum UYUŞMAZLIĞI yolu eklendi.
+- **Diş:** okuma `zarf.UserId`'ye geri bağlandı → `ZARF/OTURUM UYUSMAZLIGINDA kurbanin olaylari
+  sizdi(1)`.
+- **Kural:** **bir yetkilendirme anahtarının değeri, anahtarın kendisi kadar önemlidir.** Kimlik
+  bileşenini istemciden almak, anahtarı hiç koymamakla aynı kapıyı açar. Ve bir yalıtım testi,
+  yalıtımın kırılabileceği yolu KURMUYORSA yalıtımı ölçmüyordur.
+
 ### 🟡 BULGU (açık): `OzetKart` entity ayrımı yapısal olarak garantili değil
 K9 inceleme turunda entity aralıkları modellenirken görüldü.
 
