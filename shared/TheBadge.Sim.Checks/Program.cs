@@ -3729,6 +3729,143 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         }
     }
 
+    // ===================== K11 — KADRO → TEAMSHEET KÖPRÜSÜ (dikiş) =====================
+    // NEDEN: `PlayerState.Guc`'un XML yorumu "Maç motoru bunları HENÜZ kullanmıyor" diyordu ve
+    // DOĞRUYDU. Maç motoru sentetik `TeamSheet`lerle, dünya katmanı sentetik G-B-M sonuç
+    // döngüsüyle test ediliyordu; iki yarı hiç bağlanmamıştı. Bu kapı dikişi ölçer.
+    {
+        string hata = "";
+        var sqOpts = new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true };
+        var sqBal = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.SquadBalance>(
+            System.IO.File.ReadAllText(FindRepoFile("balance/squad.balance.json")), sqOpts);
+        sqBal.Validate();
+
+        var kadro = TheBadge.Checks.KadroFixture.Kur(eRules, 500L, 42L);
+        var ev = TheBadge.World.SquadBridge.Kur(kadro, 500L, sqBal, true, out string hEv);
+        if (ev == null) hata += $"ev kadrosu kurulamadı({hEv}) ";
+
+        if (ev != null)
+        {
+            // (1) HİÇBİR NİTELİK SIFIR OLAMAZ. `TeamSheet` kurucusundaki yorumun anlattığı ders:
+            //     eksik nitelik o alt sistemi (kaleci 1v1'i, hava topu, faul agresifliği) SESSİZCE
+            //     öldürür — M4 kalibrasyonunda yakalanmış. Köprü 26'sını da doldurmak zorunda.
+            int sifir = 0, giris = 0;
+            void Denetle(TheBadge.Sim.Match.PlayerEntry e)
+            {
+                giris++;
+                var a = e.Attributes;
+                byte[] hepsi = {
+                    a.Passing, a.Finishing, a.Dribbling, a.Tackling, a.Heading, a.FirstTouch, a.Crossing, a.SetPieces,
+                    a.Positioning, a.Decisions, a.Composure, a.Aggression, a.Workrate, a.Vision,
+                    a.Pace, a.Acceleration, a.Stamina, a.Strength, a.Agility, a.JumpReach,
+                    a.Reflexes, a.Handling, a.OneOnOne, a.AerialCommand, a.Kicking, a.Throwing };
+                if (hepsi.Length != 26) hata += "nitelik sayısı 26 değil ";
+                for (int i = 0; i < hepsi.Length; i++) if (hepsi[i] == 0) sifir++;
+            }
+            for (int i = 0; i < ev.Starters.Length; i++) Denetle(ev.Starters[i]);
+            for (int i = 0; i < ev.Bench.Length; i++) Denetle(ev.Bench[i]);
+            if (sifir > 0) hata += $"{sifir} nitelik SIFIR (alt sistem sessizce ölür) ";
+            if (ev.Bench.Length != sqBal.yedekSayisi) hata += $"yedek {ev.Bench.Length} ≠ {sqBal.yedekSayisi} ";
+
+            // (2) HAT SAYILARI DİZİLİŞE UYUYOR — `rolHat` üzerinden geri okunur.
+            var sayim = new int[4];
+            for (int i = 0; i < ev.Starters.Length; i++) sayim[sqBal.rolHat[ev.Starters[i].RoleId - 1]]++;
+            for (int h = 0; h < 4; h++)
+                if (sayim[h] != sqBal.dizilis.hatSayilari[h])
+                    hata += $"{sqBal.hatlar[h]} hattı {sayim[h]}, diziliş {sqBal.dizilis.hatSayilari[h]} istiyor ";
+
+            // (3) SEÇİM GÜCE GÖRE: her hattın İLK 11'e giren oyuncuları, o hattın kalanlarının
+            //     hepsinden güçlü olmalı. "En iyisini seçtim" iddiası ancak böyle ölçülür.
+            {
+                var ilkOnBir = new System.Collections.Generic.List<int>();
+                for (int i = 0; i < ev.Starters.Length; i++) ilkOnBir.Add(ev.Starters[i].PlayerId);
+                for (int h = 0; h < 4; h++)
+                {
+                    int enDusukSecilen = int.MaxValue, enYuksekSecilmeyen = int.MinValue;
+                    for (int i = 0; i < kadro.Oyuncular.Length; i++)
+                    {
+                        var p = kadro.Oyuncular[i];
+                        if (p.ClubId != 500L || sqBal.rolHat[p.RolId - 1] != h) continue;
+                        if (ilkOnBir.Contains(p.PlayerId)) { if (p.Guc < enDusukSecilen) enDusukSecilen = p.Guc; }
+                        else if (p.Guc > enYuksekSecilmeyen) enYuksekSecilmeyen = p.Guc;
+                    }
+                    if (enDusukSecilen != int.MaxValue && enYuksekSecilmeyen != int.MinValue
+                        && enYuksekSecilmeyen > enDusukSecilen)
+                        hata += $"{sqBal.hatlar[h]}: dışarıda kalan {enYuksekSecilmeyen} güçlü, seçilen {enDusukSecilen} zayıf ";
+                }
+            }
+
+            // (4) DETERMİNİZM — köprü bir EŞLEMEdir; iki çağrı bit-aynı kadro vermeli.
+            var ev2 = TheBadge.World.SquadBridge.Kur(kadro, 500L, sqBal, true, out _);
+            for (int i = 0; i < 11; i++)
+                if (ev2.Starters[i].PlayerId != ev.Starters[i].PlayerId
+                    || ev2.Starters[i].Attributes.Finishing != ev.Starters[i].Attributes.Finishing
+                    || ev2.Starters[i].AnchorXmm != ev.Starters[i].AnchorXmm)
+                { hata += "köprü DETERMİNİSTİK DEĞİL "; break; }
+
+            // (5) EV/DEPLASMAN AYNALAMA — ev sahibi kendi kalesi -x'te.
+            var dep = TheBadge.World.SquadBridge.Kur(kadro, 500L, sqBal, false, out _);
+            if (ev.Starters[0].AnchorXmm >= 0) hata += "ev kalecisi -x yarı sahasında değil ";
+            if (dep.Starters[0].AnchorXmm != -ev.Starters[0].AnchorXmm) hata += "deplasman çapası aynalanmıyor ";
+        }
+
+        // (6) GÜÇ MOTORA GERÇEKTEN ULAŞIYOR. Kapının çekirdek iddiası bu: `Guc` yalnız köprünün
+        //     içinde kalmıyor, motorun KENDİ okuması (`Lod2Resolver.TeamStrength`) değişiyor.
+        //     Nitelik ortalamasını karşılaştırmak yetmezdi — o, köprünün kendi çıktısını kendine
+        //     sormak olurdu; `TeamStrength` motorun sheet'i nasıl gördüğüdür.
+        double gucZayif = 0, gucGuclu = 0;
+        {
+            var k11Lod2 = new Lod2Resolver(simBal, lod2Tbl);   // 18. bölümdeki `lod2` blok-yerel
+            var zayifSt = TheBadge.Checks.KadroFixture.Kur(eRules, 501L, 42L);
+            for (int i = 0; i < zayifSt.Oyuncular.Length; i++)
+            {
+                var p = zayifSt.Oyuncular[i]; p.Guc = 40; p.Potansiyel = 50; zayifSt.Oyuncular[i] = p;
+            }
+            var gucluSt = TheBadge.Checks.KadroFixture.Kur(eRules, 501L, 42L);
+            for (int i = 0; i < gucluSt.Oyuncular.Length; i++)
+            {
+                var p = gucluSt.Oyuncular[i]; p.Guc = 85; p.Potansiyel = 90; gucluSt.Oyuncular[i] = p;
+            }
+            var sZayif = TheBadge.World.SquadBridge.Kur(zayifSt, 501L, sqBal, true, out _);
+            var sGuclu = TheBadge.World.SquadBridge.Kur(gucluSt, 501L, sqBal, true, out _);
+            gucZayif = k11Lod2.TeamStrength(sZayif);
+            gucGuclu = k11Lod2.TeamStrength(sGuclu);
+            if (!(gucGuclu > gucZayif))
+                hata += $"Guc motora ULAŞMIYOR: zayıf kadro {gucZayif:F1} ≥ güçlü kadro {gucGuclu:F1} ";
+        }
+
+        // (7) EKSİK KADRO SESSİZCE 11 UYDURMUYOR. Kaleci hattı boş bırakılırsa köprü `null` +
+        //     sebep döndürmeli; sessiz bir yedek 11 üretmek eksik kadro kuralını yok ederdi.
+        {
+            var eksik = TheBadge.Checks.KadroFixture.Kur(eRules, 502L, 42L);
+            var kalanlar = new System.Collections.Generic.List<TheBadge.World.PlayerState>();
+            for (int i = 0; i < eksik.Oyuncular.Length; i++)
+                if (sqBal.rolHat[eksik.Oyuncular[i].RolId - 1] != 0) kalanlar.Add(eksik.Oyuncular[i]);
+            eksik.Oyuncular = kalanlar.ToArray();
+            var yok = TheBadge.World.SquadBridge.Kur(eksik, 502L, sqBal, true, out string hYok);
+            if (yok != null) hata += "kalecisiz kadro için SESSİZCE 11 kuruldu ";
+            else if (hYok == null || hYok.IndexOf("kaleci", StringComparison.Ordinal) < 0)
+                hata += $"eksik kadro sebebi hattı söylemiyor({hYok}) ";
+        }
+
+        // (8) SIFIR AĞIRLIK REDDEDİLİYOR — balance sözleşmesinin kendi dişi.
+        {
+            var bozuk = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.SquadBalance>(
+                System.IO.File.ReadAllText(FindRepoFile("balance/squad.balance.json")), sqOpts);
+            bozuk.hatProfilleri.forvet.Finishing = 0;
+            bool yakalandi = false;
+            try { bozuk.Validate(); }
+            catch (ArgumentException ex) { yakalandi = ex.Message.IndexOf("Finishing", StringComparison.Ordinal) >= 0; }
+            if (!yakalandi) hata += "sıfır ağırlık Validate'ten GEÇTİ (sessiz ölü alt sistem) ";
+        }
+
+        Console.WriteLine($"[info] K11 köprü: {sqBal.dizilis.ad} · ilk 11 + {sqBal.yedekSayisi} yedek · " +
+                          $"tüm 26 nitelik dolu · motor okuması Guc=40 → {gucZayif:F1}, Guc=85 → {gucGuclu:F1}");
+        if (hata.Length > 0) failures += Fail("K11KadroKoprusu", hata);
+        else Pass($"K11KadroKoprusu(26/26 nitelik dolu · hat sayıları dizilişe uyuyor · seçim güce göre · " +
+                  $"deterministik · aynalama · Guc MOTORA ulaşıyor {gucZayif:F1}→{gucGuclu:F1} · eksik kadro sebeple reddediliyor)");
+    }
+
     // Tycoon senaryo tablosu: geçerli payload + aksiyona ÖZGÜ kapı 3 ihlali reçetesi.
     // Kapı 3 ihlali üç biçimde kurulabilir: BAŞKA kullanıcı, durum kurulumu, ya da farklı payload.
     var tycoon = new (string aksiyon, Func<TheBadge.Checks.TestPayload> gecerli,
