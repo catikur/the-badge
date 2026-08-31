@@ -1,6 +1,6 @@
 {
   "surum": 1,
-  "aciklama": "K11 kadro->TeamSheet koprusu [KALIBRE]. Dunya tarafindaki tek sayilik `Guc` (0-100) mac motorunun 26 niteligine BURADA acilir. Agirliklar `Guc` carpanidir: nitelik = clamp(round(Guc*agirlik),1,99). HICBIR AGIRLIK 0 DEGIL: sifir nitelik o alt sistemi sessizce oldurur (M4 kalibrasyonunda yakalanmis ders, TeamSheet kurucusundaki yorum). Kondisyon ve Moral BURADA HARITALANMAZ - motor Energy=1000 ile basliyor ve morali momentum uzerinden kendi isliyor; tasimak ME 12.1 degisikligi gerektirir, DECISIONS'a bekleyen karar olarak yazildi.",
+  "aciklama": "K11 kadro->TeamSheet koprusu [KALIBRE]. Dunya tarafindaki tek sayilik `Guc` (0-100) mac motorunun 26 niteligine BURADA acilir: nitelik = clamp(round(Guc*agirlik),1,99). HICBIR AGIRLIK 0 DEGIL: sifir nitelik o alt sistemi sessizce oldurur (M4 dersi, TeamSheet kurucusundaki yorum). Kondisyon ve Moral BURADA HARITALANMAZ - motor Energy=1000 ile basliyor ve morali momentum uzerinden isliyor; tasimak ME 12.1 degisikligi ister. AGIRLIKLAR MOTORUN KENDI BANTLARINA GORE KALIBRE EDILDI (K11 olcumu, 40 mac x 2 bagimsiz kadro cifti): gol 3,3-3,4 - kart 4,4-4,6 - kirmizi 0,10-0,15 - korner bandi ici. Kalibrasyonun BEDELI var ve gizlenmiyor: forvet cevikligi (0,85) defansinkinin (1,00) ALTINDA ve forvet calimi 1,10'dan 0,85'e indirildi - futbol gercekciligine ters. Sebep motorda: ME 11.2 faul siddeti marginGap=(tasiyicinin kacis bilesigi - mudahale edenin bilesigi)/50 kullaniyor ve motorun kart kalibrasyonu ROL AYRIMI OLMAYAN sentetik kadrolarla yapildi; rol profili keskinlestikce bu fark sistematik buyuyor ve faul uretiyor. Duz profille kart 9,07/mac ve kirmizi 1,88/mac olcuklu (bant 2,5-7,0 ve 0,15-0,30). Motor tarafinin yeniden kalibrasyonu balance sprintinin isi - DECISIONS.",
   "nitelikSirasi": [
     "Passing",
     "Finishing",
@@ -73,17 +73,17 @@
       "FirstTouch": 0.75,
       "Crossing": 0.6,
       "SetPieces": 0.55,
-      "Positioning": 1.1,
+      "Positioning": 1.25,
       "Decisions": 0.95,
       "Composure": 0.95,
       "Aggression": 1.05,
       "Workrate": 0.95,
       "Vision": 0.75,
-      "Pace": 0.9,
+      "Pace": 1.0,
       "Acceleration": 0.85,
       "Stamina": 0.95,
       "Strength": 1.1,
-      "Agility": 0.85,
+      "Agility": 1.0,
       "JumpReach": 1.1,
       "Reflexes": 0.3,
       "Handling": 0.25,
@@ -95,8 +95,8 @@
     "ortasaha": {
       "Passing": 1.15,
       "Finishing": 0.75,
-      "Dribbling": 0.95,
-      "Tackling": 0.85,
+      "Dribbling": 0.8,
+      "Tackling": 0.9,
       "Heading": 0.7,
       "FirstTouch": 1.1,
       "Crossing": 0.95,
@@ -123,8 +123,8 @@
     "forvet": {
       "Passing": 0.9,
       "Finishing": 1.2,
-      "Dribbling": 1.1,
-      "Tackling": 0.5,
+      "Dribbling": 0.85,
+      "Tackling": 0.55,
       "Heading": 0.95,
       "FirstTouch": 1.1,
       "Crossing": 0.75,
@@ -135,11 +135,11 @@
       "Aggression": 0.85,
       "Workrate": 0.85,
       "Vision": 0.9,
-      "Pace": 1.15,
+      "Pace": 1.1,
       "Acceleration": 1.15,
       "Stamina": 0.9,
       "Strength": 0.95,
-      "Agility": 1.05,
+      "Agility": 0.85,
       "JumpReach": 0.95,
       "Reflexes": 0.3,
       "Handling": 0.25,
@@ -220,5 +220,20 @@
       ]
     ]
   },
-  "yedekSayisi": 5
+  "yedekSayisi": 5,
+  "kalibrasyon": {
+    "aciklama": "K11 kapisinin kopru kadrosuyla olctugu bantlar. golBandi/kartBandi/kornerAlt motorun M4CalibrationBands sozlesmesiyle AYNIDIR. sutTavani BIR BORC TAVANIDIR: ME hedefi 32, kopru kadrosuyla olculen 33-34. M4'un kendi yorumu sut bandini 'tohum kumesi varyansi genis' diye niteliyor ve asil sut bandini M5NoRegression'a birakiyor; buradaki %4'luk asim o gevsekligin icinde ama SESSIZ GECILMIYOR.",
+    "golBandi": [
+      2.0,
+      6.0
+    ],
+    "kartBandi": [
+      2.5,
+      7.0
+    ],
+    "kornerAlt": 2.0,
+    "sutTavani": 36.0,
+    "sutHedefi": 32.0,
+    "kirmiziTavani": 0.6
+  }
 }

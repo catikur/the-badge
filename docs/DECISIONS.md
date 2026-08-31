@@ -2268,6 +2268,54 @@ AYRI bir kapıyla ölçülür. Uygulandı — ama ölçüm önerinin gerekçesin
 - **Ölçülemeyen:** kapının "capex yük taşıyor" iddiası (3) yalnız BUGÜNKÜ senaryoda anlamlı;
   transfer sink'i modellendiğinde işletme oranı da düşeceği için o kapı yeniden kalibre edilmeli.
 
+### K11: OYUN OYNANABİLİR HÂLE GELDİ — dikiş kuruldu, iki hata ölçümle yakalandı (2026-08-31)
+Atilla "oyunu artık denemek istiyorum" dedi. Denenecek bir şey OLMADIĞI ortaya çıktı ve sebebi tekti.
+
+- **KÖK BULGU — iki yarı hiç bağlanmamıştı.** `PlayerState.Guc`'un kendi XML yorumu bunu zaten
+  söylüyordu: *"Maç motoru bunları HENÜZ kullanmıyor."* Maç motoru SENTETİK `TeamSheet`lerle, dünya
+  katmanı SENTETİK G-B-M sonuç döngüsüyle test ediliyordu. FAZ 03 ve FAZ 04 ayrı ayrı yeşildi ve
+  aralarında kod yoktu. Kapılar bunu göremezdi çünkü her kapı kendi yarısını ölçüyordu.
+- **`SquadBridge` (K11-A):** kulüp kadrosu → diziliş kadrosu. `Guc` (0-100) motorun 26 niteliğine
+  `balance/squad.balance.json` hat profilleriyle açılır. RNG YOK — köprü bir eşlemedir; rastgelelik
+  aynı kadroya iki maçta farklı 11 verirdi. Eksik kadro SESSİZCE 11 uydurmuyor: `null` + hangi hat.
+- **HATA 1 — ROL KİMLİK UZAYLARI FARKLI.** Dünya `rolId`si 1-32 bandında bir GDD 3.2 rol
+  kataloğu; motorunki bir HAT kodu ve anlamı sabit (1 KL · 2 DF · 3 OS · 4 FV; `RoleId > 3`
+  markaja inmez, `>= 3` ileri koşar). İlk yazımda dünya rolünü olduğu gibi geçirmişim: takım
+  **14 forvetle** sahaya çıkıyordu. Ölçüm gizlenemezdi — maç başına 40-58 şut, 8-4 skorlar.
+  Çeviri `rolHat` hattıdır: hat + 1 = motor rolü.
+- **HATA 2 — KİMLİK GENİŞLİĞİ.** Dünyada `PlayerId` int, motorda `short`. Sessiz `(short)`
+  dönüşümü iki oyuncuyu aynı kimliğe düşürebilirdi; köprü artık aralığı denetliyor. (Motorun
+  `CreateInitialState`i bunu zaten "PlayerId 101 iki takımda birden" diye yakaladı — doğru kapı,
+  ama sebebi kadro üretimine kadar geri izlemek gerekiyordu.)
+- **BULGU — MOTORUN KART KALİBRASYONU ROL AYRIMINA DUYARLI.** Rol profili gerçekçileştikçe kart
+  patladı: düz test kadrosuyla kart 4,97/maç ve kırmızı 0,00; köprü kadrosuyla **9,07 ve 1,88**
+  (bantlar 2,5-7,0 ve 0,15-0,30). Sebep ME 11.2'de: faul şiddeti
+  `marginGap = (taşıyıcının kaçış bileşiği − müdahale edenin bileşiği)/50` kullanıyor ve motor
+  topa EN YAKIN oyuncuyu daldırıyor (rol bakmadan). Forvet müdahalede zayıf olduğu için
+  forvet-forvet presi devasa bir fark üretiyor. Düz kadroda bu fark ~0 olduğu için M4/M5
+  kalibrasyonu bunu hiç görmemişti. **İlk iki hipotezim (Aggression eşiği, defans müdahale
+  katsayısı) SÜPÜRMEYLE ÇÜRÜTÜLDÜ** — kart oranı o kollara duyarsızdı; teşhis ancak köprü
+  kadrosu ile test kadrosunun yan yana ölçülmesiyle çıktı.
+- **KALİBRASYON ve BEDELİ (gizlenmiyor):** profil motorun kendi bantlarına göre ayarlandı
+  (80 maç, 2 bağımsız kadro çifti): gol 3,35 · kart 4,50 · kırmızı 0,12 · korner 9,6 — hepsi bant
+  içi. Bedeli: forvet çevikliği (0,85) defansınkinin (1,00) ALTINDA ve forvet çalımı 1,10→0,85.
+  Futbol gerçekçiliğine ters. Bu bir tasarım tercihi DEĞİL, yukarıdaki motor bulgusunun semptomu.
+- **BORÇ — şut/maç 33,5, hedef ≤32.** Her düzeltme kartı indirirken şutu çıkarıyor (faul azalınca
+  oyun açılıyor). `sutTavani` 36 [KALİBRE] ile donduruldu, hedef basılıyor, borç kapandığında kapı
+  KENDİSİ kırmızıya dönüyor. M4'ün kendi yorumu şut bandını "tohum kümesi varyansı geniş" diye
+  niteliyor ve asıl bandı M5'e bırakıyor; %4'lük aşım o gevşekliğin içinde ama sessiz geçilmiyor.
+- **`TheBadge.Play` (K11-B):** oynanabilir konsol. Senin maçın TAM MOTOR (LOD 0), ligin kalan 9
+  maçı `Lod2Resolver` — ME 16.4'ün öngördüğü karışım. 20 kulüp × çift devre = 38 hafta, yani
+  `sezonHaftaSayisi` ile birebir (sayı uydurulmadı; sezon uzunluğu zaten 20 takımlı bir ligi
+  tarif ediyordu). Her yönetim eylemi Tek Kapı'dan, hafta sonu `EconomyTick`. Rakip kadroları
+  OYUNCUNUNKİYLE AYNI köprüden geçer — ayrı bir üretici, iki takımın farklı kurallarla sahaya
+  çıkması demekti. Tam sezon iki koşuda BİT-AYNI.
+- **Ölçülen ilk sezon:** oyuncu 14. sıra, 42 puan, kasa 20M→26M. Şampiyon 94 puan. Yani lig
+  yenilebilir ama bedava değil — GAME_THESIS'in "batık kulübü devral" başlangıcıyla uyumlu.
+- **Kural:** *iki alt sistem ayrı ayrı yeşilse, aralarındaki dikiş ölçülmemiş demektir.* Bu
+  projede kapılar hep bir modülün İÇİNİ ölçtü; K11 arayüzü ölçen ilk kapı ve ilk denemede iki
+  hata çıkardı.
+
 ## Bekleyen kararlar
 
 - ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —
@@ -2309,6 +2357,25 @@ AYRI bir kapıyla ölçülür. Uygulandı — ama ölçüm önerinin gerekçesin
   edilir.** Dokümanın zaten saydığı sink'i modellemek, yeni mekanik icat etmekten ucuz ve doğru;
   (c) (tesis tavanını açmak) Top Eleven anti-pattern'ine yakın olduğu için elendi, (b) (maaş
   enflasyonu) kadro gücü sistemine bağlı olduğu için sonraki dilime bırakıldı. Uygulama: K11-E.
+- **Motorun faul/kart kalibrasyonu rol ayrımı olan kadrolarla yeniden yapılsın mı? (K11 bulgusu,
+  2026-08-31)** ME 11.2 `marginGap` bir FARK olduğu için rol profili keskinleştikçe büyüyor;
+  M4/M5 kalibrasyonu düz kadrolarla yapıldığı için bunu hiç görmedi. Bugün bedeli kadro
+  profilinde ödeniyor (forvet çevikliği defansın altında — gerçekçi değil). Seçenekler:
+  (a) motor tarafını yeniden kalibre et (hakem katılığı / `sariSonrasiIhtiyat` / şiddet
+  ağırlıkları) ve M4/M5 + golden setleri yenile — doğru yer burası ama golden churn'ü büyük;
+  (b) profildeki bedeli kabul et, `squad.balance.json` bugünkü hâlde kalsın; (c) `marginGap`ı
+  role duyarsız hâle getir (spec değişikliği, ME 11.2). **Öneri: (a)**, balance sprintinde —
+  bugünkü hâl oynanabilir ve kapıyla korunuyor, ama bedel yanlış yerde duruyor. KARAR ATİLLA'NIN.
+- **Köprü kadrosuyla şut/maç 33,5 (hedef ≤32) — BORÇ, tavanla donduruldu (K11).** Kartı indiren
+  her ayar şutu çıkarıyor. `squad.balance.json → kalibrasyon.sutTavani = 36`; hedefe düşünce kapı
+  kendisi kırmızıya döner. Yukarıdaki (a) kararıyla birlikte çözülmesi muhtemel.
+- **Maç öncesi `Kondisyon` ve `Moral` motora taşınsın mı? (K11 köprü kararı, 2026-08-31)** Köprü
+  bunları BİLEREK haritalamıyor: motor her maça `Energy = 1000` ile başlıyor ve morali kendi
+  `momentum`u üzerinden işliyor; niteliğe karıştırmak çift sayım olurdu. Taşımak ME 12.1'de
+  "başlangıç enerjisi" kavramı ister. Seçenekler: (a) ME 12.1'e başlangıç enerjisi ekle —
+  yorgun kadroyla maça çıkmak gerçek bir tycoon kararı olur; (b) bugünkü hâl kalsın, kondisyon
+  yalnız dünya tarafında anlam taşısın. **Öneri: (a)** — rotasyon kararının oynanışa değmesi
+  GDD 3'ün vaadi; ama ME spec revizyonu, balance sprintine ait.
 - ~~**`Rng.Gauss01` çarpışması ne zaman düzeltilsin?**~~ → **KARAR (2026-08-30, Atilla): ŞİMDİ
   YAP.** Üç seçenek ölçülmüş maliyetle sunuldu (şimdi / FAZ 05 öncesi / hiç). Uygulandı, aşağıdaki
   K8 kaydına bakınız. Bekleyen karar kapandı.

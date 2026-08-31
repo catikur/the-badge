@@ -444,7 +444,11 @@ namespace TheBadge.Checks
             st.Club.KasaTl = kasaTl;
             st.Club.StadyumKapasite = 30000;
             var list = new List<PlayerState>();
-            int pid = 100;
+            // KİMLİK TABANI KULÜPTEN TÜRETİLİR. Sabit 100 tabanı iki kulübe aynı PlayerId'leri
+            // veriyordu ve motor bunu "PlayerId 101 iki takımda birden" diye reddetti — doğru
+            // yakaladı, ama fikstürün işi motora geçersiz veri göndermemek. Aralık motorun
+            // `short` kimlik genişliğinde kalır (SquadBridge bunu ayrıca denetler).
+            int pid = 1000 + (int)(clubId % 200) * 50;
             Instruction[] Yuva() => new Instruction[rules.yapi.talimatYuvaSayisi];
             void Ekle(int adet, int rolTaban, int rolAralik)
             {

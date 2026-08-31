@@ -14,6 +14,7 @@ namespace TheBadge.World
         public string[] hatlar = new string[0];
         public HatProfilleri hatProfilleri = new HatProfilleri();
         public int[] rolHat = new int[0];
+        public KalibrasyonCfg kalibrasyon = new KalibrasyonCfg();
         public DizilisCfg dizilis = new DizilisCfg();
         public int yedekSayisi;
 
@@ -41,6 +42,16 @@ namespace TheBadge.World
                 Pace, Acceleration, Stamina, Strength, Agility, JumpReach,
                 Reflexes, Handling, OneOnOne, AerialCommand, Kicking, Throwing
             };
+        }
+
+        /// <summary>Köprü kadrosuyla motorun kalmak zorunda olduğu bantlar — K11 kapısı okur.
+        /// `sutTavani` bir BORÇ tavanıdır: hedef `sutHedefi`, bugünkü ölçüm onun üstünde.</summary>
+        [Serializable] public sealed class KalibrasyonCfg
+        {
+            public string aciklama;
+            public double[] golBandi = new double[0];
+            public double[] kartBandi = new double[0];
+            public double kornerAlt, sutTavani, sutHedefi, kirmiziTavani;
         }
 
         [Serializable] public sealed class DizilisCfg
@@ -91,6 +102,10 @@ namespace TheBadge.World
             }
             if (toplam != 11) throw new ArgumentException($"squad.balance: diziliş {toplam} oyuncu tanımlıyor, 11 olmalı.");
             if (yedekSayisi < 0 || yedekSayisi > 9) throw new ArgumentException("squad.balance: yedekSayisi 0-9 olmalı.");
+            if (kalibrasyon.golBandi.Length != 2 || kalibrasyon.kartBandi.Length != 2)
+                throw new ArgumentException("squad.balance: kalibrasyon bantları [alt,üst] olmalı.");
+            if (kalibrasyon.sutTavani < kalibrasyon.sutHedefi)
+                throw new ArgumentException("squad.balance: şut tavanı hedefin ALTINA inemez — hedefe düştüğünde borç kapanmıştır, tavan kaldırılmalı.");
         }
     }
 
@@ -119,29 +134,48 @@ namespace TheBadge.World
         {
             if (st == null) throw new ArgumentNullException(nameof(st));
             if (bal == null) throw new ArgumentNullException(nameof(bal));
+            int n = 0;
+            for (int i = 0; i < st.Oyuncular.Length; i++) if (st.Oyuncular[i].ClubId == clubId) n++;
+            var id = new int[n]; var rol = new byte[n]; var guc = new byte[n];
+            for (int i = 0, k = 0; i < st.Oyuncular.Length; i++)
+            {
+                if (st.Oyuncular[i].ClubId != clubId) continue;
+                id[k] = st.Oyuncular[i].PlayerId; rol[k] = st.Oyuncular[i].RolId; guc[k] = st.Oyuncular[i].Guc; k++;
+            }
+            return KurDizi(bal, evSahibi, id, rol, guc, out hata);
+        }
+
+        /// <summary>ÇEKİRDEK — kadroyu dizilerden kurar. `GameState` almayan bir yol gerekiyordu:
+        /// rakip kulüpler (lig doldurma) dünya durumunda YAŞAMIYOR, ama onların kadrosu da AYNI
+        /// eşlemeden geçmeli. İki ayrı diziliş mantığı yazmak, iki takımın farklı kurallarla
+        /// sahaya çıkması demekti.
+        ///
+        /// GİRDİ SIRASI ÖNEMSİZDİR ama SONUÇ KANONİKTİR: hat içi sıralama güce göre azalan,
+        /// eşitlikte PlayerId artan. Eşitlik kuralı şart — `Guc` bayt, eşitlik sık ve kararsız
+        /// sıralama aynı kadroya iki koşuda farklı 11 verirdi (determinizm ihlali).</summary>
+        public static TeamSheet KurDizi(SquadBalance bal, bool evSahibi,
+                                        int[] playerId, byte[] rolId, byte[] guc, out string hata)
+        {
+            if (bal == null) throw new ArgumentNullException(nameof(bal));
+            if (playerId == null || rolId == null || guc == null) throw new ArgumentNullException(nameof(playerId));
+            if (playerId.Length != rolId.Length || playerId.Length != guc.Length)
+                throw new ArgumentException("SquadBridge: playerId/rolId/guc dizileri aynı uzunlukta olmalı.");
             hata = null;
             int isaret = evSahibi ? -1 : 1;   // ev sahibi KENDİ kalesi -x'te; +x yönüne hücum eder
 
-            // 1) KULÜBÜN OYUNCULARI, hatlara ayrılmış. `st.Oyuncular` PlayerId'ye göre artan
-            //    (GameState.Validate bunu zorlar), dolayısıyla bu gruplar da kanonik sıradadır.
             var hatta = new System.Collections.Generic.List<int>[4];
             for (int h = 0; h < 4; h++) hatta[h] = new System.Collections.Generic.List<int>();
-            for (int i = 0; i < st.Oyuncular.Length; i++)
+            for (int i = 0; i < playerId.Length; i++)
             {
-                if (st.Oyuncular[i].ClubId != clubId) continue;
-                int rol = st.Oyuncular[i].RolId;
-                if (rol < 1 || rol > bal.rolHat.Length) { hata = $"oyuncu {st.Oyuncular[i].PlayerId} rolId {rol} kapsam dışı"; return null; }
-                hatta[bal.rolHat[rol - 1]].Add(i);
+                int r = rolId[i];
+                if (r < 1 || r > bal.rolHat.Length) { hata = $"oyuncu {playerId[i]} rolId {r} kapsam dışı"; return null; }
+                hatta[bal.rolHat[r - 1]].Add(i);
             }
-
-            // 2) HER HAT KENDİ İÇİNDE GÜCE GÖRE AZALAN; eşitlikte PlayerId ARTAN.
-            //    Eşitlik kuralı şart: `Guc` bayt, 22 kişilik kadroda eşitlik sık ve sıralama
-            //    kararsız olsaydı aynı kadro iki koşuda farklı 11 verirdi (determinizm ihlali).
             for (int h = 0; h < 4; h++)
                 hatta[h].Sort((x, y) =>
                 {
-                    int c = st.Oyuncular[y].Guc.CompareTo(st.Oyuncular[x].Guc);
-                    return c != 0 ? c : st.Oyuncular[x].PlayerId.CompareTo(st.Oyuncular[y].PlayerId);
+                    int c = guc[y].CompareTo(guc[x]);
+                    return c != 0 ? c : playerId[x].CompareTo(playerId[y]);
                 });
 
             for (int h = 0; h < 4; h++)
@@ -151,45 +185,61 @@ namespace TheBadge.World
                     return null;
                 }
 
+            // KİMLİK GENİŞLİĞİ: dünyada `PlayerId` int, motorda `short` (`PlayerEntry.PlayerId`).
+            // Sessiz `(short)` dönüşümü 32767 üstündeki iki oyuncuyu AYNI kimliğe düşürebilir ve
+            // motor onları "iki takımda birden" sanır — ya da daha kötüsü, aynı takımda çakışırlar.
+            // Kırpmayı köprü YAKALAR; motorun kurulum hatasına bırakmak, sebebi kadro üretimine
+            // kadar geri izlemeyi gerektirirdi.
+            for (int i = 0; i < playerId.Length; i++)
+                if (playerId[i] < short.MinValue || playerId[i] > short.MaxValue)
+                {
+                    hata = $"PlayerId {playerId[i]} motorun short kimlik aralığı dışında ({short.MinValue}..{short.MaxValue})";
+                    return null;
+                }
+
             var sheet = new TeamSheet { Starters = new PlayerEntry[11] };
-            int yaz = 0;
             // BOOL DİZİ, HashSet DEĞİL: proje sırasız yapıya karşı temkinli (CLAUDE.md).
-            // Burada yalnız `Contains` kullanılsa da, dizinin niyeti okunurken tartışma bırakmaz.
-            var kullanildi = new bool[st.Oyuncular.Length];
+            var kullanildi = new bool[playerId.Length];
+            int yaz = 0;
             for (int h = 0; h < 4; h++)
                 for (int k = 0; k < bal.dizilis.hatSayilari[h]; k++, yaz++)
                 {
-                    int idx = hatta[h][k];
-                    kullanildi[idx] = true;
-                    sheet.Starters[yaz] = Giris(st, idx, bal, h,
+                    int i = hatta[h][k];
+                    kullanildi[i] = true;
+                    sheet.Starters[yaz] = Giris(playerId[i], h, guc[i], bal,
                                                 isaret * bal.dizilis.capX[h], bal.dizilis.capY[h][k]);
                 }
 
-            // 3) YEDEKLER: kalanlardan, hat sırası korunarak, her hattın en iyisinden. Kanonik
-            //    sıra: hat artan, hat içinde güç azalan (yukarıdaki sıralama zaten öyle).
             var yedekler = new System.Collections.Generic.List<PlayerEntry>();
             for (int h = 0; h < 4 && yedekler.Count < bal.yedekSayisi; h++)
                 for (int k = 0; k < hatta[h].Count && yedekler.Count < bal.yedekSayisi; k++)
                 {
-                    int idx = hatta[h][k];
-                    if (kullanildi[idx]) continue;
-                    yedekler.Add(Giris(st, idx, bal, h, isaret * bal.dizilis.capX[h], bal.dizilis.capY[h][0]));
+                    int i = hatta[h][k];
+                    if (kullanildi[i]) continue;
+                    yedekler.Add(Giris(playerId[i], h, guc[i], bal,
+                                       isaret * bal.dizilis.capX[h], bal.dizilis.capY[h][0]));
                 }
             sheet.Bench = yedekler.ToArray();
             sheet.Validate(evSahibi ? "ev" : "deplasman");
             return sheet;
         }
 
-        static PlayerEntry Giris(GameState st, int idx, SquadBalance bal, int hat, int ax, int ay)
+        /// <summary>MOTOR ROLÜ DÜNYA ROLÜ DEĞİLDİR. Dünya `rolId`si 1-32 bandında bir GDD 3.2
+        /// rol kataloğudur; motorunki bir HAT kodudur ve anlamı MatchEngine'de sabittir:
+        /// 1 kaleci · 2 defans · 3 orta saha · 4 forvet (`RoleId <= 2` savunur, `>= 3` ileri
+        /// koşar, `> 3` markaja inmez — MatchEngine:620/1439/1986). İlk yazımda dünya rolünü
+        /// OLDUĞU GİBİ geçirmiştim; motor 4-32 arasını forvet saydığı için takım 14 forvetle
+        /// sahaya çıkıyordu. Ölçüm açıktı ve gizlenemezdi: maç başına 40-58 şut, 8-4 skorlar.
+        /// İki kimlik uzayı arasındaki çeviri `rolHat` hattıdır: hat + 1 = motor rolü.</summary>
+        static PlayerEntry Giris(int playerId, int hat, byte guc, SquadBalance bal, int ax, int ay)
         {
-            var p = st.Oyuncular[idx];
             var w = bal.Profil(hat).Dizi();
-            byte N(int a) => Olcekle(p.Guc, w[a]);
+            byte N(int a) => Olcekle(guc, w[a]);
             return new PlayerEntry
             {
-                PlayerId = (short)p.PlayerId,
+                PlayerId = (short)playerId,
                 Name = null,                      // sunum verisi — köprünün işi değil (ME 5.2: Name MatchState'e girmez)
-                RoleId = p.RolId,
+                RoleId = (byte)(hat + 1),   // hat → motor rolü (1 KL · 2 DF · 3 OS · 4 FV)
                 AnchorXmm = ax,
                 AnchorYmm = ay,
                 // TÜM 26 nitelik doldurulur; `SquadBalance.Validate` sıfır ağırlığı zaten reddeder.

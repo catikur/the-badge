@@ -3769,7 +3769,14 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
 
             // (2) HAT SAYILARI DİZİLİŞE UYUYOR — `rolHat` üzerinden geri okunur.
             var sayim = new int[4];
-            for (int i = 0; i < ev.Starters.Length; i++) sayim[sqBal.rolHat[ev.Starters[i].RoleId - 1]]++;
+            // MOTOR ROLÜ okunur, dünya rolü değil: motorun anlamı 1 KL · 2 DF · 3 OS · 4 FV
+            // ve bu aralığın DIŞINA çıkmak takımı sahada başka bir takıma çevirir.
+            for (int i = 0; i < ev.Starters.Length; i++)
+            {
+                int mr = ev.Starters[i].RoleId;
+                if (mr < 1 || mr > 4) { hata += $"motor rolü {mr} — 1-4 dışı (motor 4 üstünü forvet sayar) "; continue; }
+                sayim[mr - 1]++;
+            }
             for (int h = 0; h < 4; h++)
                 if (sayim[h] != sqBal.dizilis.hatSayilari[h])
                     hata += $"{sqBal.hatlar[h]} hattı {sayim[h]}, diziliş {sqBal.dizilis.hatSayilari[h]} istiyor ";
@@ -3859,11 +3866,69 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             if (!yakalandi) hata += "sıfır ağırlık Validate'ten GEÇTİ (sessiz ölü alt sistem) ";
         }
 
+
+        // (9) KÖPRÜNÜN KURDUĞU KADROYLA MOTOR KENDİ BANDINDA KALIYOR MU?
+        //     Kapının en pahalı ama en değerli iddiası. `M4CalibrationBands` motoru SENTETİK
+        //     kadrolarla ölçüyor; köprü devreye girince motora BAŞKA bir kadro dağılımı gidiyor
+        //     ve kalibrasyon orada da geçerli olmak zorunda.
+        //     BU ÖLÇÜM İKİ HATA YAKALADI: (i) köprü DÜNYA rolünü (1-32) motora olduğu gibi
+        //     veriyordu ve motor `RoleId > 3`ü forvet saydığı için takım 14 forvetle sahaya
+        //     çıkıyordu (40-58 şut, 8-4 skorlar); (ii) rol profili keskinleştikçe ME 11.2 faul
+        //     şiddetindeki `marginGap` sistematik büyüyor ve kart üretiyordu (9,07/maç).
+        //     İKİ BAĞIMSIZ KADRO ÇİFTİ ölçülür: tek çift, profili o çifte uydurmak olurdu.
+        double kGol = 0, kSut = 0, kKart = 0, kKorner = 0, kKirmizi = 0;
+        {
+            const int NK = 40;
+            var ciftler = new (long ev, long dep)[] { (600L, 601L), (610L, 611L) };
+            foreach (var (evId, depId) in ciftler)
+            {
+                var sEv = TheBadge.World.SquadBridge.Kur(
+                    TheBadge.Checks.KadroFixture.Kur(eRules, evId, 42L), evId, sqBal, true, out _);
+                var sDep = TheBadge.World.SquadBridge.Kur(
+                    TheBadge.Checks.KadroFixture.Kur(eRules, depId, 43L), depId, sqBal, false, out _);
+                for (int n = 0; n < NK; n++)
+                {
+                    ulong sd = 0xB21D6EUL + (ulong)n * 7919UL;
+                    var c = new MatchConfig
+                    {
+                        Seed = sd, EngineVersion = "k11", Home = sEv, Away = sDep,
+                        Referee = RefereeProfile.Default, Lod = LodLevel.Lod0
+                    };
+                    var en = new MatchEngine(sd, new CommandQueue(), c, simBal) { AutoManage = true };
+                    var mst = MatchEngine.CreateInitialState(c);
+                    var r = en.Run(ref mst);
+                    kGol += r.HomeGoals + r.AwayGoals; kSut += r.Shots;
+                    kKart += r.Yellows + r.Reds; kKorner += r.Corners; kKirmizi += r.Reds;
+                }
+            }
+            int N = NK * ciftler.Length;
+            kGol /= N; kSut /= N; kKart /= N; kKorner /= N; kKirmizi /= N;
+
+            var kb = sqBal.kalibrasyon;
+            if (kGol < kb.golBandi[0] || kGol > kb.golBandi[1])
+                hata += $"köprü kadrosuyla gol/maç {kGol:F2} bant [{kb.golBandi[0]:F1}-{kb.golBandi[1]:F1}] dışı ";
+            if (kKart < kb.kartBandi[0] || kKart > kb.kartBandi[1])
+                hata += $"köprü kadrosuyla kart/maç {kKart:F2} bant [{kb.kartBandi[0]:F1}-{kb.kartBandi[1]:F1}] dışı ";
+            if (kKorner < kb.kornerAlt) hata += $"köprü kadrosuyla korner/maç {kKorner:F1} < {kb.kornerAlt:F1} ";
+            if (kKirmizi > kb.kirmiziTavani) hata += $"köprü kadrosuyla kırmızı/maç {kKirmizi:F2} > {kb.kirmiziTavani:F2} ";
+            // ŞUT: BORÇ TAVANI. Hedef `sutHedefi` (ME/M4 bandının üstü); bugünkü ölçüm onun
+            // üstünde ve TAVANLA donduruldu. Hedefe düşerse kapı KENDİSİ kırmızıya döner —
+            // borç kapandığında tavanın kaldırılması gerektiğini söyler.
+            if (kSut > kb.sutTavani)
+                hata += $"köprü kadrosuyla şut/maç {kSut:F1} > kayıtlı tavan {kb.sutTavani:F1} (BORÇ KÖTÜLEŞTİ) ";
+            else if (kSut <= kb.sutHedefi)
+                hata += $"şut {kSut:F1} ≤ hedef {kb.sutHedefi:F1} — BORÇ KAPANDI, tavan kaldırılmalı ";
+        }
+
+        Console.WriteLine($"[info] K11 kalibrasyon (80 maç, 2 bağımsız kadro çifti): gol {kGol:F2} · " +
+                          $"şut {kSut:F1} (hedef ≤{sqBal.kalibrasyon.sutHedefi:F0}, borç tavanı {sqBal.kalibrasyon.sutTavani:F0}) · " +
+                          $"kart {kKart:F2} · kırmızı {kKirmizi:F2} · korner {kKorner:F1}");
         Console.WriteLine($"[info] K11 köprü: {sqBal.dizilis.ad} · ilk 11 + {sqBal.yedekSayisi} yedek · " +
                           $"tüm 26 nitelik dolu · motor okuması Guc=40 → {gucZayif:F1}, Guc=85 → {gucGuclu:F1}");
         if (hata.Length > 0) failures += Fail("K11KadroKoprusu", hata);
-        else Pass($"K11KadroKoprusu(26/26 nitelik dolu · hat sayıları dizilişe uyuyor · seçim güce göre · " +
-                  $"deterministik · aynalama · Guc MOTORA ulaşıyor {gucZayif:F1}→{gucGuclu:F1} · eksik kadro sebeple reddediliyor)");
+        else Pass($"K11KadroKoprusu(26/26 nitelik dolu · motor rolü 1-4 · seçim güce göre · deterministik · " +
+                  $"aynalama · Guc MOTORA ulaşıyor {gucZayif:F1}→{gucGuclu:F1} · eksik kadro sebeple reddediliyor · " +
+                  $"KÖPRÜ KADROSUYLA motor bandında: gol {kGol:F2} kart {kKart:F2} kırmızı {kKirmizi:F2} · şut {kSut:F1} BORÇ tavanı altında)");
     }
 
     // Tycoon senaryo tablosu: geçerli payload + aksiyona ÖZGÜ kapı 3 ihlali reçetesi.
