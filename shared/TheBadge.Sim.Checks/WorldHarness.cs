@@ -209,6 +209,15 @@ namespace TheBadge.Checks
         }
     }
 
+    /// <summary>Olay kanalı patlatan sink — sözleşme "FIRLATMAMALI, fırlatırsa yutulur" diyor.
+    /// Bu tip o sözleşmeyi sınar: patlayan bir kanal komutu DÜŞÜRMEMELİ ve durumu geri ALMAMALI.</summary>
+    public sealed class PatlayanOlayKanali : TheBadge.World.IKomutOlaySinki
+    {
+        public void Yaz(System.Guid commandId, long userId, long anUnixMs,
+                        IReadOnlyList<TheBadge.World.WorldEvent> olaylar)
+            => throw new InvalidOperationException("olay kanali patladi (test)");
+    }
+
     public sealed class PatlayanPersona : TheBadge.World.IPersonaSink
     {
         public void KonusmaAyarlandi(System.Guid commandId, int personaId, byte tonIndeksi, long userId)

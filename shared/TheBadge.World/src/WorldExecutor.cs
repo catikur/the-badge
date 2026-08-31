@@ -32,12 +32,20 @@ namespace TheBadge.World
     /// transaction'ının İÇİNDE koşar. Fırlatırsa istisna bus'a kadar çıkar, bus rezervasyonu
     /// bırakır ve host transaction'ı geri alır — bellek içi durum da o geri almanın parçasıdır.</summary>
     /// <summary>KOMUT OLAY KANALI — CB Spec 3'ün yanıt şeması `{ status, resultingEvents,
-    /// newStateVersion }` diyor. Domain event'leri bugün YALNIZ denetim sink'ine gidiyordu
-    /// (inceleme bulgusu, P1): RPC köprüsünü kullanan istemci komutun sonucunu UYGULAYAMIYOR,
-    /// tanımsız bir tam/delta çekimi yapmak zorunda kalıyordu. Bu kanal olayları yanıta taşır.
+    /// newStateVersion }` diyor. Domain event'leri YALNIZ denetim sink'ine gidiyordu (inceleme
+    /// bulgusu, P1): RPC köprüsünü kullanan istemci komutun sonucunu UYGULAYAMIYOR, tanımsız bir
+    /// tam/delta çekimi yapmak zorunda kalıyordu. Bu kanal olayları YANITA taşır.
     ///
-    /// Denetimle AYNI sözleşme: yürütme transaction'ının İÇİNDE çağrılır ve fırlatırsa durum
-    /// geri alınır — yarım bir "olaylar yayınlandı ama durum yok" hali olamaz.</summary>
+    /// SÖZLEŞME — DENETİM SİNK'İYLE AYNI DEĞİLDİR (inceleme bulgusu, Bugbot). Bu kanal
+    /// transaction TAMAMLANDIKTAN sonra, tüm yayınların ARDINDAN çağrılır ve **FIRLATMAMALIDIR**;
+    /// fırlatırsa istisna YUTULUR. Gerekçe: o noktada durum uygulanmış ve yayınlar ÇIKMIŞTIR —
+    /// yayın geri çağrılamaz. Orada geri almak "yarısı yayınlanmış" bir işlem bırakırdı; istisnayı
+    /// yukarı bırakmak ise rezervasyonu tamamlanmamış hâlde bırakıp istemci tekrarında handler'ı
+    /// İKİNCİ KEZ çalıştırırdı (ÇİFT UYGULAMA). Yanıt önbelleğini kaybetmek bu ikisinden de ucuz:
+    /// istemci yalnız delta yerine tam çekim yapar.
+    ///
+    /// KALICI olay saklama İSTENİYORSA bu kanal DOĞRU YER DEĞİLDİR — o, denetim sink'i yoluna
+    /// aittir (yayınlardan ÖNCE koşar ve fırlatırsa durum gerçekten geri alınır).</summary>
     public interface IKomutOlaySinki
     {
         /// <summary>`userId` ve `anUnixMs` `AuditRecord`tan gelir — alıcı ne kullanıcıyı tahmin
@@ -105,6 +113,8 @@ namespace TheBadge.World
 
         /// <summary>Persona kanalı — online kanalla aynı gerekçe.</summary>
         IKomutOlaySinki olaySinki;
+        /// <summary>Olay kanalının yuttuğu hata sayısı — sessizlik ÖLÇÜLEBİLİR kalsın diye.</summary>
+        public int OlayKanaliHatasi { get; private set; }
         /// <summary>Komut olay kanalını bağlar (CB 3 yanıt şeması). Bağlı değilse olaylar yalnız
         /// denetime gider — davranış eskisi gibi kalır, sessiz bir kayıp olmaz.</summary>
         public void OlayKanaliBagla(IKomutOlaySinki sink)
@@ -274,8 +284,15 @@ namespace TheBadge.World
                 // güvenceye sahip DEĞİLDİR — orası red yolunda da çalışır ve oturum kimliğini
                 // kullanmak zorundadır; bkz. `RpcKopru.Gonder`.)
                 if (olaySinki != null)
-                    olaySinki.Yaz(auditRecord.CommandId, auditRecord.UserId,
-                                  auditRecord.ReceivedAtUnixMs, journal.Events);
+                {
+                    // YUTULUR — bilinçli. Buraya gelindiğinde durum uygulanmış ve YAYINLAR ÇIKMIŞTIR.
+                    // Geri almak yayını geri çağıramaz; istisnayı yukarı bırakmak rezervasyonu
+                    // tamamlanmamış bırakıp tekrarda ÇİFT UYGULAMAYA yol açar. Sayaç, sessizliğin
+                    // ölçülebilir kalması için: "yutuldu" ile "hiç olmadı" ayırt edilebilmeli.
+                    try { olaySinki.Yaz(auditRecord.CommandId, auditRecord.UserId,
+                                        auditRecord.ReceivedAtUnixMs, journal.Events); }
+                    catch { OlayKanaliHatasi++; }
+                }
 
                 return RejectionReason.None;
             }

@@ -2105,6 +2105,26 @@ gerçeklikten kopabilir" temasında:**
   bileşenini istemciden almak, anahtarı hiç koymamakla aynı kapıyı açar. Ve bir yalıtım testi,
   yalıtımın kırılabileceği yolu KURMUYORSA yalıtımı ölçmüyordur.
 
+**BULGU: bir önceki düzeltmenin kendisi yeni bir sözleşme ihlali yarattı (Bugbot, MEDIUM).**
+
+- `Yaz`ı yayınların ardına taşırken **etrafındaki `try`/`Geri` sarmalayıcısını da düşürmüşüm.**
+  Sonuç: `Yaz` fırlatırsa durum uygulanmış, yayınlar çıkmış, ama rezervasyon TAMAMLANMAMIŞ kalıyor
+  → istemci tekrarı handler'ı İKİNCİ KEZ çalıştırıyor (çift uygulama). Üstelik `IKomutOlaySinki`
+  doc yorumu hâlâ "denetimle aynı sözleşme: fırlatırsa durum geri alınır" diyordu — **yine yorum
+  bir şey, kod başka şey.**
+- **Doğru sözleşme, geri almak DEĞİL:** o noktada yayınlar ÇIKMIŞTIR ve geri çağrılamaz. Geri
+  almak "yarısı yayınlanmış" bir işlem bırakırdı; istisnayı yukarı bırakmak çift uygulama yaratırdı.
+  Kanal artık **FIRLATMAMALIDIR** ve fırlatırsa istisna YUTULUR — yanıt önbelleğini kaybetmek ikisinden
+  de ucuzdur (istemci delta yerine tam çekim yapar). Yutulan hata `OlayKanaliHatasi` ile SAYILIR:
+  sessizlik ölçülebilir kalmalı.
+- **Kalıcı olay saklama isteniyorsa bu kanal doğru yer değildir** — o, denetim sink'i yoluna aittir
+  (yayınlardan önce koşar ve fırlatırsa durum gerçekten geri alınır). Doc'a yazıldı.
+- **Diş:** yutma kaldırıldı → istisna yukarı çıkıp koşuyu çökertiyor (temiz FAIL satırı değil, ama
+  süreç sıfırdan farklı kodla düşüyor).
+- **Kural:** **bir çağrıyı taşırken etrafındaki hata sözleşmesini de taşıdığından emin ol.** Konum
+  değişince doğru sözleşme de değişebilir; eski sarmalayıcıyı körü körüne taşımak da onu düşürmek
+  kadar yanlıştır — bu vakada doğru cevap üçüncü bir şeydi (fırlatmayan kanal).
+
 ### 🟡 BULGU (açık): `OzetKart` entity ayrımı yapısal olarak garantili değil
 K9 inceleme turunda entity aralıkları modellenirken görüldü.
 

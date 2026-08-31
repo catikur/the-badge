@@ -6306,8 +6306,32 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                 hata += $"[geri alma] GERI ALINAN komutun olaylari onbellekte kaldi({tekrar.Olaylar.Count}) ";
         }
 
+        // (4) OLAY KANALI FIRLATIRSA: komut DÜŞMEZ ve durum GERİ ALINMAZ (inceleme bulgusu,
+        //     Bugbot). `Yaz` yayınların ARDINDAN koşuyor; oradan geri almak yayını geri çağıramaz,
+        //     istisnayı yukarı bırakmak ise rezervasyonu yarım bırakıp tekrarda ÇİFT UYGULAMA
+        //     yaratırdı. Yanıt önbelleğini kaybetmek ikisinden de ucuz.
+        {
+            var g = TheBadge.Checks.EkonomiFixture.Kur(k9Rules, k9Eco, 500L, K9User);
+            var depo = new TheBadge.World.WorldStore(g);
+            var ctx = new TheBadge.World.WorldContext(depo, k9Rules)
+            { Active = TheBadge.CommandBus.Context.Hub | TheBadge.CommandBus.Context.Online };
+            var exec = new TheBadge.World.WorldExecutor(depo, ctx);
+            TheBadge.World.TycoonActions.Baglan(ctx, exec, k9Eco);
+            exec.OlayKanaliBagla(new TheBadge.Checks.PatlayanOlayKanali());
+            var bus = new TheBadge.CommandBus.CommandBus(k9Bands, ctx,
+                new SlidingWindowRateLimiter(k9RlCfg, 8, 300_000), new IdempotencyStore());
+
+            ulong v0 = exec.StateVersion;
+            var sonuc = bus.Submit(K9Env("tycoon.set_season_ticket_price"),
+                                   new TheBadge.Checks.TestPayload().Set("fiyat", 180.0),
+                                   exec, K9Host, K9User);
+            if (!sonuc.Ok) hata += $"[olay kanali] patlayan kanal KOMUTU dusurdu({sonuc.Reason}) ";
+            if (exec.StateVersion <= v0) hata += "[olay kanali] durum GERI ALINDI (yayinlar cikmisken) ";
+            if (exec.OlayKanaliHatasi != 1) hata += $"[olay kanali] yutulan hata sayilmadi({exec.OlayKanaliHatasi}) ";
+        }
+
         if (hata.Length > 0) failures += Fail("K9OlayOnbellegi", hata);
-        else Pass("K9OlayOnbellegi(kullanici yalitimi · bayat kayit donmuyor · geri alinan komut onbellege girmiyor)");
+        else Pass("K9OlayOnbellegi(kullanici yalitimi + zarf/oturum uyusmazligi · bayat kayit donmuyor · geri alinan komut onbellege girmiyor · patlayan olay kanali komutu dusurmuyor)");
     }
 
     // 33d) POMPA HATASI KOMUTU DÜŞÜRMEZ — outbox'ın varlık sebebi
