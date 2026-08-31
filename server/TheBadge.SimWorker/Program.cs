@@ -67,7 +67,10 @@ TheBadge.World.TycoonActions.Baglan(ctx, exec, eko);
 var bus = new TheBadge.CommandBus.CommandBus(bantlar, ctx,
     new SlidingWindowRateLimiter(rlCfg, 8, 300_000), new IdempotencyStore());
 var agKanali = new LogOnlineSink();
-var kopru = new TheBadge.World.RpcKopru(bus, exec, new TheBadge.World.OutboxPompasi(outbox, agKanali));
+// TESLİM İSTEK YOLUNDA DEĞİL: köprü pompayı çalıştırmaz, HOST sürer (aşağıda). Gerçek sunucuda
+// bu, periyodik bir arka plan görevidir; burada tek turluk bir sürüş gösterimi.
+var kopru = new TheBadge.World.RpcKopru(bus, exec, new TheBadge.World.OutboxPompasi(outbox, agKanali),
+                                        32, () => outbox.BekleyenSayisi);
 
 Console.WriteLine($"  Katalog: {Catalog.Count} aksiyon · baglanmamis {exec.UnboundActions().Length}");
 
@@ -83,7 +86,10 @@ var y1 = kopru.Gonder(zarf, yuk, kullanici, simdi);
 Console.WriteLine($"  submit#1 → ok={y1.Ok} sebep={y1.Sebep} stateVersion={y1.YeniStateVersion} tekrar={y1.Tekrar}");
 var y2 = kopru.Gonder(zarf, yuk, kullanici, simdi);   // AYNI CommandId → CB 8.1
 Console.WriteLine($"  submit#2 (ayni CommandId) → ok={y2.Ok} stateVersion={y2.YeniStateVersion} tekrar={y2.Tekrar}");
-Console.WriteLine($"  outbox: bekleyen={outbox.BekleyenSayisi} teslim={outbox.TeslimSayisi}");
+Console.WriteLine($"  outbox (pompa surulmeden): bekleyen={outbox.BekleyenSayisi} teslim={outbox.TeslimSayisi}");
+kopru.PompayiSur(out string pompaDetay);   // HOST'un isi
+Console.WriteLine($"  outbox (pompa surulunce): bekleyen={outbox.BekleyenSayisi} teslim={outbox.TeslimSayisi}" +
+                  (pompaDetay == null ? "" : $" · takili: {pompaDetay}"));
 
 // --- host tarafı yardımcıları (çekirdeğe SIZMAZ) ---------------------------------------
 sealed class SunucuBantlari : IBandProvider

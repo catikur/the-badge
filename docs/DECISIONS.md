@@ -1998,8 +1998,64 @@ cümleleri model çıktısı sayıp yüksek bir skor raporlamak — ölçmediği
 - **Kural:** **bir istisna tipini yakalamak, o istisnayı yakaladığını kanıtlamaz** — türemiş tipler
   aynı `catch`e düşer. Bir korumayı ölçen kapı, korumanın KENDİ imzasını (mesaj/tip) aramalıdır.
 
+### K9 inceleme turu — ✅ TAMAM (2026-08-31)
+Üç bulgu (Codex): iki P1, bir P2. Üçü de geçerli çıktı.
+
+- **P1 — teslim İSTEK YOLUNDAYDI.** `RpcKopru.Gonder` pompayı SENKRON çağırıyordu: yavaş ya da
+  asılı bir yayın kanalı, ÇOKTAN COMMIT EDİLMİŞ bir komutun yanıtını bekletiyordu. Yani outbox'ın
+  kaldırdığı geri-alma bağımlılığının yerine GECİKME bağımlılığı duruyordu ve CB Spec'in
+  "Hub RTT ≤ 300 ms (p95)" hedefi yayın kanalının sağlığına bağlanıyordu. **Hatanın ironisi,
+  ayrımı anlatan yorumun hemen altında olmasıydı** — bağımlılığın bir eksenini kesip diğerini
+  görmemişim. Teslim artık yalnız `PompayiSur` ile, host'un arka plan döngüsünden sürülüyor.
+  Kapı bunu doğrudan ölçüyor: `Gonder`den sonra ağ kanalı BOŞ olmalı.
+- **P1 — `resultingEvents` yanıtta yoktu.** CB Spec 3'ün şeması `{ status, resultingEvents,
+  newStateVersion }`. `newStateVersion` için 8.2'yi referans gösterip AYNI diyagramdaki üçüncü
+  alanı atlamışım. Domain event'leri zaten üretiliyordu (`journal.Events`) ama yalnız denetim
+  sink'ine gidiyordu; RPC köprüsünü kullanan istemci komutun sonucunu uygulayamıyor, tanımsız bir
+  tam/delta çekimi yapmak zorunda kalıyordu. `IKomutOlaySinki` eklendi — denetimle AYNI transaction,
+  aynı geri alma sözleşmesi. Tekrar yanıtı da AYNI olayları taşıyor (CB 8.1 "önceki yanıt aynen";
+  durumu yalnız statüden ibaret saymak, tekrar eden istemciyi olaysız bırakırdı). Önbellek dedup
+  penceresiyle aynı ömre budanıyor — aksi halde pencere içinde bir tekrar boş liste alır ve
+  "aynen" iddiası delinirdi.
+- **P2 — kapı yalnız `MatchEngine.cs`'i tarıyordu.** `Lod2Resolver.cs`'teki dört üretim çağrısı
+  kapının DIŞINDAYDI: kapı, iddia ettiği kapsamın bir bölümünü hiç görmüyordu. Artık
+  `shared/TheBadge.Sim` altındaki TÜM kaynaklar taranıyor (69 adres, 2 dosya) ve RNG'li yeni bir
+  dosya kendiliğinden kapsama giriyor.
+- **P2'nin zorunlu kıldığı ikinci değişiklik: ENTITY ARTIK ARALIK.** `7100 + team*20 + idx` gibi
+  ifadelerde taban tek başına yanıltıcı; aralık modellemeden `7100` ile `7120`nin çakışıp
+  çakışmadığı görülemez. Her entity ifadesi tabloda bildirilir, bildirilmeyen kapıyı kırmızıya
+  döndürür.
+- **KASITLI PAYLAŞIM BİLDİRİLİR (Codex'in kendi önerisi).** `Lod2Resolver` satır 92 ve 105 aynı
+  çekilişi BİLEREK iki kez okuyor: 92 sarı kart toplamını, 105 aynı saltlarla taraf başına
+  değerleri türetiyor. Farklı adres kullanmak ikisini ayrıştırırdı (toplam ≠ parçaların toplamı).
+  Gerekçesiyle listede duruyor; bildirilmemiş her paylaşım hata sayılıyor.
+- **Diş ölçümü (beş yön):** pompa istek yoluna geri kondu → `K9OutboxDayanikliligi` FAIL
+  (`TESLIM ISTEK YOLUNDA YAPILDI`) · olaylar yanıta konmadı → `K9RpcYaniti` FAIL · tekrar
+  önbelleği okumadı → `K9RpcYaniti` FAIL (`farkli olay sayisi(1/0)`) · `Lod2Resolver`a çakışma
+  sokuldu → `K9AdresCakismasi` FAIL (yeni dosyanın gerçekten kapsandığının kanıtı) · kasıtlı
+  paylaşım bildirimi kaldırıldı → FAIL.
+- **Kural:** **bir bağımlılığı kesmek, onun TÜM eksenlerini kesmek demek değildir.** Outbox
+  geri-alma eksenini kesiyordu; gecikme ekseni duruyordu ve tam da ayrımı anlatan yorumun altında
+  görünmez kalmıştı. Bir ayrıştırma iddiası, ayrıştırdığı her ekseni ayrı ayrı ölçmelidir.
+
+### 🟡 BULGU (açık): `OzetKart` entity ayrımı yapısal olarak garantili değil
+K9 inceleme turunda entity aralıkları modellenirken görüldü.
+
+- `Lod2Resolver.OzetGol` / `OzetKart` entity'si `7100 + team*20 + idx` ve `7200 + team*20 + idx`.
+  `team*20` ayrımı yalnız `idx < 20` iken doğrudur.
+- **Gol tarafı GÜVENLİ:** `PoissonDraw` gol sayısını `k < 15` ile kapatıyor → idx ≤ 14 < 20, yapısal.
+- **Kart tarafı DEĞİL:** `sariEv = Yuvarla(table.sari, …)` bir kalibrasyon ızgarasından geliyor ve
+  yapısal bir üst sınırı yok; döngü yalnız `summaryCount < SummaryCapacity` (32) ile kapalı.
+  `sariEv ≥ 20` olsaydı takım 0'ın 20. kartı, takım 1'in 0. kartıyla AYNI adresi çekerdi.
+- Bugün erişilemez (ızgara değerleri ~2-3), ama koruma yapıdan değil DEĞERDEN geliyor — `gkKisaN`
+  ile aynı sınıf. Seçenekler: (a) `idx`i 20'de kapat (tek satır, golden'ları kaydırır);
+  (b) ayrımı 20'den `SummaryCapacity`ye çıkar; (c) kapıya `idx < 20` iddiasını bağla.
+  **Öneri: (a)** — kapatma hem ucuz hem de garantiyi yapıya taşır.
+
 ## Bekleyen kararlar
 
+- **`OzetKart` entity ayrımı (yukarıdaki 🟡 bulgu).** Öneri: (a) `idx`i 20'de kapat. K9'un golden
+  turu taze olduğu için maliyeti bugün düşük.
 - ~~**xG katsayıları az tahmin ediyor.**~~ → **YAPILDI (2026-08-30, K9-B):** seçenek (b)
   sonra (a) — önce neden arandı. "%5,7" ölçüm gürültüsüydü; gerçek yanlılık +%4,26 ve K8'den
   eskiydi. `shot.xg.b0` -2,48 → -2,43 ile merkeze oturtuldu (+%0,33).

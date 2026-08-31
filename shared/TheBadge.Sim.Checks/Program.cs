@@ -5705,32 +5705,76 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
 }
 
 // 32) K9 — RNG ADRES ÇAKIŞMA KAPISI (ME 3.1 domain/entity/salt şemasının koruduğu şey).
-// Sayaç-tabanlı RNG'nin güvencesi şudur: her değer KENDİ adresinden türer ve iki ALT SİSTEM
-// birbirinin çekilişini göremez. Bu güvence yalnız adreslerin AYRIK olmasıyla ayakta durur;
-// iki çağrı yeri aynı (domain, entity, tick, salt) dörtlüsünü kullanırsa BİREBİR aynı değeri
-// çeker ve bağımsız sandığımız iki gürültü tam korelasyonlu olur.
+// Sayaç-tabanlı RNG'nin güvencesi: her değer KENDİ adresinden türer ve iki ALT SİSTEM birbirinin
+// çekilişini göremez. Bu, yalnız adresler AYRIK ise doğrudur; iki çağrı yeri aynı (domain, entity,
+// tick, salt) adresini kullanırsa BİREBİR aynı değeri çeker ve bağımsız sandığımız iki gürültü tam
+// korelasyonlu olur.
 //
-// K9'da bulunan örnek: `ExecuteOpenCross` (orta nişanı) ile `ResolveAerial` (hava topu
-// temizliği) ikisi de `Physics·(700+ajan)·st.Tick·63` kullanıyordu. 200 maçlık ölçümde maç
-// İÇİ çakışma 0 çıktı — yani bugün erişilemiyordu. Ama koruma adres şemasından DEĞİL, kodun
-// bir değişmezinden geliyordu ("tek top": orta ve hava topu temizliği aynı tick'te aynı ajana
-// düşemez). Değişmez kırılsa hata sessiz olurdu. Salt 67'ye taşındı; bu kapı tekrarını önler.
+// KAPSAM: `shared/TheBadge.Sim` altındaki TÜM kaynaklar (inceleme bulgusu, P2 — ilk yazım yalnız
+// `MatchEngine.cs`'i okuyordu ve `Lod2Resolver.cs`'teki dört üretim çağrısı kapının DIŞINDA
+// kalıyordu; yani kapı, iddia ettiği kapsamın bir bölümünü hiç görmüyordu). Yeni bir RNG'li dosya
+// eklenirse taramaya KENDİLİĞİNDEN girer.
 //
-// KAPI ÇÖZEMEDİĞİNİ ATLAMAZ: helper üzerinden gelen değişken entity/salt'lar aşağıdaki TABLOda
-// bildirilir. Tabloda olmayan bir sarmalayıcı ya da çözülemeyen bir argüman kapıyı KIRMIZIYA
-// döndürür — "anlamadım, geçtim" bu kapıda yoktur.
+// ENTITY BİR ARALIKTIR, tek sayı değil: `700 + i` (i ∈ ajanlar) 700-721'i, `7100 + team*20 + idx`
+// 7100-7139'u işgal eder. Aralık modellemeden `7100` ile `7120`nin çakışıp çakışmadığı görülemez.
+// Her entity ifadesi TABLODA bildirilir; bildirilmeyen ifade kapıyı KIRMIZIYA döndürür.
+//
+// KASITLI PAYLAŞIM BİLDİRİLİR: aynı adresi bilerek yeniden okuyan yerler (aynı çekilişin iki
+// türetmede tutarlı kalması için) aşağıdaki listede gerekçesiyle durur. Bildirilmemiş her paylaşım
+// hatadır — "herhalde kasıtlıdır" kabulü, kapının işini kapının okuyucusuna devretmek olurdu.
 {
-    string meYol = FindRepoFile("shared/TheBadge.Sim/src/Match/MatchEngine.cs");
-    string src = System.IO.File.ReadAllText(meYol);
+    const int Ajan = 22;   // `Agents = new PlayerAgentState[22]` — MatchEngine.cs:313
 
-    // SPAN TABLOSU — salt'ı bir DÖNGÜ DEĞİŞKENİNDEN gelen çağrılar. Bir döngü, `taban..taban+span-1`
-    // aralığındaki TÜM saltları işgal eder; kapı bu aralığı bilmeden çakışmayı göremez.
-    // `gkKisaN` bir BALANCE değeridir: yani bir salt aralığının GENİŞLİĞİNİ ayarlanabilir bir sayı
-    // belirliyor. Bugün 3 (35-37 · 40-42 · sabit 45 → ayrık), ama 6 yapılsaydı iki karar-gürültüsü
-    // akışı SESSİZCE çakışırdı. Kapı span'ı balance'tan OKUR, böylece o düzenleme kırmızıya döner.
-    int spanCand = 10;                                  // kod sınırı: `stackalloc int[10]`
-    int spanGkKisa = simBal.longball.gkKisaN;           // BALANCE sınırı — kapı buradan okur
-    var spanTablosu = new System.Collections.Generic.Dictionary<string, (int Taban, int Span, string Kaynak)>
+    // entity ifadesi → (taban, span, kaynak). Span, ifadenin işgal ettiği ARDIŞIK entity sayısı.
+    var entityTablosu = new Dictionary<string, (int Taban, int Span, string Kaynak)>
+    {
+        ["990"]                                = (990,  1,     "sabit"),
+        ["7000"]                               = (7000, 1,     "sabit"),
+        ["(uint)(100 + agentId)"]              = (100,  Ajan,  "ajan"),
+        ["(uint)(100 + i)"]                    = (100,  Ajan,  "ajan"),
+        ["(uint)(100 + bestTarget)"]           = (100,  Ajan,  "ajan"),
+        ["(uint)(200 + i)"]                    = (200,  Ajan,  "ajan"),
+        ["(uint)(300 + i)"]                    = (300,  Ajan,  "ajan"),
+        ["(uint)(300 + c1)"]                   = (300,  Ajan,  "ajan"),
+        ["(uint)(400 + gk)"]                   = (400,  Ajan,  "ajan"),
+        ["(uint)(500 + i)"]                    = (500,  Ajan,  "ajan"),
+        ["(uint)(500 + defender)"]             = (500,  Ajan,  "ajan"),
+        ["(uint)(600 + taker)"]                = (600,  Ajan,  "ajan"),
+        ["(uint)(700 + i)"]                    = (700,  Ajan,  "ajan"),
+        ["(uint)(700 + def)"]                  = (700,  Ajan,  "ajan"),
+        ["(uint)(700 + atk)"]                  = (700,  Ajan,  "ajan"),
+        ["(uint)(750 + gkD)"]                  = (750,  Ajan,  "ajan"),
+        ["(uint)(760 + i)"]                    = (760,  Ajan,  "ajan"),
+        ["(uint)(800 + shooter)"]              = (800,  Ajan,  "ajan"),
+        ["(uint)(800 + gk)"]                   = (800,  Ajan,  "ajan"),
+        ["(uint)(900 + i)"]                    = (900,  Ajan,  "ajan"),
+        ["(uint)(900 + subject)"]              = (900,  Ajan,  "ajan"),
+        ["(uint)(950 + victim)"]               = (950,  Ajan,  "ajan"),
+        ["(uint)(950 + st.VarSubject)"]        = (950,  Ajan,  "ajan"),
+        ["(uint)(1200 + i)"]                   = (1200, Ajan,  "ajan"),
+        // LOD 2 özet log: team ∈ {0,1} × 20 + idx. Gol tarafı `PoissonDraw` ile 15'te kapalı
+        // olduğundan idx < 20 YAPISAL olarak doğru; kart tarafında aynı yapısal garanti YOK
+        // (yalnız kalibrasyon ızgarasının küçüklüğünden geliyor) — DECISIONS'a açık uç yazıldı.
+        ["(uint)(7100 + team * 20 + idx)"]     = (7100, 40,    "team×20 + idx"),
+        ["(uint)(7200 + team * 20 + idx)"]     = (7200, 40,    "team×20 + idx"),
+    };
+
+    // KASITLI PAYLAŞIM — (dosya, satırA, satırB) ve gerekçesi.
+    var kasitliPaylasim = new (string Dosya, int A, int B, string Gerekce)[]
+    {
+        ("Lod2Resolver.cs", 92, 105,
+         "AYNI çekiliş bilerek iki kez okunur: satır 92 sarı kart TOPLAMINI, satır 105 aynı " +
+         "saltlarla taraf başına değerleri türetir. Farklı adres kullanmak ikisini AYRIŞTIRIRDI " +
+         "(toplam ≠ parçaların toplamı)."),
+    };
+
+    // SALT SPAN TABLOSU — salt'ı bir DÖNGÜ DEĞİŞKENİNDEN gelen çağrılar `taban..taban+span-1`
+    // aralığındaki TÜM saltları işgal eder. `gkKisaN` bir BALANCE değeridir: bir salt aralığının
+    // GENİŞLİĞİNİ ayarlanabilir bir sayı belirliyor. Bugün 3 (35-37 · 40-42 · sabit 45 → ayrık),
+    // 6 yapılsaydı iki karar-gürültüsü akışı SESSİZCE çakışırdı. Kapı span'ı balance'tan OKUR.
+    int spanCand = 10;                          // kod sınırı: `stackalloc int[10]`
+    int spanGkKisa = simBal.longball.gkKisaN;   // BALANCE sınırı
+    var spanTablosuKaynak = new Dictionary<string, (int Taban, int Span, string Kaynak)>
     {
         ["(uint)(3 + c)"]  = (3,  spanCand,   "kod: stackalloc int[10]"),
         ["(uint)(20 + c)"] = (20, spanCand,   "kod: stackalloc int[10]"),
@@ -5738,16 +5782,6 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         ["(uint)(40 + c)"] = (40, spanGkKisa, "balance: longball.gkKisaN"),
     };
 
-    // (Ad, EntityArgIdx, TickArgIdx, SaltArgIdx) — -1: o argüman Rng çağrısında zaten sabit.
-    var helperler = new (string Ad, int EntityArg, int TickArg, int SaltArg)[]
-    {
-        ("Noise",           -1, -1, 0),
-        ("Gurultu",         -1, -1, 0),
-        ("ExecuteLongBall", -1, -1, 5),
-        ("DuelWin",          2,  3, 4),
-    };
-
-    // --- yardımcılar -------------------------------------------------------------------
     static int KapanisParantezi(string s, int acilis)
     {
         int derinlik = 0;
@@ -5758,9 +5792,9 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         }
         return -1;
     }
-    static System.Collections.Generic.List<string> ArgAyir(string ic)
+    static List<string> ArgAyir(string ic)
     {
-        var liste = new System.Collections.Generic.List<string>();
+        var liste = new List<string>();
         int derinlik = 0, bas = 0;
         for (int i = 0; i < ic.Length; i++)
         {
@@ -5773,17 +5807,6 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         return liste;
     }
     static int SatirNo(string s, int idx) { int n = 1; for (int i = 0; i < idx && i < s.Length; i++) if (s[i] == '\n') n++; return n; }
-
-    // "(uint)(700 + i)" → 700 · "990" → 990 · "entity" → -1 (değişken)
-    static int EntityTabani(string ifade)
-    {
-        string t = ifade.Replace("(uint)", "").Trim();
-        while (t.StartsWith("(") && t.EndsWith(")") && KapanisParantezi(t, 0) == t.Length - 1)
-            t = t.Substring(1, t.Length - 2).Trim();
-        var m = System.Text.RegularExpressions.Regex.Match(t, @"^(\d+)");
-        return m.Success ? int.Parse(m.Groups[1].Value) : -1;
-    }
-    // "63" → (63,true) · "salt + 200" → (200,false) · "salt" → (0,false)
     static (long Deger, bool Sabit, long Ofset) SaltCoz(string ifade)
     {
         string t = ifade.Trim();
@@ -5796,41 +5819,11 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         string t = ifade.Trim();
         return (t == "st.Tick" || t == "tick") ? "TICK" : t;
     }
-
-    // --- helper çağrı yerlerini topla --------------------------------------------------
-    // ÇAĞIRANIN SATIRI kaydedilir. İlk yazımda helper'ın bütün çağrıları `Rng` satırına
-    // atfediliyordu; "aynı satır = aynı çağrı yeri" elemesi yüzünden İKİ FARKLI ÇAĞIRANIN
-    // birbiriyle çakışması tamamen görünmezdi. Diş ölçümü bunu yakaladı: `gkKisaN` 6 yapılınca
-    // `Gurultu(35+c)` ile `Gurultu(40+c)` salt 40'ta çakışıyor ve kapı YEŞİL kalıyordu.
-    var helperCagrilari = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<(System.Collections.Generic.List<string> Args, int Satir)>>();
-    foreach (var h in helperler)
+    // `Rand01(s)` yalnız `s`'yi tüketir; `Gauss01(s)` K8 sonrası dönüştürülmüş 12 alt-saltı
+    // tüketir — yani ham `s`'yi DEĞİL. İki çağrı ancak bu kümeler kesişirse çakışır.
+    static HashSet<uint> IsgalEdilenSaltlar(string fonk, uint salt, int span = 1)
     {
-        var liste = new System.Collections.Generic.List<(System.Collections.Generic.List<string>, int)>();
-        foreach (System.Text.RegularExpressions.Match m in
-                 System.Text.RegularExpressions.Regex.Matches(src, @"\b" + h.Ad + @"\s*\("))
-        {
-            int ac = src.IndexOf('(', m.Index);
-            int kap = KapanisParantezi(src, ac);
-            if (kap < 0) continue;
-            // BİLDİRİM satırını atla (tip imzası: "void X(", "bool X(", "double X(" ...)
-            int satirBas = src.LastIndexOf('\n', m.Index) + 1;
-            string onEk = src.Substring(satirBas, m.Index - satirBas).Trim();
-            if (onEk.EndsWith("void") || onEk.EndsWith("bool") || onEk.EndsWith("double") ||
-                onEk.EndsWith("int") || onEk.EndsWith("uint") || onEk.EndsWith("float")) continue;
-            liste.Add((ArgAyir(src.Substring(ac + 1, kap - ac - 1)), SatirNo(src, m.Index)));
-        }
-        helperCagrilari[h.Ad] = liste;
-    }
-
-    // --- tüm Rng çağrılarını adres tanımlayıcısına çevir --------------------------------
-    // Bir çağrının GERÇEKTEN tükettiği ham salt kümesi. `Rand01(s)` yalnız s'yi tüketir;
-    // `Gauss01(s)` K8 düzeltmesinden sonra `s·0x9E3779B1 + i·0x85EBCA6B` (i∈[0,12)) alt-saltlarını
-    // tüketir — yani ham s'yi DEĞİL. İki çağrı ancak bu kümeler kesişirse çakışır. Kapının ilk
-    // yazımı ikisini aynı uzayda sayıp `Gauss01(...,15)` ile `Rand01(...,15)`'i çakışma sandı;
-    // oysa K8 dönüşümü tam da bu iki uzayı ayırıyor.
-    static System.Collections.Generic.HashSet<uint> IsgalEdilenSaltlar(string fonk, uint salt, int span = 1)
-    {
-        var k = new System.Collections.Generic.HashSet<uint>();
+        var k = new HashSet<uint>();
         for (int j = 0; j < span; j++)
         {
             uint s0 = unchecked(salt + (uint)j);
@@ -5840,101 +5833,155 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         return k;
     }
 
-    var adresler = new System.Collections.Generic.List<(string Adres, System.Collections.Generic.HashSet<uint> Saltlar, int Satir, string Cagri)>();
+    var adresler = new List<(string Dosya, string Domain, string Tick, int E0, int E1,
+                             HashSet<uint> Saltlar, int Satir, string Cagri)>();
     string cozulemeyen = "";
-    foreach (System.Text.RegularExpressions.Match m in
-             System.Text.RegularExpressions.Regex.Matches(src, @"Rng\.(Gauss01|Rand01)\s*\("))
-    {
-        int ac = src.IndexOf('(', m.Index);
-        int kap = KapanisParantezi(src, ac);
-        if (kap < 0) { cozulemeyen += $"satir {SatirNo(src, m.Index)}: parantez kapanmadi "; continue; }
-        var argl = ArgAyir(src.Substring(ac + 1, kap - ac - 1));
-        if (argl.Count != 5) { cozulemeyen += $"satir {SatirNo(src, m.Index)}: 5 argüman değil ({argl.Count}) "; continue; }
-        int satir = SatirNo(src, m.Index);
-        string fonk = m.Groups[1].Value;
-        string domain = argl[1].Replace("Domain.", "").Trim();
-        int entity = EntityTabani(argl[2]);
-        string tick = TickNormal(argl[3]);
-        var salt = SaltCoz(argl[4]);
+    int tarananDosya = 0;
 
-        if (entity >= 0 && salt.Sabit)
+    string simKok = System.IO.Path.GetDirectoryName(System.IO.Path.GetDirectoryName(
+        FindRepoFile("shared/TheBadge.Sim/src/Determinism/Rng.cs")));
+    foreach (string yol in System.IO.Directory.GetFiles(simKok, "*.cs", System.IO.SearchOption.AllDirectories))
+    {
+        string dosya = System.IO.Path.GetFileName(yol);
+        if (dosya == "Rng.cs") continue;                       // tanımın kendisi
+        string src = System.IO.File.ReadAllText(yol);
+        if (src.IndexOf("Rng.", StringComparison.Ordinal) < 0) continue;
+        tarananDosya++;
+
+        // Bu dosyadaki sarmalayıcılar: bir `Rng` çağrısında değişken entity/salt varsa,
+        // hangi fonksiyonun parametresinden geldiği ve o fonksiyonun çağrılarındaki değerler.
+        var helperler = new List<(string Ad, int EntityArg, int TickArg, int SaltArg)>();
+        if (dosya == "MatchEngine.cs")
         {
-            adresler.Add(($"{domain}·{entity}·{tick}", IsgalEdilenSaltlar(fonk, (uint)salt.Deger), satir, fonk));
-            continue;
+            helperler.Add(("Noise", -1, -1, 0));
+            helperler.Add(("Gurultu", -1, -1, 0));
+            helperler.Add(("ExecuteLongBall", -1, -1, 5));
+            helperler.Add(("DuelWin", 2, 3, 4));
+        }
+        else if (dosya == "Lod2Resolver.cs")
+        {
+            helperler.Add(("Yuvarla", -1, -1, 4));
+            helperler.Add(("PoissonDraw", -1, -1, 2));
         }
 
-        // Değişken argüman → sarmalayıcıyı bul (Rng çağrısını içeren en yakın bildirim)
-        string bulunan = null;
+        var helperCagrilari = new Dictionary<string, List<(List<string> Args, int Satir)>>();
         foreach (var h in helperler)
         {
-            int bild = src.LastIndexOf(h.Ad, m.Index, StringComparison.Ordinal);
-            if (bild < 0) continue;
-            // bildirimin Rng çağrısından önce ve makul yakınlıkta olması yeterli;
-            // birden çok aday varsa EN YAKIN olan seçilir
-            if (bulunan == null || bild > src.LastIndexOf(bulunan, m.Index, StringComparison.Ordinal))
-                bulunan = h.Ad;
-        }
-        if (bulunan == null || helperCagrilari[bulunan].Count == 0)
-        {
-            cozulemeyen += $"satir {satir}: entity/salt degisken ve sarmalayici TABLODA YOK ";
-            continue;
-        }
-        var ht = System.Array.Find(helperler, x => x.Ad == bulunan);
-        foreach (var (cagriArgs, cagiranSatir) in helperCagrilari[bulunan])
-        {
-            int e2 = ht.EntityArg >= 0
-                ? (ht.EntityArg < cagriArgs.Count ? EntityTabani(cagriArgs[ht.EntityArg]) : -1)
-                : entity;
-            string t2 = ht.TickArg >= 0
-                ? (ht.TickArg < cagriArgs.Count ? TickNormal(cagriArgs[ht.TickArg]) : "?")
-                : tick;
-            long s2 = -1; int span2 = 1; string spanKaynak = "";
-            if (ht.SaltArg >= 0 && ht.SaltArg < cagriArgs.Count)
+            var liste = new List<(List<string>, int)>();
+            foreach (System.Text.RegularExpressions.Match m in
+                     System.Text.RegularExpressions.Regex.Matches(src, @"\b" + h.Ad + @"\s*\("))
             {
-                string saltIfade = cagriArgs[ht.SaltArg];
-                var sc = SaltCoz(saltIfade);
-                if (sc.Sabit) s2 = sc.Deger + salt.Ofset;
-                else if (spanTablosu.TryGetValue(saltIfade.Trim(), out var sp))
-                { s2 = sp.Taban + salt.Ofset; span2 = sp.Span; spanKaynak = sp.Kaynak; }
+                int ac = src.IndexOf('(', m.Index);
+                int kap = KapanisParantezi(src, ac);
+                if (kap < 0) continue;
+                int satirBas = src.LastIndexOf('\n', m.Index) + 1;
+                string onEk = src.Substring(satirBas, m.Index - satirBas).Trim();
+                if (onEk.EndsWith("void") || onEk.EndsWith("bool") || onEk.EndsWith("double") ||
+                    onEk.EndsWith("int") || onEk.EndsWith("uint") || onEk.EndsWith("float")) continue;
+                liste.Add((ArgAyir(src.Substring(ac + 1, kap - ac - 1)), SatirNo(src, m.Index)));
             }
-            if (e2 < 0 || s2 < 0 || t2 == "?")
+            helperCagrilari[h.Ad] = liste;
+        }
+
+        foreach (System.Text.RegularExpressions.Match m in
+                 System.Text.RegularExpressions.Regex.Matches(src, @"Rng\.(Gauss01|Rand01)\s*\("))
+        {
+            int ac = src.IndexOf('(', m.Index);
+            int kap = KapanisParantezi(src, ac);
+            int satir = SatirNo(src, m.Index);
+            if (kap < 0) { cozulemeyen += $"{dosya}:{satir} parantez kapanmadi "; continue; }
+            var argl = ArgAyir(src.Substring(ac + 1, kap - ac - 1));
+            if (argl.Count != 5) { cozulemeyen += $"{dosya}:{satir} 5 argüman değil ({argl.Count}) "; continue; }
+            string fonk = m.Groups[1].Value;
+            string domain = argl[1].Replace("Domain.", "").Trim();
+            string entityIfade = argl[2].Trim();
+            string tick = TickNormal(argl[3]);
+            var salt = SaltCoz(argl[4]);
+
+            bool entityBilinen = entityTablosu.TryGetValue(entityIfade, out var er);
+            if (entityBilinen && salt.Sabit)
             {
-                cozulemeyen += $"satir {cagiranSatir} ({bulunan}[{string.Join("|", cagriArgs)}]): salt SPAN TABLOSUNDA da yok ";
+                adresler.Add((dosya, domain, tick, er.Taban, er.Taban + er.Span - 1,
+                              IsgalEdilenSaltlar(fonk, (uint)salt.Deger), satir, fonk));
                 continue;
             }
-            adresler.Add(($"{domain}·{e2}·{t2}", IsgalEdilenSaltlar(fonk, (uint)s2, span2), cagiranSatir,
-                          span2 > 1 ? $"{fonk}@{bulunan}[{s2}..{s2 + span2 - 1}·{spanKaynak}]" : $"{fonk}@{bulunan}"));
+
+            // Değişken argüman → sarmalayıcı
+            string bulunan = null;
+            foreach (var h in helperler)
+            {
+                int bild = src.LastIndexOf(h.Ad, m.Index, StringComparison.Ordinal);
+                if (bild < 0) continue;
+                if (bulunan == null || bild > src.LastIndexOf(bulunan, m.Index, StringComparison.Ordinal))
+                    bulunan = h.Ad;
+            }
+            if (bulunan == null || helperCagrilari[bulunan].Count == 0)
+            {
+                cozulemeyen += $"{dosya}:{satir} entity/salt cozulemedi ve sarmalayici TABLODA YOK " +
+                               $"(entity='{entityIfade}' salt='{argl[4].Trim()}') ";
+                continue;
+            }
+            var ht = helperler.Find(x => x.Ad == bulunan);
+            foreach (var (cagriArgs, cagiranSatir) in helperCagrilari[bulunan])
+            {
+                string e2ifade = ht.EntityArg >= 0
+                    ? (ht.EntityArg < cagriArgs.Count ? cagriArgs[ht.EntityArg].Trim() : "?")
+                    : entityIfade;
+                string t2 = ht.TickArg >= 0
+                    ? (ht.TickArg < cagriArgs.Count ? TickNormal(cagriArgs[ht.TickArg]) : "?")
+                    : tick;
+                long s2 = -1; int span2 = 1; string spanKaynak = "";
+                if (ht.SaltArg >= 0 && ht.SaltArg < cagriArgs.Count)
+                {
+                    string saltIfade = cagriArgs[ht.SaltArg].Trim();
+                    var sc = SaltCoz(saltIfade);
+                    if (sc.Sabit) s2 = sc.Deger + salt.Ofset;
+                    else if (spanTablosuKaynak.TryGetValue(saltIfade, out var sp))
+                    { s2 = sp.Taban + salt.Ofset; span2 = sp.Span; spanKaynak = sp.Kaynak; }
+                }
+                if (!entityTablosu.TryGetValue(e2ifade, out var er2) || s2 < 0 || t2 == "?")
+                {
+                    cozulemeyen += $"{dosya}:{cagiranSatir} ({bulunan}) entity='{e2ifade}' salt cozulemedi ";
+                    continue;
+                }
+                adresler.Add((dosya, domain, t2, er2.Taban, er2.Taban + er2.Span - 1,
+                              IsgalEdilenSaltlar(fonk, (uint)s2, span2), cagiranSatir,
+                              span2 > 1 ? $"{fonk}@{bulunan}[{s2}..{s2 + span2 - 1}·{spanKaynak}]" : $"{fonk}@{bulunan}"));
+            }
         }
     }
 
-    // --- çakışma tespiti: aynı (domain,entity,tick) içinde SALT KÜMELERİ kesişiyor mu ----
-    var gruplar = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<(System.Collections.Generic.HashSet<uint> S, int Satir, string Cagri)>>();
-    foreach (var a in adresler)
-    {
-        if (!gruplar.TryGetValue(a.Adres, out var liste)) gruplar[a.Adres] = liste = new System.Collections.Generic.List<(System.Collections.Generic.HashSet<uint>, int, string)>();
-        liste.Add((a.Saltlar, a.Satir, a.Cagri));
-    }
+    // ÇAKIŞMA: aynı domain + aynı tick + entity ARALIKLARI kesişiyor + salt kümeleri kesişiyor
     string cakisma = "";
-    int cakisanGrup = 0;
-    foreach (var g in gruplar)
-        for (int x = 0; x < g.Value.Count; x++)
-            for (int y = x + 1; y < g.Value.Count; y++)
-            {
-                if (g.Value[x].Satir == g.Value[y].Satir) continue;   // aynı çağrı yeri
-                if (!g.Value[x].S.Overlaps(g.Value[y].S)) continue;
-                cakisanGrup++;
-                cakisma += $"{g.Key} ← satir {g.Value[x].Satir}({g.Value[x].Cagri}) + {g.Value[y].Satir}({g.Value[y].Cagri}) ";
-            }
+    int cakisanCift = 0, kasitliSayilan = 0;
+    for (int x = 0; x < adresler.Count; x++)
+        for (int y = x + 1; y < adresler.Count; y++)
+        {
+            var a = adresler[x]; var b = adresler[y];
+            if (a.Satir == b.Satir && a.Dosya == b.Dosya) continue;
+            if (a.Domain != b.Domain || a.Tick != b.Tick) continue;
+            if (a.E1 < b.E0 || b.E1 < a.E0) continue;              // entity aralıkları ayrık
+            if (!a.Saltlar.Overlaps(b.Saltlar)) continue;
+            bool kasitli = false;
+            foreach (var kp in kasitliPaylasim)
+                if (kp.Dosya == a.Dosya && a.Dosya == b.Dosya &&
+                    ((kp.A == a.Satir && kp.B == b.Satir) || (kp.A == b.Satir && kp.B == a.Satir)))
+                { kasitli = true; break; }
+            if (kasitli) { kasitliSayilan++; continue; }
+            cakisanCift++;
+            cakisma += $"{a.Dosya} {a.Domain}·[{a.E0}-{a.E1}]·{a.Tick} ← satir {a.Satir}({a.Cagri}) + {b.Satir}({b.Cagri}) ";
+        }
 
-    Console.WriteLine($"[info] K9 adres haritasi: {adresler.Count} adres · {gruplar.Count} ayrik dortlu · " +
-                      $"cakisan {cakisanGrup} · cozulemeyen {(cozulemeyen.Length == 0 ? "0" : "VAR")}");
+    Console.WriteLine($"[info] K9 adres haritasi: {tarananDosya} dosya · {adresler.Count} adres · " +
+                      $"cakisan {cakisanCift} · kasitli paylasim {kasitliSayilan} · cozulemeyen {(cozulemeyen.Length == 0 ? "0" : "VAR")}");
     string k9hata = "";
     if (cozulemeyen.Length > 0) k9hata += "COZULEMEYEN ADRES (kapi sessizce atlamaz): " + cozulemeyen;
-    if (cakisanGrup > 0) k9hata += "ADRES CAKISMASI: " + cakisma;
-    if (adresler.Count < 30) k9hata += $"adres sayisi beklenenden az ({adresler.Count}) - tarama bozulmus olabilir ";
+    if (cakisanCift > 0) k9hata += "ADRES CAKISMASI: " + cakisma;
+    if (tarananDosya < 2) k9hata += $"taranan dosya {tarananDosya} - tarama kapsami daralmis ";
+    if (adresler.Count < 50) k9hata += $"adres sayisi beklenenden az ({adresler.Count}) ";
     if (k9hata.Length > 0) failures += Fail("K9AdresCakismasi", k9hata);
-    else Pass($"K9AdresCakismasi({adresler.Count} adres taranip {gruplar.Count} ayrik dortluye dustu - " +
-              $"iki alt sistem ayni (domain,entity,tick,salt) dortlusunu paylasmiyor)");
+    else Pass($"K9AdresCakismasi({tarananDosya} Sim dosyasi · {adresler.Count} adres · entity ARALIK olarak " +
+              $"modellendi · {kasitliSayilan} kasitli paylasim bildirilmis · cakisan 0)");
 }
 
 // 33) K9-C — RPC KÖPRÜSÜ + TRANSACTIONAL OUTBOX (CB 8.1/8.2/8.3)
@@ -5996,7 +6043,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         var bus = new TheBadge.CommandBus.CommandBus(k9Bands, ctx,
             new SlidingWindowRateLimiter(k9RlCfg, 8, 300_000), new IdempotencyStore());
         var pompa = new TheBadge.World.OutboxPompasi(outbox, ag);
-        var kopru = new TheBadge.World.RpcKopru(bus, exec, pompa);
+        var kopru = new TheBadge.World.RpcKopru(bus, exec, pompa, 32, () => outbox.BekleyenSayisi);
         return (depo, exec, bus, outbox, ag, kopru);
     }
 
@@ -6006,21 +6053,25 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     // 33a) SÜREÇ ÖLÜMÜ — yayın outbox'ta DURUR, yeniden başlatmada teslim edilir
     {
         string hata = "";
+        // TESLİM İSTEK YOLUNDA DEĞİL (inceleme bulgusu, P1): pompa BAĞLI olsa bile `Gonder`
+        // ağa dokunmaz. Yavaş/asılı bir kanal, commit edilmiş komutun yanıtını bekletemez.
         var w = K9Kur();
         var zarf = K9Env("replay.share_clip");
         var y = w.kopru.Gonder(zarf, Klip(101), K9User, K9Host);
         if (!y.Ok) hata += $"komut basarisiz({y.Sebep}/{y.Detay}) ";
-        // Pompa köprü içinde koştu → teslim edilmiş olmalı
-        if (w.ag.Klipler.Count != 1) hata += $"pompa teslim etmedi({w.ag.Klipler.Count}) ";
+        if (w.ag.Klipler.Count != 0) hata += $"TESLIM ISTEK YOLUNDA YAPILDI({w.ag.Klipler.Count}) - yavas kanal yaniti bekletirdi ";
+        if (w.outbox.BekleyenSayisi != 1) hata += $"kayit outbox'a yazilmadi({w.outbox.BekleyenSayisi}) ";
+        if (!w.kopru.BekleyenTeslimVar) hata += "host'a bekleyen is ipucu verilmedi ";
+        // Host pompayı sürünce teslim olur
+        w.kopru.PompayiSur(out string t0);
+        if (w.ag.Klipler.Count != 1) hata += $"host pompayi surunce teslim edilmedi({w.ag.Klipler.Count}) ";
         if (w.outbox.BekleyenSayisi != 0) hata += "teslim edilen kayit outbox'ta kaldi ";
+        if (w.kopru.BekleyenTeslimVar) hata += "outbox bosken hala bekleyen is bildiriliyor ";
 
-        // ŞİMDİ SÜREÇ ÖLÜMÜ: pompasız köprü = commit oldu ama teslim edilemedi
+        // SÜREÇ ÖLÜMÜ: commit oldu, pompa HİÇ sürülmedi
         var w2 = K9Kur();
-        var bus2 = w2.bus; var exec2 = w2.exec;
-        var kopruPompasiz = new TheBadge.World.RpcKopru(bus2, exec2, null);
-        var y2 = kopruPompasiz.Gonder(K9Env("replay.share_clip"), Klip(202), K9User, K9Host);
-        if (!y2.Ok) hata += $"pompasiz komut basarisiz({y2.Sebep}) ";
-        if (w2.ag.Klipler.Count != 0) hata += "pompa yokken ag'a gitti (teslim ertelenmemis) ";
+        var y2 = w2.kopru.Gonder(K9Env("replay.share_clip"), Klip(202), K9User, K9Host);
+        if (!y2.Ok) hata += $"komut basarisiz({y2.Sebep}) ";
         if (w2.outbox.BekleyenSayisi != 1) hata += $"kayit outbox'ta DURMADI({w2.outbox.BekleyenSayisi}) - surec olumunde yayin KAYBOLURDU ";
 
         // YENİDEN BAŞLATMA: aynı depo, yeni pompa
@@ -6032,16 +6083,15 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         if (w2.outbox.BekleyenSayisi != 0) hata += "teslimden sonra outbox bosalmadi ";
 
         if (hata.Length > 0) failures += Fail("K9OutboxDayanikliligi", hata);
-        else Pass("K9OutboxDayanikliligi(commit ile yayin ayri - surec olumunde kayit DURUYOR - yeniden baslatmada teslim)");
+        else Pass("K9OutboxDayanikliligi(teslim ISTEK YOLUNDA DEGIL - surec olumunde kayit DURUYOR - yeniden baslatmada teslim)");
     }
 
     // 33b) SIRA + YENİDEN DENEME — takılan kayit ARKASINDAKILERI de bekletir (CB 8.2)
     {
         string hata = "";
         var w = K9Kur();
-        var kopruPompasiz = new TheBadge.World.RpcKopru(w.bus, w.exec, null);
         for (long i = 1; i <= 3; i++)
-            kopruPompasiz.Gonder(K9Env("replay.share_clip"), Klip(300 + i), K9User, K9Host);
+            w.kopru.Gonder(K9Env("replay.share_clip"), Klip(300 + i), K9User, K9Host);
         if (w.outbox.BekleyenSayisi != 3) hata += $"3 kayit beklenirken {w.outbox.BekleyenSayisi} ";
 
         // YALNIZ İLKİ patlıyor: arkadakiler teslim EDİLEBİLİR durumda ama SIRA yüzünden
@@ -6094,8 +6144,26 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         if (w.depo.Hash() != hAra) hata += "tekrar gonderim durumu DEGISTIRDI (yeniden yurutuldu) ";
         if (y2.YeniStateVersion != y1.YeniStateVersion) hata += "tekrar yaniti farkli stateVersion ";
 
+        // CB Spec 3: yanıt `{ status, resultingEvents, newStateVersion }`
+        if (y1.Olaylar == null || y1.Olaylar.Count == 0)
+            hata += "basarili komut resultingEvents DONDURMEDI - istemci sonucu uygulayamaz ";
+        // CB 8.1 "önceki yanıt AYNEN": tekrar da AYNI olayları taşımalı
+        if (y2.Olaylar == null || y1.Olaylar == null || y2.Olaylar.Count != y1.Olaylar.Count)
+            hata += $"tekrar yaniti farkli olay sayisi({y1.Olaylar?.Count}/{y2.Olaylar?.Count}) ";
+        else
+            for (int oi = 0; oi < y1.Olaylar.Count; oi++)
+                if (y1.Olaylar[oi].Type != y2.Olaylar[oi].Type || y1.Olaylar[oi].SubjectId != y2.Olaylar[oi].SubjectId
+                    || y1.Olaylar[oi].Value != y2.Olaylar[oi].Value)
+                { hata += "tekrar yaniti FARKLI olay tasidi "; break; }
+
+        // REDDEDİLEN komut: olay yok (reddin olayı olmaz)
+        var red = w.kopru.Gonder(K9Env("tycoon.set_season_ticket_price"),
+                                 new TheBadge.Checks.TestPayload().Set("fiyat", 99999999.0), K9User, K9Host);
+        if (red.Ok) hata += "bant disi fiyat kabul edildi ";
+        else if (red.Olaylar != null && red.Olaylar.Count > 0) hata += $"REDDEDILEN komut olay dondurdu({red.Olaylar.Count}) ";
+
         if (hata.Length > 0) failures += Fail("K9RpcYaniti", hata);
-        else Pass("K9RpcYaniti(CB 8.2 newStateVersion doner - CB 8.1 tekrar yaniti AYNEN, durum degismiyor)");
+        else Pass("K9RpcYaniti(CB 3 sema: status + resultingEvents + newStateVersion - CB 8.1 tekrar AYNI olaylari tasiyor - red bos)");
     }
 
     // 33d) POMPA HATASI KOMUTU DÜŞÜRMEZ — outbox'ın varlık sebebi
@@ -6104,9 +6172,13 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         var w = K9Kur();
         w.ag.Patlat = true;
         var y = w.kopru.Gonder(K9Env("replay.share_clip"), Klip(999), K9User, K9Host);
-        if (!y.Ok) hata += $"pompa patlayinca KOMUT dusuruldu({y.Sebep}/{y.Detay}) - outbox'in cozdugu bagimlilik geri gelmis ";
-        if (w.kopru.SonPompaDetayi == null) hata += "pompa hatasi telemetriye dusmedi ";
+        if (!y.Ok) hata += $"KOMUT dusuruldu({y.Sebep}/{y.Detay}) - yayin kanali komutun sonucunu belirlemis ";
         if (w.outbox.BekleyenSayisi != 1) hata += $"kayit outbox'ta durmadi({w.outbox.BekleyenSayisi}) ";
+        // Host pompayı sürer, ağ patlar: komut ZATEN dönmüştü, etkilenmez
+        w.kopru.PompayiSur(out string t1);
+        if (t1 == null) hata += "pompa hatasi telemetriye dusmedi ";
+        if (w.kopru.SonPompaDetayi == null) hata += "son pompa detayi kaydedilmedi ";
+        if (w.outbox.BekleyenSayisi != 1) hata += "patlayan teslim kaydi dusurdu ";
         // Ağ düzelince aynı kayıt teslim edilir
         w.ag.Patlat = false;
         w.kopru.PompayiSur(out string t2);

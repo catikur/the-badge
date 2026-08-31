@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using TheBadge.CommandBus;
 using TheBadge.Sim.Commands;
 
@@ -15,10 +16,15 @@ namespace TheBadge.World
         public readonly string Detay;
         public readonly bool Tekrar;             // CB 8.1: yanıt dedup deposundan mı geldi
         public readonly ulong YeniStateVersion;  // CB 8.2
+        /// <summary>CB Spec 3: `resultingEvents`. İstemci komutun sonucunu BUNUNLA uygular;
+        /// olmadığında tanımsız bir tam/delta çekimi yapmak zorunda kalırdı (inceleme bulgusu, P1).
+        /// Reddedilen komutta BOŞ — reddin olayı olmaz.</summary>
+        public readonly IReadOnlyList<WorldEvent> Olaylar;
         public bool Ok => Sebep == RejectionReason.None;
 
-        public KomutYaniti(RejectionReason sebep, string detay, bool tekrar, ulong yeniStateVersion)
-        { Sebep = sebep; Detay = detay; Tekrar = tekrar; YeniStateVersion = yeniStateVersion; }
+        public KomutYaniti(RejectionReason sebep, string detay, bool tekrar, ulong yeniStateVersion,
+                           IReadOnlyList<WorldEvent> olaylar)
+        { Sebep = sebep; Detay = detay; Tekrar = tekrar; YeniStateVersion = yeniStateVersion; Olaylar = olaylar; }
     }
 
     /// <summary>TAŞIMA DİKİŞİ. Nakama'ya bağımlılık BURADA biter: sunucu tarafı bu arayüzü bir
@@ -34,49 +40,108 @@ namespace TheBadge.World
     /// Zincir: bus (4 kapı + CB 8.1 dedup) → `WorldExecutor` (Tek Kapı, atomik commit) →
     /// outbox pompası (teslim) → `KomutYaniti` (+ newStateVersion).
     ///
-    /// KRİTİK: pompanın BAŞARISIZLIĞI komutu BAŞARISIZ YAPMAZ. Durum commit edilmiştir ve yayın
+    /// KRİTİK 1: pompanın BAŞARISIZLIĞI komutu BAŞARISIZ YAPMAZ. Durum commit edilmiştir ve yayın
     /// outbox'ta DURUR; pompa bir sonraki turda yeniden dener. Pompa hatasında komutu reddetmek,
-    /// outbox'ın çözdüğü bağımlılığı geri kurardı — yayın kanalının sağlığı komutun sonucunu
-    /// belirlemeye devam ederdi. Teslim edilememiş kayıt sayısı yanıtta değil TELEMETRİDE
-    /// izlenir; kullanıcıya "komutun başarısız" demek yanlış olurdu, çünkü değildi.</summary>
+    /// outbox'ın çözdüğü bağımlılığı geri kurardı.
+    ///
+    /// KRİTİK 2 — TESLİM İSTEK YOLUNDA DEĞİLDİR (inceleme bulgusu, P1). İlk yazımda `Gonder`
+    /// pompayı SENKRON çağırıyordu: ağ yavaşsa ya da asılıysa, ÇOKTAN COMMIT EDİLMİŞ bir komutun
+    /// yanıtı yayın kanalını bekliyordu. Yani outbox'ın kaldırdığı geri-alma bağımlılığı yerine
+    /// GECİKME bağımlılığı duruyordu ve CB Spec'in "Hub RTT ≤ 300 ms (p95)" hedefi yayın kanalının
+    /// sağlığına bağlanıyordu. Hatanın ironisi, ayrımı anlatan yorumun hemen altında olmasıydı.
+    ///
+    /// Teslimi HOST sürer: `PompayiSur` arka plan döngüsünden çağrılır. `Gonder` yalnız outbox'a
+    /// yazılmış olanı bırakır ve döner. `BekleyenTeslimVar` host'a "sürecek iş var" der; bu bir
+    /// ZORUNLULUK değil bir İPUCUdur — host pompayı periyodik sürmek zorundadır, çünkü süreç
+    /// ölümünden sonra kalan kayıtları yalnız o boşaltır.</summary>
     public sealed class RpcKopru : IKomutTasima
     {
         readonly CommandBus.CommandBus bus;
         readonly WorldExecutor exec;
         readonly OutboxPompasi pompa;
         readonly int turBasinaTeslim;
+        readonly OlayOnbellegi onbellek;
 
         public string SonPompaDetayi { get; private set; }
         public int ToplamTeslim { get; private set; }
 
+        /// <summary>Host'a ipucu: outbox'ta sürülmeyi bekleyen kayıt var mı. Host bunu beklemeden
+        /// de pompayı periyodik sürmelidir — süreç ölümünden sonra kalanlar buradan görünmez.</summary>
+        public bool BekleyenTeslimVar => bekleyenSayaci != null && bekleyenSayaci() > 0;
+        readonly Func<int> bekleyenSayaci;
+
         public RpcKopru(CommandBus.CommandBus bus, WorldExecutor exec, OutboxPompasi pompa = null,
-                        int turBasinaTeslim = 32)
+                        int turBasinaTeslim = 32, Func<int> bekleyenSayaci = null,
+                        long olayPenceresiMs = 24L * 60 * 60 * 1000)
         {
             this.bus = bus ?? throw new ArgumentNullException(nameof(bus));
             this.exec = exec ?? throw new ArgumentNullException(nameof(exec));
             this.pompa = pompa;
             this.turBasinaTeslim = turBasinaTeslim;
+            this.bekleyenSayaci = bekleyenSayaci;
+            onbellek = new OlayOnbellegi(olayPenceresiMs);
+            exec.OlayKanaliBagla(onbellek);
+        }
+
+        /// <summary>Komut olaylarını (kullanıcı, CommandId) anahtarıyla dedup penceresi boyunca
+        /// tutar. Anahtarda KULLANICI da vardır — `IdempotencyStore` ile aynı gerekçe: yalnız
+        /// `CommandId` anahtarı, başka bir oturumun olaylarını sızdırırdı.</summary>
+        sealed class OlayOnbellegi : IKomutOlaySinki
+        {
+            static readonly WorldEvent[] Bos = new WorldEvent[0];
+            readonly object kilit = new object();
+            readonly Dictionary<Guid, (WorldEvent[] olaylar, long at)> kayit = new Dictionary<Guid, (WorldEvent[], long)>();
+            readonly long pencereMs;
+            long sonBudama = long.MinValue;
+            public OlayOnbellegi(long pencereMs) { this.pencereMs = pencereMs; }
+
+            public void Yaz(Guid commandId, IReadOnlyList<WorldEvent> olaylar)
+            {
+                var kopya = new WorldEvent[olaylar?.Count ?? 0];
+                for (int i = 0; i < kopya.Length; i++) kopya[i] = olaylar[i];
+                lock (kilit) kayit[commandId] = (kopya, sonYazmaAn);
+            }
+
+            long sonYazmaAn;
+            public void AnIsaretle(long now) { sonYazmaAn = now; }
+
+            public IReadOnlyList<WorldEvent> AlVeyaBos(long userId, Guid commandId)
+            { lock (kilit) return kayit.TryGetValue(commandId, out var k) ? k.olaylar : Bos; }
+
+            public void Buda(long now)
+            {
+                lock (kilit)
+                {
+                    if (now - sonBudama < pencereMs / 8) return;   // amorti edilmiş
+                    sonBudama = now;
+                    var sil = new List<Guid>();
+                    foreach (var kv in kayit) if (now - kv.Value.at >= pencereMs) sil.Add(kv.Key);
+                    for (int i = 0; i < sil.Count; i++) kayit.Remove(sil[i]);
+                }
+            }
         }
 
         public KomutYaniti Gonder(CommandEnvelope zarf, IPayloadView yuk, long userId, long nowUnixMs)
         {
+            onbellek.AnIsaretle(nowUnixMs);
             var sonuc = bus.Submit(zarf, yuk, exec, nowUnixMs, userId);
 
             // StateVersion yürütücüden OKUNUR, bus'tan değil: tekrar yanıtında da güncel sürüm
             // döner, çünkü istemcinin ihtiyacı "benim komutum ne yaptı" değil "durum şu an nerede".
             ulong sv = exec.StateVersion;
 
-            if (pompa != null)
-            {
-                ToplamTeslim += pompa.Sur(turBasinaTeslim, out string takili);
-                SonPompaDetayi = takili;   // null = pompa temiz
-            }
-            return new KomutYaniti(sonuc.Reason, sonuc.Detail, sonuc.Replayed, sv);
+            // OLAYLAR: yürütmede taze üretilenler, TEKRARDA önbellekten (CB 8.1 "önceki yanıt
+            // AYNEN döner" — durumu yalnız statüden ibaret saymak, tekrar eden istemciyi olaysız
+            // bırakırdı). Önbellek dedup penceresiyle AYNI ömre budanır; aksi halde pencere
+            // içinde bir tekrar boş olay listesi alır ve "aynen" iddiası delinirdi.
+            var olaylar = onbellek.AlVeyaBos(zarf.UserId, zarf.CommandId);
+            onbellek.Buda(nowUnixMs);
+            return new KomutYaniti(sonuc.Reason, sonuc.Detail, sonuc.Replayed, sv, olaylar);
         }
 
-        /// <summary>Pompayı komut akışından BAĞIMSIZ sürmek için (arka plan görevi / yeniden
-        /// başlatma sonrası kurtarma). Süreç öldükten sonra outbox'ta kalan kayıtlar yalnız
-        /// buradan boşalır — yeni bir komut gelmesini beklemek, kayıtları rehin bırakırdı.</summary>
+        /// <summary>TESLİMİN TEK YOLU. Host bunu arka plan döngüsünden sürer; komut akışıyla
+        /// arasında bağ yoktur. Süreç öldükten sonra outbox'ta kalan kayıtlar da yalnız buradan
+        /// boşalır — yeni bir komut gelmesini beklemek, kayıtları rehin bırakırdı.</summary>
         public int PompayiSur(out string takiliDetay)
         {
             if (pompa == null) { takiliDetay = "pompa bagli degil"; return 0; }

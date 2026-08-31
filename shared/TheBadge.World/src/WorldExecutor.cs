@@ -31,6 +31,18 @@ namespace TheBadge.World
     /// birlikte kalıcı olur ya hiç olmaz" sözleşmesinin host ayağı: K6'da bu çağrı veritabanı
     /// transaction'ının İÇİNDE koşar. Fırlatırsa istisna bus'a kadar çıkar, bus rezervasyonu
     /// bırakır ve host transaction'ı geri alır — bellek içi durum da o geri almanın parçasıdır.</summary>
+    /// <summary>KOMUT OLAY KANALI — CB Spec 3'ün yanıt şeması `{ status, resultingEvents,
+    /// newStateVersion }` diyor. Domain event'leri bugün YALNIZ denetim sink'ine gidiyordu
+    /// (inceleme bulgusu, P1): RPC köprüsünü kullanan istemci komutun sonucunu UYGULAYAMIYOR,
+    /// tanımsız bir tam/delta çekimi yapmak zorunda kalıyordu. Bu kanal olayları yanıta taşır.
+    ///
+    /// Denetimle AYNI sözleşme: yürütme transaction'ının İÇİNDE çağrılır ve fırlatırsa durum
+    /// geri alınır — yarım bir "olaylar yayınlandı ama durum yok" hali olamaz.</summary>
+    public interface IKomutOlaySinki
+    {
+        void Yaz(Guid commandId, IReadOnlyList<WorldEvent> olaylar);
+    }
+
     public interface IWorldAuditSink
     {
         void Persist(WorldAuditEntry entry, IReadOnlyList<WorldEvent> events);
@@ -88,6 +100,15 @@ namespace TheBadge.World
         }
 
         /// <summary>Persona kanalı — online kanalla aynı gerekçe.</summary>
+        IKomutOlaySinki olaySinki;
+        /// <summary>Komut olay kanalını bağlar (CB 3 yanıt şeması). Bağlı değilse olaylar yalnız
+        /// denetime gider — davranış eskisi gibi kalır, sessiz bir kayıp olmaz.</summary>
+        public void OlayKanaliBagla(IKomutOlaySinki sink)
+        {
+            if (olaySinki != null) throw new InvalidOperationException("olay kanalı zaten bağlı");
+            olaySinki = sink ?? throw new ArgumentNullException(nameof(sink));
+        }
+
         public void PersonaKanalBagla(IPersonaSink sink)
         {
             if (personaKanal != null) throw new InvalidOperationException("persona kanalı zaten bağlı");
@@ -189,6 +210,13 @@ namespace TheBadge.World
                         audit.Persist(new WorldAuditEntry(auditRecord, RejectionReason.None, pre, post, st.StateVersion),
                                       journal.Events);
                     }
+                    catch { journal.Geri(st); throw; }
+                }
+
+                // OLAYLAR YANITA — denetimle aynı transaction, aynı geri alma sözleşmesi.
+                if (olaySinki != null)
+                {
+                    try { olaySinki.Yaz(auditRecord.CommandId, journal.Events); }
                     catch { journal.Geri(st); throw; }
                 }
 
