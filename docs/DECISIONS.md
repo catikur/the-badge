@@ -2197,6 +2197,30 @@ Kapatmaya giderken kapatılacak şeyin var olmadığı ortaya çıktı.
 - **Kural:** **bir öneriyi yazarken dayandığı varsayımı da yaz** — "hub'da çalışıyor" varsayımını
   yazsaydım, uygulamaya geçmeden önce onu doğrulardım. Bu, bu projede aynı sınıftan ikinci vaka.
 
+### K10-C: zaman çizelgesi işaretleri eşikten ayrıldı — ✅ TAMAM (2026-08-31)
+M14 açık ucu, seçenek **(b)**: eşik korunur, çizelge en yüksek N'den beslenir.
+
+- **Sorun ÖLÇÜLDÜ, iddia edilmedi:** 60 maçlık koşuda ME 15.3'ün `H > 0,5` ölçütü **41 maçta SIFIR**
+  işaret verdi. Yani maçların üçte ikisinde zaman çizelgesi boş kalıyordu — M14'ün 0,5-0,8/maç
+  ölçümüyle birebir.
+- **İKİ BÜYÜKLÜK AYRILDI.** `HighlightCount` hâlâ ME 15.3'ün EŞİK tanımıdır ve DEĞİŞMEDİ;
+  `TimelineMarks` sunum içindir ve `zamanCizelgesiIsaret` [KALİBRE] kadar en yüksek andan dolar.
+  Bunları birleştirmek spec'i sessizce değiştirmek olurdu — kapı ikisinin ayrı davrandığını
+  denetliyor (eşik hâlâ bazı maçlarda 0 vermeli; vermezse ölçüt çizelgeye bağlanmış demektir).
+- **Motor mantığı DEĞİŞMEDİ** — `top` listesi zaten H'ye göre azalan sıralıydı, ilk N alınıyor.
+  ME 17.5 "ayar sahası" ilkesine uygun: sunum kararı, sim kararı değil.
+- **Diş (iki yön):** işaret sayısı 0 → `60/60 macta zaman cizelgesi BOS` · çizelge eşiğe bağlandı →
+  `60/60 hedefi tutmadi` + `41/60 BOS`.
+- **GÖZLEM — sunum ayarı `config_hash` içinde.** `zamanCizelgesiIsaret` `sim.balance.json`'a
+  girdiği için `balanceHash` değişti ve golden set yeniden üretilmesi gerekti. Bunun DAVRANIŞ
+  değişikliği OLMADIĞI kanıtlandı: yeniden üretim sonrası **50/50 `stateHash` AYNI**, yalnız
+  `balanceHash` değişti (0x4A949442E9BE564C → 0xCD38F01FAA168AAD). Yani `config_hash` bütün balance
+  dosyasını kapsadığı için, simülasyonu etkilemeyen bir ayar da replay setini çalkalıyor.
+  Seçenekler: (a) kabul et — churn ucuz ve "tek balance" hikayesi sade kalır; (b) sunum ayarlarını
+  `config_hash` DIŞI ayrı bir dosyaya taşı (`llm.balance.json`'ın zaten yaptığı gibi). **Öneri: (a)**
+  bugün — ikinci bir dosya, motorun iki kaynaktan okuması demek ve tek sunum ayarı için bu maliyet
+  yüksek; sunum ayarı sayısı artarsa (b) yeniden değerlendirilir. Bekleyen kararlara yazıldı.
+
 ## Bekleyen kararlar
 
 - ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —
@@ -2241,12 +2265,13 @@ Kapatmaya giderken kapatılacak şeyin var olmadığı ortaya çıktı.
 - **LOD 1'in geleceği (M15 kararı, 2026-08-16):** şu an LOD 0'ın eşleniği. Geri almak için gerekçe
   CPU olamaz (19 kat marj var); yalnız İSTEMCİ tarafında orta cihaz ölçümü LOD 0'ı 800 ms'nin
   üstüne çıkarırsa yeniden değerlendirilir. O ölçüm FAZ 05 cihaz testlerine ait.
-- **Highlight eşiği / zaman çizelgesi işareti (M14 bulgusu, 2026-08-14):** ME 15.3'ün H > 0,50 eşiği
-  ölçümde 0,5-0,8 işaret/maç veriyor. Seçenekler: (a) eşiği spec'te 0,35-0,40'a çekmek → ~3-5
-  işaret/maç, formül aynı kalır; (b) eşiği korumak ve zaman çizelgesini "en yüksek 6 an"la beslemek →
-  spec'e dokunulmaz, işaret sayısı sabit 6 olur; (c) `xG_salınımı` terimini 3 sonuçlu (galibiyet/
-  beraberlik/mağlubiyet) WinProb'a taşımak → gol sıçramaları büyür, eşik anlamlı kalır, en fazla iş.
-  Öneri: **(b)** — sunum kararı, motor mantığına dokunmaz (17.5 "ayar sahası" ilkesiyle uyumlu).
+- ~~**Highlight eşiği / zaman çizelgesi işareti.**~~ → **YAPILDI (2026-08-31, K10-C):** seçenek (b).
+  Eşik korundu (`HighlightCount` hâlâ ME 15.3 tanımı), çizelge `zamanCizelgesiIsaret` [KALİBRE]
+  kadar en yüksek andan besleniyor. Ölçüm: eşikle 41/60 maçta sıfır işaret.
+- **Sunum ayarları `config_hash` içinde mi kalsın? (K10-C gözlemi, 2026-08-31)** `zamanCizelgesiIsaret`
+  simülasyonu etkilemiyor (50/50 `stateHash` aynı) ama `balanceHash`i değiştirip golden yenilemesi
+  gerektirdi. (a) kabul et; (b) sunum ayarlarını `config_hash` dışı dosyaya taşı. **Öneri: (a)**
+  bugün — tek ayar için ikinci bir okuma kaynağı pahalı; sayı artarsa (b).
 - Premium etkilerin public ligde şeffaf rozeti (panel M-bulgusu) → tasarım kararı, FAZ 02 öncesi.
 - ~~3G Greybox Fun Gate GO/NO-GO~~ → **KAPANDI (2026-08-08): NO-GO %40** — uygulama yukarıdaki kapanış bölümünde; sunum revizyonu + mülakatlı doğrulama turu Dikey Dilim öncesi BORÇ.
 - BRIEF_3G_GREYBOX RA#1 metninin pivot sonrası revizyonu (GDD v4.2 turu).

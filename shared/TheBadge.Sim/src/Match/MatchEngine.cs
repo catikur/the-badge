@@ -2249,6 +2249,16 @@ namespace TheBadge.Sim.Match
             System.Array.Copy(topH, pkt.TopScores, topCount);
             pkt.HighlightCount = isaretli;
 
+            // ZAMAN ÇİZELGESİ: eşikten DEĞİL, en yüksek N'den. `top` zaten H'ye göre AZALAN sıralı,
+            // dolayısıyla ilk N'i almak yeterli. `HighlightCount` (ME 15.3 tanımı) DEĞİŞMEDİ.
+            int cizelge = bal.highlight.zamanCizelgesiIsaret;
+            if (cizelge > topCount) cizelge = topCount;
+            if (cizelge < 0) cizelge = 0;
+            pkt.TimelineMarks = new MatchEvent[cizelge];
+            pkt.TimelineScores = new double[cizelge];
+            System.Array.Copy(top, pkt.TimelineMarks, cizelge);
+            System.Array.Copy(topH, pkt.TimelineScores, cizelge);
+
             pkt.Home = StatLine(in st, 0);
             pkt.Away = StatLine(in st, 1);
             return pkt;

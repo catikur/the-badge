@@ -6132,6 +6132,61 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
               "baglandigi gun bu kapi duser ve CB 4.2 baglam sorusunu masaya koyar)");
 }
 
+// 32d) K10 — ZAMAN ÇİZELGESİ İŞARETLERİ (M14 açık ucunun kararı: seçenek (b))
+//
+// ME 15.3'ün `H > eşik` ölçütü ölçümde 0,5-0,8 işaret/maç veriyordu: maçların yarısında zaman
+// çizelgesi BOŞ kalıyordu. Seçenekler (a) eşiği spec'te düşürmek, (b) eşiği koruyup çizelgeyi
+// en yüksek N'den beslemek, (c) `xG_salınımı`nı 3 sonuçlu WinProb'a taşımak. Seçilen (b) —
+// SUNUM kararı, motor mantığına dokunmaz (ME 17.5 "ayar sahası").
+//
+// KAPININ ASIL İDDİASI: iki büyüklük AYRI kalıyor. `HighlightCount` hâlâ ME 15.3'ün EŞİK tanımıdır
+// ve değişmedi; `TimelineMarks` sunum içindir. Bunları birleştirmek spec'i sessizce değiştirmek
+// olurdu — kapı ikisinin ayrı davrandığını gösterir.
+{
+    string k10z = "";
+    int cizelgeHedef = simBal.highlight.zamanCizelgesiIsaret;
+    int bosCizelge = 0, esikBos = 0, sirasiz = 0, hedefTutmayan = 0;
+    const int NZ = 60;
+    for (int n = 0; n < NZ; n++)
+    {
+        ulong sd = 0x21AE00UL + (ulong)n * 7919UL;
+        var cfg = new MatchConfig
+        {
+            Seed = sd, EngineVersion = "k10-cizelge",
+            Home = BuildSheetSide(300, 7, home: true),
+            Away = BuildSheetSide(300, 7, home: false, idEntity: 8),
+            Referee = RefereeProfile.Default
+        };
+        var e = new MatchEngine(sd, new CommandQueue(), cfg, simBal) { AutoManage = true };
+        var st0 = MatchEngine.CreateInitialState(cfg);
+        e.Run(ref st0);
+        var pkt = e.BuildSummary(in st0);
+
+        if (pkt.TimelineMarks.Length == 0) bosCizelge++;
+        if (pkt.HighlightCount == 0) esikBos++;
+        // Hedef sayı: min(ayar, mevcut top sayısı)
+        int bekle = Math.Min(cizelgeHedef, pkt.TopEvents.Length);
+        if (pkt.TimelineMarks.Length != bekle) hedefTutmayan++;
+        // H'ye göre AZALAN olmalı
+        for (int i = 1; i < pkt.TimelineScores.Length; i++)
+            if (pkt.TimelineScores[i] > pkt.TimelineScores[i - 1]) { sirasiz++; break; }
+    }
+
+    if (hedefTutmayan > 0) k10z += $"{hedefTutmayan}/{NZ} macta cizelge isareti hedefi tutmadi ";
+    if (sirasiz > 0) k10z += $"{sirasiz}/{NZ} macta isaretler H'ye gore sirali degil ";
+    if (bosCizelge > 0) k10z += $"{bosCizelge}/{NZ} macta zaman cizelgesi BOS - acik ucun cozdugu sorun geri gelmis ";
+    // Eşiğin KENDİSİ değişmemiş olmalı: hâlâ maçların bir kısmında 0 işaret vermeli, yoksa
+    // `HighlightCount` sessizce çizelgeye bağlanmış demektir.
+    if (esikBos == 0) k10z += "esik tabanli HighlightCount hicbir macta 0 vermedi - " +
+                              "ME 15.3 olcutu cizelgeye baglanmis olabilir ";
+
+    Console.WriteLine($"[info] K10 zaman cizelgesi: hedef {cizelgeHedef} isaret · bos cizelge {bosCizelge}/{NZ} · " +
+                      $"esik tabanli sifir {esikBos}/{NZ}");
+    if (k10z.Length > 0) failures += Fail("K10ZamanCizelgesi", k10z);
+    else Pass($"K10ZamanCizelgesi({cizelgeHedef} isaret her macta dolu · H'ye gore sirali · " +
+              $"ME 15.3 esigi AYRI kaldi: {esikBos}/{NZ} macta sifir)");
+}
+
 // 33) K9-C — RPC KÖPRÜSÜ + TRANSACTIONAL OUTBOX (CB 8.1/8.2/8.3)
 //
 // CB 8.1'in 24 saatlik dedup'ı ZATEN VARDI (K1, `IdempotencyStore`) — yeniden yazılmadı; bu
