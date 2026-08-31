@@ -2165,6 +2165,38 @@ K9'un açık ucu. **Önerimden SAPTIM ve sebebi kayıtta.**
 - **Kural:** **bir kapıyı TAHMİN ettiğin bir sayıya bağlama.** Sayı yanlışsa kapı gevşer ve bunu
   yalnız diş ölçümü gösterir; ifade edilebilen bir ÖZELLİK varsa ona bağla.
 
+### 🔴 K10-B: CB 4.2 açık ucunun ÖNERİSİ YANLIŞ VARSAYIMA DAYANIYORDU (2026-08-31)
+Kapatmaya giderken kapatılacak şeyin var olmadığı ortaya çıktı.
+
+- **Kayıtlı öneri (c):** "yalnız `set_instruction`ı maça taşı, anchor/rol hub'da kalsın." Gerekçesi
+  GDD 3.1/3.2 ayrımıydı — makul, ama **hub tarafında talimatın bir ETKİSİ olduğunu VARSAYIYORDU.**
+- **GERÇEK DURUM: bireysel talimat İKİ TARAFTA DA ATIL.** `Talimatlar` yazılıyor, `WorldHash`e
+  giriyor ve `InstructionSlot` ile YUVA TAHSİSİ için okunuyor; **hiçbir oynanış mantığı `Deger`ini
+  okumuyor.** Maç tarafında da `PlayerInstr` kataloğu boş (`None = 0`).
+- **Dolayısıyla (c) uygulanmadı:** hiçbir şey yapmayan bir komutu yeni bir bağlama taşımak boşluğu
+  kapatmaz, **GÖRÜNMEZ hale getirirdi** — maçta kabul edilen, kimsenin okumadığı bir bayt.
+- **Şema da örtüşmüyor:** katalog `set_instruction(oyuncuId, talimatId 1-64, deger 0-10)` SKALER bir
+  dial ifade eder. GDD 3.2'nin üç talimatı ise roller (ayrı aksiyon), hareket zonları (anchor) ve
+  MARKAJ — markaj bir HEDEF oyuncu ister ve `deger` 0-10 bunu taşıyamaz. ME 14.2 "bireysel talimat /
+  markaj değişimi"ni sonraki karar tick'ine bağlıyor, yani mekanizmayı öngörüyor; eksik olan
+  talimat KATALOĞU ve şemanın onu taşıyabilmesi.
+- **Motorda markaj ZATEN VAR** (ME 7.5, `markajSayisi`, MatchEngine:1583) ama motor-içi otomatik
+  atamadır — oyuncu komutuyla verilmez.
+- **`K10TalimatAtilligi` kapısı:** talimat DEĞERİNİ okuyan bir oynanış kodu belirirse ya da
+  `PlayerInstr` kataloğu dolarsa kırmızıya döner ve CB 4.2 sorusunu masaya koyar. Ölçüt "Talimatlar"
+  kelimesi DEĞİL `Talimatlar[...].Deger` okuması — kelimeyle aramak doğrulama mesajının metnine bile
+  takılıyordu (ilk yazımda takıldı). Diş: sahte bir değer okuması → FAIL · `PlayerInstr`e ikinci
+  değer → FAIL.
+- **KARAR ATİLLA'NIN, seçenekler netleşti:** (a) talimat sistemini GERÇEKTEN uygula — katalog
+  tasarımı + şema genişletmesi (markaj hedefi) + motor bağlama + kalibrasyon; birden fazla dilim ve
+  CB 4.2 şema revizyonu gerektirir. (b) CB 4.2'de üçünü de "Hub" olarak revize et — spec revizyonu,
+  motor işi yok, GDD 3.2'nin "maç içi bireysel talimat" vaadini daraltır. (c) bugünkü hâlde bırak;
+  `K10TalimatAtilligi` atıllığı görünür tutar. **Öneri: (b)** — bugün maç içi bireysel talimat
+  YOK ve olmayan bir vaadi spec'te taşımak, boşluğu kalıcı borç gibi gösteriyor; gerçekten
+  istendiğinde (a) ayrı bir GDD v4.2 kalemi olarak açılır.
+- **Kural:** **bir öneriyi yazarken dayandığı varsayımı da yaz** — "hub'da çalışıyor" varsayımını
+  yazsaydım, uygulamaya geçmeden önce onu doğrulardım. Bu, bu projede aynı sınıftan ikinci vaka.
+
 ## Bekleyen kararlar
 
 - ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —
@@ -2176,15 +2208,12 @@ K9'un açık ucu. **Önerimden SAPTIM ve sebebi kayıtta.**
 - ~~**`Physics · 700+entity · salt 63` adres paylaşımı.**~~ → **YAPILDI (2026-08-30, K9-A):**
   seçenek (b) — tarayan kapı yazıldı, sonra düzeltildi. Kapı ikinci bir bulgu daha çıkardı
   (balance'ın salt aralığı genişliğini belirlemesi); elle düzeltme ikisini de kaçırırdı.
-- **CB 4.2 tablosu ile ME komut kümesi çelişiyor (K4 bulgusu, 2026-08-29):** spec `squad.set_player_anchor`/
-  `set_player_role`/`set_instruction`'ı "Hub + Maç" sayıyor; motorda anchor/rol maç komutu yok,
-  `PlayerInstr` kataloğu boş. Seçenekler: (a) ME komut kümesini üç komutla genişlet (determinizm kapısı +
-  50 golden replay etkisi, 1 dilim); (b) CB 4.2'de bu üçünü "Hub" olarak revize et (spec revizyonu,
-  motor işi yok, GDD 3.2 "maç içinde bireysel talimat" vaadini daraltır); (c) yalnız `set_instruction`'ı
-  maça taşı, anchor/rol hub'da kalsın (orta yol: maç içi mikro-yönetim `PlayerInstr` ile gelir, serbest
-  pozisyonlama maç arası kararı olur). Öneri: **(c)** — GDD 3.1 serbest pozisyonlama zaten formasyon
-  kararı, GDD 3.2 talimatı ise maç içi tepki. Spec dosyasına dokunulmadı; şimdilik maç bağlamında
-  açık sebeple reddediliyor ve `K4MeArayuzBoslugu` borcu görünür tutuyor.
+- **CB 4.2 tablosu ile ME komut kümesi çelişiyor — ÖNERİ DÜZELTİLDİ (K10-B, 2026-08-31).**
+  Eski öneri (c) yanlış varsayıma dayanıyordu: bireysel talimat İKİ TARAFTA DA ATIL (yukarıdaki 🔴
+  kayda bakınız). Yeni seçenekler: (a) talimat sistemini gerçekten uygula (katalog + şema + motor +
+  kalibrasyon, çok dilim); (b) CB 4.2'de üçünü de "Hub" yap (spec revizyonu, GDD 3.2 vaadini
+  daraltır); (c) bugünkü hâlde bırak, `K10TalimatAtilligi` görünür tutar. **Öneri: (b).**
+  KARAR ATİLLA'NIN — kod tarafında yapılacak bir şey yok, üçü de tasarım/spec kararı.
 - **ECONOMY_MAP source/sink bandı sermaye harcamasını (inşaat) kapsasın mı? (K3 inceleme turu,
   2026-08-29)** Ledger artık inşaatı sink sayıyor, ama referans kalibrasyon senaryosu inşaatsız:
   1,05-1,15 bandı SÜREKLİ işletme dengesini ölçüyor. Seçenekler: (a) bant işletme dengesi olarak

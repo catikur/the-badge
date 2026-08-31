@@ -6078,6 +6078,60 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
               $"kapaniyor · iki taraf yapisal olarak ayrik)");
 }
 
+// 32c) K10 — BİREYSEL TALİMAT ATIL MI? (CB 4.2 açık ucunun gerçek durumu)
+//
+// Kayıtlı öneri "yalnız `set_instruction`ı maça taşı"ydı ve YANLIŞ BİR VARSAYIMA dayanıyordu:
+// talimatın hub'da bir etkisi olduğu. Yok. `Talimatlar` yazılıyor, `WorldHash`e giriyor ve
+// `InstructionSlot` ile YUVA TAHSİSİ için okunuyor — ama hiçbir oynanış mantığı `Deger`ini
+// okumuyor. Yani aksiyonu maç bağlamına taşımak, hiçbir şey yapmayan bir komutu yeni bir bağlama
+// taşımak olurdu: boşluk kapanmaz, GÖRÜNMEZ hale gelirdi.
+//
+// Bu kapı atıllığı GÖRÜNÜR tutar. Biri talimatları gerçekten bağladığında kapı KIRMIZIYA döner ve
+// CB 4.2'nin "Hub + Maç" sorusunu yeniden masaya koymaya zorlar — çünkü o an soru gerçek olur.
+{
+    string k10t = "";
+    var okuyanlar = new List<string>();
+    // ÖLÇÜT: talimatın DEĞERİNİN okunması (`Talimatlar[...].Deger`). "Talimatlar" kelimesini
+    // aramak yanlış pozitif verir — doğrulama mesajının METNİ bile o kelimeyi içeriyor (ilk
+    // yazımda kapı tam buna takıldı). Oynanışı etkilemek, değeri OKUMAKTIR.
+    //
+    // Meşru okuyucular: `WorldHash` (kalıcı durum özeti) ve `WorldJournal` (uygula/doğrula).
+    // `TalimatId` okumaları YUVA TAHSİSİdir, davranış değil — bu yüzden ölçüte girmez.
+    var mesru = new[] { "WorldHash.cs", "WorldJournal.cs" };
+    string worldKok = System.IO.Path.GetDirectoryName(FindRepoFile("shared/TheBadge.World/src/GameState.cs"));
+    var degerOkuma = new System.Text.RegularExpressions.Regex(@"Talimatlar\s*\[[^\]]*\]\s*\.\s*Deger");
+    foreach (string yol in System.IO.Directory.GetFiles(worldKok, "*.cs", System.IO.SearchOption.AllDirectories))
+    {
+        string ad = System.IO.Path.GetFileName(yol);
+        if (System.Array.IndexOf(mesru, ad) >= 0) continue;
+        foreach (string satir in System.IO.File.ReadAllLines(yol))
+        {
+            string t = satir.TrimStart();
+            if (t.StartsWith("//")) continue;
+            if (degerOkuma.IsMatch(satir)) okuyanlar.Add($"{ad}: {satir.Trim()}");
+        }
+    }
+    // Sim tarafı: maç motoru da talimat okumuyor olmalı (bugün `PlayerInstr` katalogu boş)
+    string simSrc = System.IO.File.ReadAllText(FindRepoFile("shared/TheBadge.Sim/src/Match/MatchCommands.cs"));
+    var mInstr = System.Text.RegularExpressions.Regex.Match(simSrc, @"enum PlayerInstr\s*:\s*byte\s*\{([^}]*)\}");
+    int instrSayisi = 0;
+    if (mInstr.Success)
+        foreach (string parca in mInstr.Groups[1].Value.Split(','))
+            if (parca.Trim().Length > 0) instrSayisi++;
+    if (instrSayisi > 1)
+        k10t += $"PlayerInstr katalogu artik dolu ({instrSayisi} deger) - mac tarafi da atil degil ";
+
+    if (okuyanlar.Count > 0)
+        k10t += "TALIMATLAR ARTIK OKUNUYOR — atil degil: " + string.Join(" | ", okuyanlar) +
+                " → CB 4.2'nin 'Hub + Mac' sorusu ARTIK GERCEK, bekleyen karar yeniden acilmali ";
+
+    Console.WriteLine($"[info] K10 talimat durumu: ATIL (yazilip hash'e giriyor, oynanisa etkisi YOK) · " +
+                      $"mesru olmayan okuyucu {okuyanlar.Count}");
+    if (k10t.Length > 0) failures += Fail("K10TalimatAtilligi", k10t);
+    else Pass("K10TalimatAtilligi(bireysel talimat ATIL - hicbir oynanis mantigi degerini okumuyor; " +
+              "baglandigi gun bu kapi duser ve CB 4.2 baglam sorusunu masaya koyar)");
+}
+
 // 33) K9-C — RPC KÖPRÜSÜ + TRANSACTIONAL OUTBOX (CB 8.1/8.2/8.3)
 //
 // CB 8.1'in 24 saatlik dedup'ı ZATEN VARDI (K1, `IdempotencyStore`) — yeniden yazılmadı; bu
