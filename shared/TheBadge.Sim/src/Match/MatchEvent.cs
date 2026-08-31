@@ -109,6 +109,17 @@ namespace TheBadge.Sim.Match
         public MatchEvent[] TopEvents = new MatchEvent[0];
         public double[] TopScores = new double[0];
 
+        /// <summary>ZAMAN ÇİZELGESİ İŞARETLERİ — sunum katmanının bastığı anlar.
+        ///
+        /// EŞİKTEN DEĞİL, EN YÜKSEK N'DEN beslenir (M14 bulgusunun kararı, 2026-08-31). ME 15.3'ün
+        /// `H > eşik` ölçütü ölçümde maç başına 0,5-0,8 işaret veriyordu — yani maçların yarısında
+        /// zaman çizelgesi BOŞ kalıyordu. Eşiği düşürmek spec'e dokunmak olurdu; bunun yerine eşik
+        /// OLDUĞU GİBİ kalıyor ve `HighlightCount`u beslemeyi sürdürüyor (o, ME 15.3'ün tanımıdır),
+        /// çizelge ise sabit sayıda en yüksek andan doluyor. İki büyüklük AYRI: biri "kaç an
+        /// eşiği geçti", öteki "kullanıcıya kaç işaret gösterilir". ME 17.5 "ayar sahası" ilkesi.</summary>
+        public MatchEvent[] TimelineMarks = new MatchEvent[0];
+        public double[] TimelineScores = new double[0];
+
         /// <summary>Dakika başına örneklem [90] — ME 15.3 "90 nokta örneklem".</summary>
         public sbyte[] MomentumHome = new sbyte[0];
         public sbyte[] MomentumAway = new sbyte[0];

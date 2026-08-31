@@ -166,6 +166,169 @@ namespace TheBadge.Checks
         }
     }
 
+    /// <summary>KADEMELİ İNŞAAT KOŞUSU — capex sözleşmesinin ölçüldüğü senaryo (K10-D).
+    ///
+    /// NEDEN AYRI BİR KOŞU: `EkonomiKosu.Kos` hiç inşaat YAPMAZ, dolayısıyla `InsaatTl` sıfırdır
+    /// ve `K3EkonomiSozlesmesi`nin ölçtüğü 1,05-1,15 bandı yalnız İŞLETME dengesidir. ECONOMY_MAP
+    /// "İnşaat + tesis bakımı"nı sink sayıyor; capex ölçülmediği sürece o satır kapısız kalıyordu.
+    ///
+    /// POLİTİKA PARAMETRESİZDİR — bilerek. Bir "kasa rezervi" eşiği koysaydım, kapının verdiği
+    /// cevabı o eşiği oynatarak istediğim yere getirebilirdim; ölçtüğünü değil ayarını raporlayan
+    /// bir kapı olurdu. Burada kural tek cümledir: SLOT BOŞSA VE PARA YETİYORSA YAPILIR. Bu,
+    /// herhangi bir kulübün fiziksel olarak inşa edebileceği EN HIZLI yoldur; merdiven süresi de
+    /// bu yüzden bir ALT SINIRdır (gerçek oyuncu daha yavaş gider, daha hızlı gidemez).
+    ///
+    /// KREDİ YOK: merdiven işletme fazlasından finanse edilir. Kredi açılsaydı süre kredinin
+    /// vade/faiz ayarına bağlanırdı ve capex sorusu kredi sorusuna dönerdi.
+    ///
+    /// TEK KAPI: inşaat komutu doğrudan uygulanmaz, Command Bus'tan geçer (CLAUDE.md 1).</summary>
+    public static class KademeliInsaatKosu
+    {
+        /// <summary>Referans kulübün KENDİ tesis seti — `EkonomiFixture` tam da bunları kuruyor
+        /// (1 = stadyum tier 3, 2-5 tier 2). Merdiven "64 tesisin hepsi" DEĞİLDİR: o, derinlik
+        /// yerine genişliği ölçerdi ve referans kulübün kimliğiyle ilgisi olmazdı.</summary>
+        public static readonly int[] ReferansTesisler = { 1, 2, 3, 4, 5 };
+
+        /// <summary>Tavan tier — `eco.insaat.tierSureHafta` uzunluğundan türetilir, elle yazılmaz.</summary>
+        public static int MaxTier(EconomyBalance eco) => eco.insaat.tierSureHafta.Length - 1;
+
+        public struct Sonuc
+        {
+            public WeekLedger Toplam;          // TÜM koşunun toplamı
+            public WeekLedger MerdivenToplam;  // YALNIZ merdiven penceresi (1. sezon → tamamlanma)
+            public int BaslatilanInsaat;
+            public int MerdivenSezon;          // merdivenin tamamlandığı sezon; -1 = tamamlanmadı
+            public int IflasSezonu;            // -1 = iflas yok
+            public long MinKasaTl;             // koşu boyunca görülen en düşük kasa
+            public int BeklenmeyenRed;         // kapı reddi (InsufficientFunds/StateConflict dışı)
+            /// <summary>SEZON SEZON ledger. Capex YUMRULUdur: tek bir tier adımı bir sezonun
+            /// gelirinin %10-40'ı kadar olabilir, ertesi sezon sıfır. Bu yüzden ECONOMY_MAP
+            /// oranı sezon sezon okunduğunda savrulur; kapı PENCERE ORTALAMASINI ölçer ve bu
+            /// liste savrulmanın rapor edilmesini sağlar (ortalamayı "her sezon böyle" diye
+            /// okumak, kapının iddiasını ölçtüğünden geniş yapardı).</summary>
+            public List<WeekLedger> Sezonlar;
+        }
+
+        public static Sonuc Kos(GameState st, EconomyBalance eco, WorldRules kural, ulong saveSeed,
+                                int sezon, IBandProvider bantlar,
+                                Dictionary<RateClass, RateLimitCfg[]> rlCfg, long ownerUserId)
+        {
+            var depo = new WorldStore(st);
+            var ctx = new WorldContext(depo, kural);
+            var exec = new WorldExecutor(depo, ctx);
+            TycoonActions.Baglan(ctx, exec, eco);
+            var bus = new CommandBus.CommandBus(bantlar, ctx,
+                new SlidingWindowRateLimiter(rlCfg, 8, 300_000), new IdempotencyStore());
+
+            var r = new Sonuc { MerdivenSezon = -1, IflasSezonu = -1, MinKasaTl = st.Club.KasaTl,
+                                Sezonlar = new List<WeekLedger>(sezon) };
+            int maxTier = MaxTier(eco);
+            var j = new WorldJournal();
+            int hafta = 0;
+            // Host saati HAFTAYLA ilerler: aynı ana yığılan komutlar rate limiter'a takılırdı ve
+            // kapı ekonomiyi değil hız sınırını ölçerdi.
+            const long HaftaMs = 7L * 24 * 60 * 60 * 1000;
+            long host = 1_700_000_000_000L;
+
+            for (int s = 0; s < sezon; s++)
+            {
+                var sezonL = new WeekLedger();
+                for (int h = 0; h < kural.yapi.sezonHaftaSayisi; h++, hafta++)
+                {
+                    // ---- 1) İNŞAAT KARARI (Tek Kapı) ----
+                    for (int t = 0; t < ReferansTesisler.Length; t++)
+                    {
+                        int tesis = ReferansTesisler[t];
+                        if (st.FreeConstructionSlot() < 0) break;          // boş slot yok
+                        if (InsaattaMi(st, tesis)) continue;               // zaten yapılıyor
+                        int mevcut = st.Club.TesisTier[tesis];
+                        if (mevcut >= maxTier) continue;                   // tavan
+                        long maliyet = eco.TierMaliyet(mevcut + 1);
+                        if (!st.CanAfford(maliyet)) continue;              // para yok → BEKLE (kredi yok)
+
+                        var zarf = new CommandEnvelope
+                        {
+                            CommandId = KomutId(hafta, tesis), CatalogVersion = Catalog.Version,
+                            Source = CommandSource.UI, ActionType = "tycoon.start_construction",
+                            IssuedAtUnixMs = host, MatchTick = 0, UserId = ownerUserId,
+                            SaveSlotId = 1, TeamIdx = 0, PayloadJson = new byte[0]
+                        };
+                        var yuk = new TestPayload().Set("tesisId", (double)tesis)
+                                                   .Set("hedefTier", (double)(mevcut + 1));
+                        var o = bus.Submit(zarf, yuk, exec, host, ownerUserId);
+                        if (o.Ok) r.BaslatilanInsaat++;
+                        else if (o.Reason != RejectionReason.InsufficientFunds
+                                 && o.Reason != RejectionReason.StateConflict) r.BeklenmeyenRed++;
+                    }
+
+                    // ---- 2) HAFTALIK EKONOMİ TICK'İ ----
+                    var sonuc = (WeekResult)(byte)(1 + (hafta % 3));      // G, B, M döngüsü
+                    bool evMaci = (hafta % 2) == 0;
+                    j.Clear();
+                    var L = EconomyTick.Hafta(st, eco, kural, saveSeed, sonuc, evMaci, j);
+                    if (!j.Validate(st, out string hata))
+                        throw new InvalidOperationException("kademeli koşu journal geçersiz: " + hata);
+                    j.Apply(st);
+                    r.Toplam.Topla(L);
+                    sezonL.Topla(L);
+                    if (r.MerdivenSezon < 0) r.MerdivenToplam.Topla(L);
+                    if (st.Club.KasaTl < r.MinKasaTl) r.MinKasaTl = st.Club.KasaTl;
+                    if (r.IflasSezonu < 0 && st.Club.KasaTl <= eco.iflas.esikTl) r.IflasSezonu = s + 1;
+                    host += HaftaMs;
+                }
+                r.Sezonlar.Add(sezonL);
+                if (r.MerdivenSezon < 0 && MerdivenBitti(st, eco)) r.MerdivenSezon = s + 1;
+            }
+            return r;
+        }
+
+        /// <summary>MERDİVEN SONRASI DURAĞAN ORAN — merdiven bittikten sonra `sezon` sezon daha
+        /// koşup source/sink'i ölçer. `st` KOŞULMUŞ durumdur (merdiven tamamlanmış olmalı).</summary>
+        public static double MerdivenSonrasiOran(GameState st, EconomyBalance eco, WorldRules kural, ulong saveSeed,
+                                                 int sezon, IBandProvider bantlar,
+                                                 Dictionary<RateClass, RateLimitCfg[]> rlCfg, long ownerUserId)
+        {
+            var toplam = new WeekLedger();
+            var j = new WorldJournal();
+            int hafta = 0;
+            for (int s = 0; s < sezon; s++)
+                for (int h = 0; h < kural.yapi.sezonHaftaSayisi; h++, hafta++)
+                {
+                    j.Clear();
+                    var L = EconomyTick.Hafta(st, eco, kural, saveSeed,
+                                              (WeekResult)(byte)(1 + (hafta % 3)), (hafta % 2) == 0, j);
+                    j.Validate(st, out _); j.Apply(st);
+                    toplam.Topla(L);
+                }
+            return toplam.ToplamGider == 0 ? 0 : (double)toplam.ToplamGelir / toplam.ToplamGider;
+        }
+
+        public static bool MerdivenBitti(GameState st, EconomyBalance eco)
+        {
+            int maxTier = MaxTier(eco);
+            for (int t = 0; t < ReferansTesisler.Length; t++)
+                if (st.Club.TesisTier[ReferansTesisler[t]] < maxTier) return false;
+            return true;
+        }
+
+        static bool InsaattaMi(GameState st, int tesis)
+        {
+            for (int i = 0; i < st.Club.InsaatSlot.Length; i++)
+                if (st.Club.InsaatSlot[i].InsaatId != 0 && st.Club.InsaatSlot[i].TesisId == tesis) return true;
+            return false;
+        }
+
+        /// <summary>Deterministik CommandId — `Guid.NewGuid()` koşuyu tekrar edilemez yapardı
+        /// (dedup deposu ve denetim kaydı koşudan koşuya değişirdi).</summary>
+        static Guid KomutId(int hafta, int tesis)
+        {
+            var b = new byte[16];
+            b[0] = (byte)hafta; b[1] = (byte)(hafta >> 8); b[2] = (byte)(hafta >> 16); b[3] = (byte)(hafta >> 24);
+            b[4] = (byte)tesis; b[5] = 0xC4; b[6] = 0x9E; b[7] = 0x10;
+            return new Guid(b);
+        }
+    }
+
     /// <summary>Maç kuyruğu casusu — köprünün ME komutunu GERÇEKTEN ürettiğini ölçer.</summary>
     public sealed class SpyMatchSink : IMatchCommandSink
     {

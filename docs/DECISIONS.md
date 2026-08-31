@@ -2139,32 +2139,175 @@ K9 inceleme turunda entity aralıkları modellenirken görüldü.
   (b) ayrımı 20'den `SummaryCapacity`ye çıkar; (c) kapıya `idx < 20` iddiasını bağla.
   **Öneri: (a)** — kapatma hem ucuz hem de garantiyi yapıya taşır.
 
+### K10-A: LOD 2 özet log taraf ayrımı yapısal yapıldı — ✅ TAMAM (2026-08-31)
+K9'un açık ucu. **Önerimden SAPTIM ve sebebi kayıtta.**
+
+- **Kayıtlı öneri (a) `idx`i 20'de kapatmaktı.** Uygulamadım: bu garantiyi yapıya taşırdı ama
+  20'den sonraki kart olaylarını LOG'DAN DÜŞÜRÜRDÜ. Seçenek (b) — ayrımı `SummaryCapacity`ye
+  çekmek — aynı garantiyi VERİ KAYBETMEDEN veriyor. Öneriyi yazarken bu maliyeti hesaba katmamışım.
+- **Değişiklik:** `7100/7200 + team * 20 + idx` → `+ team * SummaryCapacity + idx`. `idx`,
+  `summaryCount` ile birlikte artıyor ve döngüler `summaryCount < SummaryCapacity` ile kapanıyor;
+  dolayısıyla `idx ≤ SummaryCapacity-1` HER ZAMAN doğru → iki taraf yapısal olarak ayrık.
+- **`K9AdresCakismasi` bu sınıfı GÖREMİYOR** ve bunu abartmamak için ayrı kapı yazıldı. O kapı her
+  çağrı yerini TEK bir entity aralığı olarak modelleyip aralıklar ARASINDA kesişim arar; bir
+  aralığın KENDİ İÇİNDE takla atması tek çağrı yerinin içinde olur ve karşılaştırma hiç kurulmaz.
+- **`K10OzetAyrimi`** üç şeyi denetler: ayrım `SummaryCapacity` SEMBOLÜNÜN kendisi mi (sayıca eşit
+  olması yetmez — biri değişince öteki de değişmeli) · `summaryCount <` karşılaştırmalarından
+  HİÇBİRİ başka sınıra bağlı değil mi · gol tarafının ikinci kapağı (`k < 15`) duruyor mu.
+- **KAPI İLK YAZIMDA GEVŞEKTİ:** döngü kapağı denetimini "en az 4 tane olsun" diye TAHMİN ettiğim
+  bir sayıya bağlamışım; gerçek sayı 6 çıktı, dolayısıyla biri bozulup 5'e düşünce kapı yine
+  geçiyordu. Sayı yerine ÖZELLİK ifade edildi: hiçbir `summaryCount <` başka sınıra bağlı olamaz.
+- **Diş (iki yön):** ayrım sabit sayıya döndürüldü → FAIL · bir döngü kapağı başka sabite bağlandı
+  → FAIL (`1 adet summaryCount < BASKA sinira bagli (64)`).
+- **Golden KAYMADI** — beklenen: LOD 2 özet dakikaları hiçbir kapıda sabitlenmiyor (golden set LOD 0
+  maçlarıdır). Değişiklik gerçek (deplasman tarafının adresi 7120+idx → 7132+idx) ama kapılara
+  görünmez. Bu, LOD 2 özet logunun pinlenmemiş olduğunun kaydıdır — bir açık uç değil, bilgi.
+- **Kural:** **bir kapıyı TAHMİN ettiğin bir sayıya bağlama.** Sayı yanlışsa kapı gevşer ve bunu
+  yalnız diş ölçümü gösterir; ifade edilebilen bir ÖZELLİK varsa ona bağla.
+
+### 🔴 K10-B: CB 4.2 açık ucunun ÖNERİSİ YANLIŞ VARSAYIMA DAYANIYORDU (2026-08-31)
+Kapatmaya giderken kapatılacak şeyin var olmadığı ortaya çıktı.
+
+- **Kayıtlı öneri (c):** "yalnız `set_instruction`ı maça taşı, anchor/rol hub'da kalsın." Gerekçesi
+  GDD 3.1/3.2 ayrımıydı — makul, ama **hub tarafında talimatın bir ETKİSİ olduğunu VARSAYIYORDU.**
+- **GERÇEK DURUM: bireysel talimat İKİ TARAFTA DA ATIL.** `Talimatlar` yazılıyor, `WorldHash`e
+  giriyor ve `InstructionSlot` ile YUVA TAHSİSİ için okunuyor; **hiçbir oynanış mantığı `Deger`ini
+  okumuyor.** Maç tarafında da `PlayerInstr` kataloğu boş (`None = 0`).
+- **Dolayısıyla (c) uygulanmadı:** hiçbir şey yapmayan bir komutu yeni bir bağlama taşımak boşluğu
+  kapatmaz, **GÖRÜNMEZ hale getirirdi** — maçta kabul edilen, kimsenin okumadığı bir bayt.
+- **Şema da örtüşmüyor:** katalog `set_instruction(oyuncuId, talimatId 1-64, deger 0-10)` SKALER bir
+  dial ifade eder. GDD 3.2'nin üç talimatı ise roller (ayrı aksiyon), hareket zonları (anchor) ve
+  MARKAJ — markaj bir HEDEF oyuncu ister ve `deger` 0-10 bunu taşıyamaz. ME 14.2 "bireysel talimat /
+  markaj değişimi"ni sonraki karar tick'ine bağlıyor, yani mekanizmayı öngörüyor; eksik olan
+  talimat KATALOĞU ve şemanın onu taşıyabilmesi.
+- **Motorda markaj ZATEN VAR** (ME 7.5, `markajSayisi`, MatchEngine:1583) ama motor-içi otomatik
+  atamadır — oyuncu komutuyla verilmez.
+- **`K10TalimatAtilligi` kapısı:** talimat DEĞERİNİ okuyan bir oynanış kodu belirirse ya da
+  `PlayerInstr` kataloğu dolarsa kırmızıya döner ve CB 4.2 sorusunu masaya koyar. Ölçüt "Talimatlar"
+  kelimesi DEĞİL `Talimatlar[...].Deger` okuması — kelimeyle aramak doğrulama mesajının metnine bile
+  takılıyordu (ilk yazımda takıldı). Diş: sahte bir değer okuması → FAIL · `PlayerInstr`e ikinci
+  değer → FAIL.
+- **KARAR ATİLLA'NIN, seçenekler netleşti:** (a) talimat sistemini GERÇEKTEN uygula — katalog
+  tasarımı + şema genişletmesi (markaj hedefi) + motor bağlama + kalibrasyon; birden fazla dilim ve
+  CB 4.2 şema revizyonu gerektirir. (b) CB 4.2'de üçünü de "Hub" olarak revize et — spec revizyonu,
+  motor işi yok, GDD 3.2'nin "maç içi bireysel talimat" vaadini daraltır. (c) bugünkü hâlde bırak;
+  `K10TalimatAtilligi` atıllığı görünür tutar. **Öneri: (b)** — bugün maç içi bireysel talimat
+  YOK ve olmayan bir vaadi spec'te taşımak, boşluğu kalıcı borç gibi gösteriyor; gerçekten
+  istendiğinde (a) ayrı bir GDD v4.2 kalemi olarak açılır.
+- **Kural:** **bir öneriyi yazarken dayandığı varsayımı da yaz** — "hub'da çalışıyor" varsayımını
+  yazsaydım, uygulamaya geçmeden önce onu doğrulardım. Bu, bu projede aynı sınıftan ikinci vaka.
+
+### K10-C: zaman çizelgesi işaretleri eşikten ayrıldı — ✅ TAMAM (2026-08-31)
+M14 açık ucu, seçenek **(b)**: eşik korunur, çizelge en yüksek N'den beslenir.
+
+- **Sorun ÖLÇÜLDÜ, iddia edilmedi:** 60 maçlık koşuda ME 15.3'ün `H > 0,5` ölçütü **41 maçta SIFIR**
+  işaret verdi. Yani maçların üçte ikisinde zaman çizelgesi boş kalıyordu — M14'ün 0,5-0,8/maç
+  ölçümüyle birebir.
+- **İKİ BÜYÜKLÜK AYRILDI.** `HighlightCount` hâlâ ME 15.3'ün EŞİK tanımıdır ve DEĞİŞMEDİ;
+  `TimelineMarks` sunum içindir ve `zamanCizelgesiIsaret` [KALİBRE] kadar en yüksek andan dolar.
+  Bunları birleştirmek spec'i sessizce değiştirmek olurdu — kapı ikisinin ayrı davrandığını
+  denetliyor (eşik hâlâ bazı maçlarda 0 vermeli; vermezse ölçüt çizelgeye bağlanmış demektir).
+- **Motor mantığı DEĞİŞMEDİ** — `top` listesi zaten H'ye göre azalan sıralıydı, ilk N alınıyor.
+  ME 17.5 "ayar sahası" ilkesine uygun: sunum kararı, sim kararı değil.
+- **Diş (iki yön):** işaret sayısı 0 → `60/60 macta zaman cizelgesi BOS` · çizelge eşiğe bağlandı →
+  `60/60 hedefi tutmadi` + `41/60 BOS`.
+- **GÖZLEM — sunum ayarı `config_hash` içinde.** `zamanCizelgesiIsaret` `sim.balance.json`'a
+  girdiği için `balanceHash` değişti ve golden set yeniden üretilmesi gerekti. Bunun DAVRANIŞ
+  değişikliği OLMADIĞI kanıtlandı: yeniden üretim sonrası **50/50 `stateHash` AYNI**, yalnız
+  `balanceHash` değişti (0x4A949442E9BE564C → 0xCD38F01FAA168AAD). Yani `config_hash` bütün balance
+  dosyasını kapsadığı için, simülasyonu etkilemeyen bir ayar da replay setini çalkalıyor.
+  Seçenekler: (a) kabul et — churn ucuz ve "tek balance" hikayesi sade kalır; (b) sunum ayarlarını
+  `config_hash` DIŞI ayrı bir dosyaya taşı (`llm.balance.json`'ın zaten yaptığı gibi). **Öneri: (a)**
+  bugün — ikinci bir dosya, motorun iki kaynaktan okuması demek ve tek sunum ayarı için bu maliyet
+  yüksek; sunum ayarı sayısı artarsa (b) yeniden değerlendirilir. Bekleyen kararlara yazıldı.
+
+### K10-D: ECONOMY_MAP capex kapısı — ✅ TAMAM, dört bulguyla (2026-08-31)
+K3 inceleme turunun açık ucu, seçenek **(a)**: 1,05-1,15 bandı işletme dengesi olarak kalır, capex
+AYRI bir kapıyla ölçülür. Uygulandı — ama ölçüm önerinin gerekçesini DÜZELTTİ (aşağıda).
+
+- **Ölçülen senaryo:** `KademeliInsaatKosu` — parametresiz, kredisiz, EN HIZLI inşa politikası
+  (slot boşsa ve para yetiyorsa yap), referans kulübün kendi tesis merdiveni (stadyum 3→5 + dört
+  tesis 2→5 = 14 adım), komutlar **Command Bus'tan** (Tek Kapı). Politikaya bilerek "kasa rezervi"
+  eşiği KONMADI: bir eşik olsaydı kapının verdiği cevabı eşiği oynatarak istediğim yere
+  götürebilirdim — ölçtüğünü değil ayarını raporlayan bir kapı olurdu.
+- **BULGU 1 — capex bandı BOZMUYOR, bandı AYAKTA TUTAN sink capex'in kendisi.** Öneri (a)'nın
+  gerekçesi "yığınsal harcama sürekli dengeyi bulanıklaştırır" idi; ölçüm bunun tersini gösterdi.
+  Merdiven penceresinde (11 sezon, 8 seed'de de aynı): source/sink **capex HARİÇ 1,48-1,49
+  (BANT DIŞI)**, **capex DAHİL 1,123-1,132 (BANT İÇİ)**. İnşaat, kapasitesi 30K→90K'ya çıkan
+  kulübün ürettiği fazlayı emen kalemdir. Yani `K3EkonomiSozlesmesi`'nin capex'i dışarıda
+  bırakması bir eksiklik DEĞİL, hiç inşaat yapmayan bir koşunun tanımıdır — ve o koşu bantta
+  kalıyorsa bunun nedeni kulübün büyümemesidir.
+- **BULGU 2 — bant SEZON SEZON değil, PENCERE ORTALAMASI olarak tutuyor.** Capex yumruludur: tek
+  bir tier adımı bir sezon gelirinin %11-38'i. Merdiven penceresinde sezon oranları **0,824 ile
+  2,255 arasında savruluyor**; ortalama 1,131. ECONOMY_MAP "sezon başına net arz bandı" diyor —
+  harfi harfine okunduğunda inşaat yapan hiçbir kulüp bandı tutturamaz. Kapı bilerek pencere
+  ortalamasını ölçer ve savrulmayı ayrıca raporlar (ortalamayı "her sezon böyle" diye okumak,
+  kapının iddiasını ölçtüğünden geniş yapardı).
+- **BULGU 3 — merdiven süresi capex maliyetine olduğu kadar FAZLA ORANINA da bağlı.** Yayın geliri
+  süpürüldüğünde: taban oran 1,041 → merdiven 40 sezonda BİTMİYOR · 1,074 → 18 sezon · 1,133 →
+  11 · 1,159 → 10. Yani ECONOMY_MAP'in kendi bandının ALT ucunda referans merdiven fiilen
+  ulaşılamaz. `merdivenSezonBandi` bu yüzden **bilerek geniş** ([6,24]): dar bir bant capex'i
+  değil fazla oranını ölçerdi, fazla oranı ise zaten `K3EkonomiSozlesmesi`'nin işi. İki kuralın
+  çakıştığı bu nokta "Bekleyen kararlar"a yazıldı.
+- **BULGU 4 (BORÇ) — merdiven tükenince GERİYE SINK KALMIYOR.** 11. sezondan sonra oran **2,25'te
+  kilitleniyor** ve orada kalıyor. Bu bir kapı hatası değil SENARYO kapsamının sonucudur:
+  ECONOMY_MAP beş sink satırı sayıyor, referans koşu bunlardan **transfer bedellerini** hiç
+  işletmiyor. `K10MerdivenSonrasiSink` bugünkü değeri `merdivenSonrasiOranTavani` [KALİBRE] ile
+  DONDURUR (sessizce kötüleşmesin), hedefi (1,15) basar ve borç kapandığında KENDİSİ kırmızıya
+  döner ("tavan kaldırılmalı ve bu kapı düşmeli").
+- **[KALİBRE] eklenenler** (`balance/economy.balance.json` → `capex`): `merdivenSezonBandi [6,24]`,
+  `merdivenSonrasiOranTavani 2,40`, `merdivenSonrasiHedefOran 1,15`.
+- **ECONOMY_MAP bandı koda TEK YERDE indi** (`EkoOranAlt/EkoOranUst`); balance JSON'una
+  TAŞINMADI, bilerek: bu bir ayar değil sözleşmedir, JSON'a taşımak bandı gevşetmeyi kod
+  incelemesinden çıkarıp bir satır düzenlemesine indirirdi.
+- **Diş (altı yön, hepsi ölçüldü):** tier maliyeti ×5 → `merdiven 24 sezonda TAMAMLANMADI` +
+  `capex ÇIKARILINCA oran 1,113 hâlâ bant içinde` · ×0,5 → `merdiven 4 sezon, bant dışı` ·
+  iflas eşiği −5M (kasa dibi −5,8M) → `en hızlı inşa eden kulüp sezon 1'de iflas etti` ·
+  tavan 2,20 → `borç KÖTÜLEŞTİ` · hedef 2,30 → `BORÇ KAPANDI, tavan kaldırılmalı` ·
+  bant üstü 30 > ufuk 24 → `kapı bandı ölçemez`.
+- **Ölçülemeyen:** kapının "capex yük taşıyor" iddiası (3) yalnız BUGÜNKÜ senaryoda anlamlı;
+  transfer sink'i modellendiğinde işletme oranı da düşeceği için o kapı yeniden kalibre edilmeli.
+
 ## Bekleyen kararlar
 
-- **`OzetKart` entity ayrımı (yukarıdaki 🟡 bulgu).** Öneri: (a) `idx`i 20'de kapat. K9'un golden
-  turu taze olduğu için maliyeti bugün düşük.
+- ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —
+  `idx`i kapatmak 20. karttan sonrasını log'dan düşürürdü; ayrımı `SummaryCapacity`ye çekmek aynı
+  garantiyi veri kaybetmeden veriyor. `K10OzetAyrimi` kapısı eklendi.
 - ~~**xG katsayıları az tahmin ediyor.**~~ → **YAPILDI (2026-08-30, K9-B):** seçenek (b)
   sonra (a) — önce neden arandı. "%5,7" ölçüm gürültüsüydü; gerçek yanlılık +%4,26 ve K8'den
   eskiydi. `shot.xg.b0` -2,48 → -2,43 ile merkeze oturtuldu (+%0,33).
 - ~~**`Physics · 700+entity · salt 63` adres paylaşımı.**~~ → **YAPILDI (2026-08-30, K9-A):**
   seçenek (b) — tarayan kapı yazıldı, sonra düzeltildi. Kapı ikinci bir bulgu daha çıkardı
   (balance'ın salt aralığı genişliğini belirlemesi); elle düzeltme ikisini de kaçırırdı.
-- **CB 4.2 tablosu ile ME komut kümesi çelişiyor (K4 bulgusu, 2026-08-29):** spec `squad.set_player_anchor`/
-  `set_player_role`/`set_instruction`'ı "Hub + Maç" sayıyor; motorda anchor/rol maç komutu yok,
-  `PlayerInstr` kataloğu boş. Seçenekler: (a) ME komut kümesini üç komutla genişlet (determinizm kapısı +
-  50 golden replay etkisi, 1 dilim); (b) CB 4.2'de bu üçünü "Hub" olarak revize et (spec revizyonu,
-  motor işi yok, GDD 3.2 "maç içinde bireysel talimat" vaadini daraltır); (c) yalnız `set_instruction`'ı
-  maça taşı, anchor/rol hub'da kalsın (orta yol: maç içi mikro-yönetim `PlayerInstr` ile gelir, serbest
-  pozisyonlama maç arası kararı olur). Öneri: **(c)** — GDD 3.1 serbest pozisyonlama zaten formasyon
-  kararı, GDD 3.2 talimatı ise maç içi tepki. Spec dosyasına dokunulmadı; şimdilik maç bağlamında
-  açık sebeple reddediliyor ve `K4MeArayuzBoslugu` borcu görünür tutuyor.
-- **ECONOMY_MAP source/sink bandı sermaye harcamasını (inşaat) kapsasın mı? (K3 inceleme turu,
-  2026-08-29)** Ledger artık inşaatı sink sayıyor, ama referans kalibrasyon senaryosu inşaatsız:
-  1,05-1,15 bandı SÜREKLİ işletme dengesini ölçüyor. Seçenekler: (a) bant işletme dengesi olarak
-  kalsın, capex ayrı bir kapıyla ölçülsün (ör. "sezon başına capex ≤ gelirin %X'i"); (b) bant
-  capex dahil yeniden tanımlansın ve yeniden kalibre edilsin. **Öneri: (a)** — yığınsal harcamayı
-  sürekli dengeye karıştırmak bandı bulanıklaştırır ve kulübün yatırım yapmasını cezalandırır gibi
-  okunur. Karar balance sprintine ait, K4-K5'i bloklamaz.
+- **CB 4.2 tablosu ile ME komut kümesi çelişiyor — ÖNERİ DÜZELTİLDİ (K10-B, 2026-08-31).**
+  Eski öneri (c) yanlış varsayıma dayanıyordu: bireysel talimat İKİ TARAFTA DA ATIL (yukarıdaki 🔴
+  kayda bakınız). Yeni seçenekler: (a) talimat sistemini gerçekten uygula (katalog + şema + motor +
+  kalibrasyon, çok dilim); (b) CB 4.2'de üçünü de "Hub" yap (spec revizyonu, GDD 3.2 vaadini
+  daraltır); (c) bugünkü hâlde bırak, `K10TalimatAtilligi` görünür tutar. **Öneri: (b).**
+  KARAR ATİLLA'NIN — kod tarafında yapılacak bir şey yok, üçü de tasarım/spec kararı.
+- ~~**ECONOMY_MAP source/sink bandı sermaye harcamasını (inşaat) kapsasın mı? (K3 inceleme turu,
+  2026-08-29)**~~ → **YAPILDI (2026-08-31, K10-D):** seçenek (a) — bant işletme dengesi olarak
+  kaldı, capex `K10CapexSozlesmesi` ile ayrı ölçülüyor. Not: önerinin GEREKÇESİ yanlıştı ("capex
+  bandı bulanıklaştırır"); ölçüm capex'in bandı AYAKTA TUTAN sink olduğunu gösterdi. Kararın
+  kendisi doğru çıktı, gerekçesi düzeltildi — yukarıdaki K10-D kaydı.
+- **ECONOMY_MAP'in iki kuralı çakışıyor: 1,05-1,15 bandının ALT ucunda referans tesis merdiveni
+  ulaşılamaz (K10-D ölçümü, 2026-08-31).** Fazla oranı 1,041'de merdiven 40 sezonda bitmiyor,
+  1,074'te 18 sezon, 1,159'da 10 sezon sürüyor. Doküman hangi kuralın öncelikli olduğunu
+  söylemiyor. Seçenekler: (a) bandın alt ucu yükseltilsin (ör. 1,08-1,15) — "yatırım yapılabilir
+  ekonomi" garanti altına alınır, enflasyon marjı daralır; (b) merdiven maliyeti fazla oranına
+  GÖRE ölçeklensin (tier maliyeti sabit ₺ değil, sezonluk fazlanın katı olarak tanımlansın);
+  (c) bugünkü hâlde bırakılsın, `merdivenSezonBandi` geniş kalsın ve kapı yalnız uçları yakalasın.
+  **Öneri: (c)** bugün — (a) spec revizyonu, (b) balance şeması değişikliği; ikisi de balance
+  sprintine ait ve bugünkü kapı ikisini de bloklamıyor. KARAR ATİLLA'NIN.
+- **Merdiven tükendikten sonra uzun vade sink'i ne? (K10-D BULGU 4, 2026-08-31)** Referans
+  senaryoda 11. sezondan sonra source/sink 2,25'te kilitleniyor — ECONOMY_MAP'in "enflasyon
+  kontrolü" gerekçesiyle çelişiyor. Muhtemel cevap dokümanın kendi listesinde: **transfer
+  bedelleri** (referans koşu transfer işletmiyor). Seçenekler: (a) referans koşuya transfer
+  hattı eklensin ve capex kapısı yeniden kalibre edilsin (K5 transfer motoru hazır, kapsam bir
+  dilim); (b) maaş enflasyonu uzun vade sink'i olsun (kadro gücü arttıkça maaş artar);
+  (c) tesis tavanı 5'ten yukarı açılsın (capex sonsuz sink olur — Top Eleven anti-pattern'ine
+  yakın, dikkatli olunmalı). **Öneri: (a)** — dokümanın zaten saydığı sink'i modellemek, yeni
+  bir mekanik icat etmekten ucuz ve doğru. Borç `K10MerdivenSonrasiSink` ile tavanlandı.
 - ~~**`Rng.Gauss01` çarpışması ne zaman düzeltilsin?**~~ → **KARAR (2026-08-30, Atilla): ŞİMDİ
   YAP.** Üç seçenek ölçülmüş maliyetle sunuldu (şimdi / FAZ 05 öncesi / hiç). Uygulandı, aşağıdaki
   K8 kaydına bakınız. Bekleyen karar kapandı.
@@ -2185,12 +2328,13 @@ K9 inceleme turunda entity aralıkları modellenirken görüldü.
 - **LOD 1'in geleceği (M15 kararı, 2026-08-16):** şu an LOD 0'ın eşleniği. Geri almak için gerekçe
   CPU olamaz (19 kat marj var); yalnız İSTEMCİ tarafında orta cihaz ölçümü LOD 0'ı 800 ms'nin
   üstüne çıkarırsa yeniden değerlendirilir. O ölçüm FAZ 05 cihaz testlerine ait.
-- **Highlight eşiği / zaman çizelgesi işareti (M14 bulgusu, 2026-08-14):** ME 15.3'ün H > 0,50 eşiği
-  ölçümde 0,5-0,8 işaret/maç veriyor. Seçenekler: (a) eşiği spec'te 0,35-0,40'a çekmek → ~3-5
-  işaret/maç, formül aynı kalır; (b) eşiği korumak ve zaman çizelgesini "en yüksek 6 an"la beslemek →
-  spec'e dokunulmaz, işaret sayısı sabit 6 olur; (c) `xG_salınımı` terimini 3 sonuçlu (galibiyet/
-  beraberlik/mağlubiyet) WinProb'a taşımak → gol sıçramaları büyür, eşik anlamlı kalır, en fazla iş.
-  Öneri: **(b)** — sunum kararı, motor mantığına dokunmaz (17.5 "ayar sahası" ilkesiyle uyumlu).
+- ~~**Highlight eşiği / zaman çizelgesi işareti.**~~ → **YAPILDI (2026-08-31, K10-C):** seçenek (b).
+  Eşik korundu (`HighlightCount` hâlâ ME 15.3 tanımı), çizelge `zamanCizelgesiIsaret` [KALİBRE]
+  kadar en yüksek andan besleniyor. Ölçüm: eşikle 41/60 maçta sıfır işaret.
+- **Sunum ayarları `config_hash` içinde mi kalsın? (K10-C gözlemi, 2026-08-31)** `zamanCizelgesiIsaret`
+  simülasyonu etkilemiyor (50/50 `stateHash` aynı) ama `balanceHash`i değiştirip golden yenilemesi
+  gerektirdi. (a) kabul et; (b) sunum ayarlarını `config_hash` dışı dosyaya taşı. **Öneri: (a)**
+  bugün — tek ayar için ikinci bir okuma kaynağı pahalı; sayı artarsa (b).
 - Premium etkilerin public ligde şeffaf rozeti (panel M-bulgusu) → tasarım kararı, FAZ 02 öncesi.
 - ~~3G Greybox Fun Gate GO/NO-GO~~ → **KAPANDI (2026-08-08): NO-GO %40** — uygulama yukarıdaki kapanış bölümünde; sunum revizyonu + mülakatlı doğrulama turu Dikey Dilim öncesi BORÇ.
 - BRIEF_3G_GREYBOX RA#1 metninin pivot sonrası revizyonu (GDD v4.2 turu).

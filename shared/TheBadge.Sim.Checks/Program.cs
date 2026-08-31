@@ -3367,6 +3367,12 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     var eRules = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.WorldRules>(
         System.IO.File.ReadAllText(wPath), eOpts);
 
+    // ECONOMY_MAP "Denge kuralları" bandı — İKİ kapı da (26a işletme koşusu, K10-D inşaat
+    // koşusu) BU değerleri kullanır. Balance JSON'una TAŞINMADI, bilerek: bu bir ayar değil
+    // SÖZLEŞMEdir; JSON'a taşımak bandı gevşetmeyi kod incelemesinden çıkarıp bir satır
+    // düzenlemesine indirirdi (CLAUDE.md "Checks'i zayıflatma"). Kodda tek yerde durur.
+    const double EkoOranAlt = 1.05, EkoOranUst = 1.15;
+
     // 26a) EKONOMİ SÖZLEŞMESİ — ECONOMY_MAP: sezon source/sink 1,05-1,15 · maaş payı %45-60
     {
         const int Sezon = 10;
@@ -3381,10 +3387,10 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                           $"yayın {T.YayinTl / Sezon / 1e6:F1} · prim {T.PrimTl / Sezon / 1e6:F1} || maaş {T.MaasTl / Sezon / 1e6:F1} · " +
                           $"bakım {T.BakimTl / Sezon / 1e6:F1} · personel {T.PersonelTl / Sezon / 1e6:F1} · işletme {T.IsletmeTl / Sezon / 1e6:F1} · faiz {T.FaizTl / Sezon / 1e6:F1}");
         string hata = "";
-        if (oran < 1.05 || oran > 1.15) hata += $"source/sink {oran:F3} bant dışı [1,05-1,15] ";
+        if (oran < EkoOranAlt || oran > EkoOranUst) hata += $"source/sink {oran:F3} bant dışı [{EkoOranAlt:F2}-{EkoOranUst:F2}] ";
         if (maasPayi < 0.45 || maasPayi > 0.60) hata += $"maaş payı %{maasPayi * 100:F1} bant dışı [%45-60] ";
         if (hata.Length > 0) failures += Fail("K3EkonomiSozlesmesi", hata);
-        else Pass($"K3EkonomiSozlesmesi(source/sink {oran:F3} ∈ [1,05-1,15] · maaş payı %{maasPayi * 100:F1} ∈ [%45-60])");
+        else Pass($"K3EkonomiSozlesmesi(source/sink {oran:F3} ∈ [{EkoOranAlt:F2}-{EkoOranUst:F2}] · maaş payı %{maasPayi * 100:F1} ∈ [%45-60])");
     }
 
     // 26b) DETERMİNİZM — CB 5.2 "aynı durum + aynı komut = aynı sonuç". Ekonomi tick'i
@@ -3595,6 +3601,133 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             ActionType = act, IssuedAtUnixMs = K3Host, MatchTick = 0, UserId = user,
             SaveSlotId = 1, TeamIdx = 0, PayloadJson = new byte[0]
         };
+
+    // ===================== K10-D — CAPEX SÖZLEŞMESİ (ECONOMY_MAP açık ucu) =====================
+    // AÇIK UÇ: `K3EkonomiSozlesmesi` source/sink bandını HİÇ İNŞAAT YAPMAYAN bir referans koşuda
+    // ölçüyor (`InsaatTl == 0`). ECONOMY_MAP ise "İnşaat + tesis bakımı"nı sink sayıyor. Yani
+    // dokümanın saydığı beş sink satırından biri kapısızdı: capex ölçülmüyordu.
+    //
+    // ÖLÇÜLEN SENARYO: `KademeliInsaatKosu` — parametresiz, kredisiz, EN HIZLI inşa politikası
+    // (slot boşsa ve para yetiyorsa yap), referans kulübün kendi tesis merdiveni (stadyum 3→5 +
+    // dört tesis 2→5 = 14 adım), komutlar Command Bus'tan.
+    //
+    // NE ÖĞRENİLDİ (8 seed, hepsinde aynı): merdiven 11 sezonda bitiyor · iflas yok · pencere
+    // içinde source/sink capex HARİÇ 1,48-1,49 (BANT DIŞI), capex DAHİL 1,123-1,132 (BANT İÇİ).
+    // Yani inşaat, büyüyen kulübü bantta tutan sink'in TA KENDİSİdir; `K3EkonomiSozlesmesi`nin
+    // capex'i dışarıda bırakması bir eksiklik değil, hiç inşaat yapmayan bir koşunun tanımıdır.
+    {
+        const int Ufuk = 24;   // koşu ufku — bandın üst ucundan (24) küçük olamaz
+        string hata = "";
+        var st0 = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+        var R = TheBadge.Checks.KademeliInsaatKosu.Kos(st0, eco, eRules, 0xEC0A0D1CUL, Ufuk,
+                                                       k3Bands, k3RlCfg, 42L);
+        long pIsletmeGider = R.MerdivenToplam.ToplamGider - R.MerdivenToplam.InsaatTl;
+        double pTam = R.MerdivenToplam.ToplamGider == 0 ? 0
+                    : (double)R.MerdivenToplam.ToplamGelir / R.MerdivenToplam.ToplamGider;
+        double pIsletme = pIsletmeGider == 0 ? 0 : (double)R.MerdivenToplam.ToplamGelir / pIsletmeGider;
+        double capexPayi = R.MerdivenToplam.ToplamGelir == 0 ? 0
+                         : (double)R.MerdivenToplam.InsaatTl / R.MerdivenToplam.ToplamGelir;
+
+        // SEZON SAVRULMASI — ortalamanın "her sezon böyle" diye okunmasını engelleyen rapor.
+        double sezonMin = double.MaxValue, sezonMax = double.MinValue;
+        int pencere = R.MerdivenSezon > 0 ? R.MerdivenSezon : R.Sezonlar.Count;
+        for (int i = 0; i < pencere; i++)
+        {
+            var L = R.Sezonlar[i];
+            if (L.ToplamGider == 0) continue;
+            double o = (double)L.ToplamGelir / L.ToplamGider;
+            if (o < sezonMin) sezonMin = o;
+            if (o > sezonMax) sezonMax = o;
+        }
+
+        Console.WriteLine($"[info] K10 capex: merdiven {R.MerdivenSezon} sezon (bant [{eco.capex.merdivenSezonBandi[0]}," +
+                          $"{eco.capex.merdivenSezonBandi[1]}]) · {R.BaslatilanInsaat} inşaat · iflas {(R.IflasSezonu < 0 ? "yok" : R.IflasSezonu.ToString())} · " +
+                          $"en düşük kasa {R.MinKasaTl / 1e6:F1}M₺");
+        Console.WriteLine($"[info] K10 capex penceresi: source/sink capex DAHİL {pTam:F3} · capex HARİÇ {pIsletme:F3} · " +
+                          $"capex/gelir %{capexPayi * 100:F1} · sezon savrulması [{sezonMin:F3},{sezonMax:F3}]");
+
+        // (1) MERDİVEN ULAŞILABİLİR ve TRİVİAL DEĞİL. Bant BİLEREK geniştir: ölçüm, sürenin
+        //     tier maliyetine olduğu kadar işletme fazlası oranına da bağlı olduğunu gösterdi
+        //     (yayın geliri ECONOMY_MAP bandının alt ucundayken merdiven 40 sezonda BİTMİYOR,
+        //     üst ucundayken 10 sezonda bitiyor). Dar bir bant capex'i değil fazla oranını
+        //     ölçerdi — fazla oranı zaten `K3EkonomiSozlesmesi`nin işi.
+        int bAlt = eco.capex.merdivenSezonBandi[0], bUst = eco.capex.merdivenSezonBandi[1];
+        if (Ufuk < bUst) hata += $"koşu ufku ({Ufuk}) bandın üst ucundan ({bUst}) küçük — kapı bandı ölçemez ";
+        if (R.MerdivenSezon < 0) hata += $"merdiven {Ufuk} sezonda TAMAMLANMADI (capex ulaşılamaz) ";
+        else if (R.MerdivenSezon < bAlt || R.MerdivenSezon > bUst)
+            hata += $"merdiven {R.MerdivenSezon} sezon, bant [{bAlt},{bUst}] dışı ";
+
+        // (2) ECONOMY_MAP bandı, İNŞAAT YAPAN koşuda ve capex DAHİL — dokümanın harfi harfine
+        //     okunuşu. PENCERE ORTALAMASI ölçülür, sezon sezon DEĞİL: capex yumruludur ve
+        //     sezon oranı savrulur (yukarıdaki rapor bunu gösterir).
+        if (pTam < EkoOranAlt || pTam > EkoOranUst)
+            hata += $"merdiven penceresi source/sink {pTam:F3} bant dışı [{EkoOranAlt:F2}-{EkoOranUst:F2}] ";
+
+        // (3) CAPEX YÜK TAŞIYOR. İnşaat çıkarılınca oran bandın ÜSTÜNE çıkmalı; çıkmıyorsa
+        //     capex ihmal edilebilir hâle gelmiştir ve tycoon katmanı ekonomiyi tutmuyordur.
+        //     (2) tek başına bunu ölçemez: capex sıfıra yaklaşsa da (2) yeşil kalabilirdi.
+        if (pIsletme <= EkoOranUst)
+            hata += $"capex ÇIKARILINCA oran {pIsletme:F3} hâlâ bant içinde — inşaat sink olarak yük taşımıyor ";
+
+        // (4) EN HIZLI İNŞA EDEN KULÜP İFLAS ETMEZ. Politika kredisiz ve "para varsa yap"tır;
+        //     iflas ederse maliyet/iade ayarı kulübü kendi parasıyla batırıyor demektir.
+        if (R.IflasSezonu >= 0) hata += $"en hızlı inşa eden kulüp sezon {R.IflasSezonu}'de iflas etti ";
+        if (R.BeklenmeyenRed > 0) hata += $"{R.BeklenmeyenRed} beklenmeyen kapı reddi (senaryo bozuk) ";
+
+        // (5) MERDİVEN GERÇEKTEN TIRMANILDI. Adım sayısı SABİT YAZILMAZ; fikstürün başlangıç
+        //     tier'larından ve balance'ın tavan tier'ından türetilir — aksi hâlde fikstür ya da
+        //     tavan değiştiğinde kapı "14 bekleniyordu" diye yanlış yerden bağırırdı.
+        int beklenenAdim = 0;
+        {
+            var stRef = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+            int mt = TheBadge.Checks.KademeliInsaatKosu.MaxTier(eco);
+            var liste = TheBadge.Checks.KademeliInsaatKosu.ReferansTesisler;
+            for (int i = 0; i < liste.Length; i++) beklenenAdim += mt - stRef.Club.TesisTier[liste[i]];
+        }
+        if (R.BaslatilanInsaat != beklenenAdim)
+            hata += $"merdiven {R.BaslatilanInsaat} adım ({beklenenAdim} bekleniyordu) ";
+
+        // (6) DETERMİNİZM — koşu Command Bus'tan geçiyor (dedup deposu, rate limiter, host saati).
+        //     Aynı seed iki koşuda BİT EŞİT durum vermeli; vermezse kapının ölçtüğü sayı da
+        //     koşudan koşuya oynardı ve bant bir şey ifade etmezdi.
+        {
+            var stD = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+            var RD = TheBadge.Checks.KademeliInsaatKosu.Kos(stD, eco, eRules, 0xEC0A0D1CUL, Ufuk,
+                                                            k3Bands, k3RlCfg, 42L);
+            if (TheBadge.World.WorldHash.Compute(stD) != TheBadge.World.WorldHash.Compute(st0))
+                hata += "kademeli koşu DETERMİNİSTİK DEĞİL (aynı seed, farklı durum) ";
+            if (RD.MerdivenSezon != R.MerdivenSezon) hata += "merdiven sezonu koşudan koşuya değişti ";
+        }
+
+        if (hata.Length > 0) failures += Fail("K10CapexSozlesmesi", hata);
+        else Pass($"K10CapexSozlesmesi(merdiven {R.MerdivenSezon} sezon ∈ [{bAlt},{bUst}] · iflas yok · " +
+                  $"capex DAHİL {pTam:F3} ∈ [{EkoOranAlt:F2}-{EkoOranUst:F2}] · capex HARİÇ {pIsletme:F3} bandın ÜSTÜNDE = inşaat yük taşıyor)");
+
+        // ---- MERDİVEN SONRASI: KAYITLI BORÇ ----
+        // Merdiven tükendikten sonra referans senaryoda GERİYE SINK KALMIYOR: kapasite 30K→90K
+        // olmuş, bakım tier'la doğrusal artmış ama gelir katlanmış; oran ~2,25'te kilitleniyor.
+        // Bu bir kapı hatası değil SENARYO kapsamının sonucudur: ECONOMY_MAP beş sink satırı
+        // sayıyor, referans koşu bunlardan TRANSFER BEDELLERİNİ hiç işletmiyor. Kapı bugünkü
+        // değeri TAVANLA dondurur (sessizce kötüleşmesin) ve hedefi yazar; hedefe nasıl
+        // inileceği Atilla'nın kararı — DECISIONS "Bekleyen kararlar".
+        {
+            string h2 = "";
+            if (R.MerdivenSezon < 0) h2 += "merdiven tamamlanmadı — sonrası ölçülemez ";
+            else
+            {
+                double sonra = TheBadge.Checks.KademeliInsaatKosu.MerdivenSonrasiOran(
+                    st0, eco, eRules, 0xEC0A0D1CUL, 5, k3Bands, k3RlCfg, 42L);
+                double tavan = eco.capex.merdivenSonrasiOranTavani, hedef = eco.capex.merdivenSonrasiHedefOran;
+                Console.WriteLine($"[info] K10 merdiven sonrası: source/sink {sonra:F3} (tavan {tavan:F2} · hedef {hedef:F2}) — " +
+                                  $"referans senaryoda transfer sink'i İŞLETİLMİYOR");
+                if (sonra > tavan) h2 += $"merdiven sonrası oran {sonra:F3} > kayıtlı tavan {tavan:F2} (borç KÖTÜLEŞTİ) ";
+                if (sonra <= hedef) h2 += $"oran {sonra:F3} ≤ hedef {hedef:F2} — BORÇ KAPANDI, tavan kaldırılmalı ve bu kapı düşmeli ";
+            }
+            if (h2.Length > 0) failures += Fail("K10MerdivenSonrasiSink", h2);
+            else Pass($"K10MerdivenSonrasiSink(BORÇ: merdiven tükenince sink kalmıyor — oran tavanla donduruldu, hedef " +
+                      $"{eco.capex.merdivenSonrasiHedefOran:F2}; transfer sink'i modellenince bu kapı düşer)");
+        }
+    }
 
     // Tycoon senaryo tablosu: geçerli payload + aksiyona ÖZGÜ kapı 3 ihlali reçetesi.
     // Kapı 3 ihlali üç biçimde kurulabilir: BAŞKA kullanıcı, durum kurulumu, ya da farklı payload.
@@ -5725,6 +5858,15 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
 {
     const int Ajan = 22;   // `Agents = new PlayerAgentState[22]` — MatchEngine.cs:313
 
+    // `SummaryCapacity` KAYNAKTAN okunur — kapının modeli koddan türesin, ona paralel yazılmasın.
+    int ozetKapasite;
+    {
+        string lodSrc = System.IO.File.ReadAllText(FindRepoFile("shared/TheBadge.Sim/src/Match/Lod2Resolver.cs"));
+        var mk = System.Text.RegularExpressions.Regex.Match(lodSrc, @"SummaryCapacity\s*=\s*(\d+)");
+        if (!mk.Success) throw new InvalidOperationException("Lod2Resolver.SummaryCapacity okunamadi — kapi modeli kuramaz");
+        ozetKapasite = int.Parse(mk.Groups[1].Value);
+    }
+
     // entity ifadesi → (taban, span, kaynak). Span, ifadenin işgal ettiği ARDIŞIK entity sayısı.
     var entityTablosu = new Dictionary<string, (int Taban, int Span, string Kaynak)>
     {
@@ -5752,11 +5894,11 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         ["(uint)(950 + victim)"]               = (950,  Ajan,  "ajan"),
         ["(uint)(950 + st.VarSubject)"]        = (950,  Ajan,  "ajan"),
         ["(uint)(1200 + i)"]                   = (1200, Ajan,  "ajan"),
-        // LOD 2 özet log: team ∈ {0,1} × 20 + idx. Gol tarafı `PoissonDraw` ile 15'te kapalı
-        // olduğundan idx < 20 YAPISAL olarak doğru; kart tarafında aynı yapısal garanti YOK
-        // (yalnız kalibrasyon ızgarasının küçüklüğünden geliyor) — DECISIONS'a açık uç yazıldı.
-        ["(uint)(7100 + team * 20 + idx)"]     = (7100, 40,    "team×20 + idx"),
-        ["(uint)(7200 + team * 20 + idx)"]     = (7200, 40,    "team×20 + idx"),
+        // LOD 2 özet log: team ∈ {0,1} × SummaryCapacity + idx (K10'da 20'den çekildi).
+        // Span KAYNAKTAN okunur, sabit yazılmaz: `SummaryCapacity` değişirse kapının modeli de
+        // değişmeli. Ayrım < kapasite yapılırsa `idx` taşar ve iki taraf çakışır — kapı görür.
+        ["(uint)(7100 + team * SummaryCapacity + idx)"] = (7100, 2 * ozetKapasite, "2 × SummaryCapacity"),
+        ["(uint)(7200 + team * SummaryCapacity + idx)"] = (7200, 2 * ozetKapasite, "2 × SummaryCapacity"),
     };
 
     // KASITLI PAYLAŞIM — (dosya, satırA, satırB) ve gerekçesi.
@@ -6012,6 +6154,170 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     if (k9hata.Length > 0) failures += Fail("K9AdresCakismasi", k9hata);
     else Pass($"K9AdresCakismasi({tarananDosya} Sim dosyasi · {adresler.Count} adres · entity ARALIK · " +
               $"{kasitliSayilan} kasitli paylasim bildirilmis · isgal modeli GERCEK Gauss01'e karsi dogrulandi · cakisan 0)");
+}
+
+// 32b) K10 — LOD 2 ÖZET LOG TARAF AYRIMI (K9'un adres kapısının GÖREMEDİĞİ sınıf).
+//
+// `OzetGol`/`OzetKart` entity'si `taban + team*AYRIM + idx`. İki tarafın çakışmaması için
+// `AYRIM > max(idx)` olmalı. Eski hâlde AYRIM 20 sabitti ve `idx`i yalnız `summaryCount <
+// SummaryCapacity` (32) kapatıyordu: kart tarafında 20. kayıttan sonrası öteki tarafın adresine
+// düşerdi. Goller `PoissonDraw`ın `k < 15` kapağıyla güvendeydi, kartlar DEĞİLDİ — koruma yapıdan
+// değil kalibrasyon ızgarasının küçüklüğünden geliyordu.
+//
+// NEDEN AYRI KAPI: `K9AdresCakismasi` bunu YAPISAL OLARAK göremez. O kapı her çağrı yerini TEK bir
+// entity ARALIĞI olarak modelleyip aralıklar ARASINDA kesişim arar; bir aralığın KENDİ İÇİNDE
+// takla atması (idx ayrımı aşınca öteki takımın yuvasına düşmesi) tek çağrı yerinin içinde olur ve
+// karşılaştırma hiç kurulmaz. Kapının kapsamını abartmamak için bu kontrol ayrı duruyor.
+{
+    string lod = System.IO.File.ReadAllText(FindRepoFile("shared/TheBadge.Sim/src/Match/Lod2Resolver.cs"));
+    string k10hata = "";
+
+    var mKap = System.Text.RegularExpressions.Regex.Match(lod, @"SummaryCapacity\s*=\s*(\d+)");
+    if (!mKap.Success) k10hata += "SummaryCapacity okunamadi ";
+    int kap = mKap.Success ? int.Parse(mKap.Groups[1].Value) : 0;
+
+    // 1) AYRIM, `idx`i kapatan sabitin KENDİSİ olmalı — sayı olarak eşit olması yetmez, AYNI
+    //    sembol olmalı ki biri değişince öteki de değişsin.
+    int semboluk = System.Text.RegularExpressions.Regex.Matches(lod, @"team \* SummaryCapacity \+ idx").Count;
+    if (semboluk != 2)
+        k10hata += $"taraf ayrimi `team * SummaryCapacity + idx` degil ({semboluk}/2 bulundu) - " +
+                   "ayrim `idx`i kapatan sabitten KOPMUS ";
+
+    // 2) `idx`i kapatan HER koşul `SummaryCapacity`ye karşı olmalı.
+    //
+    // İlk yazımda "en az 4 tane olsun" diye saymıştım — TAHMİN ettiğim bir sayıya bağlıydı ve
+    // gerçek sayı 6 çıktı, dolayısıyla biri bozulup 5'e düşünce kapı yine geçiyordu (diş ölçümü
+    // yakaladı). Doğru ifade sayı değil ÖZELLİK: `summaryCount <` karşılaştırmalarından HİÇBİRİ
+    // başka bir sınıra bağlı olmamalı.
+    var tumKarsilastirma = System.Text.RegularExpressions.Regex.Matches(lod, @"summaryCount\s*<\s*(\w+)");
+    int dongu = 0, sapan = 0; string sapanlar = "";
+    foreach (System.Text.RegularExpressions.Match mc in tumKarsilastirma)
+    {
+        if (mc.Groups[1].Value == "SummaryCapacity") dongu++;
+        else { sapan++; sapanlar += mc.Groups[1].Value + " "; }
+    }
+    if (dongu == 0) k10hata += "hic `summaryCount < SummaryCapacity` yok ";
+    if (sapan > 0) k10hata += $"{sapan} adet `summaryCount <` BASKA sinira bagli ({sapanlar.Trim()}) - " +
+                              "idx artik ayrimla ayni sabitle kapanmiyor ";
+
+    // 3) Gol tarafinin ikinci kapagi: PoissonDraw `k < 15`
+    if (!System.Text.RegularExpressions.Regex.IsMatch(lod, @"k < 15"))
+        k10hata += "PoissonDraw ust siniri (k < 15) bulunamadi ";
+
+    Console.WriteLine($"[info] K10 ozet ayrimi: SummaryCapacity {kap} · sembolik ayrim {semboluk}/2 · " +
+                      $"kapasiteye bagli karsilastirma {dongu} · sapan {sapan}");
+    if (k10hata.Length > 0) failures += Fail("K10OzetAyrimi", k10hata);
+    else Pass($"K10OzetAyrimi(taraf ayrimi = SummaryCapacity ({kap}) SEMBOLIK olarak · idx ayni sabitle " +
+              $"kapaniyor · iki taraf yapisal olarak ayrik)");
+}
+
+// 32c) K10 — BİREYSEL TALİMAT ATIL MI? (CB 4.2 açık ucunun gerçek durumu)
+//
+// Kayıtlı öneri "yalnız `set_instruction`ı maça taşı"ydı ve YANLIŞ BİR VARSAYIMA dayanıyordu:
+// talimatın hub'da bir etkisi olduğu. Yok. `Talimatlar` yazılıyor, `WorldHash`e giriyor ve
+// `InstructionSlot` ile YUVA TAHSİSİ için okunuyor — ama hiçbir oynanış mantığı `Deger`ini
+// okumuyor. Yani aksiyonu maç bağlamına taşımak, hiçbir şey yapmayan bir komutu yeni bir bağlama
+// taşımak olurdu: boşluk kapanmaz, GÖRÜNMEZ hale gelirdi.
+//
+// Bu kapı atıllığı GÖRÜNÜR tutar. Biri talimatları gerçekten bağladığında kapı KIRMIZIYA döner ve
+// CB 4.2'nin "Hub + Maç" sorusunu yeniden masaya koymaya zorlar — çünkü o an soru gerçek olur.
+{
+    string k10t = "";
+    var okuyanlar = new List<string>();
+    // ÖLÇÜT: talimatın DEĞERİNİN okunması (`Talimatlar[...].Deger`). "Talimatlar" kelimesini
+    // aramak yanlış pozitif verir — doğrulama mesajının METNİ bile o kelimeyi içeriyor (ilk
+    // yazımda kapı tam buna takıldı). Oynanışı etkilemek, değeri OKUMAKTIR.
+    //
+    // Meşru okuyucular: `WorldHash` (kalıcı durum özeti) ve `WorldJournal` (uygula/doğrula).
+    // `TalimatId` okumaları YUVA TAHSİSİdir, davranış değil — bu yüzden ölçüte girmez.
+    var mesru = new[] { "WorldHash.cs", "WorldJournal.cs" };
+    string worldKok = System.IO.Path.GetDirectoryName(FindRepoFile("shared/TheBadge.World/src/GameState.cs"));
+    var degerOkuma = new System.Text.RegularExpressions.Regex(@"Talimatlar\s*\[[^\]]*\]\s*\.\s*Deger");
+    foreach (string yol in System.IO.Directory.GetFiles(worldKok, "*.cs", System.IO.SearchOption.AllDirectories))
+    {
+        string ad = System.IO.Path.GetFileName(yol);
+        if (System.Array.IndexOf(mesru, ad) >= 0) continue;
+        foreach (string satir in System.IO.File.ReadAllLines(yol))
+        {
+            string t = satir.TrimStart();
+            if (t.StartsWith("//")) continue;
+            if (degerOkuma.IsMatch(satir)) okuyanlar.Add($"{ad}: {satir.Trim()}");
+        }
+    }
+    // Sim tarafı: maç motoru da talimat okumuyor olmalı (bugün `PlayerInstr` katalogu boş)
+    string simSrc = System.IO.File.ReadAllText(FindRepoFile("shared/TheBadge.Sim/src/Match/MatchCommands.cs"));
+    var mInstr = System.Text.RegularExpressions.Regex.Match(simSrc, @"enum PlayerInstr\s*:\s*byte\s*\{([^}]*)\}");
+    int instrSayisi = 0;
+    if (mInstr.Success)
+        foreach (string parca in mInstr.Groups[1].Value.Split(','))
+            if (parca.Trim().Length > 0) instrSayisi++;
+    if (instrSayisi > 1)
+        k10t += $"PlayerInstr katalogu artik dolu ({instrSayisi} deger) - mac tarafi da atil degil ";
+
+    if (okuyanlar.Count > 0)
+        k10t += "TALIMATLAR ARTIK OKUNUYOR — atil degil: " + string.Join(" | ", okuyanlar) +
+                " → CB 4.2'nin 'Hub + Mac' sorusu ARTIK GERCEK, bekleyen karar yeniden acilmali ";
+
+    Console.WriteLine($"[info] K10 talimat durumu: ATIL (yazilip hash'e giriyor, oynanisa etkisi YOK) · " +
+                      $"mesru olmayan okuyucu {okuyanlar.Count}");
+    if (k10t.Length > 0) failures += Fail("K10TalimatAtilligi", k10t);
+    else Pass("K10TalimatAtilligi(bireysel talimat ATIL - hicbir oynanis mantigi degerini okumuyor; " +
+              "baglandigi gun bu kapi duser ve CB 4.2 baglam sorusunu masaya koyar)");
+}
+
+// 32d) K10 — ZAMAN ÇİZELGESİ İŞARETLERİ (M14 açık ucunun kararı: seçenek (b))
+//
+// ME 15.3'ün `H > eşik` ölçütü ölçümde 0,5-0,8 işaret/maç veriyordu: maçların yarısında zaman
+// çizelgesi BOŞ kalıyordu. Seçenekler (a) eşiği spec'te düşürmek, (b) eşiği koruyup çizelgeyi
+// en yüksek N'den beslemek, (c) `xG_salınımı`nı 3 sonuçlu WinProb'a taşımak. Seçilen (b) —
+// SUNUM kararı, motor mantığına dokunmaz (ME 17.5 "ayar sahası").
+//
+// KAPININ ASIL İDDİASI: iki büyüklük AYRI kalıyor. `HighlightCount` hâlâ ME 15.3'ün EŞİK tanımıdır
+// ve değişmedi; `TimelineMarks` sunum içindir. Bunları birleştirmek spec'i sessizce değiştirmek
+// olurdu — kapı ikisinin ayrı davrandığını gösterir.
+{
+    string k10z = "";
+    int cizelgeHedef = simBal.highlight.zamanCizelgesiIsaret;
+    int bosCizelge = 0, esikBos = 0, sirasiz = 0, hedefTutmayan = 0;
+    const int NZ = 60;
+    for (int n = 0; n < NZ; n++)
+    {
+        ulong sd = 0x21AE00UL + (ulong)n * 7919UL;
+        var cfg = new MatchConfig
+        {
+            Seed = sd, EngineVersion = "k10-cizelge",
+            Home = BuildSheetSide(300, 7, home: true),
+            Away = BuildSheetSide(300, 7, home: false, idEntity: 8),
+            Referee = RefereeProfile.Default
+        };
+        var e = new MatchEngine(sd, new CommandQueue(), cfg, simBal) { AutoManage = true };
+        var st0 = MatchEngine.CreateInitialState(cfg);
+        e.Run(ref st0);
+        var pkt = e.BuildSummary(in st0);
+
+        if (pkt.TimelineMarks.Length == 0) bosCizelge++;
+        if (pkt.HighlightCount == 0) esikBos++;
+        // Hedef sayı: min(ayar, mevcut top sayısı)
+        int bekle = Math.Min(cizelgeHedef, pkt.TopEvents.Length);
+        if (pkt.TimelineMarks.Length != bekle) hedefTutmayan++;
+        // H'ye göre AZALAN olmalı
+        for (int i = 1; i < pkt.TimelineScores.Length; i++)
+            if (pkt.TimelineScores[i] > pkt.TimelineScores[i - 1]) { sirasiz++; break; }
+    }
+
+    if (hedefTutmayan > 0) k10z += $"{hedefTutmayan}/{NZ} macta cizelge isareti hedefi tutmadi ";
+    if (sirasiz > 0) k10z += $"{sirasiz}/{NZ} macta isaretler H'ye gore sirali degil ";
+    if (bosCizelge > 0) k10z += $"{bosCizelge}/{NZ} macta zaman cizelgesi BOS - acik ucun cozdugu sorun geri gelmis ";
+    // Eşiğin KENDİSİ değişmemiş olmalı: hâlâ maçların bir kısmında 0 işaret vermeli, yoksa
+    // `HighlightCount` sessizce çizelgeye bağlanmış demektir.
+    if (esikBos == 0) k10z += "esik tabanli HighlightCount hicbir macta 0 vermedi - " +
+                              "ME 15.3 olcutu cizelgeye baglanmis olabilir ";
+
+    Console.WriteLine($"[info] K10 zaman cizelgesi: hedef {cizelgeHedef} isaret · bos cizelge {bosCizelge}/{NZ} · " +
+                      $"esik tabanli sifir {esikBos}/{NZ}");
+    if (k10z.Length > 0) failures += Fail("K10ZamanCizelgesi", k10z);
+    else Pass($"K10ZamanCizelgesi({cizelgeHedef} isaret her macta dolu · H'ye gore sirali · " +
+              $"ME 15.3 esigi AYRI kaldi: {esikBos}/{NZ} macta sifir)");
 }
 
 // 33) K9-C — RPC KÖPRÜSÜ + TRANSACTIONAL OUTBOX (CB 8.1/8.2/8.3)

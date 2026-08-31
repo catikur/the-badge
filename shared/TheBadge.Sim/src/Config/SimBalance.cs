@@ -104,6 +104,7 @@ namespace TheBadge.Sim.Config
             public WinProbCfg winprob = new WinProbCfg();
             public double buyukSansXg;       // bu xG üstü şut "büyük şans" sayılır (Flags.BigChance)
             public double uzakGolMesafeM;    // bu mesafeden fazlası "uzak gol" nadirliğine girer
+            public int zamanCizelgesiIsaret;   // [KALİBRE] zaman çizelgesine basılan işaret sayısı (ME 17.5 ayar sahası)
             public NadirlikCfg nadirlik = new NadirlikCfg();
 
             /// <summary>H = 0,35×xG salınımı + 0,20×geç dakika + 0,20×skor etkisi

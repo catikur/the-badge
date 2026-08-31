@@ -409,6 +409,7 @@
     },
     "buyukSansXg": 0.35,
     "uzakGolMesafeM": 25.0,
+      "zamanCizelgesiIsaret": 6,
     "nadirlik": {
       "gol": 0.6,
       "uzakGol": 0.9,
