@@ -2139,10 +2139,37 @@ K9 inceleme turunda entity aralıkları modellenirken görüldü.
   (b) ayrımı 20'den `SummaryCapacity`ye çıkar; (c) kapıya `idx < 20` iddiasını bağla.
   **Öneri: (a)** — kapatma hem ucuz hem de garantiyi yapıya taşır.
 
+### K10-A: LOD 2 özet log taraf ayrımı yapısal yapıldı — ✅ TAMAM (2026-08-31)
+K9'un açık ucu. **Önerimden SAPTIM ve sebebi kayıtta.**
+
+- **Kayıtlı öneri (a) `idx`i 20'de kapatmaktı.** Uygulamadım: bu garantiyi yapıya taşırdı ama
+  20'den sonraki kart olaylarını LOG'DAN DÜŞÜRÜRDÜ. Seçenek (b) — ayrımı `SummaryCapacity`ye
+  çekmek — aynı garantiyi VERİ KAYBETMEDEN veriyor. Öneriyi yazarken bu maliyeti hesaba katmamışım.
+- **Değişiklik:** `7100/7200 + team * 20 + idx` → `+ team * SummaryCapacity + idx`. `idx`,
+  `summaryCount` ile birlikte artıyor ve döngüler `summaryCount < SummaryCapacity` ile kapanıyor;
+  dolayısıyla `idx ≤ SummaryCapacity-1` HER ZAMAN doğru → iki taraf yapısal olarak ayrık.
+- **`K9AdresCakismasi` bu sınıfı GÖREMİYOR** ve bunu abartmamak için ayrı kapı yazıldı. O kapı her
+  çağrı yerini TEK bir entity aralığı olarak modelleyip aralıklar ARASINDA kesişim arar; bir
+  aralığın KENDİ İÇİNDE takla atması tek çağrı yerinin içinde olur ve karşılaştırma hiç kurulmaz.
+- **`K10OzetAyrimi`** üç şeyi denetler: ayrım `SummaryCapacity` SEMBOLÜNÜN kendisi mi (sayıca eşit
+  olması yetmez — biri değişince öteki de değişmeli) · `summaryCount <` karşılaştırmalarından
+  HİÇBİRİ başka sınıra bağlı değil mi · gol tarafının ikinci kapağı (`k < 15`) duruyor mu.
+- **KAPI İLK YAZIMDA GEVŞEKTİ:** döngü kapağı denetimini "en az 4 tane olsun" diye TAHMİN ettiğim
+  bir sayıya bağlamışım; gerçek sayı 6 çıktı, dolayısıyla biri bozulup 5'e düşünce kapı yine
+  geçiyordu. Sayı yerine ÖZELLİK ifade edildi: hiçbir `summaryCount <` başka sınıra bağlı olamaz.
+- **Diş (iki yön):** ayrım sabit sayıya döndürüldü → FAIL · bir döngü kapağı başka sabite bağlandı
+  → FAIL (`1 adet summaryCount < BASKA sinira bagli (64)`).
+- **Golden KAYMADI** — beklenen: LOD 2 özet dakikaları hiçbir kapıda sabitlenmiyor (golden set LOD 0
+  maçlarıdır). Değişiklik gerçek (deplasman tarafının adresi 7120+idx → 7132+idx) ama kapılara
+  görünmez. Bu, LOD 2 özet logunun pinlenmemiş olduğunun kaydıdır — bir açık uç değil, bilgi.
+- **Kural:** **bir kapıyı TAHMİN ettiğin bir sayıya bağlama.** Sayı yanlışsa kapı gevşer ve bunu
+  yalnız diş ölçümü gösterir; ifade edilebilen bir ÖZELLİK varsa ona bağla.
+
 ## Bekleyen kararlar
 
-- **`OzetKart` entity ayrımı (yukarıdaki 🟡 bulgu).** Öneri: (a) `idx`i 20'de kapat. K9'un golden
-  turu taze olduğu için maliyeti bugün düşük.
+- ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —
+  `idx`i kapatmak 20. karttan sonrasını log'dan düşürürdü; ayrımı `SummaryCapacity`ye çekmek aynı
+  garantiyi veri kaybetmeden veriyor. `K10OzetAyrimi` kapısı eklendi.
 - ~~**xG katsayıları az tahmin ediyor.**~~ → **YAPILDI (2026-08-30, K9-B):** seçenek (b)
   sonra (a) — önce neden arandı. "%5,7" ölçüm gürültüsüydü; gerçek yanlılık +%4,26 ve K8'den
   eskiydi. `shot.xg.b0` -2,48 → -2,43 ile merkeze oturtuldu (+%0,33).

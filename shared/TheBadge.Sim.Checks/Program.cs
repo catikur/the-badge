@@ -5725,6 +5725,15 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
 {
     const int Ajan = 22;   // `Agents = new PlayerAgentState[22]` — MatchEngine.cs:313
 
+    // `SummaryCapacity` KAYNAKTAN okunur — kapının modeli koddan türesin, ona paralel yazılmasın.
+    int ozetKapasite;
+    {
+        string lodSrc = System.IO.File.ReadAllText(FindRepoFile("shared/TheBadge.Sim/src/Match/Lod2Resolver.cs"));
+        var mk = System.Text.RegularExpressions.Regex.Match(lodSrc, @"SummaryCapacity\s*=\s*(\d+)");
+        if (!mk.Success) throw new InvalidOperationException("Lod2Resolver.SummaryCapacity okunamadi — kapi modeli kuramaz");
+        ozetKapasite = int.Parse(mk.Groups[1].Value);
+    }
+
     // entity ifadesi → (taban, span, kaynak). Span, ifadenin işgal ettiği ARDIŞIK entity sayısı.
     var entityTablosu = new Dictionary<string, (int Taban, int Span, string Kaynak)>
     {
@@ -5752,11 +5761,11 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         ["(uint)(950 + victim)"]               = (950,  Ajan,  "ajan"),
         ["(uint)(950 + st.VarSubject)"]        = (950,  Ajan,  "ajan"),
         ["(uint)(1200 + i)"]                   = (1200, Ajan,  "ajan"),
-        // LOD 2 özet log: team ∈ {0,1} × 20 + idx. Gol tarafı `PoissonDraw` ile 15'te kapalı
-        // olduğundan idx < 20 YAPISAL olarak doğru; kart tarafında aynı yapısal garanti YOK
-        // (yalnız kalibrasyon ızgarasının küçüklüğünden geliyor) — DECISIONS'a açık uç yazıldı.
-        ["(uint)(7100 + team * 20 + idx)"]     = (7100, 40,    "team×20 + idx"),
-        ["(uint)(7200 + team * 20 + idx)"]     = (7200, 40,    "team×20 + idx"),
+        // LOD 2 özet log: team ∈ {0,1} × SummaryCapacity + idx (K10'da 20'den çekildi).
+        // Span KAYNAKTAN okunur, sabit yazılmaz: `SummaryCapacity` değişirse kapının modeli de
+        // değişmeli. Ayrım < kapasite yapılırsa `idx` taşar ve iki taraf çakışır — kapı görür.
+        ["(uint)(7100 + team * SummaryCapacity + idx)"] = (7100, 2 * ozetKapasite, "2 × SummaryCapacity"),
+        ["(uint)(7200 + team * SummaryCapacity + idx)"] = (7200, 2 * ozetKapasite, "2 × SummaryCapacity"),
     };
 
     // KASITLI PAYLAŞIM — (dosya, satırA, satırB) ve gerekçesi.
@@ -6012,6 +6021,61 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     if (k9hata.Length > 0) failures += Fail("K9AdresCakismasi", k9hata);
     else Pass($"K9AdresCakismasi({tarananDosya} Sim dosyasi · {adresler.Count} adres · entity ARALIK · " +
               $"{kasitliSayilan} kasitli paylasim bildirilmis · isgal modeli GERCEK Gauss01'e karsi dogrulandi · cakisan 0)");
+}
+
+// 32b) K10 — LOD 2 ÖZET LOG TARAF AYRIMI (K9'un adres kapısının GÖREMEDİĞİ sınıf).
+//
+// `OzetGol`/`OzetKart` entity'si `taban + team*AYRIM + idx`. İki tarafın çakışmaması için
+// `AYRIM > max(idx)` olmalı. Eski hâlde AYRIM 20 sabitti ve `idx`i yalnız `summaryCount <
+// SummaryCapacity` (32) kapatıyordu: kart tarafında 20. kayıttan sonrası öteki tarafın adresine
+// düşerdi. Goller `PoissonDraw`ın `k < 15` kapağıyla güvendeydi, kartlar DEĞİLDİ — koruma yapıdan
+// değil kalibrasyon ızgarasının küçüklüğünden geliyordu.
+//
+// NEDEN AYRI KAPI: `K9AdresCakismasi` bunu YAPISAL OLARAK göremez. O kapı her çağrı yerini TEK bir
+// entity ARALIĞI olarak modelleyip aralıklar ARASINDA kesişim arar; bir aralığın KENDİ İÇİNDE
+// takla atması (idx ayrımı aşınca öteki takımın yuvasına düşmesi) tek çağrı yerinin içinde olur ve
+// karşılaştırma hiç kurulmaz. Kapının kapsamını abartmamak için bu kontrol ayrı duruyor.
+{
+    string lod = System.IO.File.ReadAllText(FindRepoFile("shared/TheBadge.Sim/src/Match/Lod2Resolver.cs"));
+    string k10hata = "";
+
+    var mKap = System.Text.RegularExpressions.Regex.Match(lod, @"SummaryCapacity\s*=\s*(\d+)");
+    if (!mKap.Success) k10hata += "SummaryCapacity okunamadi ";
+    int kap = mKap.Success ? int.Parse(mKap.Groups[1].Value) : 0;
+
+    // 1) AYRIM, `idx`i kapatan sabitin KENDİSİ olmalı — sayı olarak eşit olması yetmez, AYNI
+    //    sembol olmalı ki biri değişince öteki de değişsin.
+    int semboluk = System.Text.RegularExpressions.Regex.Matches(lod, @"team \* SummaryCapacity \+ idx").Count;
+    if (semboluk != 2)
+        k10hata += $"taraf ayrimi `team * SummaryCapacity + idx` degil ({semboluk}/2 bulundu) - " +
+                   "ayrim `idx`i kapatan sabitten KOPMUS ";
+
+    // 2) `idx`i kapatan HER koşul `SummaryCapacity`ye karşı olmalı.
+    //
+    // İlk yazımda "en az 4 tane olsun" diye saymıştım — TAHMİN ettiğim bir sayıya bağlıydı ve
+    // gerçek sayı 6 çıktı, dolayısıyla biri bozulup 5'e düşünce kapı yine geçiyordu (diş ölçümü
+    // yakaladı). Doğru ifade sayı değil ÖZELLİK: `summaryCount <` karşılaştırmalarından HİÇBİRİ
+    // başka bir sınıra bağlı olmamalı.
+    var tumKarsilastirma = System.Text.RegularExpressions.Regex.Matches(lod, @"summaryCount\s*<\s*(\w+)");
+    int dongu = 0, sapan = 0; string sapanlar = "";
+    foreach (System.Text.RegularExpressions.Match mc in tumKarsilastirma)
+    {
+        if (mc.Groups[1].Value == "SummaryCapacity") dongu++;
+        else { sapan++; sapanlar += mc.Groups[1].Value + " "; }
+    }
+    if (dongu == 0) k10hata += "hic `summaryCount < SummaryCapacity` yok ";
+    if (sapan > 0) k10hata += $"{sapan} adet `summaryCount <` BASKA sinira bagli ({sapanlar.Trim()}) - " +
+                              "idx artik ayrimla ayni sabitle kapanmiyor ";
+
+    // 3) Gol tarafinin ikinci kapagi: PoissonDraw `k < 15`
+    if (!System.Text.RegularExpressions.Regex.IsMatch(lod, @"k < 15"))
+        k10hata += "PoissonDraw ust siniri (k < 15) bulunamadi ";
+
+    Console.WriteLine($"[info] K10 ozet ayrimi: SummaryCapacity {kap} · sembolik ayrim {semboluk}/2 · " +
+                      $"kapasiteye bagli karsilastirma {dongu} · sapan {sapan}");
+    if (k10hata.Length > 0) failures += Fail("K10OzetAyrimi", k10hata);
+    else Pass($"K10OzetAyrimi(taraf ayrimi = SummaryCapacity ({kap}) SEMBOLIK olarak · idx ayni sabitle " +
+              $"kapaniyor · iki taraf yapisal olarak ayrik)");
 }
 
 // 33) K9-C — RPC KÖPRÜSÜ + TRANSACTIONAL OUTBOX (CB 8.1/8.2/8.3)

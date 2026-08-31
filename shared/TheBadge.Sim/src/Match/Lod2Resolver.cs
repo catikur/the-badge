@@ -165,9 +165,19 @@ namespace TheBadge.Sim.Match
 
         static double Kuanta(double v) => (int)(v * 65536.0) / 65536.0;
 
+        /// <summary>TARAF AYRIMI `SummaryCapacity` KADARDIR, 20 değil (K10 bulgusu). Eski ayrım
+        /// `team * 20`, yalnız `idx < 20` iken doğruydu; goller `PoissonDraw`ın `k < 15` kapağıyla
+        /// yapısal olarak güvendeydi ama KARTLAR değildi — `sariEv` bir kalibrasyon ızgarasından
+        /// gelir ve yapısal üst sınırı yoktur; döngüyü yalnız `summaryCount < SummaryCapacity`
+        /// kapatır. Yani koruma yapıdan değil ızgara DEĞERLERİNİN küçüklüğünden geliyordu.
+        ///
+        /// Ayrım `SummaryCapacity`ye çekilince garanti YAPISAL olur: `idx`, `summaryCount` ile
+        /// birlikte arttığı ve döngü `summaryCount < SummaryCapacity` ile kapandığı için
+        /// `idx ≤ SummaryCapacity-1` her zaman doğrudur. `idx`i 20'de kapatmak da garantiyi
+        /// yapıya taşırdı ama 20. karttan sonrasını LOG'DAN DÜŞÜRÜRDÜ; bu çözüm veri kaybetmez.</summary>
         void OzetGol(ulong seed, byte team, int idx, int evSkor, int depSkor)
         {
-            uint dk = (uint)(Rng.Rand01(seed, Domain.Chaos, (uint)(7100 + team * 20 + idx), 0, 20) * 90);
+            uint dk = (uint)(Rng.Rand01(seed, Domain.Chaos, (uint)(7100 + team * SummaryCapacity + idx), 0, 20) * 90);
             summary[summaryCount++] = new MatchEvent
             {
                 Tick = dk * 600, Type = (ushort)EventType.Goal, ActorA = -1, ActorB = -1,
@@ -178,7 +188,7 @@ namespace TheBadge.Sim.Match
 
         void OzetKart(ulong seed, byte team, int idx, EventType tip)
         {
-            uint dk = (uint)(Rng.Rand01(seed, Domain.Chaos, (uint)(7200 + team * 20 + idx), 0, 21) * 90);
+            uint dk = (uint)(Rng.Rand01(seed, Domain.Chaos, (uint)(7200 + team * SummaryCapacity + idx), 0, 21) * 90);
             summary[summaryCount++] = new MatchEvent
             {
                 Tick = dk * 600, Type = (ushort)tip, ActorA = -1, ActorB = -1,
