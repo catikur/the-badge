@@ -14,6 +14,7 @@ namespace TheBadge.World
         public string[] hatlar = new string[0];
         public HatProfilleri hatProfilleri = new HatProfilleri();
         public int[] rolHat = new int[0];
+        public MacaGirisCfg macaGiris = new MacaGirisCfg();
         public KalibrasyonCfg kalibrasyon = new KalibrasyonCfg();
         public DizilisCfg dizilis = new DizilisCfg();
         public int yedekSayisi;
@@ -57,6 +58,14 @@ namespace TheBadge.World
             public double[] sutBandi = new double[0];
             public double[] kirmiziBandi = new double[0];
             public double kornerAlt;
+        }
+
+        /// <summary>Maç ÖNCESİ durumun motora eşlenmesi — K12-B (ME 12.1 / 12.3 ekleri).</summary>
+        [Serializable] public sealed class MacaGirisCfg
+        {
+            public string aciklama;
+            public double enerjiTaban, enerjiAralik;
+            public double moralMerkez, moralMomentumBolen;
         }
 
         [Serializable] public sealed class DizilisCfg
@@ -107,6 +116,11 @@ namespace TheBadge.World
             }
             if (toplam != 11) throw new ArgumentException($"squad.balance: diziliş {toplam} oyuncu tanımlıyor, 11 olmalı.");
             if (yedekSayisi < 0 || yedekSayisi > 9) throw new ArgumentException("squad.balance: yedekSayisi 0-9 olmalı.");
+            if (!(macaGiris.enerjiTaban > 0) || !(macaGiris.enerjiAralik > 0)
+                || macaGiris.enerjiTaban + macaGiris.enerjiAralik > 1000.0)
+                throw new ArgumentException("squad.balance: macaGiris enerji eğrisi (0,1000] içinde olmalı ve taban sıfırdan büyük olmalı.");
+            if (!(macaGiris.moralMomentumBolen > 0))
+                throw new ArgumentException("squad.balance: macaGiris.moralMomentumBolen sıfırdan büyük olmalı.");
             if (kalibrasyon.golBandi.Length != 2 || kalibrasyon.kartBandi.Length != 2
                 || kalibrasyon.sutBandi.Length != 2 || kalibrasyon.kirmiziBandi.Length != 2)
                 throw new ArgumentException("squad.balance: kalibrasyon bantlarının hepsi [alt,üst] olmalı.");
@@ -147,12 +161,14 @@ namespace TheBadge.World
             for (int i = 0; i < st.Oyuncular.Length; i++)
                 if (st.Oyuncular[i].ClubId == clubId && st.Oyuncular[i].SakatlikHafta == 0) n++;
             var id = new int[n]; var rol = new byte[n]; var guc = new byte[n];
+            var kond = new byte[n]; var moral = new byte[n];
             for (int i = 0, k = 0; i < st.Oyuncular.Length; i++)
             {
                 if (st.Oyuncular[i].ClubId != clubId || st.Oyuncular[i].SakatlikHafta > 0) continue;
-                id[k] = st.Oyuncular[i].PlayerId; rol[k] = st.Oyuncular[i].RolId; guc[k] = st.Oyuncular[i].Guc; k++;
+                id[k] = st.Oyuncular[i].PlayerId; rol[k] = st.Oyuncular[i].RolId; guc[k] = st.Oyuncular[i].Guc;
+                kond[k] = st.Oyuncular[i].Kondisyon; moral[k] = st.Oyuncular[i].Moral; k++;
             }
-            return KurDizi(bal, evSahibi, id, rol, guc, out hata);
+            return KurDizi(bal, evSahibi, id, rol, guc, out hata, kond, moral);
         }
 
         /// <summary>ÇEKİRDEK — kadroyu dizilerden kurar. `GameState` almayan bir yol gerekiyordu:
@@ -168,7 +184,8 @@ namespace TheBadge.World
         /// eşitlikte PlayerId artan. Eşitlik kuralı şart — `Guc` bayt, eşitlik sık ve kararsız
         /// sıralama aynı kadroya iki koşuda farklı 11 verirdi (determinizm ihlali).</summary>
         public static TeamSheet KurDizi(SquadBalance bal, bool evSahibi,
-                                        int[] playerId, byte[] rolId, byte[] guc, out string hata)
+                                        int[] playerId, byte[] rolId, byte[] guc, out string hata,
+                                        byte[] kondisyon = null, byte[] moral = null)
         {
             if (bal == null) throw new ArgumentNullException(nameof(bal));
             if (playerId == null || rolId == null || guc == null) throw new ArgumentNullException(nameof(playerId));
@@ -221,7 +238,8 @@ namespace TheBadge.World
                     int i = hatta[h][k];
                     kullanildi[i] = true;
                     sheet.Starters[yaz] = Giris(playerId[i], h, guc[i], bal,
-                                                isaret * bal.dizilis.capX[h], bal.dizilis.capY[h][k]);
+                                                isaret * bal.dizilis.capX[h], bal.dizilis.capY[h][k],
+                                                Enerji(bal, kondisyon, i));
                 }
 
             // YEDEKLER: HAT HAT DEĞİL, SIRAYLA (round-robin). Hat hat doldurmak, 18 kişilik
@@ -243,11 +261,25 @@ namespace TheBadge.World
                     int i = hatta[h][sonraki[h]++];
                     kullanildi[i] = true;
                     yedekler.Add(Giris(playerId[i], h, guc[i], bal,
-                                       isaret * bal.dizilis.capX[h], YedekCapaY(bal, h, hatYedek[h]++)));
+                                       isaret * bal.dizilis.capX[h], YedekCapaY(bal, h, hatYedek[h]++),
+                                       Enerji(bal, kondisyon, i)));
                     eklendi = true;
                 }
             }
             sheet.Bench = yedekler.ToArray();
+            // MOMENTUM İLK 11'İN MORALİNDEN — kulübede oturanın morali sahadaki havayı kurmaz.
+            if (moral != null && moral.Length == playerId.Length)
+            {
+                int toplam = 0, adet = 0;
+                for (int i = 0; i < 4; i++)
+                    for (int k = 0; k < bal.dizilis.hatSayilari[i]; k++) { toplam += moral[hatta[i][k]]; adet++; }
+                if (adet > 0)
+                {
+                    double m = (toplam / (double)adet - bal.macaGiris.moralMerkez) / bal.macaGiris.moralMomentumBolen;
+                    int mi = (int)Math.Round(m, MidpointRounding.AwayFromZero);
+                    sheet.BaslangicMomentum = (sbyte)(mi < -10 ? -10 : mi > 10 ? 10 : mi);
+                }
+            }
             sheet.Validate(evSahibi ? "ev" : "deplasman");
             return sheet;
         }
@@ -259,7 +291,18 @@ namespace TheBadge.World
         /// OLDUĞU GİBİ geçirmiştim; motor 4-32 arasını forvet saydığı için takım 14 forvetle
         /// sahaya çıkıyordu. Ölçüm açıktı ve gizlenemezdi: maç başına 40-58 şut, 8-4 skorlar.
         /// İki kimlik uzayı arasındaki çeviri `rolHat` hattıdır: hat + 1 = motor rolü.</summary>
-        static PlayerEntry Giris(int playerId, int hat, byte guc, SquadBalance bal, int ax, int ay)
+        /// <summary>Kondisyon → maça giriş enerjisi. `kondisyon` verilmemişse 0 döner ve motor
+        /// TAM enerjiyle başlatır (rakip kulüpler gibi kondisyon modellemeyen çağıranlar).</summary>
+        static ushort Enerji(SquadBalance bal, byte[] kondisyon, int i)
+        {
+            if (kondisyon == null || i >= kondisyon.Length) return 0;
+            double e = bal.macaGiris.enerjiTaban + bal.macaGiris.enerjiAralik * (kondisyon[i] / 100.0);
+            int v = (int)Math.Round(e, MidpointRounding.AwayFromZero);
+            return (ushort)(v < 1 ? 1 : v > 1000 ? 1000 : v);
+        }
+
+        static PlayerEntry Giris(int playerId, int hat, byte guc, SquadBalance bal, int ax, int ay,
+                                 ushort baslangicEnerji = 0)
         {
             var w = bal.Profil(hat).Dizi();
             byte N(int a) => Olcekle(guc, w[a]);
@@ -268,6 +311,7 @@ namespace TheBadge.World
                 PlayerId = (short)playerId,
                 Name = null,                      // sunum verisi — köprünün işi değil (ME 5.2: Name MatchState'e girmez)
                 RoleId = (byte)(hat + 1),   // hat → motor rolü (1 KL · 2 DF · 3 OS · 4 FV)
+                BaslangicEnerji = baslangicEnerji,
                 AnchorXmm = ax,
                 AnchorYmm = ay,
                 // TÜM 26 nitelik doldurulur; `SquadBalance.Validate` sıfır ağırlığı zaten reddeder.

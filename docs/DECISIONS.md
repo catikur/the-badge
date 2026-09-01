@@ -2385,6 +2385,30 @@ K11 bulgusunun kararı (a): "motor tarafını yeniden kalibre et". Atilla "hepsi
 - **Kural:** *kalibrasyon, ölçtüğün popülasyonların HEPSİNİ kapsamalı.* Bu oturumda aynı hatayı
   iki kez yaptım (K11'de rol ayrımı, K12'de lig dağılımı); ikisini de kapılar yakaladı.
 
+### K12-B: maç öncesi kondisyon ve moral motora bağlandı — ✅ TAMAM (2026-09-01)
+K11 köprü kararının (a) seçeneği: ME 12.1'e başlangıç enerjisi. Atilla "hepsini yap" dedi.
+
+- **NEDEN GEREKLİYDİ:** motor her maça `Energy = 1000` ile başlıyordu; `Kondisyon` yalnız dünya
+  tarafında anlam taşıyordu ve **rotasyon oynanışa HİÇ değmiyordu.** GDD 3'ün kadro yönetimi
+  vaadi karşılıksızdı: yorgun oyuncuyla çıkmakla dinlenmiş oyuncuyla çıkmak aynı maçı veriyordu.
+- **ME 12.1 EKİ:** `PlayerEntry.BaslangicEnerji` (0 = AYARLANMAMIŞ → tam enerji). Sıfırı
+  "bitkin" saymak, alanı doldurmayan her eski kadro kurucusunu sessizce sakatlardı; kapı bu
+  geriye uyumu ayrıca ölçüyor.
+- **ME 12.3 EKİ:** `TeamSheet.BaslangicMomentum` (-10..+10), İLK 11'in moral ortalamasından —
+  kulübede oturanın morali sahadaki havayı kurmaz. Motor momentumu maç içinde kendi işlemeye
+  devam ediyor; bu yalnız başlangıç noktası.
+- **[KALİBRE]** `squad.balance.json → macaGiris`: `enerji = enerjiTaban + enerjiAralik×(Kondisyon/100)`
+  (550 + 450) · `momentum = clamp(round((ortMoral − 50)/10), −10, +10)`. Taban SIFIR DEĞİL:
+  kondisyonu 0 olan oyuncunun sahada yok hükmünde olması bir KADRO KURALI, enerji eğrisinin işi değil.
+- **ÖLÇÜM:** kondisyon 90 → enerji 955, kondisyon 20 → 640 · moral 0 → momentum −5, moral 100 → +5 ·
+  24 maçlık averaj: taze −23, yorgun −39. Yorgun kadro sahada ölçülebilir şekilde daha kötü.
+- **Diş:** motorun `BaslangicEnerji` okuması kaldırılınca kapı `[enerji] yorgun kadro sahada AYNI:
+  taze averaj -10, yorgun -10` diyor — yani iddia gerçekten motoru ölçüyor.
+- **Golden churn YOK:** düz kadro kurucuları alanı doldurmadığı için M2/M4/M6/M16-E davranışı
+  değişmedi. Yalnız köprü kadrosu etkilendi ve bantlarda kaldı (gol 3,15 · şut 29,2 · kart 5,88).
+- **SPEC NOTU:** bu iki ek ME 12.1/12.3'e yapılmış EKLERDİR; spec dosyasına dokunulmadı, bu kayıt
+  bağlayıcıdır (ME 13.4 precedent'i) ve sonraki ME revizyonunda işlenir.
+
 ## Bekleyen kararlar
 
 - ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —
@@ -2445,13 +2469,9 @@ K11 bulgusunun kararı (a): "motor tarafını yeniden kalibre et". Atilla "hepsi
   orada (kaybedilen her müdahale foul adayı üretiyor), ama ayrı bir dilim.
 - ~~**Köprü kadrosuyla şut/maç 33,5 (hedef ≤32) — BORÇ.**~~ → **KAPANDI (2026-09-01, K12-A):**
   motor kalibrasyonu sonrası 30,2; tavan kaldırıldı, metrik normal banda döndü.
-- **Maç öncesi `Kondisyon` ve `Moral` motora taşınsın mı? (K11 köprü kararı, 2026-08-31)** Köprü
-  bunları BİLEREK haritalamıyor: motor her maça `Energy = 1000` ile başlıyor ve morali kendi
-  `momentum`u üzerinden işliyor; niteliğe karıştırmak çift sayım olurdu. Taşımak ME 12.1'de
-  "başlangıç enerjisi" kavramı ister. Seçenekler: (a) ME 12.1'e başlangıç enerjisi ekle —
-  yorgun kadroyla maça çıkmak gerçek bir tycoon kararı olur; (b) bugünkü hâl kalsın, kondisyon
-  yalnız dünya tarafında anlam taşısın. **Öneri: (a)** — rotasyon kararının oynanışa değmesi
-  GDD 3'ün vaadi; ama ME spec revizyonu, balance sprintine ait.
+- ~~**Maç öncesi `Kondisyon` ve `Moral` motora taşınsın mı? (K11 köprü kararı)**~~ →
+  **YAPILDI (2026-09-01, K12-B):** seçenek (a). ME 12.1'e başlangıç enerjisi, ME 12.3'e başlangıç
+  momentumu eklendi; rotasyon artık oynanışa değiyor. Yukarıdaki K12-B kaydı.
 - ~~**`Rng.Gauss01` çarpışması ne zaman düzeltilsin?**~~ → **KARAR (2026-08-30, Atilla): ŞİMDİ
   YAP.** Üç seçenek ölçülmüş maliyetle sunuldu (şimdi / FAZ 05 öncesi / hiç). Uygulandı, aşağıdaki
   K8 kaydına bakınız. Bekleyen karar kapandı.

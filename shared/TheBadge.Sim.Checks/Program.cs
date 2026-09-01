@@ -3900,6 +3900,80 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         }
 
 
+        // (11) K12-B — MAÇ ÖNCESİ DURUM MOTORA ULAŞIYOR (ME 12.1 / 12.3 ekleri).
+        //      K11'e kadar `Kondisyon` ve `Moral` yalnız dünya tarafında anlam taşıyordu:
+        //      motor her maça `Energy = 1000` ile başlıyordu ve rotasyon oynanışa HİÇ değmiyordu.
+        {
+            var tazeSt = TheBadge.Checks.KadroFixture.Kur(eRules, 630L, 42L);
+            var yorgunSt = TheBadge.Checks.KadroFixture.Kur(eRules, 630L, 42L);
+            for (int i = 0; i < yorgunSt.Oyuncular.Length; i++)
+            { var pp = yorgunSt.Oyuncular[i]; pp.Kondisyon = 20; yorgunSt.Oyuncular[i] = pp; }
+            var taze = TheBadge.World.SquadBridge.Kur(tazeSt, 630L, sqBal, true, out _);
+            var yorgun = TheBadge.World.SquadBridge.Kur(yorgunSt, 630L, sqBal, true, out _);
+
+            // (a) ENERJİ KADROYA YAZILIYOR ve kondisyonla ARTIYOR.
+            if (taze.Starters[0].BaslangicEnerji == 0) hata += "[enerji] taze kadroya enerji yazılmadı ";
+            if (!(taze.Starters[0].BaslangicEnerji > yorgun.Starters[0].BaslangicEnerji))
+                hata += $"[enerji] yorgun kadro daha düşük enerjiyle çıkmıyor " +
+                        $"({yorgun.Starters[0].BaslangicEnerji} ≥ {taze.Starters[0].BaslangicEnerji}) ";
+            if (yorgun.Starters[0].BaslangicEnerji == 0)
+                hata += "[enerji] yorgun kadro SIFIR yazdı — motor bunu 'ayarlanmamış' sayıp tam enerji verir ";
+
+            // (b) MOTOR BUNU OKUYOR: aynı seed, aynı rakip, tek fark kondisyon → yorgun takım
+            //     ölçülebilir şekilde DAHA KÖTÜ. Tek maç zar olurdu; 24 maçın toplamı ölçülür.
+            var rakipSt = TheBadge.Checks.KadroFixture.Kur(eRules, 631L, 43L);
+            var rakip = TheBadge.World.SquadBridge.Kur(rakipSt, 631L, sqBal, false, out _);
+            (int gol, int yenen, int sut) Kos(TeamSheet ev)
+            {
+                int g = 0, y = 0, sh = 0;
+                for (int n = 0; n < 24; n++)
+                {
+                    ulong sd = 0xE7E7A1UL + (ulong)n * 7919UL;
+                    var c = new MatchConfig { Seed = sd, EngineVersion = "k12b", Home = ev, Away = rakip,
+                                              Referee = RefereeProfile.Default, Lod = LodLevel.Lod0 };
+                    var en = new MatchEngine(sd, new CommandQueue(), c, simBal) { AutoManage = true };
+                    var mst = MatchEngine.CreateInitialState(c);
+                    var r = en.Run(ref mst);
+                    g += r.HomeGoals; y += r.AwayGoals; sh += r.Shots;
+                }
+                return (g, y, sh);
+            }
+            var rt = Kos(taze); var ry = Kos(yorgun);
+            if (!(rt.gol - rt.yenen > ry.gol - ry.yenen))
+                hata += $"[enerji] yorgun kadro sahada AYNI: taze averaj {rt.gol - rt.yenen}, yorgun {ry.gol - ry.yenen} ";
+
+            // (c) MORAL → BAŞLANGIÇ MOMENTUMU, ve bant -10..+10 dışına ÇIKMIYOR.
+            var moralliSt = TheBadge.Checks.KadroFixture.Kur(eRules, 632L, 42L);
+            for (int i = 0; i < moralliSt.Oyuncular.Length; i++)
+            { var pp = moralliSt.Oyuncular[i]; pp.Moral = 100; moralliSt.Oyuncular[i] = pp; }
+            var kotuSt = TheBadge.Checks.KadroFixture.Kur(eRules, 632L, 42L);
+            for (int i = 0; i < kotuSt.Oyuncular.Length; i++)
+            { var pp = kotuSt.Oyuncular[i]; pp.Moral = 0; kotuSt.Oyuncular[i] = pp; }
+            var yuksek = TheBadge.World.SquadBridge.Kur(moralliSt, 632L, sqBal, true, out _);
+            var dusuk = TheBadge.World.SquadBridge.Kur(kotuSt, 632L, sqBal, true, out _);
+            if (!(yuksek.BaslangicMomentum > dusuk.BaslangicMomentum))
+                hata += $"[moral] momentum morale bağlı değil ({yuksek.BaslangicMomentum} ≤ {dusuk.BaslangicMomentum}) ";
+            if (yuksek.BaslangicMomentum > 10 || dusuk.BaslangicMomentum < -10)
+                hata += $"[moral] momentum -10..+10 bandı dışına çıktı ({dusuk.BaslangicMomentum}..{yuksek.BaslangicMomentum}) ";
+
+            // (d) AYARLANMAMIŞ ALAN TAM ENERJİ demek — eski kadro kurucuları davranış DEĞİŞTİRMEZ.
+            //     Sıfırı "bitkin" saymak, alanı doldurmayan her sheet'i sessizce sakatlardı.
+            {
+                var düz = BuildSheetSide(300, 7, home: true);
+                if (düz.Starters[0].BaslangicEnerji != 0) hata += "[uyum] düz kadro enerji yazıyor (test varsayımı bozuldu) ";
+                var c = new MatchConfig { Seed = 4242, EngineVersion = "k12b", Home = düz,
+                                          Away = BuildSheetSide(300, 8, home: false),
+                                          Referee = RefereeProfile.Default, Lod = LodLevel.Lod0 };
+                var mst = MatchEngine.CreateInitialState(c);
+                if (mst.Agents[0].Energy != 1000)
+                    hata += $"[uyum] ayarlanmamış enerji {mst.Agents[0].Energy} ≠ 1000 (eski kadrolar sessizce yorgun başlar) ";
+            }
+
+            Console.WriteLine($"[info] K12-B maça giriş: enerji kondisyon 90 → {taze.Starters[0].BaslangicEnerji}, " +
+                              $"kondisyon 20 → {yorgun.Starters[0].BaslangicEnerji} · momentum moral 0 → {dusuk.BaslangicMomentum}, " +
+                              $"moral 100 → {yuksek.BaslangicMomentum} · 24 maç averaj taze {rt.gol - rt.yenen} / yorgun {ry.gol - ry.yenen}");
+        }
+
         // (10) İNCELEME BULGULARI (Codex, 2026-09-01) — dördü de kapıyla korunuyor.
         {
             // (a) SAKAT OYUNCU İLK 11'E GİRMEZ. En güçlü oyuncuyu sakatla; seçilmemeli.

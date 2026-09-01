@@ -349,6 +349,12 @@ namespace TheBadge.Sim.Match
                 ApplyEntry(ref s.Agents[11 + i], cfg.Away.Starters[i]);
             }
             // Santra: ev sahibi başlar; forvet topun başında (ölü top kilidi Flight=3, ME 10)
+            // BAŞLANGIÇ MOMENTUMU (ME 12.3 eki): kadro moralinin maça yansıması. Motor
+            // momentumu maç içinde kendi işler; bu yalnız başlangıç noktasıdır.
+            s.HomeRt.Momentum = Kirp(cfg.Home.BaslangicMomentum);
+            s.AwayRt.Momentum = Kirp(cfg.Away.BaslangicMomentum);
+            for (int i = 0; i < 22; i++) s.Agents[i].Momentum = i < 11 ? s.HomeRt.Momentum : s.AwayRt.Momentum;
+
             s.Agents[10].X = -600; s.Agents[10].Y = 0;
             s.Agents[10].TargetX = -600; s.Agents[10].TargetY = 0;
             s.SetPiece = SetPieceType.Kickoff;
@@ -358,6 +364,10 @@ namespace TheBadge.Sim.Match
             s.Ball.LastTouchTeam = 0;
             return s;
         }
+
+        /// <summary>Momentum bandı -10..+10 (ME 12.3). Kadro kurucusunun bant dışı bir değer
+        /// vermesi, motorun kendi ölçeğini sessizce kaydırmak olurdu.</summary>
+        static sbyte Kirp(sbyte m) => m < -10 ? (sbyte)-10 : m > 10 ? (sbyte)10 : m;
 
         /// <summary>Maç bitti mi — FullTime fazı (ME 4.1).</summary>
         public static bool IsFinished(in MatchState st) => st.Phase == MatchPhase.FullTime;
@@ -380,6 +390,9 @@ namespace TheBadge.Sim.Match
 
         static void ApplyEntry(ref PlayerAgentState a, PlayerEntry e)
         {
+            // BAŞLANGIÇ ENERJİSİ (ME 12.1 eki): 0 = ayarlanmamış → tam enerji. Sıfırı "bitkin"
+            // saymak, alanı doldurmayan her eski kadro kurucusunu sessizce sakat bırakırdı.
+            if (e.BaslangicEnerji > 0) a.Energy = e.BaslangicEnerji > 1000 ? (ushort)1000 : e.BaslangicEnerji;
             a.RoleId = e.RoleId;
             a.AnchorX = e.AnchorXmm; a.AnchorY = e.AnchorYmm;
             a.X = e.AnchorXmm; a.Y = e.AnchorYmm;

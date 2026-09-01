@@ -1,6 +1,6 @@
 {
   "surum": 1,
-  "aciklama": "K11 kadro->TeamSheet koprusu [KALIBRE]. Dunya tarafindaki tek sayilik `Guc` (0-100) mac motorunun 26 niteligine BURADA acilir: nitelik = clamp(round(Guc*agirlik),1,99). HICBIR AGIRLIK 0 DEGIL: sifir nitelik o alt sistemi sessizce oldurur (M4 dersi, TeamSheet kurucusundaki yorum). Kondisyon ve Moral BURADA HARITALANMAZ - motor Energy=1000 ile basliyor ve morali momentum uzerinden isliyor; tasimak ME 12.1 degisikligi ister. PROFIL FUTBOL GERCEKCILIGINE GORE YAZILIR, motora gore BOZULMAZ (K12). K11'de tersi yapilmisti: motorun kart kalibrasyonu rol ayrimi olmayan kadrolarla yapildigi icin profil egilip bukulmus, forvet cevikligi defansinkinin altina dusmustu. K12'de motor tarafi kalibre edildi (referee.marginBolen/sariEsik/sariSonrasiIhtiyat + utility.sutTehditCarpan/sutBaskiCezasi) ve profil geri duzeltildi. Olcum: kopru kadrosuyla gol 2,71 sut 27,8 kart 5,28 kirmizi 0,26 - hepsi bant ici, kirmizi M16-E hedefinde (0,15-0,30).",
+  "aciklama": "K11 kadro->TeamSheet koprusu [KALIBRE]. Dunya tarafindaki tek sayilik `Guc` (0-100) mac motorunun 26 niteligine BURADA acilir: nitelik = clamp(round(Guc*agirlik),1,99). HICBIR AGIRLIK 0 DEGIL: sifir nitelik o alt sistemi sessizce oldurur (M4 dersi, TeamSheet kurucusundaki yorum). Kondisyon ve Moral K12-B'de MOTORA BAGLANDI (bkz. macaGiris): motor artik kadro basina baslangic enerjisi ve takim basina baslangic momentumu aliyor. PROFIL FUTBOL GERCEKCILIGINE GORE YAZILIR, motora gore BOZULMAZ (K12). K11'de tersi yapilmisti: motorun kart kalibrasyonu rol ayrimi olmayan kadrolarla yapildigi icin profil egilip bukulmus, forvet cevikligi defansinkinin altina dusmustu. K12'de motor tarafi kalibre edildi (referee.marginBolen/sariEsik/sariSonrasiIhtiyat + utility.sutTehditCarpan/sutBaskiCezasi) ve profil geri duzeltildi. Olcum: kopru kadrosuyla gol 2,71 sut 27,8 kart 5,28 kirmizi 0,26 - hepsi bant ici, kirmizi M16-E hedefinde (0,15-0,30).",
   "nitelikSirasi": [
     "Passing",
     "Finishing",
@@ -240,5 +240,12 @@
       0.05,
       0.6
     ]
+  },
+  "macaGiris": {
+    "aciklama": "K12-B: mac ONCESI durum -> motor. enerji = enerjiTaban + enerjiAralik*(Kondisyon/100), 0-1000 (ME 12.1). TABAN SIFIR DEGIL: kondisyonu 0 olan oyuncu sahada YOK hukmunde olurdu ve bu bir kadro kurali, enerji egrisinin isi degil. momentum = clamp(round((ortalamaMoral - moralMerkez)/moralMomentumBolen), -10, +10) (ME 12.3). K11'e kadar ikisi de motora TASINMIYORDU: kondisyon yalniz dunya tarafinda anlam tasiyor, rotasyon oynanisa hic degmiyordu.",
+    "enerjiTaban": 550.0,
+    "enerjiAralik": 450.0,
+    "moralMerkez": 50.0,
+    "moralMomentumBolen": 10.0
   }
 }
