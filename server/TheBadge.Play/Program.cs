@@ -100,6 +100,29 @@ Yaz($"  Katalog: {Catalog.Count} aksiyon · bağlanmamış {exec.UnboundActions(
 Yaz();
 
 // ------------------------------------------------------------------ SEZON DÖNGÜSÜ
+// HAFTA SONU DÜNYASININ NÖBETÇİSİ. Bu konsolun haftalık döngüsü üst-düzey deyimler içinde
+// yerel bir fonksiyon; `Sim.Checks` onu ÇAĞIRAMIYOR ve "döngü dünya adımını işletiyor mu"
+// sorusu birim kapısıyla ölçülemiyor. Bu boşluk iki kez ısırdı: önce `MacSonrasi.Isle` hiç
+// çağrılmıyordu, sonra rakiplerin hafta sonu. Üçüncüsünü beklemek yerine nöbetçi ARTEFAKTIN
+// KENDİSİNE kondu: koşunun sonunda dünya gerçekten ilerlemediyse konsol yüksek sesle düşer.
+// Kaynak metnine bakan bir kapı yazmadım — ilk yeniden düzenlemede yanlış yerden kırmızıya
+// dönerdi; bu nöbetçi ise DAVRANIŞA bakıyor.
+double RakipEnerjiOrt()
+{
+    long t = 0; int n = 0;
+    for (int i = 1; i < kulupler.Length; i++)
+        for (int k = 0; k < 11; k++) { t += kulupler[i].Ev.Starters[k].BaslangicEnerji; n++; }
+    return n == 0 ? 0 : (double)t / n;
+}
+int KulupKondisyonToplam()
+{
+    int t = 0;
+    for (int i = 0; i < st.Oyuncular.Length; i++) if (st.Oyuncular[i].ClubId == KULUP) t += st.Oyuncular[i].Kondisyon;
+    return t;
+}
+double rakipOrt0 = RakipEnerjiOrt();
+int kondToplam0 = KulupKondisyonToplam();
+
 int hafta = 1, oynanan = 0;
 bool cik = false;
 while (!cik && hafta <= kural.yapi.sezonHaftaSayisi)
@@ -123,6 +146,25 @@ while (!cik && hafta <= kural.yapi.sezonHaftaSayisi)
 
     HaftayiOyna(hafta, benim);
     hafta++; oynanan++;
+}
+
+// NÖBETÇİ: en az iki hafta oynandıysa hem oyuncunun kadrosu hem rakipler DEĞİŞMİŞ olmalı.
+// İkisi de aynı `MacSonrasi` aritmetiğinden geçiyor; biri kıpırdamıyorsa döngü o adımı
+// atlıyor demektir ve bu, sessizce kaybedilen bir oyun sistemidir.
+if (oynanan >= 2)
+{
+    string nHata = "";
+    if (KulupKondisyonToplam() == kondToplam0)
+        nHata += $"oyuncunun kadro kondisyonu {oynanan} hafta sonra HİÇ değişmedi (MacSonrasi.Isle çağrılmıyor); ";
+    if (Math.Abs(RakipEnerjiOrt() - rakipOrt0) < 0.5)
+        nHata += $"rakip 11 enerjisi {oynanan} hafta sonra HİÇ değişmedi (LigKurucu.HaftaSonu çağrılmıyor); ";
+    if (nHata.Length > 0)
+    {
+        Yaz();
+        Yaz($"  !! HAFTA SONU DÜNYASI İŞLEMEDİ: {nHata}");
+        Console.Error.WriteLine($"HAFTA SONU DÜNYASI İŞLEMEDİ: {nHata}");
+        Environment.ExitCode = 2;
+    }
 }
 
 Yaz();
@@ -199,7 +241,10 @@ void Kadro()
         int hat = e.RoleId - 1;
         byte guc = 0;
         for (int k = 0; k < st.Oyuncular.Length; k++) if (st.Oyuncular[k].PlayerId == e.PlayerId) guc = st.Oyuncular[k].Guc;
-        Yaz($"   {hatAd[hat]}  #{e.PlayerId,-4} güç {guc,3}   pas {e.Attributes.Passing,3} " +
+        byte kond = 0, mrl = 0;
+        for (int k = 0; k < st.Oyuncular.Length; k++)
+            if (st.Oyuncular[k].PlayerId == e.PlayerId) { kond = st.Oyuncular[k].Kondisyon; mrl = st.Oyuncular[k].Moral; }
+        Yaz($"   {hatAd[hat]}  #{e.PlayerId,-4} güç {guc,3} kond {kond,3} moral {mrl,3}  pas {e.Attributes.Passing,3} " +
             $"bitiricilik {e.Attributes.Finishing,3} müdahale {e.Attributes.Tackling,3} hız {e.Attributes.Pace,3}");
     }
     Yaz($"   Yedek: {sheet.Bench.Length} kişi   ·   motor okuması (takım gücü): {lod2.TeamStrength(sheet):F1}");
@@ -379,6 +424,21 @@ void HaftayiOyna(int h, Mac benim)
         LigKurucu.SonucIsle(e, d, r2.HomeGoals, r2.AwayGoals);
         lod2Sayisi++;
     }
+
+    // MAÇ SONRASI KADRO DURUMU — oynayan yorulur, oynamayan dinlenir, moral sonuca göre kayar.
+    // Bu olmadan K12-B'nin kondisyon eşlemesi çalışıyor ama hiçbir şey kondisyonu DEĞİŞTİRMİYOR
+    // ve rotasyon oyunda yine hiçbir şey ifade etmiyordu (inceleme bulgusu).
+    {
+        var jm = new WorldJournal();
+        MacSonrasi.Isle(st, KULUP, benimSheet, benimSonuc, sqBal, jm);
+        if (jm.Validate(st, out string mh)) jm.Apply(st);
+        else Yaz($"  ! maç sonrası journal geçersiz: {mh}");
+    }
+
+    // RAKİPLERİN HAFTA SONU — oyuncuyla AYNI aritmetik. Bu olmadan rakipler bütün sezon 90
+    // kondisyonda kalıyor, oyuncunun 11'i dengesine iniyor ve maç 1'den sonra her rakibe sessiz
+    // bir form üstünlüğü doğuyordu (inceleme bulgusu, Bugbot).
+    for (int i = 1; i < kulupler.Length; i++) LigKurucu.HaftaSonu(kulupler[i], sqBal);
 
     // HAFTA SONU EKONOMİSİ — ECONOMY_MAP source/sink
     var j = new WorldJournal();

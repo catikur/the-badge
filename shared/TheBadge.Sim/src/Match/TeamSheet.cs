@@ -12,6 +12,12 @@ namespace TheBadge.Sim.Match
         public byte RoleId;                  // rol tablosu M2 karar diliminde anlamlanır (ME 7.4)
         public int AnchorXmm, AnchorYmm;
         public PlayerAttributes Attributes;  // 1-100 taban değerler — salt-okunur taşınır
+        /// <summary>MAÇA GİRİŞ ENERJİSİ (ME 12.1 eki, K12-B). 0 = AYARLANMAMIŞ → motor tam
+        /// enerjiyle (1000) başlatır; eski kadro kurucuları ve testler böylece davranış
+        /// değiştirmez. Dünya katmanı bunu `PlayerState.Kondisyon`dan doldurur: yorgun kadroyla
+        /// maça çıkmak GERÇEK bir tycoon kararı olsun diye — K11'e kadar kondisyon yalnız dünya
+        /// tarafında anlam taşıyordu ve rotasyon oynanışa hiç değmiyordu.</summary>
+        public ushort BaslangicEnerji;
     }
 
     /// <summary>Takım kadrosu — 11 ilk on bir (index 0 KALECİ konvansiyonu) + kulübe.
@@ -20,6 +26,10 @@ namespace TheBadge.Sim.Match
     {
         public PlayerEntry[] Starters;   // [11]
         public PlayerEntry[] Bench;      // 0..9 — değişiklik hakları M-müdahale diliminde (ME 14.2)
+        /// <summary>MAÇA GİRİŞ MOMENTUMU (ME 12.3 eki, K12-B). -10..+10; 0 = nötr.
+        /// Dünya katmanı kadro moralinden doldurur. Motor momentumu maç içinde kendi işler;
+        /// bu yalnız BAŞLANGIÇ noktasıdır.</summary>
+        public sbyte BaslangicMomentum;
 
         /// <summary>Yapısal doğrulama — motor kurulumundan ÖNCE çağrılır; hata = kurulum reddi.</summary>
         public void Validate(string label)

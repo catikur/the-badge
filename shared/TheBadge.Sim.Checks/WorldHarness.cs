@@ -189,8 +189,25 @@ namespace TheBadge.Checks
         /// yerine genişliği ölçerdi ve referans kulübün kimliğiyle ilgisi olmazdı.</summary>
         public static readonly int[] ReferansTesisler = { 1, 2, 3, 4, 5 };
 
+        /// <summary>Maaş giderinin haftalık gelire oranı tavanı — ECONOMY_MAP "maaş sink'i toplam
+        /// sink'in %45-60'ı" kuralının politika karşılığı. Üst uçtan biraz aşağıda tutulur ki
+        /// politika bandın kendisini zorlamasın.</summary>
+        public const double MaasPayiTavani = 0.55;
+
+        /// <summary>Kadro dönüşü için asgari güç farkı. Sıfır olsaydı kulüp bir puanlık fark için
+        /// her hafta oyuncu feshedip alır, sink'i politikanın gürültüsü doldururdu.</summary>
+        public const int GucFarkiEsigi = 6;
+
         /// <summary>Tavan tier — `eco.insaat.tierSureHafta` uzunluğundan türetilir, elle yazılmaz.</summary>
         public static int MaxTier(EconomyBalance eco) => eco.insaat.tierSureHafta.Length - 1;
+
+        /// <summary>HEDEFİN SAHİPLİK DURUMUNA GÖRE DOĞRU AKSİYON — serbest oyuncu (`ClubId == 0`)
+        /// için `sign_free_agent`, sahipli oyuncu için `propose_offer`. Ayrı bir metot çünkü
+        /// KAPI bunu ölçüyor: koşucu ayrımı yapmadığında serbest hedefe her hafta `propose_offer`
+        /// gidiyor, bus `NotOwned` ile sessizce reddediyor ve transfer sink'i KİLİTLENİYOR
+        /// (inceleme bulgusu, P1). Çağrı yerinde gömülü bir üçlü ifade ölçülemezdi.</summary>
+        public static string TransferAksiyonu(long hedefClubId)
+            => hedefClubId == 0 ? "transfer.sign_free_agent" : "transfer.propose_offer";
 
         public struct Sonuc
         {
@@ -207,16 +224,36 @@ namespace TheBadge.Checks
             /// liste savrulmanın rapor edilmesini sağlar (ortalamayı "her sezon böyle" diye
             /// okumak, kapının iddiasını ölçtüğünden geniş yapardı).</summary>
             public List<WeekLedger> Sezonlar;
+            public int PiyasayaGiren;          // havuza katılan oyuncu (K12-C)
+            public int Transfer;               // tamamlanan alım (K12-C)
+            /// <summary>Süresi dolmuş yuvaya rağmen politikanın DEVAM ettiği hafta sayısı.
+            /// Sıfırsa ya senaryoda hiç teklif süresi dolmuyor (kapı boşa koşuyor) ya da
+            /// donma geri gelmiştir — ikisi de kapının bilmesi gereken bir şey.</summary>
+            public int OluYuvaGecildi;
+            /// <summary>Politikanın açık teklif yüzünden ÜST ÜSTE durduğu en uzun hafta serisi.
+            /// Sağlıklı hâlde `teklifGecerlilikHafta` mertebesindedir; donmuş politikada koşu
+            /// boyu büyür (ölçüldü: 494 hafta).</summary>
+            public int EnUzunEngelliSeri;
+            public int Fesih;                  // kadro dönüşü için fesih (K12-C)
         }
 
         public static Sonuc Kos(GameState st, EconomyBalance eco, WorldRules kural, ulong saveSeed,
                                 int sezon, IBandProvider bantlar,
-                                Dictionary<RateClass, RateLimitCfg[]> rlCfg, long ownerUserId)
+                                Dictionary<RateClass, RateLimitCfg[]> rlCfg, long ownerUserId,
+                                MarketBalance mb = null, TransferBalance tb = null)
         {
             var depo = new WorldStore(st);
             var ctx = new WorldContext(depo, kural);
             var exec = new WorldExecutor(depo, ctx);
             TycoonActions.Baglan(ctx, exec, eco);
+            // PİYASA AÇIKSA transfer aksiyonları da bağlanır ve pencere AÇILIR — `propose_offer`
+            // ve `respond_offer` transfer penceresi ister (`world.balance.pencereGerektiren`).
+            bool piyasa = mb != null && tb != null;
+            if (piyasa)
+            {
+                TransferActions.Baglan(ctx, exec, kural, tb, saveSeed);
+                st.Takvim.Pencere = TransferWindow.Yaz;
+            }
             var bus = new CommandBus.CommandBus(bantlar, ctx,
                 new SlidingWindowRateLimiter(rlCfg, 8, 300_000), new IdempotencyStore());
 
@@ -224,7 +261,7 @@ namespace TheBadge.Checks
                                 Sezonlar = new List<WeekLedger>(sezon) };
             int maxTier = MaxTier(eco);
             var j = new WorldJournal();
-            int hafta = 0;
+            int hafta = 0, engelliSeri = 0;
             // Host saati HAFTAYLA ilerler: aynı ana yığılan komutlar rate limiter'a takılırdı ve
             // kapı ekonomiyi değil hız sınırını ölçerdi.
             const long HaftaMs = 7L * 24 * 60 * 60 * 1000;
@@ -232,6 +269,10 @@ namespace TheBadge.Checks
 
             for (int s = 0; s < sezon; s++)
             {
+                // SEZON BAŞI HAVUZ GİRİŞİ. Journal'dan GEÇMEZ: dizi büyütmek yapısal bir dünya
+                // olayıdır, `WorldJournal` alan yazması için var. `EconomyTick`in journal
+                // kullanması onu bir OYUNCU EYLEMİ yapmaz — Tek Kapı komutlar içindir.
+                if (piyasa) r.PiyasayaGiren += TransferMarket.SezonBasiGiris(st, kural, mb, tb, saveSeed, s + 1);
                 var sezonL = new WeekLedger();
                 for (int h = 0; h < kural.yapi.sezonHaftaSayisi; h++, hafta++)
                 {
@@ -259,6 +300,156 @@ namespace TheBadge.Checks
                         if (o.Ok) r.BaslatilanInsaat++;
                         else if (o.Reason != RejectionReason.InsufficientFunds
                                  && o.Reason != RejectionReason.StateConflict) r.BeklenmeyenRed++;
+                    }
+
+                    // ---- 1b) TRANSFER KARARI (Tek Kapı) + KARŞI TARAF SÜRÜCÜSÜ ----
+                    // ÖNCELİK: ÖNCE MERDİVEN, SONRA KADRO. İki sink tek fazla için yarışıyor ve
+                    // önceliksiz politika ikisini de yarım bırakıyordu (ölçüm: 6 alım fazlanın
+                    // tamamını kalıcı maaş yükü olarak yedi, merdiven hiç bitmedi, kasa −13M).
+                    // Sıralama ekonomik gerçekten geliyor: CAPEX SONLUdur ve geliri KALICI olarak
+                    // büyütür; transfer SONSUZ bir sink'tir ve geliri büyütmez. Tersini yapan
+                    // kulüp kendi büyüme motorunu kapatır.
+                    if (piyasa && MerdivenBitti(st, eco))
+                    {
+                        // Açık teklifimiz yoksa ve para varsa, kadroyu güçlendirecek EN İYİ
+                        // hedefe teklif. Bütçe = kasa (kredisiz politika, capex ile aynı ilke).
+                        // AÇIK TEKLİF = CANLI TEKLİF. Süresi DOLMUŞ bir yuva politikayı bloke
+                        // ETMEZ: `propose_offer` ölü yuvayı zaten geri kazanır (K5), oysa ilk
+                        // yazımda `TeklifId != 0` yeterliydi ve `TransferTick` süresi dolmuş
+                        // teklife BİLEREK dokunmadığı için yuva sonsuza dek dolu kalıyordu.
+                        // Sonuç: ilk teklif süresi dolduktan sonra kulüp bir daha ne teklif
+                        // veriyor, ne fesih yapıyor, ne kabul ediyordu — politika DONUYORDU.
+                        // ÖLÇÜM: 13 sezonluk piyasalı koşuda açık teklifli 508 haftanın 494'ü
+                        // tam olarak bu durumdaydı (inceleme bulgusu, Bugbot). Yani K12-C'nin
+                        // "merdiven sonrası 1,911" ölçümü DONMUŞ bir transfer politikasını
+                        // ölçüyordu. (Bugbot bulgusu, orta şiddet — ölçüldü, gerçek çıktı.)
+                        bool acikTeklif = false, oluYuva = false;
+                        for (int t = 0; t < st.Club.TransferTeklifleri.Length; t++)
+                        {
+                            if (st.Club.TransferTeklifleri[t].TeklifId == 0) continue;
+                            if (TransferActions.SureDoldu(st, st.Club.TransferTeklifleri[t])) oluYuva = true;
+                            else acikTeklif = true;
+                        }
+                        if (!acikTeklif && oluYuva) r.OluYuvaGecildi++;
+                        // ENGELLİ SERİ: politika açık teklif yüzünden kaç HAFTA ÜST ÜSTE durdu?
+                        // Sağlıklı hâlde bu, teklifin ömrüyle sınırlıdır; donduğunda sınırsız
+                        // büyür. Kapının ölçtüğü sayı budur — "kaç transfer oldu" değil, çünkü
+                        // transfer sayısı senaryonun zenginliğine de bağlı.
+                        if (acikTeklif) { engelliSeri++; if (engelliSeri > r.EnUzunEngelliSeri) r.EnUzunEngelliSeri = engelliSeri; }
+                        else engelliSeri = 0;
+                        // MAAŞ BÜTÇESİ — ECONOMY_MAP'in KENDİ kuralı ("maaş sink'i toplam sink'in
+                        // %45-60'ı"). İlk yazımda politika sınırsızdı: kulüp hem inşa edip hem
+                        // transfer yapmaya çalışıp iflas etti, merdiven hiç bitmedi (kasa −13M).
+                        // Asıl sink BEDEL değil ÜCRET: 6 alım bile kalıcı maaş yükü olarak
+                        // fazlanın tamamını yiyordu. Bütçesiz bir politika, piyasayı ölçmek yerine
+                        // politikanın kendi çılgınlığını ölçerdi.
+                        long haftalikGelir = 0;
+                        if (r.Sezonlar.Count > 0)
+                            haftalikGelir = r.Sezonlar[r.Sezonlar.Count - 1].ToplamGelir / kural.yapi.sezonHaftaSayisi;
+                        else haftalikGelir = r.Toplam.ToplamGelir / System.Math.Max(1, hafta);
+                        long maasTavani = (long)(haftalikGelir * MaasPayiTavani);
+
+                        // KADRO DÖNÜŞÜ: kadro TAVANDAYSA ve piyasada belirgin daha iyisi varsa
+                        // en zayıfı FESHET, yer aç. Bu olmadan transfer sink'i BİR KEZLİKtir —
+                        // kadro dolunca alım durur ve kasa şişer (ölçüm: merdiven sonrası oran
+                        // 1,88'de kaldı, kasa 3,3 milyar). Gerçek kulüp kadroyu döndürür; fesih
+                        // bedeli de ECONOMY_MAP'in transfer sink'ine yazılır.
+                        if (piyasa && !acikTeklif && st.Club.KasaTl > 0
+                            && st.Club.HaftalikMaasGiderTl < maasTavani)
+                        {
+                            int kadroSayisi = 0, enZayifIdx = -1;
+                            for (int q = 0; q < st.Oyuncular.Length; q++)
+                                if (st.Oyuncular[q].ClubId == st.Club.ClubId)
+                                {
+                                    kadroSayisi++;
+                                    if (enZayifIdx < 0 || st.Oyuncular[q].Guc < st.Oyuncular[enZayifIdx].Guc)
+                                        enZayifIdx = q;
+                                }
+                            if (kadroSayisi >= kural.yapi.kadroMax && kadroSayisi > kural.yapi.kadroMin
+                                && enZayifIdx >= 0)
+                            {
+                                // Piyasada en zayıfımızdan BELİRGİN daha iyisi var mı (tavan geçici
+                                // olarak +1 sayılarak sorulur — yer açmadan hedef görünmezdi).
+                                int aday = TransferMarket.EnIyiHedef(st, st.Club.ClubId, tb, st.Club.KasaTl,
+                                                                     kural.yapi.kadroMax + 1);
+                                if (aday >= 0 && st.Oyuncular[aday].Guc > st.Oyuncular[enZayifIdx].Guc + GucFarkiEsigi)
+                                {
+                                    var zf = new CommandEnvelope
+                                    {
+                                        CommandId = KomutId(hafta, 700 + enZayifIdx % 90), CatalogVersion = Catalog.Version,
+                                        Source = CommandSource.UI, ActionType = "transfer.release_player",
+                                        IssuedAtUnixMs = host, MatchTick = 0, UserId = ownerUserId,
+                                        SaveSlotId = 1, TeamIdx = 0, PayloadJson = new byte[0]
+                                    };
+                                    var sf = bus.Submit(zf, new TestPayload().Set("oyuncuId",
+                                                 (double)st.Oyuncular[enZayifIdx].PlayerId), exec, host, ownerUserId);
+                                    if (sf.Ok) r.Fesih++;
+                                }
+                            }
+                        }
+
+                        if (!acikTeklif && st.Club.KasaTl > 0 && st.Club.HaftalikMaasGiderTl < maasTavani)
+                        {
+                            int hedef = TransferMarket.EnIyiHedef(st, st.Club.ClubId, tb, st.Club.KasaTl,
+                                                                  kural.yapi.kadroMax);
+                            if (hedef >= 0)
+                            {
+                                var hp = st.Oyuncular[hedef];
+                                long bedel = Valuation.PiyasaDegeri(hp, tb);
+                                long maas = Valuation.MaasTalebi(hp, tb);
+                                // Yeni maaş bütçeyi aşıyorsa teklif YOK — kadro tavanı gibi bu da
+                                // bir yönetim kuralı, piyasanın değil.
+                                if (st.Club.HaftalikMaasGiderTl + maas > maasTavani) goto transferSonu;
+                                // YOL AYRIMI: serbest oyuncu `propose_offer`ı `NotOwned` ile
+                                // reddeder; doğru aksiyon `sign_free_agent`tir. Ayrım yapılmazsa
+                                // aynı serbest oyuncu her hafta seçilir, teklif sessizce düşer ve
+                                // transfer sink'i KİLİTLENİR (inceleme bulgusu, P1).
+                                bool serbestOyuncu = hp.ClubId == 0;
+                                string aksiyon = TransferAksiyonu(hp.ClubId);
+                                var z = new CommandEnvelope
+                                {
+                                    CommandId = KomutId(hafta, 900 + hedef % 90), CatalogVersion = Catalog.Version,
+                                    Source = CommandSource.UI,
+                                    ActionType = aksiyon,
+                                    IssuedAtUnixMs = host, MatchTick = 0, UserId = ownerUserId,
+                                    SaveSlotId = 1, TeamIdx = 0, PayloadJson = new byte[0]
+                                };
+                                var syuk = serbestOyuncu
+                                    ? new TestPayload().Set("oyuncuId", (double)hp.PlayerId)
+                                                       .Set("maas", (double)maas).Set("sureYil", 3L)
+                                    : new TestPayload().Set("hedefOyuncuId", (double)hp.PlayerId)
+                                                       .Set("bedel", (double)bedel).Set("maas", (double)maas);
+                                var so0 = bus.Submit(z, syuk, exec, host, ownerUserId);
+                                if (so0.Ok && serbestOyuncu) r.Transfer++;
+                                // RED SESSİZ GEÇMEZ: aynı hedefe her hafta düşen bir teklif,
+                                // sink'in kilitlendiğini gizlerdi. Kapı bunu sayar.
+                                else if (!so0.Ok) r.BeklenmeyenRed++;
+                            }
+                        }
+                        transferSonu:
+                        // Sıra bizdeyse ve bedel karşılanabiliyorsa KABUL.
+                        for (int t = 0; t < st.Club.TransferTeklifleri.Length; t++)
+                        {
+                            var o = st.Club.TransferTeklifleri[t];
+                            if (o.TeklifId == 0 || !o.SiraTeklifEdende) continue;
+                            if (o.TeklifEdenClubId != st.Club.ClubId) continue;   // biz ALICIYIZ
+                            if (!st.CanAfford(o.BedelTl)) continue;
+                            var z2 = new CommandEnvelope
+                            {
+                                CommandId = KomutId(hafta, 800 + o.TeklifId % 90), CatalogVersion = Catalog.Version,
+                                Source = CommandSource.UI, ActionType = "transfer.respond_offer",
+                                IssuedAtUnixMs = host, MatchTick = 0, UserId = ownerUserId,
+                                SaveSlotId = 1, TeamIdx = 0, PayloadJson = new byte[0]
+                            };
+                            var so = bus.Submit(z2, new TestPayload().Set("teklifId", (double)o.TeklifId)
+                                                                      .Set("cevap", "kabul"),
+                                                exec, host, ownerUserId);
+                            if (so.Ok) r.Transfer++;
+                        }
+                        // KARŞI TARAF: teklife cevap verir (K6 sürücüsü).
+                        j.Clear();
+                        TransferTick.Ilerlet(st, tb, kural, saveSeed, j);
+                        if (j.Validate(st, out _)) j.Apply(st);
                     }
 
                     // ---- 2) HAFTALIK EKONOMİ TICK'İ ----

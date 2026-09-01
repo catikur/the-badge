@@ -349,6 +349,12 @@ namespace TheBadge.Sim.Match
                 ApplyEntry(ref s.Agents[11 + i], cfg.Away.Starters[i]);
             }
             // Santra: ev sahibi başlar; forvet topun başında (ölü top kilidi Flight=3, ME 10)
+            // BAŞLANGIÇ MOMENTUMU (ME 12.3 eki): kadro moralinin maça yansıması. Motor
+            // momentumu maç içinde kendi işler; bu yalnız başlangıç noktasıdır.
+            s.HomeRt.Momentum = Kirp(cfg.Home.BaslangicMomentum);
+            s.AwayRt.Momentum = Kirp(cfg.Away.BaslangicMomentum);
+            for (int i = 0; i < 22; i++) s.Agents[i].Momentum = i < 11 ? s.HomeRt.Momentum : s.AwayRt.Momentum;
+
             s.Agents[10].X = -600; s.Agents[10].Y = 0;
             s.Agents[10].TargetX = -600; s.Agents[10].TargetY = 0;
             s.SetPiece = SetPieceType.Kickoff;
@@ -358,6 +364,10 @@ namespace TheBadge.Sim.Match
             s.Ball.LastTouchTeam = 0;
             return s;
         }
+
+        /// <summary>Momentum bandı -10..+10 (ME 12.3). Kadro kurucusunun bant dışı bir değer
+        /// vermesi, motorun kendi ölçeğini sessizce kaydırmak olurdu.</summary>
+        static sbyte Kirp(sbyte m) => m < -10 ? (sbyte)-10 : m > 10 ? (sbyte)10 : m;
 
         /// <summary>Maç bitti mi — FullTime fazı (ME 4.1).</summary>
         public static bool IsFinished(in MatchState st) => st.Phase == MatchPhase.FullTime;
@@ -380,6 +390,9 @@ namespace TheBadge.Sim.Match
 
         static void ApplyEntry(ref PlayerAgentState a, PlayerEntry e)
         {
+            // BAŞLANGIÇ ENERJİSİ (ME 12.1 eki): 0 = ayarlanmamış → tam enerji. Sıfırı "bitkin"
+            // saymak, alanı doldurmayan her eski kadro kurucusunu sessizce sakat bırakırdı.
+            if (e.BaslangicEnerji > 0) a.Energy = e.BaslangicEnerji > 1000 ? (ushort)1000 : e.BaslangicEnerji;
             a.RoleId = e.RoleId;
             a.AnchorX = e.AnchorXmm; a.AnchorY = e.AnchorYmm;
             a.X = e.AnchorXmm; a.Y = e.AnchorYmm;
@@ -1835,28 +1848,40 @@ namespace TheBadge.Sim.Match
         void ResolveFoul(ref MatchState st, int defender, int victim, double atkEff, double defEff)
         {
             ref var d = ref st.Agents[defender];
-            // margin_açığı 0-1 normalize: 50 puanlık nitelik açığı tavan sayılır (100 puanlık açık
-            // futbolda görülmez; /100 normalizasyonu şiddet skorunu ölü bölgede bırakıyordu)
-            double marginGap = Math.Min(1.0, Math.Max(0.0, (defEff - atkEff) / 50.0));
+            // margin_açığı 0-1 normalize. BÖLEN [KALİBRE] (`referee.marginBolen`): bu sayı
+            // modelin ROL DUYARLILIĞINI belirler — bileşikler bir FARK olarak giriyor, dolayısıyla
+            // kadro profili keskinleştikçe fark sistematik büyür. Koda gömülü 50 değeri, rol
+            // ayrımı OLMAYAN sentetik kadrolarla kalibre edilmişti ve gerçek kadrolarda maç
+            // başına 9,07 kart / 1,88 kırmızı üretiyordu (bantlar 2,5-7,0 ve 0,15-0,30 — K11).
+            double marginGap = Math.Min(1.0, Math.Max(0.0, (defEff - atkEff) / bal.referee.marginBolen));
             double vMaxRef = bal.move.vMaxBase + bal.move.vMaxPaceSpan;
             double speed = Math.Min(1.0, Math.Sqrt((double)d.Vx * d.Vx + (double)d.Vy * d.Vy) / 1000.0 / vMaxRef);
             // Arkadan mı: müdahale vektörü taşıyıcının gidiş yönüyle aynı yarım düzlemdeyse
             ref var c = ref st.Agents[victim];
             double apx = c.X - d.X, apy = c.Y - d.Y;
             double fromBehind = (apx * c.Vx + apy * c.Vy) > 0 ? 1.0 : 0.0;
-            double s = 0.4 * marginGap + 0.25 * speed + 0.2 * fromBehind;
-            if (Eff(defender, attrs[defender].Aggression) > 70) s += 0.05;
+            double s = bal.referee.marginAgirlik * marginGap
+                     + bal.referee.hizAgirlik * speed
+                     + bal.referee.arkadanAgirlik * fromBehind;
+            if (Eff(defender, attrs[defender].Aggression) > bal.referee.agresifEsik) s += bal.referee.agresifEk;
             // Motivasyon tonu kart riskine işler — ME 14.3: "Ateşle" agresif oyuncuda foul
             // şiddetini +0,04 artırır, "Sakinleştir" düşürür
             var rtF = d.TeamIdx == 0 ? st.HomeRt : st.AwayRt;
             if (st.Tick < rtF.MotivationUntilTick)
             {
-                if (rtF.MotivationTone == (byte)ToneType.Atesle && Eff(defender, attrs[defender].Aggression) > 70) s += 0.04;
-                else if (rtF.MotivationTone == (byte)ToneType.Sakinlestir) s -= 0.04;
+                if (rtF.MotivationTone == (byte)ToneType.Atesle
+                    && Eff(defender, attrs[defender].Aggression) > bal.referee.agresifEsik) s += bal.referee.motivasyonEk;
+                else if (rtF.MotivationTone == (byte)ToneType.Sakinlestir) s -= bal.referee.motivasyonEk;
             }
             // SARI SONRASI İHTİYAT (M16-E): kartlı oyuncu çekinerek girer — gerçek futbol davranışı.
             // Ölçülen kök: kırmızıların TAMAMI ikinci sarıydı (1,0/maç, bant 0,15-0,30) çünkü
             // sarılar aynı agresif oyuncularda yoğunlaşıyor ve davranış değişmiyordu.
+            // SARI SONRASI İHTİYAT (M16-E): kartlı oyuncu çekinerek girer.
+            // K12'de İKİ ALTERNATİF ÖLÇÜLDÜ ve ikisi de daha kötü çıktı: (a) iskontoyu yalnız
+            // `marginGap`e uygulamak — rol ayrımı olan kadroyu bastırmak için gereken seviye
+            // (0,60) düz dağılımın kırmızısını yine sıfırladı; (b) iskontoyu "pervasız değilse"
+            // koşuluna bağlamak — köprü kadrosunun faulleri zaten üst sınırın üstünde olduğu
+            // için tam ters etki yaptı (kart 5,95 → 9,32). Koşulsuz uygulama en iyisi kaldı.
             if (d.YellowCards > 0) s *= 1.0 - bal.referee.sariSonrasiIhtiyat;
             // Ceza sahasında savunucu AYAKTA kalır, dalmaz — şiddet skoru bu ihtiyatla ölçeklenir.
             // Model eki (spec dışı davranış gerçeği): bu çarpan olmadan penaltı sıklığı 1,2/maç
@@ -2869,7 +2894,9 @@ namespace TheBadge.Sim.Match
         }
 
         /// <summary>Bekleyen değişiklikleri ölü topta uygular — ME 14.2 (22 hedefin tutarlı
-        /// yeniden hesabı için oyun durmuş olmalı). Giren oyuncu TAM enerjiyle gelir.
+        /// yeniden hesabı için oyun durmuş olmalı). Giren oyuncu KADRO GİRDİSİNDEKİ enerjiyle
+        /// gelir (K12-B eki); doküman burada "tam enerjiyle gelir" diyordu ve kod da öyle
+        /// yapıyordu — ikisi birlikte kondisyon modelini baypas ediyordu.
         /// Tarama sırası (takım, slot) SABİT — çoklu değişiklik tek durakta deterministik uygulanır.</summary>
         void ApplyPendingSubs(ref MatchState st)
         {
@@ -2894,7 +2921,13 @@ namespace TheBadge.Sim.Match
                 ApplyEnvToAttrs(ref attrs[outId]);   // hava/zemin deltası yeni oyuncuya da işler (12.4)
                 slot.RoleId = e.RoleId;
                 slot.AnchorX = e.AnchorXmm; slot.AnchorY = e.AnchorYmm;
-                slot.Energy = 1000;                 // taze bacak (ME 12.1 tavanı)
+                // GELEN OYUNCUNUN ENERJİSİ KORUNUR (K12-B eki; inceleme bulgusu, P2).
+                // Koşulsuz 1000, yorgun bir yedeği sahaya girer girmez tam forma sokuyordu ve
+                // K12-B'nin kondisyon modelini değişiklik yoluyla BAYPAS ediyordu. Sıfır yine
+                // "ayarlanmamış" demektir — ilk 11'deki kuralın aynısı.
+                slot.Energy = e.BaslangicEnerji > 0
+                    ? (e.BaslangicEnerji > 1000 ? (ushort)1000 : e.BaslangicEnerji)
+                    : (ushort)1000;
                 slot.Injury = InjuryState.None;
                 slot.YellowCards = 0;               // yeni oyuncu, yeni sicil
                 slot.SentOff = false;

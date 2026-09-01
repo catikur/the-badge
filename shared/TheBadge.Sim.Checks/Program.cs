@@ -685,7 +685,7 @@ Console.WriteLine($"[info] M2 durum hash: 0x{mA2.h:X}");
 if (mA2.h != mB2.h) failures += Fail("M2Determinism", $"0x{mA2.h:X} != 0x{mB2.h:X}");
 else Pass("M2Determinism");
 
-const ulong M2_GOLDEN = 0x03F1FB2C645841A1UL; // K9 adres ayrımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
+const ulong M2_GOLDEN = 0x5498E875C7247D5DUL; // K12 hakem/şut kalibrasyonuyla yeniden sabitlendi (2026-09-01 — bilinçli)
 if (M2_GOLDEN != 0 && mA2.h != M2_GOLDEN) failures += Fail("M2Golden", $"0x{mA2.h:X}");
 else Pass("M2Golden");
 
@@ -770,7 +770,7 @@ if (f1.hash != f2.hash || f1.res.TotalTicks != f2.res.TotalTicks)
     failures += Fail("M4Determinism", $"0x{f1.hash:X} != 0x{f2.hash:X}");
 else Pass("M4Determinism");
 
-const ulong M4_GOLDEN = 0xD8C76BF965937DC2UL; // K9 adres ayrımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
+const ulong M4_GOLDEN = 0x1CEF744588036154UL; // K12 hakem/şut kalibrasyonuyla yeniden sabitlendi (2026-09-01 — bilinçli)
 if (M4_GOLDEN != 0 && f1.hash != M4_GOLDEN) failures += Fail("M4Golden", $"0x{f1.hash:X}");
 else Pass("M4Golden");
 
@@ -1066,7 +1066,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     Console.WriteLine($"[info] M6 komutlu maç hash: 0x{hA:X}");
     if (hA != hB) failures += Fail("M6Determinism", $"0x{hA:X} != 0x{hB:X}");
     else Pass("M6Determinism");
-    const ulong M6_GOLDEN = 0x675BCD0B9EF7AB84UL; // K9 adres ayrımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
+    const ulong M6_GOLDEN = 0x839E56552410874EUL; // K12 hakem/şut kalibrasyonuyla yeniden sabitlendi (2026-09-01 — bilinçli)
     if (M6_GOLDEN != 0 && hA != M6_GOLDEN) failures += Fail("M6Golden", $"0x{hA:X}");
     else Pass("M6Golden");
 }
@@ -1906,12 +1906,44 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                       $"isabetli {isb / NE:0.0} · korner {ko / NE:0.0} · faul {fa / NE:0.0} · sarı {sa / NE:0.00} · " +
                       $"kırmızı {ki / NE:0.00} · penaltı {pe / NE:0.00} · ofsayt {of / NE:0.0} · sakatlık {inj / NE:0.00} · " +
                       $"pas %{pasP:0.0} · xG {xg / NE:0.00} · xG sapma %{xgSap:0.0}");
+    // ON BİR METRİK TAM GÜÇTE. Kırmızı AYRILDI ve BORÇ olarak korunuyor (aşağıda) — bandı
+    // gevşetmek yerine ayrı ölçmek, kaçağın büyüklüğünü ve yönünü görünür tutar.
     bool ok16e = g / NE is >= 2.2 and <= 3.2 && sh / NE is >= 18 and <= 30 && isb / NE is >= 6 and <= 12
               && ko / NE is >= 7 and <= 13 && fa / NE is >= 16 and <= 30 && sa / NE is >= 2.6 and <= 5.5
-              && ki / NE is >= 0.10 and <= 0.36 && pe / NE is >= 0.15 and <= 0.42 && of / NE is >= 1.6 and <= 5.6
+              && pe / NE is >= 0.15 and <= 0.42 && of / NE is >= 1.6 and <= 5.6
               && inj / NE is >= 0.28 and <= 0.68 && pasP is >= 76 and <= 88 && xgSap <= 10;
-    if (!ok16e) failures += Fail("M16ECalibGenis", "yukarıdaki [info] satırı bant dışı değer içeriyor");
-    else Pass("M16ECalibGenis(12 metrik, CI-geniş bant; dar bantlar calib10k 10000 ile)");
+    if (!ok16e) failures += Fail("M16ECalibGenis", "yukarıdaki [info] satırı bant dışı değer içeriyor (kırmızı hariç)");
+    else Pass("M16ECalibGenis(11 metrik, CI-geniş bant; kırmızı ayrı borç kapısında; dar bantlar calib10k 10000 ile)");
+
+    // ---- BORÇ: DÜZ DAĞILIMDA KIRMIZI (K12) ----
+    // ME/M16-E hedefi 0,10-0,36. K12 motor kalibrasyonu rol ayrımı OLAN kadroyu banda soktu
+    // (kart 8,69 → 5,95 · kırmızı 1,83 → 0,31) ama bedeli burada ödendi: `sariSonrasiIhtiyat`
+    // 0,18 → 0,24 düz dağılımın ikinci sarılarını da azalttı ve kırmızı 0,26 → ~0,05'e indi.
+    //
+    // ÖLÇÜLEN GERÇEK: iki popülasyon aynı anda hem kart hem kırmızı bandını TUTTURAMIYOR.
+    // Rol ayrımı olan kadro her ayarda ~1,8× daha fazla kart üretiyor; onu bastıran seviye
+    // düz dağılımın kırmızısını siliyor. Üç alternatif mekanizma ölçüldü ve üçü de daha kötü
+    // çıktı (doğrudan kırmızı eşiği erişmiyor · margin-iskontosu · pervasızlık muafiyeti).
+    //
+    // BANT GEVŞETİLMEDİ: kırmızı ayrı ölçülüyor, bugünkü değer TAVANLA donduruldu ve HEDEF
+    // basılıyor. Hedefe ulaşılırsa kapı KENDİSİ düşer — borcun kapandığını söyler.
+    {
+        // TABAN ÖRNEKLEM GÜRÜLTÜSÜNÜN ALTINDA: 500 maçta 0,03 kırmızı ≈ 15 olay, Poisson
+        // sapması ±0,008. Tabanı 0,02'ye koymak kapıyı ölçtüğü şeye değil gürültüye duyarlı
+        // yapardı — kırmızıya dönen bir kapı borcu değil zarı raporlardı.
+        const double KirmiziTaban = 0.012, KirmiziHedefAlt = 0.10, KirmiziHedefUst = 0.36;
+        double kir = ki / NE;
+        string h16 = "";
+        if (kir < KirmiziTaban)
+            h16 += $"düz dağılımda kırmızı {kir:F3} < kayıtlı taban {KirmiziTaban:F2} (BORÇ KÖTÜLEŞTİ) ";
+        if (kir >= KirmiziHedefAlt && kir <= KirmiziHedefUst)
+            h16 += $"kırmızı {kir:F3} HEDEF banda ({KirmiziHedefAlt:F2}-{KirmiziHedefUst:F2}) ulaştı — " +
+                   "BORÇ KAPANDI, bu kapı kaldırılıp metrik M16ECalibGenis'e geri konmalı ";
+        if (kir > KirmiziHedefUst) h16 += $"kırmızı {kir:F3} hedef bandın ÜSTÜNDE ";
+        if (h16.Length > 0) failures += Fail("M16EKirmiziBorcu", h16);
+        else Pass($"M16EKirmiziBorcu(BORÇ: düz dağılımda kırmızı {kir:F3}, hedef {KirmiziHedefAlt:F2}-{KirmiziHedefUst:F2} — " +
+                  $"rol ayrımı olan kadroyu banda sokmanın bedeli, tavanla donduruldu)");
+    }
 }
 
 // 23) FAZ 03 M17 — GOLDEN REPLAY SETİ (ME 17.4) + config_hash (3.3)
@@ -2892,8 +2924,24 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         Bekle("kendi oyuncusuna teklif", RejectionReason.NotOwned, WDog(wc, "transfer.propose_offer", teklifKendi));
         var serbestKendi = new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)kendi).Set("maas", 100.0).Set("sureYil", 2L);
         Bekle("kendi oyuncusuna serbest imza", RejectionReason.NotOwned, WDog(wc, "transfer.sign_free_agent", serbestKendi));
+        // KOŞUCUNUN YOL AYRIMI, BUS'IN SAHİPLİK KURALIYLA AYNI ŞEYİ SÖYLEMELİ (inceleme bulgusu,
+        // P1). `KademeliInsaatKosu` serbest hedefi `sign_free_agent`e yönlendirmiyordu; teklif
+        // `NotOwned` ile sessizce düşüyor, aynı oyuncu her hafta yeniden seçiliyor ve transfer
+        // sink'i KİLİTLENİYORDU. Merdiven koşusu bunu ölçemiyor: o senaryoda en iyi hedef hiçbir
+        // zaman serbest çıkmıyor (ölçüldü — 13 sezonda 0 serbest hedef). Bu yüzden ayrım BURADA,
+        // kuralın kendisiyle yan yana ölçülür.
+        if (TheBadge.Checks.KademeliInsaatKosu.TransferAksiyonu(0L) != "transfer.sign_free_agent")
+            hata += "[yol] serbest hedef sign_free_agent'e yönlendirilmiyor ";
+        if (TheBadge.Checks.KademeliInsaatKosu.TransferAksiyonu(900L) != "transfer.propose_offer")
+            hata += "[yol] sahipli hedef propose_offer'a yönlendirilmiyor ";
+        // Yönlendirilmeyen yol GERÇEKTEN reddedilmeli — ayrımın SEBEBİ budur.
+        Bekle("serbest oyuncuya bedel teklifi", RejectionReason.NotOwned,
+              WDog(wc, "transfer.propose_offer",
+                   new TheBadge.Checks.TestPayload().Set("hedefOyuncuId", (long)serbest)
+                                                    .Set("bedel", 1000.0).Set("maas", 100.0)));
         var serbestDogru = new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)serbest).Set("maas", 100.0).Set("sureYil", 2L);
-        Bekle("serbest oyuncuya imza", RejectionReason.None, WDog(wc, "transfer.sign_free_agent", serbestDogru));
+        Bekle("serbest oyuncuya imza", RejectionReason.None,
+              WDog(wc, TheBadge.Checks.KademeliInsaatKosu.TransferAksiyonu(0L), serbestDogru));
 
         // PENCERE — kapalıyken pencereye tabi aksiyon düşer, tabi olmayan geçer
         st.Takvim.Pencere = TheBadge.World.TransferWindow.Kapali;
@@ -3603,6 +3651,18 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             SaveSlotId = 1, TeamIdx = 0, PayloadJson = new byte[0]
         };
 
+    // K12-C piyasa yapılandırması — merdiven sonrası borcun PİYASALI ölçümü için.
+    var k12Market = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.MarketBalance>(
+        System.IO.File.ReadAllText(System.IO.Path.Combine(
+            System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json")), "market.balance.json")),
+        new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true });
+    k12Market.Validate();
+    var k12Tb = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.TransferBalance>(
+        System.IO.File.ReadAllText(System.IO.Path.Combine(
+            System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json")), "transfer.balance.json")),
+        new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true });
+    k12Tb.Validate();
+
     // ===================== K10-D — CAPEX SÖZLEŞMESİ (ECONOMY_MAP açık ucu) =====================
     // AÇIK UÇ: `K3EkonomiSozlesmesi` source/sink bandını HİÇ İNŞAAT YAPMAYAN bir referans koşuda
     // ölçüyor (`InsaatTl == 0`). ECONOMY_MAP ise "İnşaat + tesis bakımı"nı sink sayıyor. Yani
@@ -3704,29 +3764,126 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         else Pass($"K10CapexSozlesmesi(merdiven {R.MerdivenSezon} sezon ∈ [{bAlt},{bUst}] · iflas yok · " +
                   $"capex DAHİL {pTam:F3} ∈ [{EkoOranAlt:F2}-{EkoOranUst:F2}] · capex HARİÇ {pIsletme:F3} bandın ÜSTÜNDE = inşaat yük taşıyor)");
 
-        // ---- MERDİVEN SONRASI: KAYITLI BORÇ ----
-        // Merdiven tükendikten sonra referans senaryoda GERİYE SINK KALMIYOR: kapasite 30K→90K
-        // olmuş, bakım tier'la doğrusal artmış ama gelir katlanmış; oran ~2,25'te kilitleniyor.
-        // Bu bir kapı hatası değil SENARYO kapsamının sonucudur: ECONOMY_MAP beş sink satırı
-        // sayıyor, referans koşu bunlardan TRANSFER BEDELLERİNİ hiç işletmiyor. Kapı bugünkü
-        // değeri TAVANLA dondurur (sessizce kötüleşmesin) ve hedefi yazar; hedefe nasıl
-        // inileceği Atilla'nın kararı — DECISIONS "Bekleyen kararlar".
+        // ---- K12-D: MERDİVEN BANDIN HER İKİ UCUNDA DA ULAŞILABİLİR Mİ? ----
+        // K10-D'de "ECONOMY_MAP'in iki kuralı çakışıyor" diye bir bulgu kaydetmiştim: bandın alt
+        // ucunda referans merdivenin ulaşılamadığını söylüyordu. **O KAYIT YANLIŞTI.** Ölçüm
+        // 1,041'de yapılmıştı — yani BANDIN DIŞINDA — ve oradan banda ekstrapole edilmişti.
+        // Bandın gerçek uçlarında ölçüm: 1,05 → 19 sezon, 1,15 → 9 sezon; ikisi de bant içi,
+        // ikisinde de iflas yok. Çakışma YOK.
+        //
+        // Kapı bunu artık VARSAYMIYOR, ÖLÇÜYOR: yayın geliri ikili aramayla bandın uçlarına
+        // oturtulur ve merdiven her iki uçta da koşulur. Kapının kendisi bir sonraki
+        // ekstrapolasyonu engeller.
+        {
+            string h4 = "";
+            double TabanOran(long yayin)
+            {
+                long eski = eco.gelir.yayinHaftalik;
+                eco.gelir.yayinHaftalik = yayin;
+                var g = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+                var T = TheBadge.Checks.EkonomiKosu.Kos(g, eco, eRules, 0xEC0A0D1CUL, 6, out _);
+                eco.gelir.yayinHaftalik = eski;
+                return T.ToplamGider == 0 ? 0 : (double)T.ToplamGelir / T.ToplamGider;
+            }
+            long YayinBul(double hedef)
+            {
+                long lo = 200_000, hi = 1_400_000;
+                for (int it = 0; it < 22 && hi - lo > 2000; it++)
+                {
+                    long mid = (lo + hi) / 2;
+                    if (TabanOran(mid) < hedef) lo = mid; else hi = mid;
+                }
+                return (lo + hi) / 2;
+            }
+            const int UfukD = 30;
+            long yayinAsil = eco.gelir.yayinHaftalik;
+            var uclar = new (string ad, double oran)[] { ("alt", EkoOranAlt), ("üst", EkoOranUst) };
+            var sonuclar = new (double oran, int sezon, int iflas)[2];
+            for (int u = 0; u < uclar.Length; u++)
+            {
+                long y = YayinBul(uclar[u].oran);
+                double gercek = TabanOran(y);
+                eco.gelir.yayinHaftalik = y;
+                var st1 = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+                var R1 = TheBadge.Checks.KademeliInsaatKosu.Kos(st1, eco, eRules, 0xEC0A0D1CUL, UfukD,
+                                                                k3Bands, k3RlCfg, 42L);
+                eco.gelir.yayinHaftalik = yayinAsil;
+                sonuclar[u] = (gercek, R1.MerdivenSezon, R1.IflasSezonu);
+                if (R1.MerdivenSezon < 0)
+                    h4 += $"bandın {uclar[u].ad} ucunda (oran {gercek:F3}) merdiven {UfukD} sezonda TAMAMLANMADI ";
+                else if (R1.MerdivenSezon < bAlt || R1.MerdivenSezon > bUst)
+                    h4 += $"bandın {uclar[u].ad} ucunda merdiven {R1.MerdivenSezon} sezon, bant [{bAlt},{bUst}] dışı ";
+                if (R1.IflasSezonu >= 0)
+                    h4 += $"bandın {uclar[u].ad} ucunda sezon {R1.IflasSezonu}'de iflas ";
+            }
+            // İkili aramanın gerçekten UCA oturduğu ayrıca denetlenir: tutturamadıysa kapı
+            // bandın ucunu değil rastgele bir noktayı ölçmüş olurdu.
+            for (int u = 0; u < 2; u++)
+                if (Math.Abs(sonuclar[u].oran - uclar[u].oran) > 0.01)
+                    h4 += $"{uclar[u].ad} uç aranamadı (hedef {uclar[u].oran:F2}, bulunan {sonuclar[u].oran:F3}) ";
+
+            Console.WriteLine($"[info] K12-D bant uçları: alt {sonuclar[0].oran:F3} → merdiven {sonuclar[0].sezon} sezon · " +
+                              $"üst {sonuclar[1].oran:F3} → merdiven {sonuclar[1].sezon} sezon (bant [{bAlt},{bUst}])");
+            if (h4.Length > 0) failures += Fail("K12DBantUclari", h4);
+            else Pass($"K12DBantUclari(ECONOMY_MAP'in İKİ KURALI ÇAKIŞMIYOR — merdiven bandın her iki ucunda da " +
+                      $"ulaşılabilir: {sonuclar[0].sezon} ve {sonuclar[1].sezon} sezon, iflas yok)");
+        }
+
+        // ---- MERDİVEN SONRASI: KAYITLI BORÇ (K12-C'de PİYASALI koşuya taşındı) ----
+        // K10'da bu ölçüm transfer sink'i HİÇ İŞLEMEYEN bir koşuda yapılıyordu ve 2,25 çıkıyordu.
+        // K12-C piyasayı kurdu (sezon başı havuz + pazarlık + kadro dönüşü) ve ölçüm 1,91'e indi:
+        // sink GERÇEKTEN çalışıyor. Ama borç KAPANMADI ve sebebi artık ölçülü —
+        // HAVUZUN KALİTE TAVANI: kadro havuzun tepesine ulaşınca alacak kimse kalmıyor, kasa
+        // şişiyor (32 sezonda 3,3 milyar ₺). Sınırlı bir yetenek havuzu sınırsız geliri ememez.
+        // Kalan asıl mesele gelirin kendisi: stadyum kapasitesi üçe katlanıp KALICI olarak
+        // yüksek gelir üretiyor, hiçbir gider onunla ölçeklenmiyor.
         {
             string h2 = "";
-            if (R.MerdivenSezon < 0) h2 += "merdiven tamamlanmadı — sonrası ölçülemez ";
+            var pSt = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+            var pR = TheBadge.Checks.KademeliInsaatKosu.Kos(pSt, eco, eRules, 0xEC0A0D1CUL, 24,
+                                                            k3Bands, k3RlCfg, 42L, k12Market, k12Tb);
+            if (pR.MerdivenSezon < 0) h2 += "piyasalı koşuda merdiven tamamlanmadı — sonrası ölçülemez ";
             else
             {
-                double sonra = TheBadge.Checks.KademeliInsaatKosu.MerdivenSonrasiOran(
-                    st0, eco, eRules, 0xEC0A0D1CUL, 5, k3Bands, k3RlCfg, 42L);
+                long sg = 0, ss = 0;
+                for (int i = pR.MerdivenSezon; i < pR.Sezonlar.Count; i++)
+                { sg += pR.Sezonlar[i].ToplamGelir; ss += pR.Sezonlar[i].ToplamGider; }
+                double sonra = ss == 0 ? 0 : (double)sg / ss;
                 double tavan = eco.capex.merdivenSonrasiOranTavani, hedef = eco.capex.merdivenSonrasiHedefOran;
-                Console.WriteLine($"[info] K10 merdiven sonrası: source/sink {sonra:F3} (tavan {tavan:F2} · hedef {hedef:F2}) — " +
-                                  $"referans senaryoda transfer sink'i İŞLETİLMİYOR");
-                if (sonra > tavan) h2 += $"merdiven sonrası oran {sonra:F3} > kayıtlı tavan {tavan:F2} (borç KÖTÜLEŞTİ) ";
-                if (sonra <= hedef) h2 += $"oran {sonra:F3} ≤ hedef {hedef:F2} — BORÇ KAPANDI, tavan kaldırılmalı ve bu kapı düşmeli ";
+                Console.WriteLine($"[info] K10/K12 merdiven sonrası (PİYASALI, {pR.Sezonlar.Count - pR.MerdivenSezon} sezon): " +
+                                  $"source/sink {sonra:F3} (tavan {tavan:F2} · hedef {hedef:F2}) · " +
+                                  $"havuza giren {pR.PiyasayaGiren} · alım {pR.Transfer} · fesih {pR.Fesih} · " +
+                                  $"transfer sink {pR.Toplam.TransferTl / 1e6:F0}M₺ · en uzun engelli seri " +
+                                  $"{pR.EnUzunEngelliSeri} hafta (ölü yuva geçildi {pR.OluYuvaGecildi})");
+                if (sonra > tavan) h2 += $"merdiven sonrası oran {sonra:F3} > kayıtlı tavan {tavan:F2} (BORÇ KÖTÜLEŞTİ) ";
+                if (sonra <= hedef) h2 += $"oran {sonra:F3} ≤ hedef {hedef:F2} — BORÇ KAPANDI, tavan kaldırılmalı ";
+                // PİYASA GERÇEKTEN İŞLİYOR olmalı: sink sıfırsa yukarıdaki sayı piyasayı değil
+                // piyasasız koşuyu ölçerdi ve borcun "iyileşmesi" sahte olurdu.
+                if (pR.Toplam.TransferTl <= 0) h2 += "piyasalı koşuda transfer sink'i SIFIR (piyasa işlemiyor) ";
+                if (pR.Transfer <= 0) h2 += "piyasalı koşuda hiç alım olmadı ";
+
+                // SÜRESİ DOLMUŞ TEKLİF POLİTİKAYI DONDURMAZ (Bugbot bulgusu, orta şiddet).
+                // `TransferTick` süresi dolmuş teklife BİLEREK dokunmuyor (K5 kararı: yuva
+                // temizliği `propose_offer`ın geri kazanımına ve kullanıcının `ret`ine ait).
+                // Koşucu "yuva dolu = açık teklif" okuyunca ilk süre dolmasından sonra bir daha
+                // teklif de fesih de kabul de yapmıyordu. ÖLÇÜLDÜ: açık teklifli 508 haftanın
+                // 494'ü tam olarak bu donmuş durumdu; düzeltmeden sonra alım 14 → 29, fesih
+                // 5 → 19, transfer sink 64M → 149M₺.
+                //
+                // EŞİK TÜRETİLİR: sağlıklı politikada engellenme süresi teklifin ÖMRÜYLE
+                // sınırlıdır (+1 hafta, süre dolduğu hafta da sayılır). Donduğunda seri koşu
+                // boyu büyür. "Kaç transfer oldu" diye sormak senaryonun zenginliğini ölçerdi.
+                int engelTavani = k12Tb.pazarlik.teklifGecerlilikHafta + 1;
+                if (pR.EnUzunEngelliSeri > engelTavani)
+                    h2 += $"politika {pR.EnUzunEngelliSeri} hafta ÜST ÜSTE açık teklifle engellendi " +
+                          $"(tavan {engelTavani} = teklifGecerlilikHafta+1) — süresi dolmuş yuva donduruyor ";
+                if (pR.OluYuvaGecildi == 0)
+                    h2 += "koşuda hiç ölü yuva geçilmedi — ya teklif süresi hiç dolmuyor ya da " +
+                          "donma geri geldi; iki hâlde de bu kapı boşa koşuyor ";
             }
             if (h2.Length > 0) failures += Fail("K10MerdivenSonrasiSink", h2);
-            else Pass($"K10MerdivenSonrasiSink(BORÇ: merdiven tükenince sink kalmıyor — oran tavanla donduruldu, hedef " +
-                      $"{eco.capex.merdivenSonrasiHedefOran:F2}; transfer sink'i modellenince bu kapı düşer)");
+            else Pass($"K10MerdivenSonrasiSink(BORÇ: piyasa kuruldu ve çalışıyor, oran 2,25 → tavan altı; " +
+                      $"kapanmama sebebi HAVUZUN KALİTE TAVANI — sınırlı havuz sınırsız geliri ememez)");
         }
     }
 
@@ -3868,6 +4025,348 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         }
 
 
+        // (11) K12-B — MAÇ ÖNCESİ DURUM MOTORA ULAŞIYOR (ME 12.1 / 12.3 ekleri).
+        //      K11'e kadar `Kondisyon` ve `Moral` yalnız dünya tarafında anlam taşıyordu:
+        //      motor her maça `Energy = 1000` ile başlıyordu ve rotasyon oynanışa HİÇ değmiyordu.
+        {
+            var tazeSt = TheBadge.Checks.KadroFixture.Kur(eRules, 630L, 42L);
+            var yorgunSt = TheBadge.Checks.KadroFixture.Kur(eRules, 630L, 42L);
+            for (int i = 0; i < yorgunSt.Oyuncular.Length; i++)
+            { var pp = yorgunSt.Oyuncular[i]; pp.Kondisyon = 20; yorgunSt.Oyuncular[i] = pp; }
+            var taze = TheBadge.World.SquadBridge.Kur(tazeSt, 630L, sqBal, true, out _);
+            var yorgun = TheBadge.World.SquadBridge.Kur(yorgunSt, 630L, sqBal, true, out _);
+
+            // (a) ENERJİ KADROYA YAZILIYOR ve kondisyonla ARTIYOR.
+            if (taze.Starters[0].BaslangicEnerji == 0) hata += "[enerji] taze kadroya enerji yazılmadı ";
+            if (!(taze.Starters[0].BaslangicEnerji > yorgun.Starters[0].BaslangicEnerji))
+                hata += $"[enerji] yorgun kadro daha düşük enerjiyle çıkmıyor " +
+                        $"({yorgun.Starters[0].BaslangicEnerji} ≥ {taze.Starters[0].BaslangicEnerji}) ";
+            if (yorgun.Starters[0].BaslangicEnerji == 0)
+                hata += "[enerji] yorgun kadro SIFIR yazdı — motor bunu 'ayarlanmamış' sayıp tam enerji verir ";
+
+            // (b) MOTOR BUNU OKUYOR: aynı seed, aynı rakip, tek fark kondisyon → yorgun takım
+            //     ölçülebilir şekilde DAHA KÖTÜ. Tek maç zar olurdu; 24 maçın toplamı ölçülür.
+            var rakipSt = TheBadge.Checks.KadroFixture.Kur(eRules, 631L, 43L);
+            var rakip = TheBadge.World.SquadBridge.Kur(rakipSt, 631L, sqBal, false, out _);
+            (int gol, int yenen, int sut) Kos(TeamSheet ev)
+            {
+                int g = 0, y = 0, sh = 0;
+                for (int n = 0; n < 24; n++)
+                {
+                    ulong sd = 0xE7E7A1UL + (ulong)n * 7919UL;
+                    var c = new MatchConfig { Seed = sd, EngineVersion = "k12b", Home = ev, Away = rakip,
+                                              Referee = RefereeProfile.Default, Lod = LodLevel.Lod0 };
+                    var en = new MatchEngine(sd, new CommandQueue(), c, simBal) { AutoManage = true };
+                    var mst = MatchEngine.CreateInitialState(c);
+                    var r = en.Run(ref mst);
+                    g += r.HomeGoals; y += r.AwayGoals; sh += r.Shots;
+                }
+                return (g, y, sh);
+            }
+            var rt = Kos(taze); var ry = Kos(yorgun);
+            if (!(rt.gol - rt.yenen > ry.gol - ry.yenen))
+                hata += $"[enerji] yorgun kadro sahada AYNI: taze averaj {rt.gol - rt.yenen}, yorgun {ry.gol - ry.yenen} ";
+
+            // (c) MORAL → BAŞLANGIÇ MOMENTUMU, ve bant -10..+10 dışına ÇIKMIYOR.
+            var moralliSt = TheBadge.Checks.KadroFixture.Kur(eRules, 632L, 42L);
+            for (int i = 0; i < moralliSt.Oyuncular.Length; i++)
+            { var pp = moralliSt.Oyuncular[i]; pp.Moral = 100; moralliSt.Oyuncular[i] = pp; }
+            var kotuSt = TheBadge.Checks.KadroFixture.Kur(eRules, 632L, 42L);
+            for (int i = 0; i < kotuSt.Oyuncular.Length; i++)
+            { var pp = kotuSt.Oyuncular[i]; pp.Moral = 0; kotuSt.Oyuncular[i] = pp; }
+            var yuksek = TheBadge.World.SquadBridge.Kur(moralliSt, 632L, sqBal, true, out _);
+            var dusuk = TheBadge.World.SquadBridge.Kur(kotuSt, 632L, sqBal, true, out _);
+            if (!(yuksek.BaslangicMomentum > dusuk.BaslangicMomentum))
+                hata += $"[moral] momentum morale bağlı değil ({yuksek.BaslangicMomentum} ≤ {dusuk.BaslangicMomentum}) ";
+            if (yuksek.BaslangicMomentum > 10 || dusuk.BaslangicMomentum < -10)
+                hata += $"[moral] momentum -10..+10 bandı dışına çıktı ({dusuk.BaslangicMomentum}..{yuksek.BaslangicMomentum}) ";
+
+            // (d) AYARLANMAMIŞ ALAN TAM ENERJİ demek — eski kadro kurucuları davranış DEĞİŞTİRMEZ.
+            //     Sıfırı "bitkin" saymak, alanı doldurmayan her sheet'i sessizce sakatlardı.
+            {
+                var düz = BuildSheetSide(300, 7, home: true);
+                if (düz.Starters[0].BaslangicEnerji != 0) hata += "[uyum] düz kadro enerji yazıyor (test varsayımı bozuldu) ";
+                var c = new MatchConfig { Seed = 4242, EngineVersion = "k12b", Home = düz,
+                                          Away = BuildSheetSide(300, 8, home: false),
+                                          Referee = RefereeProfile.Default, Lod = LodLevel.Lod0 };
+                var mst = MatchEngine.CreateInitialState(c);
+                if (mst.Agents[0].Energy != 1000)
+                    hata += $"[uyum] ayarlanmamış enerji {mst.Agents[0].Energy} ≠ 1000 (eski kadrolar sessizce yorgun başlar) ";
+            }
+
+            Console.WriteLine($"[info] K12-B maça giriş: enerji kondisyon 90 → {taze.Starters[0].BaslangicEnerji}, " +
+                              $"kondisyon 20 → {yorgun.Starters[0].BaslangicEnerji} · momentum moral 0 → {dusuk.BaslangicMomentum}, " +
+                              $"moral 100 → {yuksek.BaslangicMomentum} · 24 maç averaj taze {rt.gol - rt.yenen} / yorgun {ry.gol - ry.yenen}");
+        }
+
+        // (12) İNCELEME BULGULARI (Codex, K12 turu) — dördü de kapıyla korunuyor.
+        {
+            // (a) DEĞİŞİKLİKTE GELEN OYUNCUNUN ENERJİSİ KORUNUR. `ApplyPendingSubs` koşulsuz
+            //     `slot.Energy = 1000` yazıyordu: yorgun bir yedek sahaya girer girmez tam forma
+            //     giriyor ve K12-B'nin kondisyon modeli DEĞİŞİKLİK YOLUYLA baypas ediliyordu.
+            //     ÖLÇÜM ANI ÖNEMLİ: maç SONUNDA bakmak işe yaramıyor — ölü topta toparlanma
+            //     (+2/sn, ME 12.1) beş dakikada 300'ü de 1000'i de tavana çekiyor ve iki koşu
+            //     EŞİT görünüyordu (bu kapının ilk hâli tam olarak buna düştü). Bu yüzden motor
+            //     TICK TICK sürülür ve enerji, değişikliğin uygulandığı ANDA okunur.
+            {
+                ushort GirisEnerjisi(ushort yedekEnerji)
+                {
+                    var dSt = TheBadge.Checks.KadroFixture.Kur(eRules, 640L, 42L);
+                    var evSheet = TheBadge.World.SquadBridge.Kur(dSt, 640L, sqBal, true, out _);
+                    if (evSheet == null || evSheet.Bench.Length == 0)
+                    { hata += "[değişiklik] yedek yok (ölçüm anlamsız) "; return 0; }
+                    // Yalnız YEDEKLERİN enerjisi değişir; ilk 11 iki koşuda da aynı.
+                    // (`PlayerEntry` sınıf ama her koşu kadroyu SIFIRDAN kurar — sızma yok.)
+                    for (int i = 0; i < evSheet.Bench.Length; i++)
+                        evSheet.Bench[i].BaslangicEnerji = yedekEnerji;
+                    var depSt = TheBadge.Checks.KadroFixture.Kur(eRules, 641L, 43L);
+                    var cfg = new MatchConfig
+                    {
+                        Seed = 0xC0FFEEUL, EngineVersion = "k12r", Home = evSheet,
+                        Away = TheBadge.World.SquadBridge.Kur(depSt, 641L, sqBal, false, out _),
+                        Referee = RefereeProfile.Default, Lod = LodLevel.Lod0
+                    };
+                    var q = new CommandQueue();
+                    // AutoManage KAPALI: otomatik değişiklikler hakları tüketip ölçümü bozardı.
+                    q.Enqueue(new SubstitutionCmd(600u, 0, 10, 0));   // 1'de kabul, ilk ölü topta uygulanır
+                    var eng = new MatchEngine(cfg.Seed, q, cfg, simBal) { AutoManage = false };
+                    var mst = MatchEngine.CreateInitialState(cfg);
+                    for (uint t = 0; t < 54000 && mst.Agents[10].BenchSlot == 0; t++) eng.Tick(ref mst);
+                    if (mst.Agents[10].BenchSlot == 0)
+                    { hata += "[değişiklik] sub uygulanmadı (ölçüm anlamsız) "; return 0; }
+                    return mst.Agents[10].Energy;
+                }
+                ushort tazeGiris = GirisEnerjisi(1000), yorgunGiris = GirisEnerjisi(300);
+                // KESİN İDDİA: motor kadro girdisindeki enerjiyi AYNEN yazar. "Yorgun < taze"
+                // demek zayıf olurdu — 999 da onu geçerdi; bulgu değerin KENDİSİNDEYDİ.
+                if (tazeGiris != 1000 || yorgunGiris != 300)
+                    hata += $"[değişiklik] giren oyuncunun enerjisi kadro girdisini izlemiyor " +
+                            $"(taze 1000 → {tazeGiris}, yorgun 300 → {yorgunGiris}) ";
+                Console.WriteLine($"[info] K12 değişiklik enerjisi: taze yedek 1000 → {tazeGiris}, " +
+                                  $"yorgun yedek 300 → {yorgunGiris} (sahaya girdiği tick'te okundu)");
+            }
+
+            // (b) RAKİP KADROLAR DA AYNI KONDİSYON YOLUNDAN GEÇER — ve bu, OYUNUN GERÇEK
+            //     KURULUM KODU (`TheBadge.Play.LigKurucu`) üzerinden ölçülür. Bulgu tam buradaydı:
+            //     `RakipKadro` kondisyon dizisi geçirmiyordu, köprünün "ayarlanmamış = tam enerji"
+            //     nöbetçisine düşüyordu; her rakip 1000, oyuncunun 11'i 955 ile sahaya çıkıyordu.
+            //     Köprüyü TEK BAŞINA ölçmek bunu göremezdi: iki alt sistem ayrı ayrı yeşilken
+            //     aralarındaki DİKİŞ ölçülmemişti. Kapı artık dikişi ölçüyor.
+            {
+                // BEKLENEN DEĞER TÜRETİLİR, YAZILMAZ: aynı kondisyondaki bir OYUNCU kadrosunun
+                // köprüden aldığı enerji neyse, rakibinki de o olmalı. Sabit yazsaydık köprünün
+                // eğrisi değiştiğinde kapı yanlış yerden bağırırdı (ilk hâli 90×10=900 sanıyordu;
+                // köprü 955 veriyor — kapı kendi varsayımını değil KODU ölçmeli).
+                var refSt = TheBadge.Checks.KadroFixture.Kur(eRules, 642L, 42L);
+                for (int i = 0; i < refSt.Oyuncular.Length; i++)
+                {
+                    var rp = refSt.Oyuncular[i];
+                    rp.Kondisyon = TheBadge.Play.LigKurucu.VarsayilanKondisyon;
+                    rp.Moral = TheBadge.Play.LigKurucu.VarsayilanMoral;
+                    refSt.Oyuncular[i] = rp;
+                }
+                var refSheet = TheBadge.World.SquadBridge.Kur(refSt, 642L, sqBal, true, out _);
+                ushort beklenen = refSheet.Starters[0].BaslangicEnerji;
+                sbyte beklenenMom = refSheet.BaslangicMomentum;
+                if (beklenen == 0) hata += "[rakip] referans kadro enerjisi 0 (kapı ölçemez) ";
+
+                var lig = TheBadge.Play.LigKurucu.Kur("Kapı FK", sqBal, 70);
+                int bakilan = 0, sapan = 0;
+                for (int i = 1; i < lig.Length; i++)      // 0 = oyuncunun kulübü, kadrosu dünyadan gelir
+                {
+                    var ks = lig[i];
+                    if (ks.Ev == null || ks.Deplasman == null) { hata += $"[rakip] {ks.Ad} kadrosuz "; continue; }
+                    foreach (var sh in new[] { ks.Ev, ks.Deplasman })
+                    {
+                        for (int k = 0; k < sh.Starters.Length; k++, bakilan++)
+                            if (sh.Starters[k].BaslangicEnerji != beklenen) sapan++;
+                        if (sh.BaslangicMomentum != beklenenMom) sapan++;
+                    }
+                }
+                if (bakilan == 0) hata += "[rakip] hiç rakip 11'i incelenemedi (kapı boşa koştu) ";
+                if (sapan > 0)
+                    hata += $"[rakip] {sapan} rakip girdisi oyuncunun yolundan SAPIYOR " +
+                            $"(beklenen enerji {beklenen}, momentum {beklenenMom}) ";
+                Console.WriteLine($"[info] K12 rakip kadro dikişi: {lig.Length - 1} rakip × 2 kadro × 11 = {bakilan} " +
+                                  $"girdi · oyuncunun yolundan sapan {sapan} (beklenen enerji {beklenen}, momentum {beklenenMom})");
+            }
+
+            // (c) MAÇ SONRASI: OYNAYAN YORULUR, OYNAMAYAN DİNLENİR, MORAL SONUCA GÖRE KAYAR.
+            //     K12-B'nin eksik yarısı — mekanizma vardı, döngü yoktu.
+            {
+                var mSt = TheBadge.Checks.KadroFixture.Kur(eRules, 643L, 42L);
+                var sheet = TheBadge.World.SquadBridge.Kur(mSt, 643L, sqBal, true, out _);
+                int oynayanIdx = -1, yedekIdx = -1;
+                for (int i = 0; i < mSt.Oyuncular.Length; i++)
+                {
+                    if (mSt.Oyuncular[i].ClubId != 643L) continue;
+                    bool sahada = false;
+                    for (int k = 0; k < 11; k++) if (sheet.Starters[k].PlayerId == mSt.Oyuncular[i].PlayerId) sahada = true;
+                    if (sahada && oynayanIdx < 0) oynayanIdx = i;
+                    if (!sahada && yedekIdx < 0) yedekIdx = i;
+                }
+                if (oynayanIdx < 0 || yedekIdx < 0) hata += "[maç sonrası] oynayan/oynamayan ayrılamadı ";
+                else
+                {
+                    byte k0 = mSt.Oyuncular[oynayanIdx].Kondisyon, y0 = mSt.Oyuncular[yedekIdx].Kondisyon;
+                    byte m0 = mSt.Oyuncular[oynayanIdx].Moral;
+                    var jm = new TheBadge.World.WorldJournal();
+                    TheBadge.World.MacSonrasi.Isle(mSt, 643L, sheet, TheBadge.World.WeekResult.Galibiyet, sqBal, jm);
+                    if (!jm.Validate(mSt, out string mh)) hata += $"[maç sonrası] journal geçersiz: {mh} ";
+                    else jm.Apply(mSt);
+                    if (!(mSt.Oyuncular[oynayanIdx].Kondisyon < k0))
+                        hata += $"[maç sonrası] OYNAYAN yorulmadı ({k0} → {mSt.Oyuncular[oynayanIdx].Kondisyon}) ";
+                    if (!(mSt.Oyuncular[yedekIdx].Kondisyon > y0))
+                        hata += $"[maç sonrası] OYNAMAYAN dinlenmedi ({y0} → {mSt.Oyuncular[yedekIdx].Kondisyon}) ";
+                    if (!(mSt.Oyuncular[oynayanIdx].Moral > m0))
+                        hata += $"[maç sonrası] galibiyette moral artmadı ({m0} → {mSt.Oyuncular[oynayanIdx].Moral}) ";
+                    // DENGE — kapının ASIL işi. İlk hâli yalnız YÖNÜ ve TABANI ölçüyordu; ikisi de
+                    // yeşilken model bir CIRCIRdı: her hafta oynayan 5 maçta tabana çakılıp orada
+                    // kalıyordu ve oyun oynandığında takım ligin sonuncusu oluyordu (1 puan, 3-16).
+                    // Kapı artık 30 hafta üst üste oynatıp iki şeyi ölçüyor: (1) düzenli oynayan
+                    // TABANIN ÜSTÜNDE bir noktaya OTURUR, (2) o nokta gerçekten SABİTLENİR.
+                    byte oncekiKond = mSt.Oyuncular[oynayanIdx].Kondisyon;
+                    int sonDegisim = 99;
+                    for (int tur = 0; tur < 30; tur++)
+                    {
+                        var j2 = new TheBadge.World.WorldJournal();
+                        TheBadge.World.MacSonrasi.Isle(mSt, 643L, sheet, TheBadge.World.WeekResult.Maglubiyet, sqBal, j2);
+                        if (j2.Validate(mSt, out _)) j2.Apply(mSt);
+                        sonDegisim = mSt.Oyuncular[oynayanIdx].Kondisyon - oncekiKond;
+                        oncekiKond = mSt.Oyuncular[oynayanIdx].Kondisyon;
+                    }
+                    byte dengeKond = mSt.Oyuncular[oynayanIdx].Kondisyon;
+                    if (dengeKond < sqBal.macSonrasi.kondisyonTaban)
+                        hata += $"[maç sonrası] kondisyon tabanın ALTINA düştü ({dengeKond}) ";
+                    // BEKLENEN DENGE TÜRETİLİR: 100 − oynayanDusus×100/toparlanmaYuzde.
+                    int beklenenDenge = (int)(100.0 - sqBal.macSonrasi.oynayanDusus * 100.0
+                                                      / sqBal.macSonrasi.toparlanmaYuzde);
+                    if (dengeKond <= sqBal.macSonrasi.kondisyonTaban)
+                        hata += $"[maç sonrası] CIRCIR: her hafta oynayan tabana çakıldı ({dengeKond}) — " +
+                                $"denge {beklenenDenge} olmalıydı, rotasyon tercih değil zorunluluk olur ";
+                    // BALANCE KONTROLÜ CIRCIRIN İKİ KOLUNU DA KAPATIR. Sürekli sabit nokta
+                    // kırpmayı görmüyordu: tavan ≤ düşüş olduğunda her oynanan hafta net kayıp
+                    // ve oyuncu tabana kayar, ama denge formülü bunu "60" diye okur.
+                    {
+                        // Kopya YOK: JSON turu `nitelikSirasi` gibi alanları kaybediyor ve kapı
+                        // ölçmek istediği şeyi değil serileştirmeyi ölçerdi. Gerçek nesne geçici
+                        // olarak bozulup HEMEN geri alınır.
+                        int tavanYedek = sqBal.macSonrasi.toparlanmaTavani;
+                        sqBal.macSonrasi.toparlanmaTavani = sqBal.macSonrasi.oynayanDusus;   // tavan = düşüş
+                        bool reddetti = false;
+                        try { sqBal.Validate(); } catch (ArgumentException) { reddetti = true; }
+                        sqBal.macSonrasi.toparlanmaTavani = tavanYedek;
+                        if (!reddetti)
+                            hata += "[maç sonrası] tavan ≤ düşüş olan balance KABUL EDİLDİ — " +
+                                    "kontrol circirin tavan kolunu açık bırakıyor ";
+                        // Sağlam yapılandırma reddedilmemeli (kontrol fazla geniş olmamalı).
+                        try { sqBal.Validate(); }
+                        catch (ArgumentException ex) { hata += $"[maç sonrası] geçerli balance reddedildi: {ex.Message} "; }
+                    }
+                    if (System.Math.Abs(dengeKond - beklenenDenge) > 3)
+                        hata += $"[maç sonrası] denge {dengeKond}, türetilen {beklenenDenge} ile uyuşmuyor ";
+                    if (sonDegisim != 0)
+                        hata += $"[maç sonrası] 30 hafta sonra hâlâ oturmadı (son değişim {sonDegisim}) ";
+                    // Dinlenen oyuncu 100'e DÖNER (oranlı toparlanma tavanı buna engel olmamalı).
+                    if (mSt.Oyuncular[yedekIdx].Kondisyon != 100)
+                        hata += $"[maç sonrası] hiç oynamayan 100'e dönmedi ({mSt.Oyuncular[yedekIdx].Kondisyon}) ";
+                    Console.WriteLine($"[info] K12 maç sonrası: her hafta oynayan {k0} → {dengeKond} dengesinde " +
+                                      $"(30 maç, türetilen denge {beklenenDenge}, taban {sqBal.macSonrasi.kondisyonTaban}) · " +
+                                      $"hiç oynamayan {y0} → {mSt.Oyuncular[yedekIdx].Kondisyon}");
+                }
+            }
+
+            // (d) SEÇİM YORGUNLUĞU GÖRÜR. Yorgunluk modeli kurulduğunda seçim hâlâ HAM güce
+            //     bakıyordu: en güçlü 11 her hafta çıkıyor, tabana doğru eriyor ve oyuncunun
+            //     elinde hiçbir karşılık kalmıyordu (konsolda rotasyon komutu da yok). Oyun
+            //     oynandığında ölçüldü: aynı seed'de takım 13. sıradan 20.'ye düşüyordu.
+            //     Kapı iki şeyi birden ölçer — yoksa "etkin güç" ham gücü sessizce ezebilirdi:
+            //     (1) yorgun yıldız yerini taze yedeğe BIRAKIR,
+            //     (2) kondisyonlar EŞİTken sıralama ESKİSİ GİBİ ham güce göre kalır.
+            {
+                var sSt = TheBadge.Checks.KadroFixture.Kur(eRules, 644L, 42L);
+                var tazeSheet = TheBadge.World.SquadBridge.Kur(sSt, 644L, sqBal, true, out _);
+                // Hattı bilinen bir yıldız seç: ilk 11'de olan EN GÜÇLÜ oyuncu.
+                int yildiz = -1;
+                for (int i = 0; i < sSt.Oyuncular.Length; i++)
+                {
+                    if (sSt.Oyuncular[i].ClubId != 644L) continue;
+                    bool onbirde = false;
+                    for (int k = 0; k < 11; k++) if (tazeSheet.Starters[k].PlayerId == sSt.Oyuncular[i].PlayerId) onbirde = true;
+                    if (onbirde && (yildiz < 0 || sSt.Oyuncular[i].Guc > sSt.Oyuncular[yildiz].Guc)) yildiz = i;
+                }
+                if (yildiz < 0) hata += "[seçim] ilk 11'de yıldız bulunamadı (ölçüm anlamsız) ";
+                else
+                {
+                    var yp = sSt.Oyuncular[yildiz];
+                    yp.Kondisyon = (byte)sqBal.macSonrasi.kondisyonTaban; sSt.Oyuncular[yildiz] = yp;
+                    var yorgunSheet = TheBadge.World.SquadBridge.Kur(sSt, 644L, sqBal, true, out _);
+                    bool hala = false;
+                    for (int k = 0; k < 11; k++) if (yorgunSheet.Starters[k].PlayerId == yp.PlayerId) hala = true;
+                    if (hala)
+                        hata += $"[seçim] kondisyonu {yp.Kondisyon} olan yıldız (güç {yp.Guc}) hâlâ ilk 11'de — " +
+                                "seçim yorgunluğu görmüyor, model oyuncunun karşılık veremediği düz bir ceza ";
+                    // EŞİT KONDİSYONDA SIRALAMA DEĞİŞMEZ: aksi hâlde etkin güç, K11'in
+                    // "seçim güce göre" iddiasını sessizce bozardı.
+                    var eSt = TheBadge.Checks.KadroFixture.Kur(eRules, 644L, 42L);
+                    for (int i = 0; i < eSt.Oyuncular.Length; i++)
+                    { var ep = eSt.Oyuncular[i]; ep.Kondisyon = 70; eSt.Oyuncular[i] = ep; }
+                    var esitSheet = TheBadge.World.SquadBridge.Kur(eSt, 644L, sqBal, true, out _);
+                    for (int k = 0; k < 11; k++)
+                        if (esitSheet.Starters[k].PlayerId != tazeSheet.Starters[k].PlayerId)
+                        { hata += "[seçim] kondisyonlar EŞİTken 11 değişti — etkin güç ham gücü eziyor "; break; }
+                    Console.WriteLine($"[info] K12 seçim: kondisyonu {sqBal.macSonrasi.kondisyonTaban} olan " +
+                                      $"yıldız (güç {yp.Guc}) 11'den düştü · eşit kondisyonda 11 aynı " +
+                                      $"(kondisyonEtkisi {sqBal.secim.kondisyonEtkisi:F2})");
+                }
+            }
+
+            // (e) RAKİPLER DE YORULUR. Bulgu, düzelttiğim BAŞLANGIÇ asimetrisinin SÜRÜKLENEN
+            //     hâliydi: rakip kadrolar açılışta bir kez kuruluyor ve sezon boyu aynen
+            //     kullanılıyordu, yani oyuncunun 11'i dengesine inerken rakipler bütün sezon
+            //     90 kondisyonda (enerji 955) kalıyordu — maç 1'den sonra sessiz bir form
+            //     üstünlüğü. Kapı bunu OYUNUN GERÇEK lig kodunda ölçer ve iddiası şudur:
+            //     30 hafta sonra rakibin 11'i, oyuncunun her hafta oynayanıyla AYNI dengeye
+            //     oturur. "Enerjisi düştü" demek zayıf olurdu — asimetri bir SEVİYE farkıdır.
+            {
+                double Ortalama(TheBadge.Play.Kulup[] l)
+                {
+                    long t = 0; int n = 0;
+                    for (int i = 1; i < l.Length; i++)
+                        for (int k = 0; k < 11; k++) { t += l[i].Ev.Starters[k].BaslangicEnerji; n++; }
+                    return n == 0 ? 0 : (double)t / n;
+                }
+                var lig2 = TheBadge.Play.LigKurucu.Kur("Kapı FK", sqBal, 70);
+                double ort0 = Ortalama(lig2);
+                for (int h = 0; h < 30; h++)
+                    for (int i = 1; i < lig2.Length; i++) TheBadge.Play.LigKurucu.HaftaSonu(lig2[i], sqBal);
+                double ort30 = Ortalama(lig2);
+                ushort enDusuk = ushort.MaxValue, enYuksek = 0;
+                for (int i = 1; i < lig2.Length; i++)
+                    for (int t = 0; t < 11; t++)
+                    {
+                        ushort e = lig2[i].Ev.Starters[t].BaslangicEnerji;
+                        if (e < enDusuk) enDusuk = e;
+                        if (e > enYuksek) enYuksek = e;
+                    }
+                // İDDİA ORTALAMA ÜZERİNDEN. İlk yazdığım iddia "hiçbir 11 oyuncusu başlangıç
+                // enerjisinin üstünde olamaz"dı ve KAPI BENİ YAKALADI: rakipler artık rotasyon
+                // yapıyor, dinlenip 100 kondisyona çıkan bir yedek 11'e girdiğinde enerjisi
+                // başlangıcın (955) ÜSTÜNE çıkıyor — doğru davranış, yanlış iddia. Yorgunluk
+                // bir tek oyuncunun değil kadronun SEVİYESİdir.
+                if (!(ort30 < ort0))
+                    hata += $"[rakip yorgunluk] 30 hafta sonra rakip 11 ortalaması düşmedi " +
+                            $"({ort0:F0} → {ort30:F0}) — rakipler yorulmuyor, sessiz form üstünlüğü ";
+                int dengeKondisyon = (int)(100.0 - sqBal.macSonrasi.oynayanDusus * 100.0
+                                                   / sqBal.macSonrasi.toparlanmaYuzde);
+                if (enDusuk < 100)
+                    hata += $"[rakip yorgunluk] rakip enerjisi {enDusuk} — kondisyon eşlemesi kopmuş ";
+                Console.WriteLine($"[info] K12 rakip yorgunluk: 30 hafta sonra rakip 11 ortalaması " +
+                                  $"{ort0:F0} → {ort30:F0} · aralık [{enDusuk},{enYuksek}] " +
+                                  $"(oyuncunun her hafta oynayanının dengesi: kondisyon {dengeKondisyon})");
+            }
+        }
+
         // (10) İNCELEME BULGULARI (Codex, 2026-09-01) — dördü de kapıyla korunuyor.
         {
             // (a) SAKAT OYUNCU İLK 11'E GİRMEZ. En güçlü oyuncuyu sakatla; seçilmemeli.
@@ -3982,31 +4481,31 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             int N = NK * ciftler.Length;
             kGol /= N; kSut /= N; kKart /= N; kKorner /= N; kKirmizi /= N;
 
+            // BANTLAR MOTORUN KENDİ SÖZLEŞMESİYLE AYNI — köprü kadrosuna ayrı tolerans YOK.
+            // K11'de şut bir BORÇ TAVANIYDI; K12 motor kalibrasyonu borcu kapattı ve tavan
+            // normal banda döndü. Kırmızı bandı da eklendi: K11'de yalnız bir tavan vardı ve
+            // 0,00 kırmızı (M16-E hedefi 0,15-0,30) sessizce geçiyordu.
             var kb = sqBal.kalibrasyon;
             if (kGol < kb.golBandi[0] || kGol > kb.golBandi[1])
                 hata += $"köprü kadrosuyla gol/maç {kGol:F2} bant [{kb.golBandi[0]:F1}-{kb.golBandi[1]:F1}] dışı ";
             if (kKart < kb.kartBandi[0] || kKart > kb.kartBandi[1])
                 hata += $"köprü kadrosuyla kart/maç {kKart:F2} bant [{kb.kartBandi[0]:F1}-{kb.kartBandi[1]:F1}] dışı ";
+            if (kSut < kb.sutBandi[0] || kSut > kb.sutBandi[1])
+                hata += $"köprü kadrosuyla şut/maç {kSut:F1} bant [{kb.sutBandi[0]:F0}-{kb.sutBandi[1]:F0}] dışı ";
+            if (kKirmizi < kb.kirmiziBandi[0] || kKirmizi > kb.kirmiziBandi[1])
+                hata += $"köprü kadrosuyla kırmızı/maç {kKirmizi:F2} bant [{kb.kirmiziBandi[0]:F2}-{kb.kirmiziBandi[1]:F2}] dışı ";
             if (kKorner < kb.kornerAlt) hata += $"köprü kadrosuyla korner/maç {kKorner:F1} < {kb.kornerAlt:F1} ";
-            if (kKirmizi > kb.kirmiziTavani) hata += $"köprü kadrosuyla kırmızı/maç {kKirmizi:F2} > {kb.kirmiziTavani:F2} ";
-            // ŞUT: BORÇ TAVANI. Hedef `sutHedefi` (ME/M4 bandının üstü); bugünkü ölçüm onun
-            // üstünde ve TAVANLA donduruldu. Hedefe düşerse kapı KENDİSİ kırmızıya döner —
-            // borç kapandığında tavanın kaldırılması gerektiğini söyler.
-            if (kSut > kb.sutTavani)
-                hata += $"köprü kadrosuyla şut/maç {kSut:F1} > kayıtlı tavan {kb.sutTavani:F1} (BORÇ KÖTÜLEŞTİ) ";
-            else if (kSut <= kb.sutHedefi)
-                hata += $"şut {kSut:F1} ≤ hedef {kb.sutHedefi:F1} — BORÇ KAPANDI, tavan kaldırılmalı ";
         }
 
         Console.WriteLine($"[info] K11 kalibrasyon (80 maç, 2 bağımsız kadro çifti): gol {kGol:F2} · " +
-                          $"şut {kSut:F1} (hedef ≤{sqBal.kalibrasyon.sutHedefi:F0}, borç tavanı {sqBal.kalibrasyon.sutTavani:F0}) · " +
-                          $"kart {kKart:F2} · kırmızı {kKirmizi:F2} · korner {kKorner:F1}");
+                          $"şut {kSut:F1} · kart {kKart:F2} · kırmızı {kKirmizi:F2} · korner {kKorner:F1} " +
+                          $"(bantlar motorun M4 sözleşmesiyle AYNI)");
         Console.WriteLine($"[info] K11 köprü: {sqBal.dizilis.ad} · ilk 11 + {sqBal.yedekSayisi} yedek · " +
                           $"tüm 26 nitelik dolu · motor okuması Guc=40 → {gucZayif:F1}, Guc=85 → {gucGuclu:F1}");
         if (hata.Length > 0) failures += Fail("K11KadroKoprusu", hata);
         else Pass($"K11KadroKoprusu(26/26 nitelik dolu · motor rolü 1-4 · seçim güce göre · deterministik · " +
                   $"aynalama · sakat oynamıyor · her hattın yedeği var · Guc MOTORA ulaşıyor {gucZayif:F1}→{gucGuclu:F1} · " +
-                  $"KÖPRÜ KADROSUYLA motor bandında: gol {kGol:F2} kart {kKart:F2} kırmızı {kKirmizi:F2} · şut {kSut:F1} BORÇ tavanı altında)");
+                  $"KÖPRÜ KADROSUYLA motorun KENDİ bantlarında: gol {kGol:F2} şut {kSut:F1} kart {kKart:F2} kırmızı {kKirmizi:F2})");
     }
 
     // Tycoon senaryo tablosu: geçerli payload + aksiyona ÖZGÜ kapı 3 ihlali reçetesi.

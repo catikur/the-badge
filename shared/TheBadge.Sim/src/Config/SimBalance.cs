@@ -212,6 +212,20 @@ namespace TheBadge.Sim.Config
             public double cezaSahasiIhtiyatCarpan; // kendi ceza sahasında şiddet skoru çarpanı
             public double avantajXtEsik;      // avantaj için mağdurun hücresinin asgari xT'si (ME 11.2 tehdit koşulu)
             public double sariSonrasiIhtiyat; // sarı görmüş oyuncunun şiddet skoru iskontosu (M16-E)
+
+            // --- ŞİDDET FORMÜLÜ (ME 11.2) — K12'ye kadar KODA GÖMÜLÜYDÜ.
+            // s = marginAgirlik×margin_açığı + hizAgirlik×hız + arkadanAgirlik×arkadan_mı
+            // margin_açığı = clamp((taşıyıcının kaçış bileşiği − müdahale edenin bileşiği)/marginBolen, 0, 1)
+            //
+            // `marginBolen` bu modelin ROL DUYARLILIĞINI belirler ve tam olarak bu yüzden
+            // [KALİBRE] olması gerekiyordu: bileşikler bir FARK olarak giriyor, dolayısıyla
+            // kadro profili keskinleştikçe (gerçek defans / gerçek forvet) fark sistematik
+            // büyüyor. M4/M5 kalibrasyonu rol ayrımı OLMAYAN sentetik kadrolarla yapıldığı için
+            // 50 bölen orada ~0 fark üretiyordu ve sorun görünmüyordu (K11 bulgusu).
+            public double marginBolen;
+            public double marginAgirlik, hizAgirlik, arkadanAgirlik;
+            public double agresifEsik, agresifEk;   // Eff(Aggression) > eşik → +ek
+            public double motivasyonEk;             // ME 14.3 "Ateşle"/"Sakinleştir" şiddet deltası
         }
 
         /// <summary>Duran toplar — ME Spec 10 [KALİBRE].</summary>

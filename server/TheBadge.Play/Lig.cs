@@ -15,6 +15,11 @@ namespace TheBadge.Play
         public string Ad;
         public byte GucTaban;              // rakip kadro üretiminin merkezi
         public TeamSheet Ev, Deplasman;    // ev/deplasman çapaları aynalı olduğu için iki kadro
+        /// <summary>Ham kadro — kadrolar HER HAFTA bundan YENİDEN kurulur. İlk yazımda iki
+        /// `TeamSheet` başlangıçta bir kez kuruluyor ve sezon boyu aynen kullanılıyordu: oyuncunun
+        /// 11'i yorulurken rakipler bütün sezon 90 kondisyonda kalıyor ve maç 1'den sonra her
+        /// rakibe sessiz bir form üstünlüğü doğuyordu (inceleme bulgusu, Bugbot).</summary>
+        public int[] OyuncuId; public byte[] OyuncuRol, OyuncuGuc, OyuncuKond, OyuncuMoral;
         public int O, G, B, M, AG, YG;
         public int Puan => G * 3 + B;
         public int Averaj => AG - YG;
@@ -32,6 +37,15 @@ namespace TheBadge.Play
         /// `sezonHaftaSayisi` ile BİREBİR. Sayı buradan uydurulmadı; sezon uzunluğu zaten
         /// 20 takımlı bir ligi tarif ediyordu.</summary>
         public const int KulupSayisi = 20;
+
+        /// <summary>Kadroların maça giriş kondisyonu. OYUNCU ve RAKİP AYNI değeri kullanır —
+        /// rakip kadroları kondisyonsuz kurmak, köprünün "ayarlanmamış = tam enerji" nöbetçisine
+        /// düşüyor ve her rakibe sessiz bir kondisyon avantajı veriyordu (inceleme bulgusu, P1):
+        /// oyuncunun 11'i 955 enerjiyle, rakibin 11'i 1000 ile çıkıyordu.</summary>
+        public const byte VarsayilanKondisyon = 90;
+        /// <summary>Aynı gerekçe momentum için: moral verilmezse `BaslangicMomentum` 0 kalır ve
+        /// oyuncunun takımı moralinden gelen momentumla, rakip nötr momentumla sahaya çıkardı.</summary>
+        public const byte VarsayilanMoral = 60;
 
         static readonly string[] Adlar =
         {
@@ -58,35 +72,66 @@ namespace TheBadge.Play
                           : string.Equals(Adlar[i], oyuncuAdi, StringComparison.Ordinal) ? Adlar[i] + " (rakip)"
                           : Adlar[i];
                 k[i] = new Kulup { Id = i + 1, Ad = ad, GucTaban = g };
-                if (i > 0)
-                {
-                    k[i].Ev = RakipKadro(k[i].Id, g, sqBal, true);
-                    k[i].Deplasman = RakipKadro(k[i].Id, g, sqBal, false);
-                }
+                if (i > 0) { KadroDizileriKur(k[i], g); KadrolariYenile(k[i], sqBal); }
             }
             return k;
         }
 
-        /// <summary>Rakip kadrosu — OYUNCUNUN kadrosuyla AYNI köprüden geçer (`SquadBridge`).
-        /// Ayrı bir üretici yazmak, iki takımın farklı kurallarla sahaya çıkması demekti.
-        /// Mevki içi güç dağılımı indeksten türetilir; RNG yok, lig her açılışta aynı.</summary>
-        static TeamSheet RakipKadro(int clubId, byte taban, SquadBalance bal, bool ev)
+        /// <summary>Rakip kadro dizileri. Mevki içi güç dağılımı indeksten türetilir; RNG yok,
+        /// lig her açılışta aynı. Kondisyon/moral OYUNCUNUNKİYLE aynı varsayılandan başlar.</summary>
+        static void KadroDizileriKur(Kulup k, byte taban)
         {
             const int N = 18;
-            var id = new int[N]; var rol = new byte[N]; var guc = new byte[N];
+            k.OyuncuId = new int[N]; k.OyuncuRol = new byte[N]; k.OyuncuGuc = new byte[N];
+            k.OyuncuKond = new byte[N]; k.OyuncuMoral = new byte[N];
             // 2 KL · 6 DF · 6 OS · 4 FV — `rolHat`: 1 KL · 2-8 DF · 9-20 OS · 21-32 FV
             byte[] roller = { 1, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 21, 22, 23, 24 };
             for (int i = 0; i < N; i++)
             {
-                id[i] = clubId * 1000 + i;
-                rol[i] = roller[i];
-                int d = ((clubId * 13 + i * 29) % 15) - 7;     // -7..+7 sapma
+                k.OyuncuId[i] = k.Id * 1000 + i;
+                k.OyuncuRol[i] = roller[i];
+                int d = ((k.Id * 13 + i * 29) % 15) - 7;     // -7..+7 sapma
                 int v = taban + d;
-                guc[i] = (byte)(v < 30 ? 30 : v > 95 ? 95 : v);
+                k.OyuncuGuc[i] = (byte)(v < 30 ? 30 : v > 95 ? 95 : v);
+                k.OyuncuKond[i] = VarsayilanKondisyon;
+                k.OyuncuMoral[i] = VarsayilanMoral;
             }
-            var s = SquadBridge.KurDizi(bal, ev, id, rol, guc, out string hata);
+        }
+
+        /// <summary>Rakip kadrosu — OYUNCUNUN kadrosuyla AYNI köprüden geçer (`SquadBridge`).
+        /// Ayrı bir üretici yazmak, iki takımın farklı kurallarla sahaya çıkması demekti.</summary>
+        public static void KadrolariYenile(Kulup k, SquadBalance bal)
+        {
+            k.Ev = Kur1(k, bal, true);
+            k.Deplasman = Kur1(k, bal, false);
+        }
+
+        static TeamSheet Kur1(Kulup k, SquadBalance bal, bool ev)
+        {
+            var s = SquadBridge.KurDizi(bal, ev, k.OyuncuId, k.OyuncuRol, k.OyuncuGuc,
+                                        out string hata, k.OyuncuKond, k.OyuncuMoral);
             if (s == null) throw new InvalidOperationException($"rakip kadro kurulamadı: {hata}");
             return s;
+        }
+
+        /// <summary>RAKİBİN HAFTA SONU — oyuncunun kulübüyle AYNI aritmetik (`MacSonrasi`).
+        /// Sahaya çıkan 11 yorulur, kalanlar toparlanır; sonra kadrolar YENİDEN kurulur ki
+        /// yorgunluk bir sonraki haftanın SEÇİMİNE de yansısın (etkin güç).
+        ///
+        /// Bu olmadan rakipler bütün sezon 90 kondisyonda (enerji 955) kalıyor, oyuncunun 11'i
+        /// dengesine (60 → ~700) iniyordu: maç 1'den sonra her rakibe sessiz bir form üstünlüğü.
+        /// Düzelttiğim BAŞLANGIÇ asimetrisinin sürüklenen hâliydi (inceleme bulgusu, Bugbot).</summary>
+        public static void HaftaSonu(Kulup k, SquadBalance bal)
+        {
+            if (k.Ev == null || k.OyuncuId == null) return;
+            for (int i = 0; i < k.OyuncuId.Length; i++)
+            {
+                bool oynadi = false;
+                for (int t = 0; t < k.Ev.Starters.Length; t++)
+                    if (k.Ev.Starters[t].PlayerId == k.OyuncuId[i]) { oynadi = true; break; }
+                k.OyuncuKond[i] = MacSonrasi.YeniKondisyon(k.OyuncuKond[i], oynadi, bal);
+            }
+            KadrolariYenile(k, bal);
         }
 
         /// <summary>Çift devreli fikstür (circle method). İlk devre 19 hafta, ikinci devre aynı

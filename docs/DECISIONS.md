@@ -2346,6 +2346,347 @@ yarısının neden yapılamadığı ölçümle netleşti.
 - **Kalan iş (yeni bekleyen karar):** oyuncu piyasası modeli — havuz yenilenmesi + rakip kulüp
   bütçeleri. Kalem hazır olduğu için o dilim geldiğinde ölçüm doğrudan koşar.
 
+### K12-A: motorun faul/kart modeli rol ayrımına göre kalibre edildi — ✅ TAMAM, bir borçla (2026-09-01)
+K11 bulgusunun kararı (a): "motor tarafını yeniden kalibre et". Atilla "hepsini yap" dedi; yapıldı.
+
+- **ÖNCE MAGIC NUMBER BORCU ÖDENDİ.** ME 11.2 şiddet formülünün ağırlıkları KODA GÖMÜLÜYDÜ
+  (`/50` margin böleni, 0,4/0,25/0,2 terim ağırlıkları, 70 agresiflik eşiği, 0,05 ve 0,04 ekler).
+  Hepsi `sim.balance.json → referee` altına [KALİBRE] olarak taşındı. Bölen özellikle önemliydi:
+  modelin ROL DUYARLILIĞINI o belirliyor, çünkü bileşikler bir FARK olarak giriyor.
+- **ÜÇ KADRO DAĞILIMI BİRDEN ÖLÇÜLDÜ.** İlk süpürmemde ikisine bakmıştım (düz + köprü) ve
+  M16-E'nin "lig dağılımı" gözden kaçmıştı — kapı bunu hemen yakaladı. **Bu, K11'de yaptığım
+  hatanın aynısıydı: eksik popülasyonla kalibre etmek.** Süpürme aracı üçünü birden ölçecek
+  şekilde yeniden yazıldı.
+- **DÖRT HİPOTEZ ÖLÇÜMLE ÇÜRÜDÜ, sırayla:** (1) agresiflik eşiği/defans müdahale katsayısı —
+  kart oranı o kollara duyarsız; (2) `marginBolen`i büyütmek — düz kadroda uçurum (5,05 → 0,87);
+  (3) doğrudan kırmızı eşiği (`kirmiziEsik`) — kol erişmiyor, lig kırmızısı 0,05'ten kıpırdamadı;
+  (4) ihtiyatı "pervasız değilse" koşuluna bağlamak — TAM TERS etki, çünkü köprü kadrosunun
+  faulleri zaten üst sınırın üstünde (kart 5,95 → 9,32). (5) iskontoyu yalnız `marginGap`e
+  uygulamak da denendi: aralığı genişletti ama çatışmayı kapatmadı.
+- **KAYNAK BULUNDU:** kaybedilen HER müdahale `ResolveFoul`a gidiyor. Kötü müdahaleci hem daha
+  çok düello kaybediyor hem daha yüksek `marginGap` taşıyor — çifte ceza. Rol profili
+  gerçekçileştikçe forvet presi bu iki etkiyi birden büyütüyor.
+- **UYGULANAN KALİBRASYON:** `sariEsik` 0,555 → 0,560 · `sariSonrasiIhtiyat` 0,18 → 0,24 ·
+  `utility.sutTehditCarpan` 0,57 → 0,47 · `utility.sutBaskiCezasi` 0,35 → 0,45.
+- **SONUÇ — kadro profili GERİ DÜZELTİLDİ.** K11'de bedel yanlış yerde ödeniyordu (forvet
+  çevikliği defansın altına indirilmişti). Profil futbol gerçekçiliğine döndü ve köprü kadrosu
+  motorun KENDİ bantlarında: **gol 2,74 · şut 30,2 · kart 5,69 · kırmızı 0,28 · korner 9,6.**
+- **ŞUT BORCU KAPANDI.** K11'de şut 33,5 idi ve 36 tavanıyla dondurulmuştu; artık 30,2 ve
+  normal banda ([10-32]) döndü. `sutTavani`/`sutHedefi` kaldırıldı — kapının kendi "borç kapandı"
+  dalı tam olarak bunu söylüyordu.
+- **KALAN BORÇ — DÜZ DAĞILIMDA KIRMIZI 0,03 (hedef 0,10-0,36).** İki popülasyon aynı anda hem
+  kart hem kırmızı bandını TUTTURAMIYOR: rol ayrımı olan kadro her ayarda ~1,8× daha fazla kart
+  üretiyor ve onu bastıran iskonto seviyesi düz dağılımın ikinci sarılarını siliyor.
+  **BANT GEVŞETİLMEDİ:** metrik `M16ECalibGenis`ten AYRILDI ve `M16EKirmiziBorcu` kapısına
+  taşındı — bugünkü değer tavanla donduruldu, hedef basılıyor, hedefe ulaşılırsa kapı KENDİSİ
+  düşüyor. Diğer 11 metrik tam güçte kaldı. Tavan örneklem gürültüsünün altına konuldu
+  (500 maçta 0,03 ≈ 15 olay, Poisson ±0,008) — aksi hâlde kapı borcu değil zarı raporlardı.
+- **Golden setler bilinçli yenilendi:** M2/M4/M6 sabitleri + 50 replay + LOD 2 tablosu.
+- **Kural:** *kalibrasyon, ölçtüğün popülasyonların HEPSİNİ kapsamalı.* Bu oturumda aynı hatayı
+  iki kez yaptım (K11'de rol ayrımı, K12'de lig dağılımı); ikisini de kapılar yakaladı.
+
+### K12-B: maç öncesi kondisyon ve moral motora bağlandı — ✅ TAMAM (2026-09-01)
+K11 köprü kararının (a) seçeneği: ME 12.1'e başlangıç enerjisi. Atilla "hepsini yap" dedi.
+
+- **NEDEN GEREKLİYDİ:** motor her maça `Energy = 1000` ile başlıyordu; `Kondisyon` yalnız dünya
+  tarafında anlam taşıyordu ve **rotasyon oynanışa HİÇ değmiyordu.** GDD 3'ün kadro yönetimi
+  vaadi karşılıksızdı: yorgun oyuncuyla çıkmakla dinlenmiş oyuncuyla çıkmak aynı maçı veriyordu.
+- **ME 12.1 EKİ:** `PlayerEntry.BaslangicEnerji` (0 = AYARLANMAMIŞ → tam enerji). Sıfırı
+  "bitkin" saymak, alanı doldurmayan her eski kadro kurucusunu sessizce sakatlardı; kapı bu
+  geriye uyumu ayrıca ölçüyor.
+- **ME 12.3 EKİ:** `TeamSheet.BaslangicMomentum` (-10..+10), İLK 11'in moral ortalamasından —
+  kulübede oturanın morali sahadaki havayı kurmaz. Motor momentumu maç içinde kendi işlemeye
+  devam ediyor; bu yalnız başlangıç noktası.
+- **[KALİBRE]** `squad.balance.json → macaGiris`: `enerji = enerjiTaban + enerjiAralik×(Kondisyon/100)`
+  (550 + 450) · `momentum = clamp(round((ortMoral − 50)/10), −10, +10)`. Taban SIFIR DEĞİL:
+  kondisyonu 0 olan oyuncunun sahada yok hükmünde olması bir KADRO KURALI, enerji eğrisinin işi değil.
+- **ÖLÇÜM:** kondisyon 90 → enerji 955, kondisyon 20 → 640 · moral 0 → momentum −5, moral 100 → +5 ·
+  24 maçlık averaj: taze −23, yorgun −39. Yorgun kadro sahada ölçülebilir şekilde daha kötü.
+- **Diş:** motorun `BaslangicEnerji` okuması kaldırılınca kapı `[enerji] yorgun kadro sahada AYNI:
+  taze averaj -10, yorgun -10` diyor — yani iddia gerçekten motoru ölçüyor.
+- **Golden churn YOK:** düz kadro kurucuları alanı doldurmadığı için M2/M4/M6/M16-E davranışı
+  değişmedi. Yalnız köprü kadrosu etkilendi ve bantlarda kaldı (gol 3,15 · şut 29,2 · kart 5,88).
+- **SPEC NOTU:** bu iki ek ME 12.1/12.3'e yapılmış EKLERDİR; spec dosyasına dokunulmadı, bu kayıt
+  bağlayıcıdır (ME 13.4 precedent'i) ve sonraki ME revizyonunda işlenir.
+
+### K12-C: transfer piyasası kuruldu — borç İYİLEŞTİ ama kapanmadı, sebebi artık ÖLÇÜLÜ (2026-09-01)
+K11-E'nin bıraktığı yer: kalem (`WeekLedger.TransferTl`) bağlıydı ama borç ölçülemiyordu, çünkü
+piyasa yoktu. Atilla "hepsini yap" dedi; piyasa kuruldu.
+
+- **`TransferMarket` (World):** her sezon başı havuza yeni oyuncular katılır (`market.balance.json`
+  [KALİBRE]) — bir kısmı serbest, kalanı rakip kulüplerde. Tüm çekilişler sayaç-RNG + save seed.
+  Rakip kulüplerin KENDİ ekonomileri modellenmiyor ve bu gizlenmiyor: onlar oyuncu SAHİBİdir,
+  `Valuation` kurallarıyla pazarlık eder. Asgari gerçeklik bilinçli — daha fazlasını uydurmak
+  ölçümü varsayımın kendisine çevirirdi.
+- **Merdiven koşusuna transfer hattı eklendi:** teklif → karşı taraf sürücüsü (`TransferTick`) →
+  kabul, hepsi Command Bus'tan. Artı kadro dönüşü: kadro tavandayken piyasada belirgin daha iyisi
+  varsa en zayıf feshedilir (fesih bedeli de transfer sink'i).
+- **POLİTİKA İKİ KEZ DÜZELTİLDİ, ikisi de ölçümle:**
+  1. *Sınırsız politika iflas etti.* Kulüp hem inşa hem transfer yapmaya çalıştı; 6 alım kalıcı
+     maaş yükü olarak işletme fazlasının TAMAMINI yedi (oran 1,13 → 1,01), merdiven hiç bitmedi,
+     kasa −13M. Asıl sink BEDEL değil ÜCRET. → ECONOMY_MAP'in kendi maaş kuralı (%55 tavan) eklendi.
+  2. *Öncelik yoktu.* İki sink tek fazla için yarışıyordu. Sıralama ekonomik gerçekten geldi:
+     **capex SONLUdur ve geliri KALICI büyütür; transfer SONSUZ sink'tir ve geliri büyütmez.**
+     Önce merdiven, sonra kadro. → merdiven 11 sezonda bitti, sonra transfer devreye girdi.
+- **SONUÇ: merdiven sonrası oran 2,25 → 1,911.** Sink GERÇEKTEN çalışıyor (14 alım · 5 fesih ·
+  64M₺ transfer sink'i). Borç ratchet'i 2,40 → 2,00 sıkıldı ve ölçüm PİYASALI koşuya taşındı.
+- **BORÇ KAPANMADI ve sebebi artık ÖLÇÜLÜ: HAVUZUN KALİTE TAVANI.** Kadro havuzun tepesine
+  ulaşınca alacak kimse kalmıyor; 32 sezonda kasa 3,3 milyar ₺'ye çıkıyor. **Sınırlı bir yetenek
+  havuzu sınırsız geliri ememez.** Kalan asıl mesele gelirin kendisi: stadyum kapasitesi üçe
+  katlanıp KALICI yüksek gelir üretiyor, hiçbir gider onunla ölçeklenmiyor.
+- **Kapı bunu koruyor:** `K10MerdivenSonrasiSink` artık piyasalı koşuyu ölçüyor ve piyasanın
+  GERÇEKTEN işlediğini ayrıca denetliyor (transfer sink'i sıfırsa ya da hiç alım yoksa düşer) —
+  aksi hâlde "borç iyileşti" sahte bir iyileşme olurdu.
+
+### 🔴 K12-D: "ECONOMY_MAP'in iki kuralı çakışıyor" BULGUSU YANLIŞTI (2026-09-01)
+K10-D'de kaydettiğim bulgu — "bandın alt ucunda referans merdiven ulaşılamaz" — **doğru değildi**
+ve düzeltiyorum.
+
+- **HATA NEREDEYDİ:** ölçümü yayın gelirini süpürerek yapmıştım ve "merdiven 40 sezonda bitmiyor"
+  gözlemi **taban oran 1,041**'de alınmıştı. 1,041 ECONOMY_MAP'in bandının (1,05-1,15) **DIŞINDA**.
+  Bandın içinde ölçmek yerine, bandın dışındaki bir noktadan banda EKSTRAPOLE ettim.
+- **GERÇEK ÖLÇÜM (ikili aramayla bandın tam uçlarına oturtularak):** alt uç 1,050 → merdiven
+  **19 sezon**; üst uç 1,150 → merdiven **9 sezon**. İkisi de `merdivenSezonBandi` [6,24] içinde,
+  ikisinde de **iflas yok**. Çakışma YOK.
+- **KAPIYA BAĞLANDI:** `K12DBantUclari` yayın gelirini ikili aramayla bandın uçlarına oturtur ve
+  merdiveni HER İKİ UÇTA koşar. Aramanın gerçekten uca oturduğunu da ayrıca denetler — tutturamazsa
+  kapı bandın ucunu değil rastgele bir noktayı ölçmüş olurdu. Bir sonraki ekstrapolasyonu kapı engeller.
+- **Bu, K10-D'de (c) diye kapatılan kararı da geçersiz kılıyor:** korunacak bir çakışma yoktu.
+  `merdivenSezonBandi`'nin geniş tutulma gerekçesi (fazla oranına duyarlılık) hâlâ geçerli — ama
+  artık "bandın ucunda ulaşılamaz" değil, "bandın ucunda 19 sezon" diye biliniyor.
+- **Kural (bu oturumda ÜÇÜNCÜ kez):** *ölçtüğün şeyin geçerli olduğu bölgenin İÇİNDEN ölç.*
+  K11'de eksik kadro popülasyonu, K12-A'da eksik lig dağılımı, burada bandın dışından
+  ekstrapolasyon. Üçünü de ölçüm yakaladı; hiçbirini okuma yakalamadı.
+
+### K12 inceleme turu — ✅ TAMAM, dördü de GERÇEK çıktı (2026-09-01)
+
+PR #26'ya iki inceleyici toplam altı bulgu yazdı (Codex 4, Bugbot 2 — biri Codex'inkiyle aynı).
+**Beşi ayrı ayrı koda karşı doğrulandı, beşi de gerçekti** ve düzeltildi. Aşağıda Codex'in dördü;
+Bugbot'un yeni bulgusu (süresi dolmuş teklif donması) ayrı kayıtta. Sıralama şiddet değil,
+ETKİ sırasına göre:
+
+1. **(P2) Maç sonrası hiçbir şey kondisyon/moral YAZMIYORDU.** K12-B "kondisyonu motora bağladım"
+   diyordu ve eşleme doğruydu — ama repo genelinde `PlayerState.Kondisyon`a oynanış tarafından
+   yazan tek bir çağrı yoktu. Yani her oyuncu her maça aynı 90 ile giriyordu ve **rotasyon oyunda
+   yine hiçbir şey değiştirmiyordu.** İddiam gerçekte olduğundan genişti. Düzeltme:
+   `shared/TheBadge.World/src/Squad/MacSonrasi.cs` + `squad.balance.json → macSonrasi`
+   ([KALİBRE] `oynayanDusus 14`, `dinlenenArtis 9`, `kondisyonTaban 25`,
+   `moralGalibiyet 6 / moralBeraberlik 0 / moralMaglubiyet -7`); `TheBadge.Play` haftalık döngüsü
+   journal üzerinden çağırıyor, kadro ekranı kond/moral gösteriyor.
+2. **(P1) Rakip kadrolar sessiz kondisyon avantajı alıyordu.** `Lig.RakipKadro` köprüye kondisyon
+   dizisi geçirmiyor, köprünün "ayarlanmamış = tam enerji" nöbetçisine düşüyordu: oyuncunun 11'i
+   955, rakibin 11'i 1000 enerjiyle sahaya çıkıyordu. Düzeltme: `LigKurucu.VarsayilanKondisyon 90`
+   / `VarsayilanMoral 60`, iki taraf da AYNI yoldan.
+3. **(P2) Değişiklikte giren oyuncu TAM enerjiyle geliyordu.** `ApplyPendingSubs` koşulsuz
+   `slot.Energy = 1000` yazıyordu — yorgun bir yedek sahaya girer girmez taze oluyor, kondisyon
+   modeli değişiklik yoluyla baypas ediliyordu. Doküman da aynı şeyi söylüyordu; ikisi birlikte
+   düzeltildi.
+4. **(P1) Serbest oyuncu transfer sink'ini kilitleyebilirdi.** `EnIyiHedef` serbest oyuncu
+   dönebiliyor ama koşucu her hedefe `propose_offer` gönderiyordu; bus bunu `NotOwned` ile
+   reddeder (K2 sahiplik denetimi) ve aynı hedef her hafta yeniden seçilirdi. Düzeltme: yol ayrımı
+   (`KademeliInsaatKosu.TransferAksiyonu`) + OK olmayan her sonuç `BeklenmeyenRed` sayılıyor.
+
+**DİŞ ÖLÇÜMÜ — dördü de ayrı ayrı söküldü, dördü de kırmızıya döndü:**
+
+| Sökülen düzeltme | Kapının verdiği cevap |
+|---|---|
+| `slot.Energy = 1000` geri | `[değişiklik] giren oyuncunun enerjisi kadro girdisini izlemiyor (taze 1000 → 1000, yorgun 300 → 1000)` |
+| Rakip kadro kondisyonsuz | `[rakip] 456 rakip girdisi oyuncunun yolundan SAPIYOR (beklenen enerji 955, momentum 1)` |
+| `MacSonrasi.Isle` boşa çıkarıldı | `[maç sonrası] OYNAYAN yorulmadı (90 → 90) · OYNAMAYAN dinlenmedi · galibiyette moral artmadı` |
+| Yol ayrımı sökülü | `K2Kapi3Sebepleri: [yol] serbest hedef sign_free_agent'e yönlendirilmiyor` |
+
+### 🔴 BULGU: yazdığım ilk kapının İKİSİ de kendi varsayımını ölçüyordu (2026-09-01)
+
+Bu turun asıl dersi düzeltmelerde değil, onları koruyacak kapıyı yazarken çıktı. İlk hâlde iki
+kapı da yeşil değil, YANLIŞ ölçüyordu:
+
+- **Değişiklik enerjisi kapısı maç SONUNDA bakıyordu.** Ölü topta toparlanma (+2/sn, ME 12.1)
+  beş dakikada 300'ü de 1000'i de tavana çekiyor; kapı "taze 1000, yorgun 1000" görüp
+  düzeltmenin çalıştığını sanacaktı. Çözüm: motor `Tick` `Tick` sürülüyor ve enerji
+  **değişikliğin uygulandığı ANDA** okunuyor. Ölçüm anı, ölçülen şeyin parçasıdır.
+- **Rakip kadro kapısı beklenen enerjiyi 90×10=900 diye YAZMIŞTI.** Köprünün eğrisi 90 → 955
+  veriyor. Kapı kodu değil kendi aritmetiğini ölçüyordu. Çözüm: beklenen değer artık aynı
+  kondisyondaki bir OYUNCU kadrosundan TÜRETİLİYOR — iddia da zaten buydu: "rakip, oyuncunun
+  yolundan geçer".
+
+**Ve bir tanesinin dişi hiç yoktu:** serbest oyuncu yol ayrımını söktüğümde merdiven koşusu
+YEŞİL kaldı. Ölçtüm: 13 sezonluk piyasalı koşuda en iyi hedef **hiçbir zaman** serbest çıkmıyor
+(0 kez) — yani düzeltme gerçek bir hatayı kapatıyor ama o senaryo onu hiç çalıştırmıyor. Bunu
+"kapı var" diye geçmek, olmayan bir korumayı varmış gibi göstermek olurdu. Ayrım ayrı bir metoda
+çıkarıldı ve kuralın kendisiyle YAN YANA (K2 sahiplik kapısında) ölçülüyor.
+
+**Kural (yeni):** *bir düzeltmeyi koruduğunu söylediğin kapıyı, düzeltmeyi SÖKEREK ölç; sökünce
+kırmızıya dönmüyorsa kapı o düzeltmeyi korumuyordur — nerede durduğundan bağımsız.*
+
+### 🔴 BULGU (oyunu OYNARKEN bulundu): yorgunluk modelim bir CIRCIRdı ve seçim onu görmüyordu (2026-09-01)
+
+İnceleme turu bitip her kapı yeşil olduktan sonra oyunu 6 hafta oynadım. Takım **ligin sonuncusu**
+oldu: 1 puan, 3-16. Kapılar bir şey demiyordu çünkü yorgunluk kapısı **yönü** (oynayan yorulur mu)
+ve **tabanı** (sıfıra düşer mi) ölçüyordu — modelin ŞEKLİNİ değil.
+
+**Birinci hata — model bir denge değil bir circirdı.** "Oynayan −14, oynamayan +9" demiştim; yani
+oynayan oyuncu HİÇ toparlanmıyordu. Düzenli ilk 11 beş maçta tabana (25) çakılıyor ve sezonun
+kalanını orada geçiriyordu. Düzeltme: toparlanma HERKESE ve 100'e olan AÇIĞIN yüzdesi olarak
+(`toparlanmaYuzde 35`, `toparlanmaTavani 20`). Bu bir denge noktası kurar:
+`100 − oynayanDusus×100/toparlanmaYuzde` = **60**. Her hafta oynayan 60'ta oturur, dinlenen 100'e
+tırmanır. `SquadBalance.Validate` artık bu dengeyi hesaplayıp tabanın altındaysa **yüklemeyi
+reddediyor** — circir bir daha balance dosyasından giremez.
+
+**İkinci hata — seçim yorgunluğu görmüyordu.** `SquadBridge` ham `Guc`a göre sıralıyordu: aynı en
+güçlü 11 her hafta çıkıyor, erirken bile çıkmaya devam ediyordu. Konsolda rotasyon komutu da yok.
+Yani model, oyuncunun karşılık veremediği düz bir cezaydı. Düzeltme: seçim **etkin güce** göre —
+`Guc × ((1−e) + e × kondisyon/100)`, `secim.kondisyonEtkisi = 0.5` [KALİBRE]. Yorgun yıldız yerini
+taze yedeğe bırakır; rotasyon sistemin KENDİ cevabı olur.
+
+**ÖLÇÜM — ve burada kendi ölçümümü bir kez düzeltmem gerekti.** İlk tabloyu **6 haftalık**
+koşulardan kurmuştum ve "düzeltilmiş model kontrolün de ÜSTÜNDE" diye yazmıştım. **O okuma
+gürültüydü:** 6 maç, bir ligde bir örneklem bile değil. Rakip yorgunluğu eklendikten sonra aynı
+yapılandırma 6 haftada 20. sıraya düştü — model değil örneklem konuşuyordu. **TAM SEZON (38 hafta),
+aynı seed:**
+
+| Model | Sıra | Puan | A-Y |
+|---|---|---|---|
+| Yorgunluk ~kapalı (`oynayanDusus 1`, kontrol) | 10. | 54 | 51-51 |
+| Circir + ham güç seçimi | 14. | 42 | 46-60 |
+| **Denge + etkin güç + rakip yorgunluğu (bugünkü)** | **11.** | **48** | **49-54** |
+
+Doğru okuma bu: circir modeli tam sezonda **12 puana ve −14 averaja** mal oluyor ve oyuncunun
+buna verecek cevabı yok. Düzeltilmiş model kontrolün **6 puan altında** — yorgunluk gerçek bir
+maliyet, ama rotasyonla yönetilebilir bir maliyet. "Kontrolün üstünde" değil; öyle olsaydı
+zaten yorgunluk bir kısıt olmazdı.
+
+**Kural (yeni):** *6 maçlık bir örneklemden model sonucu çıkarma.* Circir bulgusunu 6 haftalık
+koşu YAKALADI çünkü etki devasaydı (1 puana karşı 6); ama düzeltmenin BÜYÜKLÜĞÜNÜ aynı koşudan
+okumak, gürültüyü ölçüm sanmaktı.
+
+**Kapı artık şekli ölçüyor:** (1) 30 hafta üst üste oynayan TABANIN ÜSTÜNDE bir noktaya OTURUR ve
+o nokta türetilen denge ile ±3 içinde uyuşur, (2) 30. haftada değişim sıfırdır (gerçekten oturdu),
+(3) hiç oynamayan 100'e DÖNER, (4) kondisyonu tabana inen yıldız 11'den DÜŞER, (5) kondisyonlar
+EŞİTken 11 değişmez (etkin güç, K11'in "seçim güce göre" iddiasını sessizce ezmesin). Diş: circir
+geri konduğunda `CIRCIR: her hafta oynayan tabana çakıldı (25) — denge 60 olmalıydı`; seçim ham
+güce döndüğünde `kondisyonu 25 olan yıldız (güç 85) hâlâ ilk 11'de`.
+
+Küçük bir yan bulgu, kapı yakaladı: oranlı toparlanmada tam sayı bölmesi tepeye yakın sıfıra
+düşüyor ve dinlenen oyuncu **98'de kilitleniyordu**. Açık varken toparlanma en az 1.
+
+**Kural (yeni):** *bir modelin YÖNÜNÜ ve SINIRINI ölçmek şeklini ölçmez; dengesi olan her modelde
+kapı DENGEYİ ölçmeli.* Ve daha genel olanı: bu bulguyu hiçbir inceleyici bulmadı, hiçbir kapı
+bulmadı — **oyunu oynamak buldu.**
+
+### 🔴 BULGU (Bugbot, gerçek): rakipler hiç yorulmuyordu — düzelttiğim asimetrinin SÜRÜKLENEN hâli (2026-09-01)
+
+Yorgunluk modelini düzeltip yayınladıktan sonra Bugbot yeni bir bulgu yazdı ve haklıydı:
+`MacSonrasi.Isle` YALNIZ oyuncunun kulübü için koşuyordu. Rakip `TeamSheet`ler açılışta bir kez
+kuruluyor ve sezon boyu aynen kullanılıyordu — yani oyuncunun 11'i dengesine (kondisyon 60,
+enerji ~700) inerken rakipler bütün sezon 90 kondisyonda (enerji 955) kalıyordu. **Maç 1'den sonra
+her rakibe sessiz bir form üstünlüğü.**
+
+Bu, K12 turunda düzelttiğim BAŞLANGIÇ asimetrisinin (rakipler 1000, oyuncu 955) sürüklenen hâliydi:
+başlangıcı eşitledim, ama zamanla açılan farkı görmedim. Aynı sınıftan hatanın üçüncü tekrarı.
+
+Düzeltme: `Kulup` artık ham kadro dizilerini taşıyor, `LigKurucu.HaftaSonu` her hafta
+`MacSonrasi.YeniKondisyon` ile — **oyuncuyla BİREBİR AYNI aritmetik** — kondisyonu yürütüyor ve
+kadroyu yeniden kuruyor (yorgunluk bir sonraki haftanın SEÇİMİNE de yansısın diye). İki ayrı
+aritmetik yazmak aynı hatayı dördüncü kez davet ederdi; bu yüzden adım tek bir public metoda
+çıkarıldı.
+
+Ölçüm: 30 hafta sonra rakip 11'inin ortalama enerjisi **955 → 887**, aralık [820,987].
+
+**Ve kapı beni yine yakaladı:** ilk yazdığım iddia "hiçbir rakip 11 oyuncusu başlangıç enerjisinin
+üstünde olamaz"dı. Kırmızıya döndü — çünkü rakipler artık ROTASYON yapıyor ve dinlenip 100
+kondisyona çıkan bir yedek 11'e girdiğinde enerjisi 987 oluyor. Davranış doğru, iddia yanlıştı:
+yorgunluk bir tek oyuncunun değil kadronun SEVİYESİdir. İddia ortalamaya taşındı.
+
+### 🔴 BULGU (Bugbot, gerçek): circir kontrolüm circirin bir kolunu açık bırakıyordu (2026-09-01)
+
+Circiri engellemek için `SquadBalance.Validate`e denge kontrolü koymuştum:
+`100 − oynayanDusus×100/toparlanmaYuzde` tabanın üstünde mi? Bugbot bunun **kırpmayı görmediğini**
+söyledi ve haklıydı: çalışma anında toparlanma `toparlanmaTavani` ile de kırpılıyor. Tavan
+yorgunluğa eşit ya da ondan küçükse hiçbir kondisyonda net kazanç olamaz — oyuncu tabana kayar —
+ama sürekli sabit nokta bunu "60" diye okur ve yapılandırma kabul edilir.
+
+Yani engellemek için yazdığım kontrol, engellediğini sandığım şeyin bir kolunu açık bırakıyordu.
+Bugünkü değerlerde (tavan 20 > düşüş 14) sorun yok; kontrol GELECEKTEKİ bir [KALİBRE] değişikliği
+içindi ve tam orada delikti.
+
+`toparlanmaTavani > oynayanDusus` şartı eklendi (tavan şartı sağlandığında denge noktasındaki
+toparlanma zaten kırpılmaz, yani sürekli formül orada geçerlidir). Kapı hem NEGATİF hem POZİTİF
+yönü ölçüyor: tavan = düşüş olan yapılandırma REDDEDİLMELİ, geçerli yapılandırma reddedilMEMELİ
+(kontrol fazla geniş olmasın). Diş: kontrol söküldüğünde `tavan ≤ düşüş olan balance KABUL EDİLDİ`.
+
+Küçük bir yan ders: kapının ilk hâli yapılandırmayı JSON turuyla kopyalıyordu ve `nitelikSirasi`
+kayboluyordu — kapı ölçmek istediği şeyi değil serileştirmeyi ölçecekti. Gerçek nesne geçici
+olarak bozulup hemen geri alınıyor.
+
+### 🟢 Ölçüm boşluğu KAPANDI (kısmen): nöbetçi artefaktın kendisine kondu (2026-09-01)
+
+Haftalık döngünün üst-düzey deyimler içinde yerel bir fonksiyon olması ve `Sim.Checks`in onu
+çağıramaması, bu turda **iki kez** ısırdı: önce `MacSonrasi.Isle` hiç çağrılmıyordu, sonra
+rakiplerin hafta sonu. Üçüncüsünü beklemedim.
+
+Kaynak metnine bakan bir kapı yazmadım — ilk yeniden düzenlemede yanlış yerden kırmızıya döner ve
+kapı gevşetme baskısı üretirdi. Bunun yerine nöbetçi **konsolun kendisine** kondu ve DAVRANIŞA
+bakıyor: en az iki hafta oynandıysa hem oyuncunun kadro kondisyonu hem rakip 11 enerjisi DEĞİŞMİŞ
+olmalı; değişmediyse `!! HAFTA SONU DÜNYASI İŞLEMEDİ` yazıp çıkış kodu 2 ile düşüyor.
+
+Diş, iki yarısı için ayrı ayrı ölçüldü: `MacSonrasi.Isle` söküldüğünde "oyuncunun kadro kondisyonu
+6 hafta sonra HİÇ değişmedi", `LigKurucu.HaftaSonu` söküldüğünde "rakip 11 enerjisi 6 hafta sonra
+HİÇ değişmedi" — ikisinde de çıkış kodu 2. Normal koşuda 0.
+
+Bu, birim kapısının yerini TUTMAZ ve tutar gibi de yazılmadı: FAZ 02'de döngü test edilebilir bir
+servise taşındığında asıl kapı gelir. Ama artık sessizce kaybedilemez.
+
+### 🔴 BULGU (Bugbot, gerçek): süresi dolmuş teklif transfer politikasını DONDURUYORDU (2026-09-01)
+
+Codex'in dört bulgusunun yanına Cursor Bugbot iki bulgu daha yazdı; biri Codex'in serbest oyuncu
+bulgusunun aynısıydı, **ikincisi yeni ve K12-C'nin ölçümünü geçersiz kılıyordu.**
+
+`TransferTick` süresi dolmuş teklife BİLEREK dokunmuyor (K5 inceleme kararı: yuva temizliği
+`propose_offer`ın geri kazanımına ve kullanıcının `ret`ine ait; iki yerden temizlemek aynı yuvayı
+iki gerekçeyle kapatırdı). Koşucu ise "yuva dolu = açık teklif" okuyordu (`TeklifId != 0`). Sonuç:
+**ilk teklif süresi dolduktan sonra kulüp bir daha ne teklif veriyor, ne fesih yapıyor, ne kabul
+ediyordu.** Politika donuyordu ve donduğunu kimse görmüyordu.
+
+**ÖLÇÜM (13 sezonluk piyasalı koşu):** açık teklifli 508 haftanın **494'ü** tam olarak bu donmuş
+durumdaydı — yani transfer motoru koşunun neredeyse tamamında ölüydü.
+
+| | Donmuş (bulgu öncesi) | Düzeltilmiş |
+|---|---|---|
+| Alım | 14 | **29** |
+| Fesih | 5 | **19** |
+| Transfer sink | 64M₺ | **149M₺** |
+| En uzun engelli seri | 494 hafta | **1 hafta** |
+| Merdiven sonrası source/sink | 1,911 | **1,912** |
+
+Düzeltme koşucuda: açık teklif = **CANLI** teklif. Dünya tarafı doğruydu, okuma yanlıştı.
+
+**VE BU, K12-C'NİN SONUCUNU ÇÜRÜTMÜYOR — GÜÇLENDİRİYOR.** Transfer sink'i 2,3 KATINA çıktı ve
+merdiven sonrası oran 1,911'den 1,912'ye "yükseldi" (yani hiç kıpırdamadı). K12-C'de "borcun asıl
+kaynağı transfer sink'inin küçüklüğü değil, GELİRİN sınırsız büyümesi" diye kaydetmiştim; bu artık
+bir yorum değil, kontrollü bir deney: **sink'i ikiye katlamak oranı 0,001 oynatıyor.** Kalan borç
+gelir tarafındadır ve Atilla'nın kararını bekleyen üç seçenek (ücret enflasyonu / gelir doygunluğu)
+aynen geçerlidir.
+
+**Kapı:** politikanın açık teklif yüzünden ÜST ÜSTE durduğu en uzun hafta serisi ölçülüyor ve
+tavan TÜRETİLİYOR (`tb.pazarlik.teklifGecerlilikHafta + 1` = 3). "Kaç transfer oldu" diye sormak
+senaryonun zenginliğini ölçerdi; engellenme süresi ise doğrudan donmayı ölçer. Diş: düzeltme
+söküldüğünde kapı `494 hafta ÜST ÜSTE ... (tavan 3)` diyerek kırmızıya döndü.
+
+### 📐 Dikiş kuralının ikinci uygulaması: kapı artık oyunun GERÇEK kurulum kodunu koşuyor (2026-09-01)
+
+Rakip kondisyon bulgusu, K11'de kaydedilen kuralın birebir tekrarıydı: *iki alt sistem ayrı ayrı
+yeşilse, aralarındaki dikiş ölçülmemiş demektir.* `SquadBridge` yeşildi, `Lig.RakipKadro` yeşildi;
+aradaki çağrı yanlıştı ve hiçbir kapı oraya bakmıyordu. Bu yüzden `TheBadge.Sim.Checks` artık
+`server/TheBadge.Play`e referans veriyor ve kapı **oyunun gerçek lig kurulumunu** (`LigKurucu.Kur`,
+19 rakip × 2 kadro × 11 = 418 girdi) koşarak ölçüyor.
+
+**Kalan ölçüm boşluğu (gizlenmiyor):** haftalık döngünün KENDİSİ (`HaftayiOyna`) hâlâ üst-düzey
+deyimler içinde yerel bir fonksiyon; kapı onu çağıramıyor. Yani "döngü `MacSonrasi.Isle`'yi
+çağırıyor mu" sorusu bugün ancak gözle doğrulanıyor. Kaynak metnine bakan bir kapı yazmadım:
+ilk yeniden düzenlemede yanlış yerden kırmızıya döner ve kapı gevşetme baskısı üretirdi. Bu boşluk
+FAZ 02'de konsol yerini ekranlara bıraktığında kapanır — döngü test edilebilir bir servise
+taşındığında kapı doğrudan onu koşar.
+
 ## Bekleyen kararlar
 
 - ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —
@@ -2377,43 +2718,43 @@ yarısının neden yapılamadığı ölçümle netleşti.
   kaldı, capex `K10CapexSozlesmesi` ile ayrı ölçülüyor. Not: önerinin GEREKÇESİ yanlıştı ("capex
   bandı bulanıklaştırır"); ölçüm capex'in bandı AYAKTA TUTAN sink olduğunu gösterdi. Kararın
   kendisi doğru çıktı, gerekçesi düzeltildi — yukarıdaki K10-D kaydı.
-- ~~**ECONOMY_MAP'in iki kuralı çakışıyor (K10-D).**~~ → **KARAR (2026-08-31, "hepsini kapat"):
-  (c) — bugünkü hâl korunur, `merdivenSezonBandi` geniş kalır, kapı yalnız uçları yakalar.**
-  Gerekçe: (a) spec revizyonu, (b) balance şeması değişikliği; ikisi de balance sprintinin işi ve
-  bugünkü kapı ikisini de bloklamıyor. Çakışma ÖLÇÜLDÜ ve kayıtlı (fazla oranı 1,041'de merdiven
-  40 sezonda bitmiyor, 1,159'da 10 sezonda bitiyor) — balance sprinti bu sayıyla başlar.
+- ~~**ECONOMY_MAP'in iki kuralı çakışıyor (K10-D).**~~ → **BULGU YANLIŞMIŞ — KAPANDI
+  (2026-09-01, K12-D).** 2026-08-31'de (c) ile kapatılmıştı; şimdi korunacak bir çakışma
+  OLMADIĞI ölçüldü: bandın alt ucunda merdiven 19, üst ucunda 9 sezonda bitiyor, ikisi de bant
+  içi, iflas yok. Eski gözlem bandın DIŞINDAKİ (1,041) bir ölçümden ekstrapole edilmişti.
+  `K12DBantUclari` artık uçları ikili aramayla bulup ölçüyor — yukarıdaki K12-D kaydı.
 - ~~**Merdiven tükendikten sonra uzun vade sink'i ne? (K10-D BULGU 4)**~~ → **KARAR (2026-08-31,
   "hepsini kapat"): (a) — referans koşuya TRANSFER hattı eklenir, capex kapısı yeniden kalibre
   edilir.** Dokümanın zaten saydığı sink'i modellemek, yeni mekanik icat etmekten ucuz ve doğru;
   (c) (tesis tavanını açmak) Top Eleven anti-pattern'ine yakın olduğu için elendi, (b) (maaş
   enflasyonu) kadro gücü sistemine bağlı olduğu için sonraki dilime bırakıldı. Uygulama: K11-E.
-- **Oyuncu piyasası modeli — merdiven sonrası sink borcunun ÖN KOŞULU (K11-E, 2026-08-31).**
-  Transfer kalemi ledger'a bağlandı ve kapıyla korunuyor, ama borcu kapatacak ölçüm için
-  SÜREKLİ bir piyasa gerekiyor: bugün oyuncu havuzu fikstürle sınırlı, yenilenmiyor ve rakip
-  kulüplerin bütçesi yok. Seçenekler: (a) havuz yenilenmesi + rakip kulüp bütçeleri (dünya
-  katmanına çok-kulüp ekonomisi girer — büyük dilim); (b) referans koşuya SENTETİK bir piyasa
-  (havuz her sezon yenilenir, karşı taraf sabit bir kabul eşiğiyle davranır — ucuz, ama
-  ölçtüğü şey gerçek piyasa değil, varsayımın kendisi); (c) borç açık kalsın, kapı tavanla
-  korusun. **Öneri: (c) bugün, (a) FAZ 05'te** — (b) kapının ölçtüğünü ayarına çevirir.
-- **Motorun faul/kart kalibrasyonu rol ayrımı olan kadrolarla yeniden yapılsın mı? (K11 bulgusu,
-  2026-08-31)** ME 11.2 `marginGap` bir FARK olduğu için rol profili keskinleştikçe büyüyor;
-  M4/M5 kalibrasyonu düz kadrolarla yapıldığı için bunu hiç görmedi. Bugün bedeli kadro
-  profilinde ödeniyor (forvet çevikliği defansın altında — gerçekçi değil). Seçenekler:
-  (a) motor tarafını yeniden kalibre et (hakem katılığı / `sariSonrasiIhtiyat` / şiddet
-  ağırlıkları) ve M4/M5 + golden setleri yenile — doğru yer burası ama golden churn'ü büyük;
-  (b) profildeki bedeli kabul et, `squad.balance.json` bugünkü hâlde kalsın; (c) `marginGap`ı
-  role duyarsız hâle getir (spec değişikliği, ME 11.2). **Öneri: (a)**, balance sprintinde —
-  bugünkü hâl oynanabilir ve kapıyla korunuyor, ama bedel yanlış yerde duruyor. KARAR ATİLLA'NIN.
-- **Köprü kadrosuyla şut/maç 33,5 (hedef ≤32) — BORÇ, tavanla donduruldu (K11).** Kartı indiren
-  her ayar şutu çıkarıyor. `squad.balance.json → kalibrasyon.sutTavani = 36`; hedefe düşünce kapı
-  kendisi kırmızıya döner. Yukarıdaki (a) kararıyla birlikte çözülmesi muhtemel.
-- **Maç öncesi `Kondisyon` ve `Moral` motora taşınsın mı? (K11 köprü kararı, 2026-08-31)** Köprü
-  bunları BİLEREK haritalamıyor: motor her maça `Energy = 1000` ile başlıyor ve morali kendi
-  `momentum`u üzerinden işliyor; niteliğe karıştırmak çift sayım olurdu. Taşımak ME 12.1'de
-  "başlangıç enerjisi" kavramı ister. Seçenekler: (a) ME 12.1'e başlangıç enerjisi ekle —
-  yorgun kadroyla maça çıkmak gerçek bir tycoon kararı olur; (b) bugünkü hâl kalsın, kondisyon
-  yalnız dünya tarafında anlam taşısın. **Öneri: (a)** — rotasyon kararının oynanışa değmesi
-  GDD 3'ün vaadi; ama ME spec revizyonu, balance sprintine ait.
+- ~~**Oyuncu piyasası modeli — merdiven sonrası sink borcunun ÖN KOŞULU (K11-E).**~~ →
+  **YAPILDI (2026-09-01, K12-C):** seçenek (a)'nın asgari hâli — havuz yenilenmesi + pazarlık +
+  kadro dönüşü kuruldu. Borç 2,25 → 1,911'e indi ama KAPANMADI.
+- **Sınırsız gelir büyümesi: merdiven sonrası borcun ASIL kaynağı (K12-C ölçümü, 2026-09-01).**
+  Piyasa kuruldu ve çalışıyor, ama havuzun kalite tavanı yüzünden sink doyuyor: kadro havuzun
+  tepesine ulaşınca kasa şişiyor (32 sezonda 3,3 milyar ₺). Sorun sink tarafında değil KAYNAK
+  tarafında: stadyum kapasitesi üçe katlanıp kalıcı yüksek gelir üretiyor ve hiçbir gider onunla
+  ölçeklenmiyor. Seçenekler: (a) maaş enflasyonu — kulüp büyüdükçe oyuncu ücret talebi büyüsün
+  (piyasa modeli hazır, `Valuation.MaasTalebi`'ye kulüp ölçeği girer); (b) havuz kalitesi kulüple
+  birlikte büyüsün (üst lig oyuncuları görünür olsun) — sink doymaz ama "her sezon daha iyisi
+  var" hissi Top Eleven'a yaklaşır, dikkat; (c) gelir tarafı doygunlaşsın (kapasite ötesi seyirci
+  getirisi azalan verimli olsun). **Öneri: (a) + (c)** — ikisi de ECONOMY_MAP'in kendi mantığı
+  içinde kalır ve rekabeti bozmaz. KARAR ATİLLA'NIN.
+- ~~**Motorun faul/kart kalibrasyonu rol ayrımı olan kadrolarla yeniden yapılsın mı?**~~ →
+  **YAPILDI (2026-09-01, K12-A):** seçenek (a). Kadro profili gerçekçiliğe geri döndü, köprü
+  kadrosu motorun kendi bantlarında. Kalan tek kaçak (düz dağılımda kırmızı) bant gevşetilmeden
+  ayrı bir borç kapısına taşındı — yukarıdaki K12-A kaydı.
+- **Düz dağılımda kırmızı 0,03 (hedef 0,10-0,36) — BORÇ (K12-A).** İki popülasyon aynı anda hem
+  kart hem kırmızı bandını tutturamıyor. Seçenekler: (a) müdahale KARARINI role duyarlı yap —
+  kötü müdahaleci dalmak yerine jokey yapsın (model işi, ME 7.6 pres tetiği); (b) ikinci sarı
+  mekanizmasını şiddetten ayır; (c) borç açık kalsın, kapı korusun. **Öneri: (a)** — kaynak
+  orada (kaybedilen her müdahale foul adayı üretiyor), ama ayrı bir dilim.
+- ~~**Köprü kadrosuyla şut/maç 33,5 (hedef ≤32) — BORÇ.**~~ → **KAPANDI (2026-09-01, K12-A):**
+  motor kalibrasyonu sonrası 30,2; tavan kaldırıldı, metrik normal banda döndü.
+- ~~**Maç öncesi `Kondisyon` ve `Moral` motora taşınsın mı? (K11 köprü kararı)**~~ →
+  **YAPILDI (2026-09-01, K12-B):** seçenek (a). ME 12.1'e başlangıç enerjisi, ME 12.3'e başlangıç
+  momentumu eklendi; rotasyon artık oynanışa değiyor. Yukarıdaki K12-B kaydı.
 - ~~**`Rng.Gauss01` çarpışması ne zaman düzeltilsin?**~~ → **KARAR (2026-08-30, Atilla): ŞİMDİ
   YAP.** Üç seçenek ölçülmüş maliyetle sunuldu (şimdi / FAZ 05 öncesi / hiç). Uygulandı, aşağıdaki
   K8 kaydına bakınız. Bekleyen karar kapandı.

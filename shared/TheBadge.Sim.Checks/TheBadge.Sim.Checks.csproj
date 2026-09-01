@@ -8,5 +8,9 @@
     <ProjectReference Include="../TheBadge.Sim/TheBadge.Sim.csproj" />
     <ProjectReference Include="../TheBadge.CommandBus/TheBadge.CommandBus.csproj" />
     <ProjectReference Include="../TheBadge.World/TheBadge.World.csproj" />
+    <!-- OYNANABİLİR KONSOL: kapı, oyunun GERÇEK kurulum yolunu (LigKurucu) ölçer. İnceleme
+         bulgusu tam da bu dikişteydi — rakip kadrolar kondisyonsuz kuruluyordu ve iki alt
+         sistem ayrı ayrı yeşilken aralarındaki dikiş ölçülmemişti. -->
+    <ProjectReference Include="../../server/TheBadge.Play/TheBadge.Play.csproj" />
   </ItemGroup>
 </Project>
