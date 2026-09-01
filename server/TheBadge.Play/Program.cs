@@ -199,7 +199,10 @@ void Kadro()
         int hat = e.RoleId - 1;
         byte guc = 0;
         for (int k = 0; k < st.Oyuncular.Length; k++) if (st.Oyuncular[k].PlayerId == e.PlayerId) guc = st.Oyuncular[k].Guc;
-        Yaz($"   {hatAd[hat]}  #{e.PlayerId,-4} güç {guc,3}   pas {e.Attributes.Passing,3} " +
+        byte kond = 0, mrl = 0;
+        for (int k = 0; k < st.Oyuncular.Length; k++)
+            if (st.Oyuncular[k].PlayerId == e.PlayerId) { kond = st.Oyuncular[k].Kondisyon; mrl = st.Oyuncular[k].Moral; }
+        Yaz($"   {hatAd[hat]}  #{e.PlayerId,-4} güç {guc,3} kond {kond,3} moral {mrl,3}  pas {e.Attributes.Passing,3} " +
             $"bitiricilik {e.Attributes.Finishing,3} müdahale {e.Attributes.Tackling,3} hız {e.Attributes.Pace,3}");
     }
     Yaz($"   Yedek: {sheet.Bench.Length} kişi   ·   motor okuması (takım gücü): {lod2.TeamStrength(sheet):F1}");
@@ -378,6 +381,16 @@ void HaftayiOyna(int h, Mac benim)
         var r2 = lod2.Run(c2.Seed, c2);
         LigKurucu.SonucIsle(e, d, r2.HomeGoals, r2.AwayGoals);
         lod2Sayisi++;
+    }
+
+    // MAÇ SONRASI KADRO DURUMU — oynayan yorulur, oynamayan dinlenir, moral sonuca göre kayar.
+    // Bu olmadan K12-B'nin kondisyon eşlemesi çalışıyor ama hiçbir şey kondisyonu DEĞİŞTİRMİYOR
+    // ve rotasyon oyunda yine hiçbir şey ifade etmiyordu (inceleme bulgusu).
+    {
+        var jm = new WorldJournal();
+        MacSonrasi.Isle(st, KULUP, benimSheet, benimSonuc, sqBal, jm);
+        if (jm.Validate(st, out string mh)) jm.Apply(st);
+        else Yaz($"  ! maç sonrası journal geçersiz: {mh}");
     }
 
     // HAFTA SONU EKONOMİSİ — ECONOMY_MAP source/sink

@@ -15,6 +15,7 @@ namespace TheBadge.World
         public HatProfilleri hatProfilleri = new HatProfilleri();
         public int[] rolHat = new int[0];
         public MacaGirisCfg macaGiris = new MacaGirisCfg();
+        public MacSonrasiCfg macSonrasi = new MacSonrasiCfg();
         public KalibrasyonCfg kalibrasyon = new KalibrasyonCfg();
         public DizilisCfg dizilis = new DizilisCfg();
         public int yedekSayisi;
@@ -68,6 +69,14 @@ namespace TheBadge.World
             public double moralMerkez, moralMomentumBolen;
         }
 
+        /// <summary>Maç SONRASI kadro durumu — K12-B'nin ikinci yarısı.</summary>
+        [Serializable] public sealed class MacSonrasiCfg
+        {
+            public string aciklama;
+            public int oynayanDusus, dinlenenArtis, kondisyonTaban;
+            public int moralGalibiyet, moralBeraberlik, moralMaglubiyet;
+        }
+
         [Serializable] public sealed class DizilisCfg
         {
             public string ad, aciklama;
@@ -119,6 +128,10 @@ namespace TheBadge.World
             if (!(macaGiris.enerjiTaban > 0) || !(macaGiris.enerjiAralik > 0)
                 || macaGiris.enerjiTaban + macaGiris.enerjiAralik > 1000.0)
                 throw new ArgumentException("squad.balance: macaGiris enerji eğrisi (0,1000] içinde olmalı ve taban sıfırdan büyük olmalı.");
+            if (macSonrasi.oynayanDusus < 1 || macSonrasi.dinlenenArtis < 1)
+                throw new ArgumentException("squad.balance: macSonrasi yorulma/dinlenme sıfırdan büyük olmalı — sıfır, rotasyonu yine anlamsız kılar.");
+            if (macSonrasi.kondisyonTaban < 1 || macSonrasi.kondisyonTaban > 100)
+                throw new ArgumentException("squad.balance: macSonrasi.kondisyonTaban 1-100 olmalı (sıfır = oyuncu sahada yok hükmünde).");
             if (!(macaGiris.moralMomentumBolen > 0))
                 throw new ArgumentException("squad.balance: macaGiris.moralMomentumBolen sıfırdan büyük olmalı.");
             if (kalibrasyon.golBandi.Length != 2 || kalibrasyon.kartBandi.Length != 2

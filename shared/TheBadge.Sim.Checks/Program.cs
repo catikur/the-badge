@@ -2924,8 +2924,24 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         Bekle("kendi oyuncusuna teklif", RejectionReason.NotOwned, WDog(wc, "transfer.propose_offer", teklifKendi));
         var serbestKendi = new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)kendi).Set("maas", 100.0).Set("sureYil", 2L);
         Bekle("kendi oyuncusuna serbest imza", RejectionReason.NotOwned, WDog(wc, "transfer.sign_free_agent", serbestKendi));
+        // KOŞUCUNUN YOL AYRIMI, BUS'IN SAHİPLİK KURALIYLA AYNI ŞEYİ SÖYLEMELİ (inceleme bulgusu,
+        // P1). `KademeliInsaatKosu` serbest hedefi `sign_free_agent`e yönlendirmiyordu; teklif
+        // `NotOwned` ile sessizce düşüyor, aynı oyuncu her hafta yeniden seçiliyor ve transfer
+        // sink'i KİLİTLENİYORDU. Merdiven koşusu bunu ölçemiyor: o senaryoda en iyi hedef hiçbir
+        // zaman serbest çıkmıyor (ölçüldü — 13 sezonda 0 serbest hedef). Bu yüzden ayrım BURADA,
+        // kuralın kendisiyle yan yana ölçülür.
+        if (TheBadge.Checks.KademeliInsaatKosu.TransferAksiyonu(0L) != "transfer.sign_free_agent")
+            hata += "[yol] serbest hedef sign_free_agent'e yönlendirilmiyor ";
+        if (TheBadge.Checks.KademeliInsaatKosu.TransferAksiyonu(900L) != "transfer.propose_offer")
+            hata += "[yol] sahipli hedef propose_offer'a yönlendirilmiyor ";
+        // Yönlendirilmeyen yol GERÇEKTEN reddedilmeli — ayrımın SEBEBİ budur.
+        Bekle("serbest oyuncuya bedel teklifi", RejectionReason.NotOwned,
+              WDog(wc, "transfer.propose_offer",
+                   new TheBadge.Checks.TestPayload().Set("hedefOyuncuId", (long)serbest)
+                                                    .Set("bedel", 1000.0).Set("maas", 100.0)));
         var serbestDogru = new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)serbest).Set("maas", 100.0).Set("sureYil", 2L);
-        Bekle("serbest oyuncuya imza", RejectionReason.None, WDog(wc, "transfer.sign_free_agent", serbestDogru));
+        Bekle("serbest oyuncuya imza", RejectionReason.None,
+              WDog(wc, TheBadge.Checks.KademeliInsaatKosu.TransferAksiyonu(0L), serbestDogru));
 
         // PENCERE — kapalıyken pencereye tabi aksiyon düşer, tabi olmayan geçer
         st.Takvim.Pencere = TheBadge.World.TransferWindow.Kapali;
@@ -4061,6 +4077,142 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             Console.WriteLine($"[info] K12-B maça giriş: enerji kondisyon 90 → {taze.Starters[0].BaslangicEnerji}, " +
                               $"kondisyon 20 → {yorgun.Starters[0].BaslangicEnerji} · momentum moral 0 → {dusuk.BaslangicMomentum}, " +
                               $"moral 100 → {yuksek.BaslangicMomentum} · 24 maç averaj taze {rt.gol - rt.yenen} / yorgun {ry.gol - ry.yenen}");
+        }
+
+        // (12) İNCELEME BULGULARI (Codex, K12 turu) — dördü de kapıyla korunuyor.
+        {
+            // (a) DEĞİŞİKLİKTE GELEN OYUNCUNUN ENERJİSİ KORUNUR. `ApplyPendingSubs` koşulsuz
+            //     `slot.Energy = 1000` yazıyordu: yorgun bir yedek sahaya girer girmez tam forma
+            //     giriyor ve K12-B'nin kondisyon modeli DEĞİŞİKLİK YOLUYLA baypas ediliyordu.
+            //     ÖLÇÜM ANI ÖNEMLİ: maç SONUNDA bakmak işe yaramıyor — ölü topta toparlanma
+            //     (+2/sn, ME 12.1) beş dakikada 300'ü de 1000'i de tavana çekiyor ve iki koşu
+            //     EŞİT görünüyordu (bu kapının ilk hâli tam olarak buna düştü). Bu yüzden motor
+            //     TICK TICK sürülür ve enerji, değişikliğin uygulandığı ANDA okunur.
+            {
+                ushort GirisEnerjisi(ushort yedekEnerji)
+                {
+                    var dSt = TheBadge.Checks.KadroFixture.Kur(eRules, 640L, 42L);
+                    var evSheet = TheBadge.World.SquadBridge.Kur(dSt, 640L, sqBal, true, out _);
+                    if (evSheet == null || evSheet.Bench.Length == 0)
+                    { hata += "[değişiklik] yedek yok (ölçüm anlamsız) "; return 0; }
+                    // Yalnız YEDEKLERİN enerjisi değişir; ilk 11 iki koşuda da aynı.
+                    // (`PlayerEntry` sınıf ama her koşu kadroyu SIFIRDAN kurar — sızma yok.)
+                    for (int i = 0; i < evSheet.Bench.Length; i++)
+                        evSheet.Bench[i].BaslangicEnerji = yedekEnerji;
+                    var depSt = TheBadge.Checks.KadroFixture.Kur(eRules, 641L, 43L);
+                    var cfg = new MatchConfig
+                    {
+                        Seed = 0xC0FFEEUL, EngineVersion = "k12r", Home = evSheet,
+                        Away = TheBadge.World.SquadBridge.Kur(depSt, 641L, sqBal, false, out _),
+                        Referee = RefereeProfile.Default, Lod = LodLevel.Lod0
+                    };
+                    var q = new CommandQueue();
+                    // AutoManage KAPALI: otomatik değişiklikler hakları tüketip ölçümü bozardı.
+                    q.Enqueue(new SubstitutionCmd(600u, 0, 10, 0));   // 1'de kabul, ilk ölü topta uygulanır
+                    var eng = new MatchEngine(cfg.Seed, q, cfg, simBal) { AutoManage = false };
+                    var mst = MatchEngine.CreateInitialState(cfg);
+                    for (uint t = 0; t < 54000 && mst.Agents[10].BenchSlot == 0; t++) eng.Tick(ref mst);
+                    if (mst.Agents[10].BenchSlot == 0)
+                    { hata += "[değişiklik] sub uygulanmadı (ölçüm anlamsız) "; return 0; }
+                    return mst.Agents[10].Energy;
+                }
+                ushort tazeGiris = GirisEnerjisi(1000), yorgunGiris = GirisEnerjisi(300);
+                // KESİN İDDİA: motor kadro girdisindeki enerjiyi AYNEN yazar. "Yorgun < taze"
+                // demek zayıf olurdu — 999 da onu geçerdi; bulgu değerin KENDİSİNDEYDİ.
+                if (tazeGiris != 1000 || yorgunGiris != 300)
+                    hata += $"[değişiklik] giren oyuncunun enerjisi kadro girdisini izlemiyor " +
+                            $"(taze 1000 → {tazeGiris}, yorgun 300 → {yorgunGiris}) ";
+                Console.WriteLine($"[info] K12 değişiklik enerjisi: taze yedek 1000 → {tazeGiris}, " +
+                                  $"yorgun yedek 300 → {yorgunGiris} (sahaya girdiği tick'te okundu)");
+            }
+
+            // (b) RAKİP KADROLAR DA AYNI KONDİSYON YOLUNDAN GEÇER — ve bu, OYUNUN GERÇEK
+            //     KURULUM KODU (`TheBadge.Play.LigKurucu`) üzerinden ölçülür. Bulgu tam buradaydı:
+            //     `RakipKadro` kondisyon dizisi geçirmiyordu, köprünün "ayarlanmamış = tam enerji"
+            //     nöbetçisine düşüyordu; her rakip 1000, oyuncunun 11'i 955 ile sahaya çıkıyordu.
+            //     Köprüyü TEK BAŞINA ölçmek bunu göremezdi: iki alt sistem ayrı ayrı yeşilken
+            //     aralarındaki DİKİŞ ölçülmemişti. Kapı artık dikişi ölçüyor.
+            {
+                // BEKLENEN DEĞER TÜRETİLİR, YAZILMAZ: aynı kondisyondaki bir OYUNCU kadrosunun
+                // köprüden aldığı enerji neyse, rakibinki de o olmalı. Sabit yazsaydık köprünün
+                // eğrisi değiştiğinde kapı yanlış yerden bağırırdı (ilk hâli 90×10=900 sanıyordu;
+                // köprü 955 veriyor — kapı kendi varsayımını değil KODU ölçmeli).
+                var refSt = TheBadge.Checks.KadroFixture.Kur(eRules, 642L, 42L);
+                for (int i = 0; i < refSt.Oyuncular.Length; i++)
+                {
+                    var rp = refSt.Oyuncular[i];
+                    rp.Kondisyon = TheBadge.Play.LigKurucu.VarsayilanKondisyon;
+                    rp.Moral = TheBadge.Play.LigKurucu.VarsayilanMoral;
+                    refSt.Oyuncular[i] = rp;
+                }
+                var refSheet = TheBadge.World.SquadBridge.Kur(refSt, 642L, sqBal, true, out _);
+                ushort beklenen = refSheet.Starters[0].BaslangicEnerji;
+                sbyte beklenenMom = refSheet.BaslangicMomentum;
+                if (beklenen == 0) hata += "[rakip] referans kadro enerjisi 0 (kapı ölçemez) ";
+
+                var lig = TheBadge.Play.LigKurucu.Kur("Kapı FK", sqBal, 70);
+                int bakilan = 0, sapan = 0;
+                for (int i = 1; i < lig.Length; i++)      // 0 = oyuncunun kulübü, kadrosu dünyadan gelir
+                {
+                    var ks = lig[i];
+                    if (ks.Ev == null || ks.Deplasman == null) { hata += $"[rakip] {ks.Ad} kadrosuz "; continue; }
+                    foreach (var sh in new[] { ks.Ev, ks.Deplasman })
+                    {
+                        for (int k = 0; k < sh.Starters.Length; k++, bakilan++)
+                            if (sh.Starters[k].BaslangicEnerji != beklenen) sapan++;
+                        if (sh.BaslangicMomentum != beklenenMom) sapan++;
+                    }
+                }
+                if (bakilan == 0) hata += "[rakip] hiç rakip 11'i incelenemedi (kapı boşa koştu) ";
+                if (sapan > 0)
+                    hata += $"[rakip] {sapan} rakip girdisi oyuncunun yolundan SAPIYOR " +
+                            $"(beklenen enerji {beklenen}, momentum {beklenenMom}) ";
+                Console.WriteLine($"[info] K12 rakip kadro dikişi: {lig.Length - 1} rakip × 2 kadro × 11 = {bakilan} " +
+                                  $"girdi · oyuncunun yolundan sapan {sapan} (beklenen enerji {beklenen}, momentum {beklenenMom})");
+            }
+
+            // (c) MAÇ SONRASI: OYNAYAN YORULUR, OYNAMAYAN DİNLENİR, MORAL SONUCA GÖRE KAYAR.
+            //     K12-B'nin eksik yarısı — mekanizma vardı, döngü yoktu.
+            {
+                var mSt = TheBadge.Checks.KadroFixture.Kur(eRules, 643L, 42L);
+                var sheet = TheBadge.World.SquadBridge.Kur(mSt, 643L, sqBal, true, out _);
+                int oynayanIdx = -1, yedekIdx = -1;
+                for (int i = 0; i < mSt.Oyuncular.Length; i++)
+                {
+                    if (mSt.Oyuncular[i].ClubId != 643L) continue;
+                    bool sahada = false;
+                    for (int k = 0; k < 11; k++) if (sheet.Starters[k].PlayerId == mSt.Oyuncular[i].PlayerId) sahada = true;
+                    if (sahada && oynayanIdx < 0) oynayanIdx = i;
+                    if (!sahada && yedekIdx < 0) yedekIdx = i;
+                }
+                if (oynayanIdx < 0 || yedekIdx < 0) hata += "[maç sonrası] oynayan/oynamayan ayrılamadı ";
+                else
+                {
+                    byte k0 = mSt.Oyuncular[oynayanIdx].Kondisyon, y0 = mSt.Oyuncular[yedekIdx].Kondisyon;
+                    byte m0 = mSt.Oyuncular[oynayanIdx].Moral;
+                    var jm = new TheBadge.World.WorldJournal();
+                    TheBadge.World.MacSonrasi.Isle(mSt, 643L, sheet, TheBadge.World.WeekResult.Galibiyet, sqBal, jm);
+                    if (!jm.Validate(mSt, out string mh)) hata += $"[maç sonrası] journal geçersiz: {mh} ";
+                    else jm.Apply(mSt);
+                    if (!(mSt.Oyuncular[oynayanIdx].Kondisyon < k0))
+                        hata += $"[maç sonrası] OYNAYAN yorulmadı ({k0} → {mSt.Oyuncular[oynayanIdx].Kondisyon}) ";
+                    if (!(mSt.Oyuncular[yedekIdx].Kondisyon > y0))
+                        hata += $"[maç sonrası] OYNAMAYAN dinlenmedi ({y0} → {mSt.Oyuncular[yedekIdx].Kondisyon}) ";
+                    if (!(mSt.Oyuncular[oynayanIdx].Moral > m0))
+                        hata += $"[maç sonrası] galibiyette moral artmadı ({m0} → {mSt.Oyuncular[oynayanIdx].Moral}) ";
+                    // TABAN: üst üste maçlarda kondisyon SIFIRA düşmez.
+                    for (int tur = 0; tur < 30; tur++)
+                    {
+                        var j2 = new TheBadge.World.WorldJournal();
+                        TheBadge.World.MacSonrasi.Isle(mSt, 643L, sheet, TheBadge.World.WeekResult.Maglubiyet, sqBal, j2);
+                        if (j2.Validate(mSt, out _)) j2.Apply(mSt);
+                    }
+                    if (mSt.Oyuncular[oynayanIdx].Kondisyon < sqBal.macSonrasi.kondisyonTaban)
+                        hata += $"[maç sonrası] kondisyon tabanın ALTINA düştü ({mSt.Oyuncular[oynayanIdx].Kondisyon}) ";
+                    Console.WriteLine($"[info] K12 maç sonrası: oynayan {k0} → {mSt.Oyuncular[oynayanIdx].Kondisyon} " +
+                                      $"(30 maç sonra, taban {sqBal.macSonrasi.kondisyonTaban}) · oynamayan {y0} → {mSt.Oyuncular[yedekIdx].Kondisyon}");
+                }
+            }
         }
 
         // (10) İNCELEME BULGULARI (Codex, 2026-09-01) — dördü de kapıyla korunuyor.

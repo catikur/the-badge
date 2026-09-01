@@ -2894,7 +2894,9 @@ namespace TheBadge.Sim.Match
         }
 
         /// <summary>Bekleyen değişiklikleri ölü topta uygular — ME 14.2 (22 hedefin tutarlı
-        /// yeniden hesabı için oyun durmuş olmalı). Giren oyuncu TAM enerjiyle gelir.
+        /// yeniden hesabı için oyun durmuş olmalı). Giren oyuncu KADRO GİRDİSİNDEKİ enerjiyle
+        /// gelir (K12-B eki); doküman burada "tam enerjiyle gelir" diyordu ve kod da öyle
+        /// yapıyordu — ikisi birlikte kondisyon modelini baypas ediyordu.
         /// Tarama sırası (takım, slot) SABİT — çoklu değişiklik tek durakta deterministik uygulanır.</summary>
         void ApplyPendingSubs(ref MatchState st)
         {
@@ -2919,7 +2921,13 @@ namespace TheBadge.Sim.Match
                 ApplyEnvToAttrs(ref attrs[outId]);   // hava/zemin deltası yeni oyuncuya da işler (12.4)
                 slot.RoleId = e.RoleId;
                 slot.AnchorX = e.AnchorXmm; slot.AnchorY = e.AnchorYmm;
-                slot.Energy = 1000;                 // taze bacak (ME 12.1 tavanı)
+                // GELEN OYUNCUNUN ENERJİSİ KORUNUR (K12-B eki; inceleme bulgusu, P2).
+                // Koşulsuz 1000, yorgun bir yedeği sahaya girer girmez tam forma sokuyordu ve
+                // K12-B'nin kondisyon modelini değişiklik yoluyla BAYPAS ediyordu. Sıfır yine
+                // "ayarlanmamış" demektir — ilk 11'deki kuralın aynısı.
+                slot.Energy = e.BaslangicEnerji > 0
+                    ? (e.BaslangicEnerji > 1000 ? (ushort)1000 : e.BaslangicEnerji)
+                    : (ushort)1000;
                 slot.Injury = InjuryState.None;
                 slot.YellowCards = 0;               // yeni oyuncu, yeni sicil
                 slot.SentOff = false;

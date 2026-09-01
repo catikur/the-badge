@@ -2458,6 +2458,79 @@ ve düzeltiyorum.
   K11'de eksik kadro popülasyonu, K12-A'da eksik lig dağılımı, burada bandın dışından
   ekstrapolasyon. Üçünü de ölçüm yakaladı; hiçbirini okuma yakalamadı.
 
+### K12 inceleme turu — ✅ TAMAM, dördü de GERÇEK çıktı (2026-09-01)
+
+Codex PR #26'ya dört bulgu yazdı; **dördü de koda karşı doğrulandı, dördü de gerçekti** ve
+düzeltildi. Sıralama şiddet değil, ETKİ sırasına göre:
+
+1. **(P2) Maç sonrası hiçbir şey kondisyon/moral YAZMIYORDU.** K12-B "kondisyonu motora bağladım"
+   diyordu ve eşleme doğruydu — ama repo genelinde `PlayerState.Kondisyon`a oynanış tarafından
+   yazan tek bir çağrı yoktu. Yani her oyuncu her maça aynı 90 ile giriyordu ve **rotasyon oyunda
+   yine hiçbir şey değiştirmiyordu.** İddiam gerçekte olduğundan genişti. Düzeltme:
+   `shared/TheBadge.World/src/Squad/MacSonrasi.cs` + `squad.balance.json → macSonrasi`
+   ([KALİBRE] `oynayanDusus 14`, `dinlenenArtis 9`, `kondisyonTaban 25`,
+   `moralGalibiyet 6 / moralBeraberlik 0 / moralMaglubiyet -7`); `TheBadge.Play` haftalık döngüsü
+   journal üzerinden çağırıyor, kadro ekranı kond/moral gösteriyor.
+2. **(P1) Rakip kadrolar sessiz kondisyon avantajı alıyordu.** `Lig.RakipKadro` köprüye kondisyon
+   dizisi geçirmiyor, köprünün "ayarlanmamış = tam enerji" nöbetçisine düşüyordu: oyuncunun 11'i
+   955, rakibin 11'i 1000 enerjiyle sahaya çıkıyordu. Düzeltme: `LigKurucu.VarsayilanKondisyon 90`
+   / `VarsayilanMoral 60`, iki taraf da AYNI yoldan.
+3. **(P2) Değişiklikte giren oyuncu TAM enerjiyle geliyordu.** `ApplyPendingSubs` koşulsuz
+   `slot.Energy = 1000` yazıyordu — yorgun bir yedek sahaya girer girmez taze oluyor, kondisyon
+   modeli değişiklik yoluyla baypas ediliyordu. Doküman da aynı şeyi söylüyordu; ikisi birlikte
+   düzeltildi.
+4. **(P1) Serbest oyuncu transfer sink'ini kilitleyebilirdi.** `EnIyiHedef` serbest oyuncu
+   dönebiliyor ama koşucu her hedefe `propose_offer` gönderiyordu; bus bunu `NotOwned` ile
+   reddeder (K2 sahiplik denetimi) ve aynı hedef her hafta yeniden seçilirdi. Düzeltme: yol ayrımı
+   (`KademeliInsaatKosu.TransferAksiyonu`) + OK olmayan her sonuç `BeklenmeyenRed` sayılıyor.
+
+**DİŞ ÖLÇÜMÜ — dördü de ayrı ayrı söküldü, dördü de kırmızıya döndü:**
+
+| Sökülen düzeltme | Kapının verdiği cevap |
+|---|---|
+| `slot.Energy = 1000` geri | `[değişiklik] giren oyuncunun enerjisi kadro girdisini izlemiyor (taze 1000 → 1000, yorgun 300 → 1000)` |
+| Rakip kadro kondisyonsuz | `[rakip] 456 rakip girdisi oyuncunun yolundan SAPIYOR (beklenen enerji 955, momentum 1)` |
+| `MacSonrasi.Isle` boşa çıkarıldı | `[maç sonrası] OYNAYAN yorulmadı (90 → 90) · OYNAMAYAN dinlenmedi · galibiyette moral artmadı` |
+| Yol ayrımı sökülü | `K2Kapi3Sebepleri: [yol] serbest hedef sign_free_agent'e yönlendirilmiyor` |
+
+### 🔴 BULGU: yazdığım ilk kapının İKİSİ de kendi varsayımını ölçüyordu (2026-09-01)
+
+Bu turun asıl dersi düzeltmelerde değil, onları koruyacak kapıyı yazarken çıktı. İlk hâlde iki
+kapı da yeşil değil, YANLIŞ ölçüyordu:
+
+- **Değişiklik enerjisi kapısı maç SONUNDA bakıyordu.** Ölü topta toparlanma (+2/sn, ME 12.1)
+  beş dakikada 300'ü de 1000'i de tavana çekiyor; kapı "taze 1000, yorgun 1000" görüp
+  düzeltmenin çalıştığını sanacaktı. Çözüm: motor `Tick` `Tick` sürülüyor ve enerji
+  **değişikliğin uygulandığı ANDA** okunuyor. Ölçüm anı, ölçülen şeyin parçasıdır.
+- **Rakip kadro kapısı beklenen enerjiyi 90×10=900 diye YAZMIŞTI.** Köprünün eğrisi 90 → 955
+  veriyor. Kapı kodu değil kendi aritmetiğini ölçüyordu. Çözüm: beklenen değer artık aynı
+  kondisyondaki bir OYUNCU kadrosundan TÜRETİLİYOR — iddia da zaten buydu: "rakip, oyuncunun
+  yolundan geçer".
+
+**Ve bir tanesinin dişi hiç yoktu:** serbest oyuncu yol ayrımını söktüğümde merdiven koşusu
+YEŞİL kaldı. Ölçtüm: 13 sezonluk piyasalı koşuda en iyi hedef **hiçbir zaman** serbest çıkmıyor
+(0 kez) — yani düzeltme gerçek bir hatayı kapatıyor ama o senaryo onu hiç çalıştırmıyor. Bunu
+"kapı var" diye geçmek, olmayan bir korumayı varmış gibi göstermek olurdu. Ayrım ayrı bir metoda
+çıkarıldı ve kuralın kendisiyle YAN YANA (K2 sahiplik kapısında) ölçülüyor.
+
+**Kural (yeni):** *bir düzeltmeyi koruduğunu söylediğin kapıyı, düzeltmeyi SÖKEREK ölç; sökünce
+kırmızıya dönmüyorsa kapı o düzeltmeyi korumuyordur — nerede durduğundan bağımsız.*
+
+### 📐 Dikiş kuralının ikinci uygulaması: kapı artık oyunun GERÇEK kurulum kodunu koşuyor (2026-09-01)
+
+Rakip kondisyon bulgusu, K11'de kaydedilen kuralın birebir tekrarıydı: *iki alt sistem ayrı ayrı
+yeşilse, aralarındaki dikiş ölçülmemiş demektir.* `SquadBridge` yeşildi, `Lig.RakipKadro` yeşildi;
+aradaki çağrı yanlıştı ve hiçbir kapı oraya bakmıyordu. Bu yüzden `TheBadge.Sim.Checks` artık
+`server/TheBadge.Play`e referans veriyor ve kapı **oyunun gerçek lig kurulumunu** (`LigKurucu.Kur`,
+19 rakip × 2 kadro × 11 = 418 girdi) koşarak ölçüyor.
+
+**Kalan ölçüm boşluğu (gizlenmiyor):** haftalık döngünün KENDİSİ (`HaftayiOyna`) hâlâ üst-düzey
+deyimler içinde yerel bir fonksiyon; kapı onu çağıramıyor. Yani "döngü `MacSonrasi.Isle`'yi
+çağırıyor mu" sorusu bugün ancak gözle doğrulanıyor. Kaynak metnine bakan bir kapı yazmadım:
+ilk yeniden düzenlemede yanlış yerden kırmızıya döner ve kapı gevşetme baskısı üretirdi. Bu boşluk
+FAZ 02'de konsol yerini ekranlara bıraktığında kapanır — döngü test edilebilir bir servise
+taşındığında kapı doğrudan onu koşar.
+
 ## Bekleyen kararlar
 
 - ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —

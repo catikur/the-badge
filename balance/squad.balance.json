@@ -247,5 +247,14 @@
     "enerjiAralik": 450.0,
     "moralMerkez": 50.0,
     "moralMomentumBolen": 10.0
+  },
+  "macSonrasi": {
+    "aciklama": "K12-B ikinci yarisi: mac sonrasi kadro durumu. Oynayan yorulur, oynamayan dinlenir; moral sonuca gore kayar (kulubede oturan yarim etkilenir). kondisyonTaban SIFIR DEGIL: kondisyonu sifira dusen oyuncu sahada yok hukmunde olurdu ve bu bir kadro kurali, yorgunluk egrisinin isi degil. Bu blok olmadan K12-B'nin esleme mekanizmasi calisiyor ama oyun donguSU kondisyonu hic degistirmiyordu - rotasyon yine hicbir sey degistirmiyordu.",
+    "oynayanDusus": 14,
+    "dinlenenArtis": 9,
+    "kondisyonTaban": 25,
+    "moralGalibiyet": 6,
+    "moralBeraberlik": 0,
+    "moralMaglubiyet": -7
   }
 }

@@ -125,9 +125,17 @@ namespace TheBadge.World
             return eklenen;
         }
 
-        /// <summary>Kulübün kadrosunu güçlendirecek EN İYİ satın alınabilir oyuncu — deterministik.
-        /// Ölçüt: gücü kadronun EN ZAYIF oyuncusundan yüksek, bedeli karşılanabilir. Eşitlikte
-        /// PlayerId artan (kanonik). Bulunamazsa -1.</summary>
+        /// <summary>Kulübün kadrosunu güçlendirecek EN İYİ hedef — deterministik. Ölçüt: gücü
+        /// kadronun EN ZAYIF oyuncusundan yüksek, bedeli karşılanabilir. Eşitlikte PlayerId artan
+        /// (kanonik). Bulunamazsa -1.
+        ///
+        /// SERBEST OYUNCU DA DÖNEBİLİR (`ClubId == 0`) ve ÇAĞIRAN YOLU AYIRMAK ZORUNDADIR:
+        /// `transfer.propose_offer` serbest oyuncuyu `NotOwned` ile reddeder (sahiplik denetimi
+        /// K2'de `OwnerNeed.Yabanci` ile yapılıyor), doğru yol `transfer.sign_free_agent`tir.
+        /// İlk yazımda çağıran bu ayrımı yapmıyordu: aynı serbest oyuncu her hafta seçiliyor,
+        /// teklif sessizce reddediliyor ve transfer sink'i KİLİTLENİYORDU (inceleme bulgusu, P1).
+        /// Serbest oyuncuyu burada elemek de bir seçenekti; elenmedi çünkü serbest transfer
+        /// gerçek bir kazanım yolu ve maaş yüküyle yine sink'e girer.</summary>
         public static int EnIyiHedef(GameState st, long clubId, TransferBalance tb, long butce,
                                      int kadroMax)
         {

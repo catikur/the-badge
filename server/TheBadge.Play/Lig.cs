@@ -33,6 +33,15 @@ namespace TheBadge.Play
         /// 20 takımlı bir ligi tarif ediyordu.</summary>
         public const int KulupSayisi = 20;
 
+        /// <summary>Kadroların maça giriş kondisyonu. OYUNCU ve RAKİP AYNI değeri kullanır —
+        /// rakip kadroları kondisyonsuz kurmak, köprünün "ayarlanmamış = tam enerji" nöbetçisine
+        /// düşüyor ve her rakibe sessiz bir kondisyon avantajı veriyordu (inceleme bulgusu, P1):
+        /// oyuncunun 11'i 955 enerjiyle, rakibin 11'i 1000 ile çıkıyordu.</summary>
+        public const byte VarsayilanKondisyon = 90;
+        /// <summary>Aynı gerekçe momentum için: moral verilmezse `BaslangicMomentum` 0 kalır ve
+        /// oyuncunun takımı moralinden gelen momentumla, rakip nötr momentumla sahaya çıkardı.</summary>
+        public const byte VarsayilanMoral = 60;
+
         static readonly string[] Adlar =
         {
             "Demirkale FK", "Yeşilvadi SK", "Karadeniz Fırtına", "Altınboynuz",
@@ -74,6 +83,7 @@ namespace TheBadge.Play
         {
             const int N = 18;
             var id = new int[N]; var rol = new byte[N]; var guc = new byte[N];
+            var kond = new byte[N]; var moral = new byte[N];
             // 2 KL · 6 DF · 6 OS · 4 FV — `rolHat`: 1 KL · 2-8 DF · 9-20 OS · 21-32 FV
             byte[] roller = { 1, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 21, 22, 23, 24 };
             for (int i = 0; i < N; i++)
@@ -83,8 +93,10 @@ namespace TheBadge.Play
                 int d = ((clubId * 13 + i * 29) % 15) - 7;     // -7..+7 sapma
                 int v = taban + d;
                 guc[i] = (byte)(v < 30 ? 30 : v > 95 ? 95 : v);
+                kond[i] = VarsayilanKondisyon;
+                moral[i] = VarsayilanMoral;
             }
-            var s = SquadBridge.KurDizi(bal, ev, id, rol, guc, out string hata);
+            var s = SquadBridge.KurDizi(bal, ev, id, rol, guc, out string hata, kond, moral);
             if (s == null) throw new InvalidOperationException($"rakip kadro kurulamadı: {hata}");
             return s;
         }

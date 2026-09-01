@@ -201,6 +201,14 @@ namespace TheBadge.Checks
         /// <summary>Tavan tier — `eco.insaat.tierSureHafta` uzunluğundan türetilir, elle yazılmaz.</summary>
         public static int MaxTier(EconomyBalance eco) => eco.insaat.tierSureHafta.Length - 1;
 
+        /// <summary>HEDEFİN SAHİPLİK DURUMUNA GÖRE DOĞRU AKSİYON — serbest oyuncu (`ClubId == 0`)
+        /// için `sign_free_agent`, sahipli oyuncu için `propose_offer`. Ayrı bir metot çünkü
+        /// KAPI bunu ölçüyor: koşucu ayrımı yapmadığında serbest hedefe her hafta `propose_offer`
+        /// gidiyor, bus `NotOwned` ile sessizce reddediyor ve transfer sink'i KİLİTLENİYOR
+        /// (inceleme bulgusu, P1). Çağrı yerinde gömülü bir üçlü ifade ölçülemezdi.</summary>
+        public static string TransferAksiyonu(long hedefClubId)
+            => hedefClubId == 0 ? "transfer.sign_free_agent" : "transfer.propose_offer";
+
         public struct Sonuc
         {
             public WeekLedger Toplam;          // TÜM koşunun toplamı
@@ -363,17 +371,30 @@ namespace TheBadge.Checks
                                 // Yeni maaş bütçeyi aşıyorsa teklif YOK — kadro tavanı gibi bu da
                                 // bir yönetim kuralı, piyasanın değil.
                                 if (st.Club.HaftalikMaasGiderTl + maas > maasTavani) goto transferSonu;
+                                // YOL AYRIMI: serbest oyuncu `propose_offer`ı `NotOwned` ile
+                                // reddeder; doğru aksiyon `sign_free_agent`tir. Ayrım yapılmazsa
+                                // aynı serbest oyuncu her hafta seçilir, teklif sessizce düşer ve
+                                // transfer sink'i KİLİTLENİR (inceleme bulgusu, P1).
+                                bool serbestOyuncu = hp.ClubId == 0;
+                                string aksiyon = TransferAksiyonu(hp.ClubId);
                                 var z = new CommandEnvelope
                                 {
                                     CommandId = KomutId(hafta, 900 + hedef % 90), CatalogVersion = Catalog.Version,
-                                    Source = CommandSource.UI, ActionType = "transfer.propose_offer",
+                                    Source = CommandSource.UI,
+                                    ActionType = aksiyon,
                                     IssuedAtUnixMs = host, MatchTick = 0, UserId = ownerUserId,
                                     SaveSlotId = 1, TeamIdx = 0, PayloadJson = new byte[0]
                                 };
-                                bus.Submit(z, new TestPayload().Set("hedefOyuncuId", (double)hp.PlayerId)
-                                                               .Set("bedel", (double)bedel)
-                                                               .Set("maas", (double)maas),
-                                           exec, host, ownerUserId);
+                                var syuk = serbestOyuncu
+                                    ? new TestPayload().Set("oyuncuId", (double)hp.PlayerId)
+                                                       .Set("maas", (double)maas).Set("sureYil", 3L)
+                                    : new TestPayload().Set("hedefOyuncuId", (double)hp.PlayerId)
+                                                       .Set("bedel", (double)bedel).Set("maas", (double)maas);
+                                var so0 = bus.Submit(z, syuk, exec, host, ownerUserId);
+                                if (so0.Ok && serbestOyuncu) r.Transfer++;
+                                // RED SESSİZ GEÇMEZ: aynı hedefe her hafta düşen bir teklif,
+                                // sink'in kilitlendiğini gizlerdi. Kapı bunu sayar.
+                                else if (!so0.Ok) r.BeklenmeyenRed++;
                             }
                         }
                         transferSonu:
