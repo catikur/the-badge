@@ -2538,17 +2538,26 @@ Yani model, oyuncunun karşılık veremediği düz bir cezaydı. Düzeltme: seç
 `Guc × ((1−e) + e × kondisyon/100)`, `secim.kondisyonEtkisi = 0.5` [KALİBRE]. Yorgun yıldız yerini
 taze yedeğe bırakır; rotasyon sistemin KENDİ cevabı olur.
 
-**AYNI SEED, AYNI 6 HAFTA — dört model:**
+**ÖLÇÜM — ve burada kendi ölçümümü bir kez düzeltmem gerekti.** İlk tabloyu **6 haftalık**
+koşulardan kurmuştum ve "düzeltilmiş model kontrolün de ÜSTÜNDE" diye yazmıştım. **O okuma
+gürültüydü:** 6 maç, bir ligde bir örneklem bile değil. Rakip yorgunluğu eklendikten sonra aynı
+yapılandırma 6 haftada 20. sıraya düştü — model değil örneklem konuşuyordu. **TAM SEZON (38 hafta),
+aynı seed:**
 
 | Model | Sıra | Puan | A-Y |
 |---|---|---|---|
-| Yorgunluk kapalı (kontrol) | 13. | 6 | 6-8 |
-| Circir + ham güç seçimi (gönderdiğim hâli) | **20.** | 1 | 3-16 |
-| Denge + ham güç seçimi | 19. | 3 | 8-12 |
-| Denge + etkin güç seçimi | **11.** | 8 | 6-8 |
+| Yorgunluk ~kapalı (`oynayanDusus 1`, kontrol) | 10. | 54 | 51-51 |
+| Circir + ham güç seçimi | 14. | 42 | 46-60 |
+| **Denge + etkin güç + rakip yorgunluğu (bugünkü)** | **11.** | **48** | **49-54** |
 
-Son satır kontrolün de ÜSTÜNDE: yorgunluk gerçek bir kısıt, ama ona cevap vermek (rotasyon)
-ödüllendiriliyor. Aradığımız şekil buydu.
+Doğru okuma bu: circir modeli tam sezonda **12 puana ve −14 averaja** mal oluyor ve oyuncunun
+buna verecek cevabı yok. Düzeltilmiş model kontrolün **6 puan altında** — yorgunluk gerçek bir
+maliyet, ama rotasyonla yönetilebilir bir maliyet. "Kontrolün üstünde" değil; öyle olsaydı
+zaten yorgunluk bir kısıt olmazdı.
+
+**Kural (yeni):** *6 maçlık bir örneklemden model sonucu çıkarma.* Circir bulgusunu 6 haftalık
+koşu YAKALADI çünkü etki devasaydı (1 puana karşı 6); ama düzeltmenin BÜYÜKLÜĞÜNÜ aynı koşudan
+okumak, gürültüyü ölçüm sanmaktı.
 
 **Kapı artık şekli ölçüyor:** (1) 30 hafta üst üste oynayan TABANIN ÜSTÜNDE bir noktaya OTURUR ve
 o nokta türetilen denge ile ±3 içinde uyuşur, (2) 30. haftada değişim sıfırdır (gerçekten oturdu),
@@ -2563,6 +2572,48 @@ düşüyor ve dinlenen oyuncu **98'de kilitleniyordu**. Açık varken toparlanma
 **Kural (yeni):** *bir modelin YÖNÜNÜ ve SINIRINI ölçmek şeklini ölçmez; dengesi olan her modelde
 kapı DENGEYİ ölçmeli.* Ve daha genel olanı: bu bulguyu hiçbir inceleyici bulmadı, hiçbir kapı
 bulmadı — **oyunu oynamak buldu.**
+
+### 🔴 BULGU (Bugbot, gerçek): rakipler hiç yorulmuyordu — düzelttiğim asimetrinin SÜRÜKLENEN hâli (2026-09-01)
+
+Yorgunluk modelini düzeltip yayınladıktan sonra Bugbot yeni bir bulgu yazdı ve haklıydı:
+`MacSonrasi.Isle` YALNIZ oyuncunun kulübü için koşuyordu. Rakip `TeamSheet`ler açılışta bir kez
+kuruluyor ve sezon boyu aynen kullanılıyordu — yani oyuncunun 11'i dengesine (kondisyon 60,
+enerji ~700) inerken rakipler bütün sezon 90 kondisyonda (enerji 955) kalıyordu. **Maç 1'den sonra
+her rakibe sessiz bir form üstünlüğü.**
+
+Bu, K12 turunda düzelttiğim BAŞLANGIÇ asimetrisinin (rakipler 1000, oyuncu 955) sürüklenen hâliydi:
+başlangıcı eşitledim, ama zamanla açılan farkı görmedim. Aynı sınıftan hatanın üçüncü tekrarı.
+
+Düzeltme: `Kulup` artık ham kadro dizilerini taşıyor, `LigKurucu.HaftaSonu` her hafta
+`MacSonrasi.YeniKondisyon` ile — **oyuncuyla BİREBİR AYNI aritmetik** — kondisyonu yürütüyor ve
+kadroyu yeniden kuruyor (yorgunluk bir sonraki haftanın SEÇİMİNE de yansısın diye). İki ayrı
+aritmetik yazmak aynı hatayı dördüncü kez davet ederdi; bu yüzden adım tek bir public metoda
+çıkarıldı.
+
+Ölçüm: 30 hafta sonra rakip 11'inin ortalama enerjisi **955 → 887**, aralık [820,987].
+
+**Ve kapı beni yine yakaladı:** ilk yazdığım iddia "hiçbir rakip 11 oyuncusu başlangıç enerjisinin
+üstünde olamaz"dı. Kırmızıya döndü — çünkü rakipler artık ROTASYON yapıyor ve dinlenip 100
+kondisyona çıkan bir yedek 11'e girdiğinde enerjisi 987 oluyor. Davranış doğru, iddia yanlıştı:
+yorgunluk bir tek oyuncunun değil kadronun SEVİYESİdir. İddia ortalamaya taşındı.
+
+### 🟢 Ölçüm boşluğu KAPANDI (kısmen): nöbetçi artefaktın kendisine kondu (2026-09-01)
+
+Haftalık döngünün üst-düzey deyimler içinde yerel bir fonksiyon olması ve `Sim.Checks`in onu
+çağıramaması, bu turda **iki kez** ısırdı: önce `MacSonrasi.Isle` hiç çağrılmıyordu, sonra
+rakiplerin hafta sonu. Üçüncüsünü beklemedim.
+
+Kaynak metnine bakan bir kapı yazmadım — ilk yeniden düzenlemede yanlış yerden kırmızıya döner ve
+kapı gevşetme baskısı üretirdi. Bunun yerine nöbetçi **konsolun kendisine** kondu ve DAVRANIŞA
+bakıyor: en az iki hafta oynandıysa hem oyuncunun kadro kondisyonu hem rakip 11 enerjisi DEĞİŞMİŞ
+olmalı; değişmediyse `!! HAFTA SONU DÜNYASI İŞLEMEDİ` yazıp çıkış kodu 2 ile düşüyor.
+
+Diş, iki yarısı için ayrı ayrı ölçüldü: `MacSonrasi.Isle` söküldüğünde "oyuncunun kadro kondisyonu
+6 hafta sonra HİÇ değişmedi", `LigKurucu.HaftaSonu` söküldüğünde "rakip 11 enerjisi 6 hafta sonra
+HİÇ değişmedi" — ikisinde de çıkış kodu 2. Normal koşuda 0.
+
+Bu, birim kapısının yerini TUTMAZ ve tutar gibi de yazılmadı: FAZ 02'de döngü test edilebilir bir
+servise taşındığında asıl kapı gelir. Ama artık sessizce kaybedilemez.
 
 ### 🔴 BULGU (Bugbot, gerçek): süresi dolmuş teklif transfer politikasını DONDURUYORDU (2026-09-01)
 

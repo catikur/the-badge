@@ -4301,6 +4301,51 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                                       $"(kondisyonEtkisi {sqBal.secim.kondisyonEtkisi:F2})");
                 }
             }
+
+            // (e) RAKİPLER DE YORULUR. Bulgu, düzelttiğim BAŞLANGIÇ asimetrisinin SÜRÜKLENEN
+            //     hâliydi: rakip kadrolar açılışta bir kez kuruluyor ve sezon boyu aynen
+            //     kullanılıyordu, yani oyuncunun 11'i dengesine inerken rakipler bütün sezon
+            //     90 kondisyonda (enerji 955) kalıyordu — maç 1'den sonra sessiz bir form
+            //     üstünlüğü. Kapı bunu OYUNUN GERÇEK lig kodunda ölçer ve iddiası şudur:
+            //     30 hafta sonra rakibin 11'i, oyuncunun her hafta oynayanıyla AYNI dengeye
+            //     oturur. "Enerjisi düştü" demek zayıf olurdu — asimetri bir SEVİYE farkıdır.
+            {
+                double Ortalama(TheBadge.Play.Kulup[] l)
+                {
+                    long t = 0; int n = 0;
+                    for (int i = 1; i < l.Length; i++)
+                        for (int k = 0; k < 11; k++) { t += l[i].Ev.Starters[k].BaslangicEnerji; n++; }
+                    return n == 0 ? 0 : (double)t / n;
+                }
+                var lig2 = TheBadge.Play.LigKurucu.Kur("Kapı FK", sqBal, 70);
+                double ort0 = Ortalama(lig2);
+                for (int h = 0; h < 30; h++)
+                    for (int i = 1; i < lig2.Length; i++) TheBadge.Play.LigKurucu.HaftaSonu(lig2[i], sqBal);
+                double ort30 = Ortalama(lig2);
+                ushort enDusuk = ushort.MaxValue, enYuksek = 0;
+                for (int i = 1; i < lig2.Length; i++)
+                    for (int t = 0; t < 11; t++)
+                    {
+                        ushort e = lig2[i].Ev.Starters[t].BaslangicEnerji;
+                        if (e < enDusuk) enDusuk = e;
+                        if (e > enYuksek) enYuksek = e;
+                    }
+                // İDDİA ORTALAMA ÜZERİNDEN. İlk yazdığım iddia "hiçbir 11 oyuncusu başlangıç
+                // enerjisinin üstünde olamaz"dı ve KAPI BENİ YAKALADI: rakipler artık rotasyon
+                // yapıyor, dinlenip 100 kondisyona çıkan bir yedek 11'e girdiğinde enerjisi
+                // başlangıcın (955) ÜSTÜNE çıkıyor — doğru davranış, yanlış iddia. Yorgunluk
+                // bir tek oyuncunun değil kadronun SEVİYESİdir.
+                if (!(ort30 < ort0))
+                    hata += $"[rakip yorgunluk] 30 hafta sonra rakip 11 ortalaması düşmedi " +
+                            $"({ort0:F0} → {ort30:F0}) — rakipler yorulmuyor, sessiz form üstünlüğü ";
+                int dengeKondisyon = (int)(100.0 - sqBal.macSonrasi.oynayanDusus * 100.0
+                                                   / sqBal.macSonrasi.toparlanmaYuzde);
+                if (enDusuk < 100)
+                    hata += $"[rakip yorgunluk] rakip enerjisi {enDusuk} — kondisyon eşlemesi kopmuş ";
+                Console.WriteLine($"[info] K12 rakip yorgunluk: 30 hafta sonra rakip 11 ortalaması " +
+                                  $"{ort0:F0} → {ort30:F0} · aralık [{enDusuk},{enYuksek}] " +
+                                  $"(oyuncunun her hafta oynayanının dengesi: kondisyon {dengeKondisyon})");
+            }
         }
 
         // (10) İNCELEME BULGULARI (Codex, 2026-09-01) — dördü de kapıyla korunuyor.

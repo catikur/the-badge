@@ -26,6 +26,31 @@ namespace TheBadge.World
     /// tırmanır. Rotasyon böylece bir ZORUNLULUK değil bir TERCİH olur.</summary>
     public static class MacSonrasi
     {
+        /// <summary>BİR OYUNCUNUN HAFTALIK KONDİSYON ADIMI — tek aritmetik, iki çağıran.
+        ///
+        /// TOPARLANMA HERKESE: 100'e olan açığın yüzdesi, tavanla sınırlı. Oynayan bunun ÜSTÜNE
+        /// yorgunluğu yer; böylece düzenli oynayan bir DENGEYE oturur, tabana çakılmaz.
+        ///
+        /// NEDEN AYRI METOT: dünya kulübü `GameState`te yaşıyor, lig rakipleri yaşamıyor — ama
+        /// ikisinin yorgunluğu AYNI olmak zorunda. İlk yazımda yalnız oyuncunun kulübü yoruluyordu
+        /// ve rakipler bütün sezon 90 kondisyonda kalıyordu: maç 1'den sonra her rakibe sessiz bir
+        /// form üstünlüğü (inceleme bulgusu, Bugbot — düzelttiğim BAŞLANGIÇ asimetrisinin
+        /// SÜRÜKLENEN hâli). İki ayrı aritmetik yazmak aynı hatayı üçüncü kez davet ederdi.</summary>
+        public static byte YeniKondisyon(byte kondisyon, bool oynadi, SquadBalance bal)
+        {
+            if (bal == null) throw new ArgumentNullException(nameof(bal));
+            var ms = bal.macSonrasi;
+            int acik = 100 - kondisyon;
+            // EN AZ 1: tam sayı bölmesi tepeye yakın sıfıra düşüyor ve toparlanma orada
+            // KİLİTLENİYOR — kapı bunu yakaladı, dinlenen oyuncu 98'de takılı kalıyordu.
+            int toparlanma = acik <= 0 ? 0 : Math.Max(1, (acik * ms.toparlanmaYuzde) / 100);
+            if (toparlanma > ms.toparlanmaTavani) toparlanma = ms.toparlanmaTavani;
+            int yeni = kondisyon + toparlanma - (oynadi ? ms.oynayanDusus : 0);
+            if (yeni < ms.kondisyonTaban) yeni = ms.kondisyonTaban;
+            if (yeni > 100) yeni = 100;
+            return (byte)yeni;
+        }
+
         /// <summary>Maçtan sonra kadro durumunu işler. `sahada` = maça çıkan kadro (ilk 11 +
         /// kulübe); kulübedekiler de "kadroda" sayılır ama YORULMAZ — yalnız ilk 11 yorulur.
         /// Kadroda olmayan (kadro dışı) oyuncular da dinlenir.</summary>
@@ -53,17 +78,7 @@ namespace TheBadge.World
                 bool sahadaydi = false;
                 for (int k = 0; k < oynayan.Length; k++) if (oynayan[k] == p.PlayerId) { sahadaydi = true; break; }
 
-                // TOPARLANMA HERKESE: 100'e olan açığın yüzdesi, tavanla sınırlı. Oynayan bunun
-                // ÜSTÜNE yorgunluğu yer — böylece düzenli oynayan bir dengeye oturur, tabana
-                // çakılmaz.
-                int acik = 100 - p.Kondisyon;
-                // EN AZ 1: tam sayı bölmesi tepeye yakın sıfıra düşüyor ve toparlanma orada
-                // KİLİTLENİYOR — kapı bunu yakaladı, dinlenen oyuncu 98'de takılı kalıyordu.
-                int toparlanma = acik <= 0 ? 0 : System.Math.Max(1, (acik * ms.toparlanmaYuzde) / 100);
-                if (toparlanma > ms.toparlanmaTavani) toparlanma = ms.toparlanmaTavani;
-                int yeniKond = p.Kondisyon + toparlanma - (sahadaydi ? ms.oynayanDusus : 0);
-                if (yeniKond < ms.kondisyonTaban) yeniKond = ms.kondisyonTaban;
-                if (yeniKond > 100) yeniKond = 100;
+                byte yeniKond = YeniKondisyon(p.Kondisyon, sahadaydi, bal);
                 if (yeniKond != p.Kondisyon) j.OyuncuSet(i, PlayerField.Kondisyon, yeniKond);
 
                 // MORAL SONUCA GÖRE — ama yalnız MAÇA ÇIKANLAR için tam, çıkmayanlar için yarım.
