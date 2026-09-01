@@ -2597,6 +2597,27 @@ aritmetik yazmak aynı hatayı dördüncü kez davet ederdi; bu yüzden adım te
 kondisyona çıkan bir yedek 11'e girdiğinde enerjisi 987 oluyor. Davranış doğru, iddia yanlıştı:
 yorgunluk bir tek oyuncunun değil kadronun SEVİYESİdir. İddia ortalamaya taşındı.
 
+### 🔴 BULGU (Bugbot, gerçek): circir kontrolüm circirin bir kolunu açık bırakıyordu (2026-09-01)
+
+Circiri engellemek için `SquadBalance.Validate`e denge kontrolü koymuştum:
+`100 − oynayanDusus×100/toparlanmaYuzde` tabanın üstünde mi? Bugbot bunun **kırpmayı görmediğini**
+söyledi ve haklıydı: çalışma anında toparlanma `toparlanmaTavani` ile de kırpılıyor. Tavan
+yorgunluğa eşit ya da ondan küçükse hiçbir kondisyonda net kazanç olamaz — oyuncu tabana kayar —
+ama sürekli sabit nokta bunu "60" diye okur ve yapılandırma kabul edilir.
+
+Yani engellemek için yazdığım kontrol, engellediğini sandığım şeyin bir kolunu açık bırakıyordu.
+Bugünkü değerlerde (tavan 20 > düşüş 14) sorun yok; kontrol GELECEKTEKİ bir [KALİBRE] değişikliği
+içindi ve tam orada delikti.
+
+`toparlanmaTavani > oynayanDusus` şartı eklendi (tavan şartı sağlandığında denge noktasındaki
+toparlanma zaten kırpılmaz, yani sürekli formül orada geçerlidir). Kapı hem NEGATİF hem POZİTİF
+yönü ölçüyor: tavan = düşüş olan yapılandırma REDDEDİLMELİ, geçerli yapılandırma reddedilMEMELİ
+(kontrol fazla geniş olmasın). Diş: kontrol söküldüğünde `tavan ≤ düşüş olan balance KABUL EDİLDİ`.
+
+Küçük bir yan ders: kapının ilk hâli yapılandırmayı JSON turuyla kopyalıyordu ve `nitelikSirasi`
+kayboluyordu — kapı ölçmek istediği şeyi değil serileştirmeyi ölçecekti. Gerçek nesne geçici
+olarak bozulup hemen geri alınıyor.
+
 ### 🟢 Ölçüm boşluğu KAPANDI (kısmen): nöbetçi artefaktın kendisine kondu (2026-09-01)
 
 Haftalık döngünün üst-düzey deyimler içinde yerel bir fonksiyon olması ve `Sim.Checks`in onu

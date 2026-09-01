@@ -156,9 +156,22 @@ namespace TheBadge.World
                 throw new ArgumentException("squad.balance: macSonrasi.toparlanmaYuzde 1-100 olmalı.");
             if (macSonrasi.toparlanmaTavani < 1)
                 throw new ArgumentException("squad.balance: macSonrasi.toparlanmaTavani sıfırdan büyük olmalı.");
+            // TAVAN ŞARTI — DENGE ŞARTINDAN ÖNCE GELİR. Toparlanma çalışma anında
+            // `toparlanmaTavani` ile de kırpılıyor; tavan yorgunluğa EŞİT ya da ONDAN KÜÇÜKSE
+            // hiçbir kondisyonda net kazanç olamaz ve oyuncu tabana kayar — aşağıdaki sürekli
+            // sabit nokta bunu GÖRMEZ, çünkü kırpmayı hesaba katmıyor. Yani kontrol, engellemek
+            // için yazıldığı circirin bir kolunu açık bırakıyordu (inceleme bulgusu, Bugbot).
+            // Bugünkü değerlerde (tavan 20 > düşüş 14) sorun yok; kontrol GELECEKTEKİ bir
+            // [KALİBRE] değişikliği için var.
+            if (macSonrasi.toparlanmaTavani <= macSonrasi.oynayanDusus)
+                throw new ArgumentException($"squad.balance: macSonrasi.toparlanmaTavani " +
+                    $"({macSonrasi.toparlanmaTavani}) ≤ oynayanDusus ({macSonrasi.oynayanDusus}) — " +
+                    "her oynanan hafta net kayıp; model circir, oyuncu tabana kayar.");
             // DENGE ŞARTI: her hafta oynayan oyuncunun oturacağı nokta TABANIN ÜSTÜNDE olmalı.
             // Altındaysa model bir circirdir: düzenli ilk 11 sezon boyunca tabana çakılı kalır
             // ve rotasyon "iyi fikir" değil ZORUNLULUK olur (ölçüldü: lig sonuncusu).
+            // (Tavan şartı sağlandığında denge noktasındaki toparlanma zaten kırpılmaz —
+            //  orada toparlanma = oynayanDusus < tavan — yani sürekli formül geçerlidir.)
             double denge = 100.0 - macSonrasi.oynayanDusus * 100.0 / macSonrasi.toparlanmaYuzde;
             if (denge <= macSonrasi.kondisyonTaban)
                 throw new ArgumentException($"squad.balance: her hafta oynayanın denge kondisyonu {denge:F0}, " +

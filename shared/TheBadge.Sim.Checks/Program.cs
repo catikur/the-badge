@@ -4244,6 +4244,25 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                     if (dengeKond <= sqBal.macSonrasi.kondisyonTaban)
                         hata += $"[maç sonrası] CIRCIR: her hafta oynayan tabana çakıldı ({dengeKond}) — " +
                                 $"denge {beklenenDenge} olmalıydı, rotasyon tercih değil zorunluluk olur ";
+                    // BALANCE KONTROLÜ CIRCIRIN İKİ KOLUNU DA KAPATIR. Sürekli sabit nokta
+                    // kırpmayı görmüyordu: tavan ≤ düşüş olduğunda her oynanan hafta net kayıp
+                    // ve oyuncu tabana kayar, ama denge formülü bunu "60" diye okur.
+                    {
+                        // Kopya YOK: JSON turu `nitelikSirasi` gibi alanları kaybediyor ve kapı
+                        // ölçmek istediği şeyi değil serileştirmeyi ölçerdi. Gerçek nesne geçici
+                        // olarak bozulup HEMEN geri alınır.
+                        int tavanYedek = sqBal.macSonrasi.toparlanmaTavani;
+                        sqBal.macSonrasi.toparlanmaTavani = sqBal.macSonrasi.oynayanDusus;   // tavan = düşüş
+                        bool reddetti = false;
+                        try { sqBal.Validate(); } catch (ArgumentException) { reddetti = true; }
+                        sqBal.macSonrasi.toparlanmaTavani = tavanYedek;
+                        if (!reddetti)
+                            hata += "[maç sonrası] tavan ≤ düşüş olan balance KABUL EDİLDİ — " +
+                                    "kontrol circirin tavan kolunu açık bırakıyor ";
+                        // Sağlam yapılandırma reddedilmemeli (kontrol fazla geniş olmamalı).
+                        try { sqBal.Validate(); }
+                        catch (ArgumentException ex) { hata += $"[maç sonrası] geçerli balance reddedildi: {ex.Message} "; }
+                    }
                     if (System.Math.Abs(dengeKond - beklenenDenge) > 3)
                         hata += $"[maç sonrası] denge {dengeKond}, türetilen {beklenenDenge} ile uyuşmuyor ";
                     if (sonDegisim != 0)
