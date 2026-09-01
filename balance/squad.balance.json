@@ -241,6 +241,10 @@
       0.6
     ]
   },
+  "secim": {
+    "aciklama": "Ilk 11 secimi. kondisyonEtkisi: yorgunlugun secimdeki agirligi. Sifirken secim ham guce bakar ve K12-B'nin yorgunluk modeli oyuncunun elinde hicbir karsiligi olmayan duz bir cezaya donusuyordu (olculdu: 6 haftada 13. -> 20. sira). Etkin guc = Guc x ((1-e) + e x kondisyon/100).",
+    "kondisyonEtkisi": 0.5
+  },
   "macaGiris": {
     "aciklama": "K12-B: mac ONCESI durum -> motor. enerji = enerjiTaban + enerjiAralik*(Kondisyon/100), 0-1000 (ME 12.1). TABAN SIFIR DEGIL: kondisyonu 0 olan oyuncu sahada YOK hukmunde olurdu ve bu bir kadro kurali, enerji egrisinin isi degil. momentum = clamp(round((ortalamaMoral - moralMerkez)/moralMomentumBolen), -10, +10) (ME 12.3). K11'e kadar ikisi de motora TASINMIYORDU: kondisyon yalniz dunya tarafinda anlam tasiyor, rotasyon oynanisa hic degmiyordu.",
     "enerjiTaban": 550.0,
@@ -249,9 +253,10 @@
     "moralMomentumBolen": 10.0
   },
   "macSonrasi": {
-    "aciklama": "K12-B ikinci yarisi: mac sonrasi kadro durumu. Oynayan yorulur, oynamayan dinlenir; moral sonuca gore kayar (kulubede oturan yarim etkilenir). kondisyonTaban SIFIR DEGIL: kondisyonu sifira dusen oyuncu sahada yok hukmunde olurdu ve bu bir kadro kurali, yorgunluk egrisinin isi degil. Bu blok olmadan K12-B'nin esleme mekanizmasi calisiyor ama oyun donguSU kondisyonu hic degistirmiyordu - rotasyon yine hicbir sey degistirmiyordu.",
+    "aciklama": "K12-B ikinci yarisi: mac sonrasi kadro durumu. Oynayan yorulur; TOPARLANMA herkese 100'e olan acigin yuzdesi olarak uygulanir (tavanla sinirli). Sabit '+n' dinlenme bir CIRCIR uretiyordu: her hafta oynayan 5 macta tabana cakiliyor ve sezon boyu orada kaliyordu — oyun denendiginde takim ligin SONUNCUSU oldu (6 hafta, 1 puan, 3-16). Oranli toparlanma denge noktasi kurar: her hafta oynayan ~60'ta oturur, dinlenen 100'e tirmanir. kondisyonTaban SIFIR DEGIL: kondisyonu sifira dusen oyuncu sahada yok hukmunde olurdu.",
     "oynayanDusus": 14,
-    "dinlenenArtis": 9,
+    "toparlanmaYuzde": 35,
+    "toparlanmaTavani": 20,
     "kondisyonTaban": 25,
     "moralGalibiyet": 6,
     "moralBeraberlik": 0,

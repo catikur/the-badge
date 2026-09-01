@@ -17,6 +17,7 @@ namespace TheBadge.World
         public MacaGirisCfg macaGiris = new MacaGirisCfg();
         public MacSonrasiCfg macSonrasi = new MacSonrasiCfg();
         public KalibrasyonCfg kalibrasyon = new KalibrasyonCfg();
+        public SecimCfg secim = new SecimCfg();
         public DizilisCfg dizilis = new DizilisCfg();
         public int yedekSayisi;
 
@@ -73,8 +74,29 @@ namespace TheBadge.World
         [Serializable] public sealed class MacSonrasiCfg
         {
             public string aciklama;
-            public int oynayanDusus, dinlenenArtis, kondisyonTaban;
+            /// <summary>Maç oynayanın haftalık kondisyon kaybı.</summary>
+            public int oynayanDusus;
+            /// <summary>HAFTALIK TOPARLANMA — 100'e olan AÇIĞIN yüzdesi olarak, herkese uygulanır.
+            /// Sabit bir "+n" değildi ilk yazımda ve model bir CIRCIR'a dönüşmüştü: her hafta
+            /// oynayan oyuncu −14 alıyor, hiç toparlanmıyor ve 5 maçta tabana çakılıp sezon
+            /// boyunca orada kalıyordu. Oranlı toparlanma bunun yerine bir DENGE noktası kurar:
+            /// her hafta oynayan `100 − oynayanDusus×100/toparlanmaYuzde` civarında oturur.</summary>
+            public int toparlanmaYuzde;
+            /// <summary>Tek haftada toparlanabilecek en çok puan — tabana çakılmış bir oyuncunun
+            /// tek haftada tazelenmesini engeller.</summary>
+            public int toparlanmaTavani;
+            public int kondisyonTaban;
             public int moralGalibiyet, moralBeraberlik, moralMaglubiyet;
+        }
+
+        /// <summary>İLK 11 SEÇİMİ [KALİBRE].</summary>
+        [Serializable] public sealed class SecimCfg
+        {
+            public string aciklama;
+            /// <summary>Kondisyonun seçimdeki ağırlığı, 0-1. 0 = ham güç (yorgunluk seçimi hiç
+            /// etkilemez), 1 = güç tamamen kondisyonla ölçeklenir. Etkin güç =
+            /// `Guc × ((1−e) + e × kondisyon/100)`.</summary>
+            public double kondisyonEtkisi;
         }
 
         [Serializable] public sealed class DizilisCfg
@@ -128,10 +150,23 @@ namespace TheBadge.World
             if (!(macaGiris.enerjiTaban > 0) || !(macaGiris.enerjiAralik > 0)
                 || macaGiris.enerjiTaban + macaGiris.enerjiAralik > 1000.0)
                 throw new ArgumentException("squad.balance: macaGiris enerji eğrisi (0,1000] içinde olmalı ve taban sıfırdan büyük olmalı.");
-            if (macSonrasi.oynayanDusus < 1 || macSonrasi.dinlenenArtis < 1)
-                throw new ArgumentException("squad.balance: macSonrasi yorulma/dinlenme sıfırdan büyük olmalı — sıfır, rotasyonu yine anlamsız kılar.");
+            if (macSonrasi.oynayanDusus < 1)
+                throw new ArgumentException("squad.balance: macSonrasi.oynayanDusus sıfırdan büyük olmalı — sıfır, rotasyonu yine anlamsız kılar.");
+            if (macSonrasi.toparlanmaYuzde < 1 || macSonrasi.toparlanmaYuzde > 100)
+                throw new ArgumentException("squad.balance: macSonrasi.toparlanmaYuzde 1-100 olmalı.");
+            if (macSonrasi.toparlanmaTavani < 1)
+                throw new ArgumentException("squad.balance: macSonrasi.toparlanmaTavani sıfırdan büyük olmalı.");
+            // DENGE ŞARTI: her hafta oynayan oyuncunun oturacağı nokta TABANIN ÜSTÜNDE olmalı.
+            // Altındaysa model bir circirdir: düzenli ilk 11 sezon boyunca tabana çakılı kalır
+            // ve rotasyon "iyi fikir" değil ZORUNLULUK olur (ölçüldü: lig sonuncusu).
+            double denge = 100.0 - macSonrasi.oynayanDusus * 100.0 / macSonrasi.toparlanmaYuzde;
+            if (denge <= macSonrasi.kondisyonTaban)
+                throw new ArgumentException($"squad.balance: her hafta oynayanın denge kondisyonu {denge:F0}, " +
+                    $"taban {macSonrasi.kondisyonTaban} — model circir; toparlanmaYuzde artmalı ya da oynayanDusus azalmalı.");
             if (macSonrasi.kondisyonTaban < 1 || macSonrasi.kondisyonTaban > 100)
                 throw new ArgumentException("squad.balance: macSonrasi.kondisyonTaban 1-100 olmalı (sıfır = oyuncu sahada yok hükmünde).");
+            if (!(secim.kondisyonEtkisi >= 0.0 && secim.kondisyonEtkisi <= 1.0))
+                throw new ArgumentException("squad.balance: secim.kondisyonEtkisi 0-1 olmalı.");
             if (!(macaGiris.moralMomentumBolen > 0))
                 throw new ArgumentException("squad.balance: macaGiris.moralMomentumBolen sıfırdan büyük olmalı.");
             if (kalibrasyon.golBandi.Length != 2 || kalibrasyon.kartBandi.Length != 2
@@ -215,10 +250,26 @@ namespace TheBadge.World
                 if (r < 1 || r > bal.rolHat.Length) { hata = $"oyuncu {playerId[i]} rolId {r} kapsam dışı"; return null; }
                 hatta[bal.rolHat[r - 1]].Add(i);
             }
+            // SEÇİM ETKİN GÜCE GÖRE: ham `Guc` değil, kondisyonla ölçeklenmiş güç.
+            // NEDEN: K12-B yorgunluğu kurdu ama seçim onu GÖRMÜYORDU — hep aynı en güçlü 11
+            // çıkıyor, tabana doğru eriyor ve oyuncunun elinde hiçbir karşılık yoktu (konsolda
+            // rotasyon komutu da yok). Ölçüldü: 6 haftada takım 13. sıradan 20.'ye düştü. Etkin
+            // güç, yorgun yıldızın önüne taze yedeği geçirir; rotasyon böylece SİSTEMİN KENDİ
+            // cevabı olur, oyuncudan beklenen bir ödev değil.
+            // Kondisyon verilmemişse (rakip kadro yolu, eski çağıranlar) etki YOK — sözleşme
+            // "ayarlanmamış = tam" olarak kalır.
+            int Etkin(int i)
+            {
+                if (kondisyon == null || i >= kondisyon.Length || kondisyon[i] == 0) return guc[i] * 1000;
+                double e = bal.secim.kondisyonEtkisi;
+                return (int)(guc[i] * 1000 * ((1.0 - e) + e * kondisyon[i] / 100.0));
+            }
             for (int h = 0; h < 4; h++)
                 hatta[h].Sort((x, y) =>
                 {
-                    int c = guc[y].CompareTo(guc[x]);
+                    // Eşitlik kuralı KORUNUR: etkin güç eşitse PlayerId artan — kararsız sıralama
+                    // aynı kadroya iki koşuda farklı 11 verirdi (determinizm).
+                    int c = Etkin(y).CompareTo(Etkin(x));
                     return c != 0 ? c : playerId[x].CompareTo(playerId[y]);
                 });
 

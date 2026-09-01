@@ -11,9 +11,19 @@ namespace TheBadge.World
     /// **rotasyon oyunda yine hiçbir şey değiştirmiyordu.** Mekanizmayı kurup döngüyü bağlamamak,
     /// çalışan bir kapı ve çalışmayan bir oyun demekti.
     ///
-    /// BURADA NE OLUYOR: maçta OYNAYAN yorulur, OYNAMAYAN dinlenir; moral sonuca göre kayar.
-    /// Hepsi journal üzerinden — `EconomyTick` ile aynı desen (bu bir oyuncu KOMUTU değil, haftalık
-    /// dünya işleyişi; Tek Kapı komutlar içindir).</summary>
+    /// BURADA NE OLUYOR: HERKES toparlanır (100'e olan açığın bir yüzdesi kadar, tavanla sınırlı),
+    /// maçta OYNAYAN bunun üstüne yorgunluk yer; moral sonuca göre kayar. Hepsi journal üzerinden —
+    /// `EconomyTick` ile aynı desen (bu bir oyuncu KOMUTU değil, haftalık dünya işleyişi; Tek Kapı
+    /// komutlar içindir).
+    ///
+    /// MODELİN ŞEKLİ NEDEN ORANLI: ilk yazımda "oynayan −14, oynamayan +9" idi — yani oynayan
+    /// oyuncu hiç toparlanmıyordu. Bu bir yorgunluk eğrisi değil bir CIRCIRdı: düzenli ilk 11 beş
+    /// maçta tabana çakılıyor ve sezonun kalanını orada geçiriyordu. Oyunu 6 hafta oynadığımda
+    /// takım ligin SONUNCUSU oldu (1 puan, 3-16); aynı seed'de yorgunluk kapatılınca 13. sıra
+    /// (6 puan, 6-8). Kapılar yeşildi çünkü yönü ve tabanı ölçüyorlardı, DENGEYİ değil.
+    /// Oranlı toparlanma bir denge noktası kurar: her hafta oynayan
+    /// `100 − oynayanDusus×100/toparlanmaYuzde` civarında oturur (bugün ~60), dinlenen 100'e
+    /// tırmanır. Rotasyon böylece bir ZORUNLULUK değil bir TERCİH olur.</summary>
     public static class MacSonrasi
     {
         /// <summary>Maçtan sonra kadro durumunu işler. `sahada` = maça çıkan kadro (ilk 11 +
@@ -43,8 +53,15 @@ namespace TheBadge.World
                 bool sahadaydi = false;
                 for (int k = 0; k < oynayan.Length; k++) if (oynayan[k] == p.PlayerId) { sahadaydi = true; break; }
 
-                int yeniKond = sahadaydi ? p.Kondisyon - ms.oynayanDusus
-                                         : p.Kondisyon + ms.dinlenenArtis;
+                // TOPARLANMA HERKESE: 100'e olan açığın yüzdesi, tavanla sınırlı. Oynayan bunun
+                // ÜSTÜNE yorgunluğu yer — böylece düzenli oynayan bir dengeye oturur, tabana
+                // çakılmaz.
+                int acik = 100 - p.Kondisyon;
+                // EN AZ 1: tam sayı bölmesi tepeye yakın sıfıra düşüyor ve toparlanma orada
+                // KİLİTLENİYOR — kapı bunu yakaladı, dinlenen oyuncu 98'de takılı kalıyordu.
+                int toparlanma = acik <= 0 ? 0 : System.Math.Max(1, (acik * ms.toparlanmaYuzde) / 100);
+                if (toparlanma > ms.toparlanmaTavani) toparlanma = ms.toparlanmaTavani;
+                int yeniKond = p.Kondisyon + toparlanma - (sahadaydi ? ms.oynayanDusus : 0);
                 if (yeniKond < ms.kondisyonTaban) yeniKond = ms.kondisyonTaban;
                 if (yeniKond > 100) yeniKond = 100;
                 if (yeniKond != p.Kondisyon) j.OyuncuSet(i, PlayerField.Kondisyon, yeniKond);

@@ -2518,6 +2518,52 @@ YEŞİL kaldı. Ölçtüm: 13 sezonluk piyasalı koşuda en iyi hedef **hiçbir 
 **Kural (yeni):** *bir düzeltmeyi koruduğunu söylediğin kapıyı, düzeltmeyi SÖKEREK ölç; sökünce
 kırmızıya dönmüyorsa kapı o düzeltmeyi korumuyordur — nerede durduğundan bağımsız.*
 
+### 🔴 BULGU (oyunu OYNARKEN bulundu): yorgunluk modelim bir CIRCIRdı ve seçim onu görmüyordu (2026-09-01)
+
+İnceleme turu bitip her kapı yeşil olduktan sonra oyunu 6 hafta oynadım. Takım **ligin sonuncusu**
+oldu: 1 puan, 3-16. Kapılar bir şey demiyordu çünkü yorgunluk kapısı **yönü** (oynayan yorulur mu)
+ve **tabanı** (sıfıra düşer mi) ölçüyordu — modelin ŞEKLİNİ değil.
+
+**Birinci hata — model bir denge değil bir circirdı.** "Oynayan −14, oynamayan +9" demiştim; yani
+oynayan oyuncu HİÇ toparlanmıyordu. Düzenli ilk 11 beş maçta tabana (25) çakılıyor ve sezonun
+kalanını orada geçiriyordu. Düzeltme: toparlanma HERKESE ve 100'e olan AÇIĞIN yüzdesi olarak
+(`toparlanmaYuzde 35`, `toparlanmaTavani 20`). Bu bir denge noktası kurar:
+`100 − oynayanDusus×100/toparlanmaYuzde` = **60**. Her hafta oynayan 60'ta oturur, dinlenen 100'e
+tırmanır. `SquadBalance.Validate` artık bu dengeyi hesaplayıp tabanın altındaysa **yüklemeyi
+reddediyor** — circir bir daha balance dosyasından giremez.
+
+**İkinci hata — seçim yorgunluğu görmüyordu.** `SquadBridge` ham `Guc`a göre sıralıyordu: aynı en
+güçlü 11 her hafta çıkıyor, erirken bile çıkmaya devam ediyordu. Konsolda rotasyon komutu da yok.
+Yani model, oyuncunun karşılık veremediği düz bir cezaydı. Düzeltme: seçim **etkin güce** göre —
+`Guc × ((1−e) + e × kondisyon/100)`, `secim.kondisyonEtkisi = 0.5` [KALİBRE]. Yorgun yıldız yerini
+taze yedeğe bırakır; rotasyon sistemin KENDİ cevabı olur.
+
+**AYNI SEED, AYNI 6 HAFTA — dört model:**
+
+| Model | Sıra | Puan | A-Y |
+|---|---|---|---|
+| Yorgunluk kapalı (kontrol) | 13. | 6 | 6-8 |
+| Circir + ham güç seçimi (gönderdiğim hâli) | **20.** | 1 | 3-16 |
+| Denge + ham güç seçimi | 19. | 3 | 8-12 |
+| Denge + etkin güç seçimi | **11.** | 8 | 6-8 |
+
+Son satır kontrolün de ÜSTÜNDE: yorgunluk gerçek bir kısıt, ama ona cevap vermek (rotasyon)
+ödüllendiriliyor. Aradığımız şekil buydu.
+
+**Kapı artık şekli ölçüyor:** (1) 30 hafta üst üste oynayan TABANIN ÜSTÜNDE bir noktaya OTURUR ve
+o nokta türetilen denge ile ±3 içinde uyuşur, (2) 30. haftada değişim sıfırdır (gerçekten oturdu),
+(3) hiç oynamayan 100'e DÖNER, (4) kondisyonu tabana inen yıldız 11'den DÜŞER, (5) kondisyonlar
+EŞİTken 11 değişmez (etkin güç, K11'in "seçim güce göre" iddiasını sessizce ezmesin). Diş: circir
+geri konduğunda `CIRCIR: her hafta oynayan tabana çakıldı (25) — denge 60 olmalıydı`; seçim ham
+güce döndüğünde `kondisyonu 25 olan yıldız (güç 85) hâlâ ilk 11'de`.
+
+Küçük bir yan bulgu, kapı yakaladı: oranlı toparlanmada tam sayı bölmesi tepeye yakın sıfıra
+düşüyor ve dinlenen oyuncu **98'de kilitleniyordu**. Açık varken toparlanma en az 1.
+
+**Kural (yeni):** *bir modelin YÖNÜNÜ ve SINIRINI ölçmek şeklini ölçmez; dengesi olan her modelde
+kapı DENGEYİ ölçmeli.* Ve daha genel olanı: bu bulguyu hiçbir inceleyici bulmadı, hiçbir kapı
+bulmadı — **oyunu oynamak buldu.**
+
 ### 🔴 BULGU (Bugbot, gerçek): süresi dolmuş teklif transfer politikasını DONDURUYORDU (2026-09-01)
 
 Codex'in dört bulgusunun yanına Cursor Bugbot iki bulgu daha yazdı; biri Codex'in serbest oyuncu

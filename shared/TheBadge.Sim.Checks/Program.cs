@@ -4220,17 +4220,85 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                         hata += $"[maç sonrası] OYNAMAYAN dinlenmedi ({y0} → {mSt.Oyuncular[yedekIdx].Kondisyon}) ";
                     if (!(mSt.Oyuncular[oynayanIdx].Moral > m0))
                         hata += $"[maç sonrası] galibiyette moral artmadı ({m0} → {mSt.Oyuncular[oynayanIdx].Moral}) ";
-                    // TABAN: üst üste maçlarda kondisyon SIFIRA düşmez.
+                    // DENGE — kapının ASIL işi. İlk hâli yalnız YÖNÜ ve TABANI ölçüyordu; ikisi de
+                    // yeşilken model bir CIRCIRdı: her hafta oynayan 5 maçta tabana çakılıp orada
+                    // kalıyordu ve oyun oynandığında takım ligin sonuncusu oluyordu (1 puan, 3-16).
+                    // Kapı artık 30 hafta üst üste oynatıp iki şeyi ölçüyor: (1) düzenli oynayan
+                    // TABANIN ÜSTÜNDE bir noktaya OTURUR, (2) o nokta gerçekten SABİTLENİR.
+                    byte oncekiKond = mSt.Oyuncular[oynayanIdx].Kondisyon;
+                    int sonDegisim = 99;
                     for (int tur = 0; tur < 30; tur++)
                     {
                         var j2 = new TheBadge.World.WorldJournal();
                         TheBadge.World.MacSonrasi.Isle(mSt, 643L, sheet, TheBadge.World.WeekResult.Maglubiyet, sqBal, j2);
                         if (j2.Validate(mSt, out _)) j2.Apply(mSt);
+                        sonDegisim = mSt.Oyuncular[oynayanIdx].Kondisyon - oncekiKond;
+                        oncekiKond = mSt.Oyuncular[oynayanIdx].Kondisyon;
                     }
-                    if (mSt.Oyuncular[oynayanIdx].Kondisyon < sqBal.macSonrasi.kondisyonTaban)
-                        hata += $"[maç sonrası] kondisyon tabanın ALTINA düştü ({mSt.Oyuncular[oynayanIdx].Kondisyon}) ";
-                    Console.WriteLine($"[info] K12 maç sonrası: oynayan {k0} → {mSt.Oyuncular[oynayanIdx].Kondisyon} " +
-                                      $"(30 maç sonra, taban {sqBal.macSonrasi.kondisyonTaban}) · oynamayan {y0} → {mSt.Oyuncular[yedekIdx].Kondisyon}");
+                    byte dengeKond = mSt.Oyuncular[oynayanIdx].Kondisyon;
+                    if (dengeKond < sqBal.macSonrasi.kondisyonTaban)
+                        hata += $"[maç sonrası] kondisyon tabanın ALTINA düştü ({dengeKond}) ";
+                    // BEKLENEN DENGE TÜRETİLİR: 100 − oynayanDusus×100/toparlanmaYuzde.
+                    int beklenenDenge = (int)(100.0 - sqBal.macSonrasi.oynayanDusus * 100.0
+                                                      / sqBal.macSonrasi.toparlanmaYuzde);
+                    if (dengeKond <= sqBal.macSonrasi.kondisyonTaban)
+                        hata += $"[maç sonrası] CIRCIR: her hafta oynayan tabana çakıldı ({dengeKond}) — " +
+                                $"denge {beklenenDenge} olmalıydı, rotasyon tercih değil zorunluluk olur ";
+                    if (System.Math.Abs(dengeKond - beklenenDenge) > 3)
+                        hata += $"[maç sonrası] denge {dengeKond}, türetilen {beklenenDenge} ile uyuşmuyor ";
+                    if (sonDegisim != 0)
+                        hata += $"[maç sonrası] 30 hafta sonra hâlâ oturmadı (son değişim {sonDegisim}) ";
+                    // Dinlenen oyuncu 100'e DÖNER (oranlı toparlanma tavanı buna engel olmamalı).
+                    if (mSt.Oyuncular[yedekIdx].Kondisyon != 100)
+                        hata += $"[maç sonrası] hiç oynamayan 100'e dönmedi ({mSt.Oyuncular[yedekIdx].Kondisyon}) ";
+                    Console.WriteLine($"[info] K12 maç sonrası: her hafta oynayan {k0} → {dengeKond} dengesinde " +
+                                      $"(30 maç, türetilen denge {beklenenDenge}, taban {sqBal.macSonrasi.kondisyonTaban}) · " +
+                                      $"hiç oynamayan {y0} → {mSt.Oyuncular[yedekIdx].Kondisyon}");
+                }
+            }
+
+            // (d) SEÇİM YORGUNLUĞU GÖRÜR. Yorgunluk modeli kurulduğunda seçim hâlâ HAM güce
+            //     bakıyordu: en güçlü 11 her hafta çıkıyor, tabana doğru eriyor ve oyuncunun
+            //     elinde hiçbir karşılık kalmıyordu (konsolda rotasyon komutu da yok). Oyun
+            //     oynandığında ölçüldü: aynı seed'de takım 13. sıradan 20.'ye düşüyordu.
+            //     Kapı iki şeyi birden ölçer — yoksa "etkin güç" ham gücü sessizce ezebilirdi:
+            //     (1) yorgun yıldız yerini taze yedeğe BIRAKIR,
+            //     (2) kondisyonlar EŞİTken sıralama ESKİSİ GİBİ ham güce göre kalır.
+            {
+                var sSt = TheBadge.Checks.KadroFixture.Kur(eRules, 644L, 42L);
+                var tazeSheet = TheBadge.World.SquadBridge.Kur(sSt, 644L, sqBal, true, out _);
+                // Hattı bilinen bir yıldız seç: ilk 11'de olan EN GÜÇLÜ oyuncu.
+                int yildiz = -1;
+                for (int i = 0; i < sSt.Oyuncular.Length; i++)
+                {
+                    if (sSt.Oyuncular[i].ClubId != 644L) continue;
+                    bool onbirde = false;
+                    for (int k = 0; k < 11; k++) if (tazeSheet.Starters[k].PlayerId == sSt.Oyuncular[i].PlayerId) onbirde = true;
+                    if (onbirde && (yildiz < 0 || sSt.Oyuncular[i].Guc > sSt.Oyuncular[yildiz].Guc)) yildiz = i;
+                }
+                if (yildiz < 0) hata += "[seçim] ilk 11'de yıldız bulunamadı (ölçüm anlamsız) ";
+                else
+                {
+                    var yp = sSt.Oyuncular[yildiz];
+                    yp.Kondisyon = (byte)sqBal.macSonrasi.kondisyonTaban; sSt.Oyuncular[yildiz] = yp;
+                    var yorgunSheet = TheBadge.World.SquadBridge.Kur(sSt, 644L, sqBal, true, out _);
+                    bool hala = false;
+                    for (int k = 0; k < 11; k++) if (yorgunSheet.Starters[k].PlayerId == yp.PlayerId) hala = true;
+                    if (hala)
+                        hata += $"[seçim] kondisyonu {yp.Kondisyon} olan yıldız (güç {yp.Guc}) hâlâ ilk 11'de — " +
+                                "seçim yorgunluğu görmüyor, model oyuncunun karşılık veremediği düz bir ceza ";
+                    // EŞİT KONDİSYONDA SIRALAMA DEĞİŞMEZ: aksi hâlde etkin güç, K11'in
+                    // "seçim güce göre" iddiasını sessizce bozardı.
+                    var eSt = TheBadge.Checks.KadroFixture.Kur(eRules, 644L, 42L);
+                    for (int i = 0; i < eSt.Oyuncular.Length; i++)
+                    { var ep = eSt.Oyuncular[i]; ep.Kondisyon = 70; eSt.Oyuncular[i] = ep; }
+                    var esitSheet = TheBadge.World.SquadBridge.Kur(eSt, 644L, sqBal, true, out _);
+                    for (int k = 0; k < 11; k++)
+                        if (esitSheet.Starters[k].PlayerId != tazeSheet.Starters[k].PlayerId)
+                        { hata += "[seçim] kondisyonlar EŞİTken 11 değişti — etkin güç ham gücü eziyor "; break; }
+                    Console.WriteLine($"[info] K12 seçim: kondisyonu {sqBal.macSonrasi.kondisyonTaban} olan " +
+                                      $"yıldız (güç {yp.Guc}) 11'den düştü · eşit kondisyonda 11 aynı " +
+                                      $"(kondisyonEtkisi {sqBal.secim.kondisyonEtkisi:F2})");
                 }
             }
         }
