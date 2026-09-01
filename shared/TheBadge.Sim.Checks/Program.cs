@@ -3853,13 +3853,33 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                 Console.WriteLine($"[info] K10/K12 merdiven sonrası (PİYASALI, {pR.Sezonlar.Count - pR.MerdivenSezon} sezon): " +
                                   $"source/sink {sonra:F3} (tavan {tavan:F2} · hedef {hedef:F2}) · " +
                                   $"havuza giren {pR.PiyasayaGiren} · alım {pR.Transfer} · fesih {pR.Fesih} · " +
-                                  $"transfer sink {pR.Toplam.TransferTl / 1e6:F0}M₺");
+                                  $"transfer sink {pR.Toplam.TransferTl / 1e6:F0}M₺ · en uzun engelli seri " +
+                                  $"{pR.EnUzunEngelliSeri} hafta (ölü yuva geçildi {pR.OluYuvaGecildi})");
                 if (sonra > tavan) h2 += $"merdiven sonrası oran {sonra:F3} > kayıtlı tavan {tavan:F2} (BORÇ KÖTÜLEŞTİ) ";
                 if (sonra <= hedef) h2 += $"oran {sonra:F3} ≤ hedef {hedef:F2} — BORÇ KAPANDI, tavan kaldırılmalı ";
                 // PİYASA GERÇEKTEN İŞLİYOR olmalı: sink sıfırsa yukarıdaki sayı piyasayı değil
                 // piyasasız koşuyu ölçerdi ve borcun "iyileşmesi" sahte olurdu.
                 if (pR.Toplam.TransferTl <= 0) h2 += "piyasalı koşuda transfer sink'i SIFIR (piyasa işlemiyor) ";
                 if (pR.Transfer <= 0) h2 += "piyasalı koşuda hiç alım olmadı ";
+
+                // SÜRESİ DOLMUŞ TEKLİF POLİTİKAYI DONDURMAZ (Bugbot bulgusu, orta şiddet).
+                // `TransferTick` süresi dolmuş teklife BİLEREK dokunmuyor (K5 kararı: yuva
+                // temizliği `propose_offer`ın geri kazanımına ve kullanıcının `ret`ine ait).
+                // Koşucu "yuva dolu = açık teklif" okuyunca ilk süre dolmasından sonra bir daha
+                // teklif de fesih de kabul de yapmıyordu. ÖLÇÜLDÜ: açık teklifli 508 haftanın
+                // 494'ü tam olarak bu donmuş durumdu; düzeltmeden sonra alım 14 → 29, fesih
+                // 5 → 19, transfer sink 64M → 149M₺.
+                //
+                // EŞİK TÜRETİLİR: sağlıklı politikada engellenme süresi teklifin ÖMRÜYLE
+                // sınırlıdır (+1 hafta, süre dolduğu hafta da sayılır). Donduğunda seri koşu
+                // boyu büyür. "Kaç transfer oldu" diye sormak senaryonun zenginliğini ölçerdi.
+                int engelTavani = k12Tb.pazarlik.teklifGecerlilikHafta + 1;
+                if (pR.EnUzunEngelliSeri > engelTavani)
+                    h2 += $"politika {pR.EnUzunEngelliSeri} hafta ÜST ÜSTE açık teklifle engellendi " +
+                          $"(tavan {engelTavani} = teklifGecerlilikHafta+1) — süresi dolmuş yuva donduruyor ";
+                if (pR.OluYuvaGecildi == 0)
+                    h2 += "koşuda hiç ölü yuva geçilmedi — ya teklif süresi hiç dolmuyor ya da " +
+                          "donma geri geldi; iki hâlde de bu kapı boşa koşuyor ";
             }
             if (h2.Length > 0) failures += Fail("K10MerdivenSonrasiSink", h2);
             else Pass($"K10MerdivenSonrasiSink(BORÇ: piyasa kuruldu ve çalışıyor, oran 2,25 → tavan altı; " +

@@ -226,6 +226,14 @@ namespace TheBadge.Checks
             public List<WeekLedger> Sezonlar;
             public int PiyasayaGiren;          // havuza katılan oyuncu (K12-C)
             public int Transfer;               // tamamlanan alım (K12-C)
+            /// <summary>Süresi dolmuş yuvaya rağmen politikanın DEVAM ettiği hafta sayısı.
+            /// Sıfırsa ya senaryoda hiç teklif süresi dolmuyor (kapı boşa koşuyor) ya da
+            /// donma geri gelmiştir — ikisi de kapının bilmesi gereken bir şey.</summary>
+            public int OluYuvaGecildi;
+            /// <summary>Politikanın açık teklif yüzünden ÜST ÜSTE durduğu en uzun hafta serisi.
+            /// Sağlıklı hâlde `teklifGecerlilikHafta` mertebesindedir; donmuş politikada koşu
+            /// boyu büyür (ölçüldü: 494 hafta).</summary>
+            public int EnUzunEngelliSeri;
             public int Fesih;                  // kadro dönüşü için fesih (K12-C)
         }
 
@@ -253,7 +261,7 @@ namespace TheBadge.Checks
                                 Sezonlar = new List<WeekLedger>(sezon) };
             int maxTier = MaxTier(eco);
             var j = new WorldJournal();
-            int hafta = 0;
+            int hafta = 0, engelliSeri = 0;
             // Host saati HAFTAYLA ilerler: aynı ana yığılan komutlar rate limiter'a takılırdı ve
             // kapı ekonomiyi değil hız sınırını ölçerdi.
             const long HaftaMs = 7L * 24 * 60 * 60 * 1000;
@@ -305,9 +313,30 @@ namespace TheBadge.Checks
                     {
                         // Açık teklifimiz yoksa ve para varsa, kadroyu güçlendirecek EN İYİ
                         // hedefe teklif. Bütçe = kasa (kredisiz politika, capex ile aynı ilke).
-                        bool acikTeklif = false;
+                        // AÇIK TEKLİF = CANLI TEKLİF. Süresi DOLMUŞ bir yuva politikayı bloke
+                        // ETMEZ: `propose_offer` ölü yuvayı zaten geri kazanır (K5), oysa ilk
+                        // yazımda `TeklifId != 0` yeterliydi ve `TransferTick` süresi dolmuş
+                        // teklife BİLEREK dokunmadığı için yuva sonsuza dek dolu kalıyordu.
+                        // Sonuç: ilk teklif süresi dolduktan sonra kulüp bir daha ne teklif
+                        // veriyor, ne fesih yapıyor, ne kabul ediyordu — politika DONUYORDU.
+                        // ÖLÇÜM: 13 sezonluk piyasalı koşuda açık teklifli 508 haftanın 494'ü
+                        // tam olarak bu durumdaydı (inceleme bulgusu, Bugbot). Yani K12-C'nin
+                        // "merdiven sonrası 1,911" ölçümü DONMUŞ bir transfer politikasını
+                        // ölçüyordu. (Bugbot bulgusu, orta şiddet — ölçüldü, gerçek çıktı.)
+                        bool acikTeklif = false, oluYuva = false;
                         for (int t = 0; t < st.Club.TransferTeklifleri.Length; t++)
-                            if (st.Club.TransferTeklifleri[t].TeklifId != 0) acikTeklif = true;
+                        {
+                            if (st.Club.TransferTeklifleri[t].TeklifId == 0) continue;
+                            if (TransferActions.SureDoldu(st, st.Club.TransferTeklifleri[t])) oluYuva = true;
+                            else acikTeklif = true;
+                        }
+                        if (!acikTeklif && oluYuva) r.OluYuvaGecildi++;
+                        // ENGELLİ SERİ: politika açık teklif yüzünden kaç HAFTA ÜST ÜSTE durdu?
+                        // Sağlıklı hâlde bu, teklifin ömrüyle sınırlıdır; donduğunda sınırsız
+                        // büyür. Kapının ölçtüğü sayı budur — "kaç transfer oldu" değil, çünkü
+                        // transfer sayısı senaryonun zenginliğine de bağlı.
+                        if (acikTeklif) { engelliSeri++; if (engelliSeri > r.EnUzunEngelliSeri) r.EnUzunEngelliSeri = engelliSeri; }
+                        else engelliSeri = 0;
                         // MAAŞ BÜTÇESİ — ECONOMY_MAP'in KENDİ kuralı ("maaş sink'i toplam sink'in
                         // %45-60'ı"). İlk yazımda politika sınırsızdı: kulüp hem inşa edip hem
                         // transfer yapmaya çalışıp iflas etti, merdiven hiç bitmedi (kasa −13M).

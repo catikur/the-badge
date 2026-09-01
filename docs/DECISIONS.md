@@ -2460,8 +2460,10 @@ ve düzeltiyorum.
 
 ### K12 inceleme turu — ✅ TAMAM, dördü de GERÇEK çıktı (2026-09-01)
 
-Codex PR #26'ya dört bulgu yazdı; **dördü de koda karşı doğrulandı, dördü de gerçekti** ve
-düzeltildi. Sıralama şiddet değil, ETKİ sırasına göre:
+PR #26'ya iki inceleyici toplam altı bulgu yazdı (Codex 4, Bugbot 2 — biri Codex'inkiyle aynı).
+**Beşi ayrı ayrı koda karşı doğrulandı, beşi de gerçekti** ve düzeltildi. Aşağıda Codex'in dördü;
+Bugbot'un yeni bulgusu (süresi dolmuş teklif donması) ayrı kayıtta. Sıralama şiddet değil,
+ETKİ sırasına göre:
 
 1. **(P2) Maç sonrası hiçbir şey kondisyon/moral YAZMIYORDU.** K12-B "kondisyonu motora bağladım"
    diyordu ve eşleme doğruydu — ama repo genelinde `PlayerState.Kondisyon`a oynanış tarafından
@@ -2515,6 +2517,42 @@ YEŞİL kaldı. Ölçtüm: 13 sezonluk piyasalı koşuda en iyi hedef **hiçbir 
 
 **Kural (yeni):** *bir düzeltmeyi koruduğunu söylediğin kapıyı, düzeltmeyi SÖKEREK ölç; sökünce
 kırmızıya dönmüyorsa kapı o düzeltmeyi korumuyordur — nerede durduğundan bağımsız.*
+
+### 🔴 BULGU (Bugbot, gerçek): süresi dolmuş teklif transfer politikasını DONDURUYORDU (2026-09-01)
+
+Codex'in dört bulgusunun yanına Cursor Bugbot iki bulgu daha yazdı; biri Codex'in serbest oyuncu
+bulgusunun aynısıydı, **ikincisi yeni ve K12-C'nin ölçümünü geçersiz kılıyordu.**
+
+`TransferTick` süresi dolmuş teklife BİLEREK dokunmuyor (K5 inceleme kararı: yuva temizliği
+`propose_offer`ın geri kazanımına ve kullanıcının `ret`ine ait; iki yerden temizlemek aynı yuvayı
+iki gerekçeyle kapatırdı). Koşucu ise "yuva dolu = açık teklif" okuyordu (`TeklifId != 0`). Sonuç:
+**ilk teklif süresi dolduktan sonra kulüp bir daha ne teklif veriyor, ne fesih yapıyor, ne kabul
+ediyordu.** Politika donuyordu ve donduğunu kimse görmüyordu.
+
+**ÖLÇÜM (13 sezonluk piyasalı koşu):** açık teklifli 508 haftanın **494'ü** tam olarak bu donmuş
+durumdaydı — yani transfer motoru koşunun neredeyse tamamında ölüydü.
+
+| | Donmuş (bulgu öncesi) | Düzeltilmiş |
+|---|---|---|
+| Alım | 14 | **29** |
+| Fesih | 5 | **19** |
+| Transfer sink | 64M₺ | **149M₺** |
+| En uzun engelli seri | 494 hafta | **1 hafta** |
+| Merdiven sonrası source/sink | 1,911 | **1,912** |
+
+Düzeltme koşucuda: açık teklif = **CANLI** teklif. Dünya tarafı doğruydu, okuma yanlıştı.
+
+**VE BU, K12-C'NİN SONUCUNU ÇÜRÜTMÜYOR — GÜÇLENDİRİYOR.** Transfer sink'i 2,3 KATINA çıktı ve
+merdiven sonrası oran 1,911'den 1,912'ye "yükseldi" (yani hiç kıpırdamadı). K12-C'de "borcun asıl
+kaynağı transfer sink'inin küçüklüğü değil, GELİRİN sınırsız büyümesi" diye kaydetmiştim; bu artık
+bir yorum değil, kontrollü bir deney: **sink'i ikiye katlamak oranı 0,001 oynatıyor.** Kalan borç
+gelir tarafındadır ve Atilla'nın kararını bekleyen üç seçenek (ücret enflasyonu / gelir doygunluğu)
+aynen geçerlidir.
+
+**Kapı:** politikanın açık teklif yüzünden ÜST ÜSTE durduğu en uzun hafta serisi ölçülüyor ve
+tavan TÜRETİLİYOR (`tb.pazarlik.teklifGecerlilikHafta + 1` = 3). "Kaç transfer oldu" diye sormak
+senaryonun zenginliğini ölçerdi; engellenme süresi ise doğrudan donmayı ölçer. Diş: düzeltme
+söküldüğünde kapı `494 hafta ÜST ÜSTE ... (tavan 3)` diyerek kırmızıya döndü.
 
 ### 📐 Dikiş kuralının ikinci uygulaması: kapı artık oyunun GERÇEK kurulum kodunu koşuyor (2026-09-01)
 
