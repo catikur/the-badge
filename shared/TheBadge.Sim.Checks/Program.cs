@@ -3748,6 +3748,71 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         else Pass($"K10CapexSozlesmesi(merdiven {R.MerdivenSezon} sezon ∈ [{bAlt},{bUst}] · iflas yok · " +
                   $"capex DAHİL {pTam:F3} ∈ [{EkoOranAlt:F2}-{EkoOranUst:F2}] · capex HARİÇ {pIsletme:F3} bandın ÜSTÜNDE = inşaat yük taşıyor)");
 
+        // ---- K12-D: MERDİVEN BANDIN HER İKİ UCUNDA DA ULAŞILABİLİR Mİ? ----
+        // K10-D'de "ECONOMY_MAP'in iki kuralı çakışıyor" diye bir bulgu kaydetmiştim: bandın alt
+        // ucunda referans merdivenin ulaşılamadığını söylüyordu. **O KAYIT YANLIŞTI.** Ölçüm
+        // 1,041'de yapılmıştı — yani BANDIN DIŞINDA — ve oradan banda ekstrapole edilmişti.
+        // Bandın gerçek uçlarında ölçüm: 1,05 → 19 sezon, 1,15 → 9 sezon; ikisi de bant içi,
+        // ikisinde de iflas yok. Çakışma YOK.
+        //
+        // Kapı bunu artık VARSAYMIYOR, ÖLÇÜYOR: yayın geliri ikili aramayla bandın uçlarına
+        // oturtulur ve merdiven her iki uçta da koşulur. Kapının kendisi bir sonraki
+        // ekstrapolasyonu engeller.
+        {
+            string h4 = "";
+            double TabanOran(long yayin)
+            {
+                long eski = eco.gelir.yayinHaftalik;
+                eco.gelir.yayinHaftalik = yayin;
+                var g = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+                var T = TheBadge.Checks.EkonomiKosu.Kos(g, eco, eRules, 0xEC0A0D1CUL, 6, out _);
+                eco.gelir.yayinHaftalik = eski;
+                return T.ToplamGider == 0 ? 0 : (double)T.ToplamGelir / T.ToplamGider;
+            }
+            long YayinBul(double hedef)
+            {
+                long lo = 200_000, hi = 1_400_000;
+                for (int it = 0; it < 22 && hi - lo > 2000; it++)
+                {
+                    long mid = (lo + hi) / 2;
+                    if (TabanOran(mid) < hedef) lo = mid; else hi = mid;
+                }
+                return (lo + hi) / 2;
+            }
+            const int UfukD = 30;
+            long yayinAsil = eco.gelir.yayinHaftalik;
+            var uclar = new (string ad, double oran)[] { ("alt", EkoOranAlt), ("üst", EkoOranUst) };
+            var sonuclar = new (double oran, int sezon, int iflas)[2];
+            for (int u = 0; u < uclar.Length; u++)
+            {
+                long y = YayinBul(uclar[u].oran);
+                double gercek = TabanOran(y);
+                eco.gelir.yayinHaftalik = y;
+                var st1 = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+                var R1 = TheBadge.Checks.KademeliInsaatKosu.Kos(st1, eco, eRules, 0xEC0A0D1CUL, UfukD,
+                                                                k3Bands, k3RlCfg, 42L);
+                eco.gelir.yayinHaftalik = yayinAsil;
+                sonuclar[u] = (gercek, R1.MerdivenSezon, R1.IflasSezonu);
+                if (R1.MerdivenSezon < 0)
+                    h4 += $"bandın {uclar[u].ad} ucunda (oran {gercek:F3}) merdiven {UfukD} sezonda TAMAMLANMADI ";
+                else if (R1.MerdivenSezon < bAlt || R1.MerdivenSezon > bUst)
+                    h4 += $"bandın {uclar[u].ad} ucunda merdiven {R1.MerdivenSezon} sezon, bant [{bAlt},{bUst}] dışı ";
+                if (R1.IflasSezonu >= 0)
+                    h4 += $"bandın {uclar[u].ad} ucunda sezon {R1.IflasSezonu}'de iflas ";
+            }
+            // İkili aramanın gerçekten UCA oturduğu ayrıca denetlenir: tutturamadıysa kapı
+            // bandın ucunu değil rastgele bir noktayı ölçmüş olurdu.
+            for (int u = 0; u < 2; u++)
+                if (Math.Abs(sonuclar[u].oran - uclar[u].oran) > 0.01)
+                    h4 += $"{uclar[u].ad} uç aranamadı (hedef {uclar[u].oran:F2}, bulunan {sonuclar[u].oran:F3}) ";
+
+            Console.WriteLine($"[info] K12-D bant uçları: alt {sonuclar[0].oran:F3} → merdiven {sonuclar[0].sezon} sezon · " +
+                              $"üst {sonuclar[1].oran:F3} → merdiven {sonuclar[1].sezon} sezon (bant [{bAlt},{bUst}])");
+            if (h4.Length > 0) failures += Fail("K12DBantUclari", h4);
+            else Pass($"K12DBantUclari(ECONOMY_MAP'in İKİ KURALI ÇAKIŞMIYOR — merdiven bandın her iki ucunda da " +
+                      $"ulaşılabilir: {sonuclar[0].sezon} ve {sonuclar[1].sezon} sezon, iflas yok)");
+        }
+
         // ---- MERDİVEN SONRASI: KAYITLI BORÇ (K12-C'de PİYASALI koşuya taşındı) ----
         // K10'da bu ölçüm transfer sink'i HİÇ İŞLEMEYEN bir koşuda yapılıyordu ve 2,25 çıkıyordu.
         // K12-C piyasayı kurdu (sezon başı havuz + pazarlık + kadro dönüşü) ve ölçüm 1,91'e indi:
