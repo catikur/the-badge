@@ -2438,6 +2438,26 @@ piyasa yoktu. Atilla "hepsini yap" dedi; piyasa kuruldu.
   GERÇEKTEN işlediğini ayrıca denetliyor (transfer sink'i sıfırsa ya da hiç alım yoksa düşer) —
   aksi hâlde "borç iyileşti" sahte bir iyileşme olurdu.
 
+### 🔴 K12-D: "ECONOMY_MAP'in iki kuralı çakışıyor" BULGUSU YANLIŞTI (2026-09-01)
+K10-D'de kaydettiğim bulgu — "bandın alt ucunda referans merdiven ulaşılamaz" — **doğru değildi**
+ve düzeltiyorum.
+
+- **HATA NEREDEYDİ:** ölçümü yayın gelirini süpürerek yapmıştım ve "merdiven 40 sezonda bitmiyor"
+  gözlemi **taban oran 1,041**'de alınmıştı. 1,041 ECONOMY_MAP'in bandının (1,05-1,15) **DIŞINDA**.
+  Bandın içinde ölçmek yerine, bandın dışındaki bir noktadan banda EKSTRAPOLE ettim.
+- **GERÇEK ÖLÇÜM (ikili aramayla bandın tam uçlarına oturtularak):** alt uç 1,050 → merdiven
+  **19 sezon**; üst uç 1,150 → merdiven **9 sezon**. İkisi de `merdivenSezonBandi` [6,24] içinde,
+  ikisinde de **iflas yok**. Çakışma YOK.
+- **KAPIYA BAĞLANDI:** `K12DBantUclari` yayın gelirini ikili aramayla bandın uçlarına oturtur ve
+  merdiveni HER İKİ UÇTA koşar. Aramanın gerçekten uca oturduğunu da ayrıca denetler — tutturamazsa
+  kapı bandın ucunu değil rastgele bir noktayı ölçmüş olurdu. Bir sonraki ekstrapolasyonu kapı engeller.
+- **Bu, K10-D'de (c) diye kapatılan kararı da geçersiz kılıyor:** korunacak bir çakışma yoktu.
+  `merdivenSezonBandi`'nin geniş tutulma gerekçesi (fazla oranına duyarlılık) hâlâ geçerli — ama
+  artık "bandın ucunda ulaşılamaz" değil, "bandın ucunda 19 sezon" diye biliniyor.
+- **Kural (bu oturumda ÜÇÜNCÜ kez):** *ölçtüğün şeyin geçerli olduğu bölgenin İÇİNDEN ölç.*
+  K11'de eksik kadro popülasyonu, K12-A'da eksik lig dağılımı, burada bandın dışından
+  ekstrapolasyon. Üçünü de ölçüm yakaladı; hiçbirini okuma yakalamadı.
+
 ## Bekleyen kararlar
 
 - ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —
@@ -2469,11 +2489,11 @@ piyasa yoktu. Atilla "hepsini yap" dedi; piyasa kuruldu.
   kaldı, capex `K10CapexSozlesmesi` ile ayrı ölçülüyor. Not: önerinin GEREKÇESİ yanlıştı ("capex
   bandı bulanıklaştırır"); ölçüm capex'in bandı AYAKTA TUTAN sink olduğunu gösterdi. Kararın
   kendisi doğru çıktı, gerekçesi düzeltildi — yukarıdaki K10-D kaydı.
-- ~~**ECONOMY_MAP'in iki kuralı çakışıyor (K10-D).**~~ → **KARAR (2026-08-31, "hepsini kapat"):
-  (c) — bugünkü hâl korunur, `merdivenSezonBandi` geniş kalır, kapı yalnız uçları yakalar.**
-  Gerekçe: (a) spec revizyonu, (b) balance şeması değişikliği; ikisi de balance sprintinin işi ve
-  bugünkü kapı ikisini de bloklamıyor. Çakışma ÖLÇÜLDÜ ve kayıtlı (fazla oranı 1,041'de merdiven
-  40 sezonda bitmiyor, 1,159'da 10 sezonda bitiyor) — balance sprinti bu sayıyla başlar.
+- ~~**ECONOMY_MAP'in iki kuralı çakışıyor (K10-D).**~~ → **BULGU YANLIŞMIŞ — KAPANDI
+  (2026-09-01, K12-D).** 2026-08-31'de (c) ile kapatılmıştı; şimdi korunacak bir çakışma
+  OLMADIĞI ölçüldü: bandın alt ucunda merdiven 19, üst ucunda 9 sezonda bitiyor, ikisi de bant
+  içi, iflas yok. Eski gözlem bandın DIŞINDAKİ (1,041) bir ölçümden ekstrapole edilmişti.
+  `K12DBantUclari` artık uçları ikili aramayla bulup ölçüyor — yukarıdaki K12-D kaydı.
 - ~~**Merdiven tükendikten sonra uzun vade sink'i ne? (K10-D BULGU 4)**~~ → **KARAR (2026-08-31,
   "hepsini kapat"): (a) — referans koşuya TRANSFER hattı eklenir, capex kapısı yeniden kalibre
   edilir.** Dokümanın zaten saydığı sink'i modellemek, yeni mekanik icat etmekten ucuz ve doğru;
