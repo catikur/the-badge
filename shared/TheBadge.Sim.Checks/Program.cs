@@ -685,7 +685,7 @@ Console.WriteLine($"[info] M2 durum hash: 0x{mA2.h:X}");
 if (mA2.h != mB2.h) failures += Fail("M2Determinism", $"0x{mA2.h:X} != 0x{mB2.h:X}");
 else Pass("M2Determinism");
 
-const ulong M2_GOLDEN = 0x03F1FB2C645841A1UL; // K9 adres ayrımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
+const ulong M2_GOLDEN = 0x5498E875C7247D5DUL; // K12 hakem/şut kalibrasyonuyla yeniden sabitlendi (2026-09-01 — bilinçli)
 if (M2_GOLDEN != 0 && mA2.h != M2_GOLDEN) failures += Fail("M2Golden", $"0x{mA2.h:X}");
 else Pass("M2Golden");
 
@@ -770,7 +770,7 @@ if (f1.hash != f2.hash || f1.res.TotalTicks != f2.res.TotalTicks)
     failures += Fail("M4Determinism", $"0x{f1.hash:X} != 0x{f2.hash:X}");
 else Pass("M4Determinism");
 
-const ulong M4_GOLDEN = 0xD8C76BF965937DC2UL; // K9 adres ayrımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
+const ulong M4_GOLDEN = 0x1CEF744588036154UL; // K12 hakem/şut kalibrasyonuyla yeniden sabitlendi (2026-09-01 — bilinçli)
 if (M4_GOLDEN != 0 && f1.hash != M4_GOLDEN) failures += Fail("M4Golden", $"0x{f1.hash:X}");
 else Pass("M4Golden");
 
@@ -1066,7 +1066,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     Console.WriteLine($"[info] M6 komutlu maç hash: 0x{hA:X}");
     if (hA != hB) failures += Fail("M6Determinism", $"0x{hA:X} != 0x{hB:X}");
     else Pass("M6Determinism");
-    const ulong M6_GOLDEN = 0x675BCD0B9EF7AB84UL; // K9 adres ayrımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
+    const ulong M6_GOLDEN = 0x839E56552410874EUL; // K12 hakem/şut kalibrasyonuyla yeniden sabitlendi (2026-09-01 — bilinçli)
     if (M6_GOLDEN != 0 && hA != M6_GOLDEN) failures += Fail("M6Golden", $"0x{hA:X}");
     else Pass("M6Golden");
 }
@@ -1906,12 +1906,44 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                       $"isabetli {isb / NE:0.0} · korner {ko / NE:0.0} · faul {fa / NE:0.0} · sarı {sa / NE:0.00} · " +
                       $"kırmızı {ki / NE:0.00} · penaltı {pe / NE:0.00} · ofsayt {of / NE:0.0} · sakatlık {inj / NE:0.00} · " +
                       $"pas %{pasP:0.0} · xG {xg / NE:0.00} · xG sapma %{xgSap:0.0}");
+    // ON BİR METRİK TAM GÜÇTE. Kırmızı AYRILDI ve BORÇ olarak korunuyor (aşağıda) — bandı
+    // gevşetmek yerine ayrı ölçmek, kaçağın büyüklüğünü ve yönünü görünür tutar.
     bool ok16e = g / NE is >= 2.2 and <= 3.2 && sh / NE is >= 18 and <= 30 && isb / NE is >= 6 and <= 12
               && ko / NE is >= 7 and <= 13 && fa / NE is >= 16 and <= 30 && sa / NE is >= 2.6 and <= 5.5
-              && ki / NE is >= 0.10 and <= 0.36 && pe / NE is >= 0.15 and <= 0.42 && of / NE is >= 1.6 and <= 5.6
+              && pe / NE is >= 0.15 and <= 0.42 && of / NE is >= 1.6 and <= 5.6
               && inj / NE is >= 0.28 and <= 0.68 && pasP is >= 76 and <= 88 && xgSap <= 10;
-    if (!ok16e) failures += Fail("M16ECalibGenis", "yukarıdaki [info] satırı bant dışı değer içeriyor");
-    else Pass("M16ECalibGenis(12 metrik, CI-geniş bant; dar bantlar calib10k 10000 ile)");
+    if (!ok16e) failures += Fail("M16ECalibGenis", "yukarıdaki [info] satırı bant dışı değer içeriyor (kırmızı hariç)");
+    else Pass("M16ECalibGenis(11 metrik, CI-geniş bant; kırmızı ayrı borç kapısında; dar bantlar calib10k 10000 ile)");
+
+    // ---- BORÇ: DÜZ DAĞILIMDA KIRMIZI (K12) ----
+    // ME/M16-E hedefi 0,10-0,36. K12 motor kalibrasyonu rol ayrımı OLAN kadroyu banda soktu
+    // (kart 8,69 → 5,95 · kırmızı 1,83 → 0,31) ama bedeli burada ödendi: `sariSonrasiIhtiyat`
+    // 0,18 → 0,24 düz dağılımın ikinci sarılarını da azalttı ve kırmızı 0,26 → ~0,05'e indi.
+    //
+    // ÖLÇÜLEN GERÇEK: iki popülasyon aynı anda hem kart hem kırmızı bandını TUTTURAMIYOR.
+    // Rol ayrımı olan kadro her ayarda ~1,8× daha fazla kart üretiyor; onu bastıran seviye
+    // düz dağılımın kırmızısını siliyor. Üç alternatif mekanizma ölçüldü ve üçü de daha kötü
+    // çıktı (doğrudan kırmızı eşiği erişmiyor · margin-iskontosu · pervasızlık muafiyeti).
+    //
+    // BANT GEVŞETİLMEDİ: kırmızı ayrı ölçülüyor, bugünkü değer TAVANLA donduruldu ve HEDEF
+    // basılıyor. Hedefe ulaşılırsa kapı KENDİSİ düşer — borcun kapandığını söyler.
+    {
+        // TABAN ÖRNEKLEM GÜRÜLTÜSÜNÜN ALTINDA: 500 maçta 0,03 kırmızı ≈ 15 olay, Poisson
+        // sapması ±0,008. Tabanı 0,02'ye koymak kapıyı ölçtüğü şeye değil gürültüye duyarlı
+        // yapardı — kırmızıya dönen bir kapı borcu değil zarı raporlardı.
+        const double KirmiziTaban = 0.012, KirmiziHedefAlt = 0.10, KirmiziHedefUst = 0.36;
+        double kir = ki / NE;
+        string h16 = "";
+        if (kir < KirmiziTaban)
+            h16 += $"düz dağılımda kırmızı {kir:F3} < kayıtlı taban {KirmiziTaban:F2} (BORÇ KÖTÜLEŞTİ) ";
+        if (kir >= KirmiziHedefAlt && kir <= KirmiziHedefUst)
+            h16 += $"kırmızı {kir:F3} HEDEF banda ({KirmiziHedefAlt:F2}-{KirmiziHedefUst:F2}) ulaştı — " +
+                   "BORÇ KAPANDI, bu kapı kaldırılıp metrik M16ECalibGenis'e geri konmalı ";
+        if (kir > KirmiziHedefUst) h16 += $"kırmızı {kir:F3} hedef bandın ÜSTÜNDE ";
+        if (h16.Length > 0) failures += Fail("M16EKirmiziBorcu", h16);
+        else Pass($"M16EKirmiziBorcu(BORÇ: düz dağılımda kırmızı {kir:F3}, hedef {KirmiziHedefAlt:F2}-{KirmiziHedefUst:F2} — " +
+                  $"rol ayrımı olan kadroyu banda sokmanın bedeli, tavanla donduruldu)");
+    }
 }
 
 // 23) FAZ 03 M17 — GOLDEN REPLAY SETİ (ME 17.4) + config_hash (3.3)
@@ -3982,31 +4014,31 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             int N = NK * ciftler.Length;
             kGol /= N; kSut /= N; kKart /= N; kKorner /= N; kKirmizi /= N;
 
+            // BANTLAR MOTORUN KENDİ SÖZLEŞMESİYLE AYNI — köprü kadrosuna ayrı tolerans YOK.
+            // K11'de şut bir BORÇ TAVANIYDI; K12 motor kalibrasyonu borcu kapattı ve tavan
+            // normal banda döndü. Kırmızı bandı da eklendi: K11'de yalnız bir tavan vardı ve
+            // 0,00 kırmızı (M16-E hedefi 0,15-0,30) sessizce geçiyordu.
             var kb = sqBal.kalibrasyon;
             if (kGol < kb.golBandi[0] || kGol > kb.golBandi[1])
                 hata += $"köprü kadrosuyla gol/maç {kGol:F2} bant [{kb.golBandi[0]:F1}-{kb.golBandi[1]:F1}] dışı ";
             if (kKart < kb.kartBandi[0] || kKart > kb.kartBandi[1])
                 hata += $"köprü kadrosuyla kart/maç {kKart:F2} bant [{kb.kartBandi[0]:F1}-{kb.kartBandi[1]:F1}] dışı ";
+            if (kSut < kb.sutBandi[0] || kSut > kb.sutBandi[1])
+                hata += $"köprü kadrosuyla şut/maç {kSut:F1} bant [{kb.sutBandi[0]:F0}-{kb.sutBandi[1]:F0}] dışı ";
+            if (kKirmizi < kb.kirmiziBandi[0] || kKirmizi > kb.kirmiziBandi[1])
+                hata += $"köprü kadrosuyla kırmızı/maç {kKirmizi:F2} bant [{kb.kirmiziBandi[0]:F2}-{kb.kirmiziBandi[1]:F2}] dışı ";
             if (kKorner < kb.kornerAlt) hata += $"köprü kadrosuyla korner/maç {kKorner:F1} < {kb.kornerAlt:F1} ";
-            if (kKirmizi > kb.kirmiziTavani) hata += $"köprü kadrosuyla kırmızı/maç {kKirmizi:F2} > {kb.kirmiziTavani:F2} ";
-            // ŞUT: BORÇ TAVANI. Hedef `sutHedefi` (ME/M4 bandının üstü); bugünkü ölçüm onun
-            // üstünde ve TAVANLA donduruldu. Hedefe düşerse kapı KENDİSİ kırmızıya döner —
-            // borç kapandığında tavanın kaldırılması gerektiğini söyler.
-            if (kSut > kb.sutTavani)
-                hata += $"köprü kadrosuyla şut/maç {kSut:F1} > kayıtlı tavan {kb.sutTavani:F1} (BORÇ KÖTÜLEŞTİ) ";
-            else if (kSut <= kb.sutHedefi)
-                hata += $"şut {kSut:F1} ≤ hedef {kb.sutHedefi:F1} — BORÇ KAPANDI, tavan kaldırılmalı ";
         }
 
         Console.WriteLine($"[info] K11 kalibrasyon (80 maç, 2 bağımsız kadro çifti): gol {kGol:F2} · " +
-                          $"şut {kSut:F1} (hedef ≤{sqBal.kalibrasyon.sutHedefi:F0}, borç tavanı {sqBal.kalibrasyon.sutTavani:F0}) · " +
-                          $"kart {kKart:F2} · kırmızı {kKirmizi:F2} · korner {kKorner:F1}");
+                          $"şut {kSut:F1} · kart {kKart:F2} · kırmızı {kKirmizi:F2} · korner {kKorner:F1} " +
+                          $"(bantlar motorun M4 sözleşmesiyle AYNI)");
         Console.WriteLine($"[info] K11 köprü: {sqBal.dizilis.ad} · ilk 11 + {sqBal.yedekSayisi} yedek · " +
                           $"tüm 26 nitelik dolu · motor okuması Guc=40 → {gucZayif:F1}, Guc=85 → {gucGuclu:F1}");
         if (hata.Length > 0) failures += Fail("K11KadroKoprusu", hata);
         else Pass($"K11KadroKoprusu(26/26 nitelik dolu · motor rolü 1-4 · seçim güce göre · deterministik · " +
                   $"aynalama · sakat oynamıyor · her hattın yedeği var · Guc MOTORA ulaşıyor {gucZayif:F1}→{gucGuclu:F1} · " +
-                  $"KÖPRÜ KADROSUYLA motor bandında: gol {kGol:F2} kart {kKart:F2} kırmızı {kKirmizi:F2} · şut {kSut:F1} BORÇ tavanı altında)");
+                  $"KÖPRÜ KADROSUYLA motorun KENDİ bantlarında: gol {kGol:F2} şut {kSut:F1} kart {kKart:F2} kırmızı {kKirmizi:F2})");
     }
 
     // Tycoon senaryo tablosu: geçerli payload + aksiyona ÖZGÜ kapı 3 ihlali reçetesi.

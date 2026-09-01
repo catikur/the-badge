@@ -49,8 +49,8 @@
     "kayipKoridorRakip": 0.22,
     "pasKesmeBandiSn": 0.7,
     "kayipMesafePerM": 0.006,
-    "sutTehditCarpan": 0.57,
-    "sutBaskiCezasi": 0.35,
+    "sutTehditCarpan": 0.47,
+    "sutBaskiCezasi": 0.45,
     "araPasIleriM": 12.0,
     "araPasRisk": 0.28,
     "araPasUlasimBandiM": 24.0,
@@ -208,11 +208,18 @@
     "foulEsikTaban": 0.475,
     "strictnessCarpan": 0.002,
     "griBantOrta": 0.06,
-    "sariEsik": 0.555,
+    "sariEsik": 0.56,
     "kirmiziEsik": 0.8,
     "cezaSahasiIhtiyatCarpan": 0.88,
     "avantajXtEsik": 0.012,
-    "sariSonrasiIhtiyat": 0.18
+    "sariSonrasiIhtiyat": 0.24,
+    "marginBolen": 50.0,
+    "marginAgirlik": 0.4,
+    "hizAgirlik": 0.25,
+    "arkadanAgirlik": 0.2,
+    "agresifEsik": 70.0,
+    "agresifEk": 0.05,
+    "motivasyonEk": 0.04
   },
   "hava": {
     "yagmur": {
@@ -409,7 +416,7 @@
     },
     "buyukSansXg": 0.35,
     "uzakGolMesafeM": 25.0,
-      "zamanCizelgesiIsaret": 6,
+    "zamanCizelgesiIsaret": 6,
     "nadirlik": {
       "gol": 0.6,
       "uzakGol": 0.9,

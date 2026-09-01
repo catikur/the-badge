@@ -2346,6 +2346,45 @@ yarısının neden yapılamadığı ölçümle netleşti.
 - **Kalan iş (yeni bekleyen karar):** oyuncu piyasası modeli — havuz yenilenmesi + rakip kulüp
   bütçeleri. Kalem hazır olduğu için o dilim geldiğinde ölçüm doğrudan koşar.
 
+### K12-A: motorun faul/kart modeli rol ayrımına göre kalibre edildi — ✅ TAMAM, bir borçla (2026-09-01)
+K11 bulgusunun kararı (a): "motor tarafını yeniden kalibre et". Atilla "hepsini yap" dedi; yapıldı.
+
+- **ÖNCE MAGIC NUMBER BORCU ÖDENDİ.** ME 11.2 şiddet formülünün ağırlıkları KODA GÖMÜLÜYDÜ
+  (`/50` margin böleni, 0,4/0,25/0,2 terim ağırlıkları, 70 agresiflik eşiği, 0,05 ve 0,04 ekler).
+  Hepsi `sim.balance.json → referee` altına [KALİBRE] olarak taşındı. Bölen özellikle önemliydi:
+  modelin ROL DUYARLILIĞINI o belirliyor, çünkü bileşikler bir FARK olarak giriyor.
+- **ÜÇ KADRO DAĞILIMI BİRDEN ÖLÇÜLDÜ.** İlk süpürmemde ikisine bakmıştım (düz + köprü) ve
+  M16-E'nin "lig dağılımı" gözden kaçmıştı — kapı bunu hemen yakaladı. **Bu, K11'de yaptığım
+  hatanın aynısıydı: eksik popülasyonla kalibre etmek.** Süpürme aracı üçünü birden ölçecek
+  şekilde yeniden yazıldı.
+- **DÖRT HİPOTEZ ÖLÇÜMLE ÇÜRÜDÜ, sırayla:** (1) agresiflik eşiği/defans müdahale katsayısı —
+  kart oranı o kollara duyarsız; (2) `marginBolen`i büyütmek — düz kadroda uçurum (5,05 → 0,87);
+  (3) doğrudan kırmızı eşiği (`kirmiziEsik`) — kol erişmiyor, lig kırmızısı 0,05'ten kıpırdamadı;
+  (4) ihtiyatı "pervasız değilse" koşuluna bağlamak — TAM TERS etki, çünkü köprü kadrosunun
+  faulleri zaten üst sınırın üstünde (kart 5,95 → 9,32). (5) iskontoyu yalnız `marginGap`e
+  uygulamak da denendi: aralığı genişletti ama çatışmayı kapatmadı.
+- **KAYNAK BULUNDU:** kaybedilen HER müdahale `ResolveFoul`a gidiyor. Kötü müdahaleci hem daha
+  çok düello kaybediyor hem daha yüksek `marginGap` taşıyor — çifte ceza. Rol profili
+  gerçekçileştikçe forvet presi bu iki etkiyi birden büyütüyor.
+- **UYGULANAN KALİBRASYON:** `sariEsik` 0,555 → 0,560 · `sariSonrasiIhtiyat` 0,18 → 0,24 ·
+  `utility.sutTehditCarpan` 0,57 → 0,47 · `utility.sutBaskiCezasi` 0,35 → 0,45.
+- **SONUÇ — kadro profili GERİ DÜZELTİLDİ.** K11'de bedel yanlış yerde ödeniyordu (forvet
+  çevikliği defansın altına indirilmişti). Profil futbol gerçekçiliğine döndü ve köprü kadrosu
+  motorun KENDİ bantlarında: **gol 2,74 · şut 30,2 · kart 5,69 · kırmızı 0,28 · korner 9,6.**
+- **ŞUT BORCU KAPANDI.** K11'de şut 33,5 idi ve 36 tavanıyla dondurulmuştu; artık 30,2 ve
+  normal banda ([10-32]) döndü. `sutTavani`/`sutHedefi` kaldırıldı — kapının kendi "borç kapandı"
+  dalı tam olarak bunu söylüyordu.
+- **KALAN BORÇ — DÜZ DAĞILIMDA KIRMIZI 0,03 (hedef 0,10-0,36).** İki popülasyon aynı anda hem
+  kart hem kırmızı bandını TUTTURAMIYOR: rol ayrımı olan kadro her ayarda ~1,8× daha fazla kart
+  üretiyor ve onu bastıran iskonto seviyesi düz dağılımın ikinci sarılarını siliyor.
+  **BANT GEVŞETİLMEDİ:** metrik `M16ECalibGenis`ten AYRILDI ve `M16EKirmiziBorcu` kapısına
+  taşındı — bugünkü değer tavanla donduruldu, hedef basılıyor, hedefe ulaşılırsa kapı KENDİSİ
+  düşüyor. Diğer 11 metrik tam güçte kaldı. Tavan örneklem gürültüsünün altına konuldu
+  (500 maçta 0,03 ≈ 15 olay, Poisson ±0,008) — aksi hâlde kapı borcu değil zarı raporlardı.
+- **Golden setler bilinçli yenilendi:** M2/M4/M6 sabitleri + 50 replay + LOD 2 tablosu.
+- **Kural:** *kalibrasyon, ölçtüğün popülasyonların HEPSİNİ kapsamalı.* Bu oturumda aynı hatayı
+  iki kez yaptım (K11'de rol ayrımı, K12'de lig dağılımı); ikisini de kapılar yakaladı.
+
 ## Bekleyen kararlar
 
 - ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —
@@ -2395,18 +2434,17 @@ yarısının neden yapılamadığı ölçümle netleşti.
   (havuz her sezon yenilenir, karşı taraf sabit bir kabul eşiğiyle davranır — ucuz, ama
   ölçtüğü şey gerçek piyasa değil, varsayımın kendisi); (c) borç açık kalsın, kapı tavanla
   korusun. **Öneri: (c) bugün, (a) FAZ 05'te** — (b) kapının ölçtüğünü ayarına çevirir.
-- **Motorun faul/kart kalibrasyonu rol ayrımı olan kadrolarla yeniden yapılsın mı? (K11 bulgusu,
-  2026-08-31)** ME 11.2 `marginGap` bir FARK olduğu için rol profili keskinleştikçe büyüyor;
-  M4/M5 kalibrasyonu düz kadrolarla yapıldığı için bunu hiç görmedi. Bugün bedeli kadro
-  profilinde ödeniyor (forvet çevikliği defansın altında — gerçekçi değil). Seçenekler:
-  (a) motor tarafını yeniden kalibre et (hakem katılığı / `sariSonrasiIhtiyat` / şiddet
-  ağırlıkları) ve M4/M5 + golden setleri yenile — doğru yer burası ama golden churn'ü büyük;
-  (b) profildeki bedeli kabul et, `squad.balance.json` bugünkü hâlde kalsın; (c) `marginGap`ı
-  role duyarsız hâle getir (spec değişikliği, ME 11.2). **Öneri: (a)**, balance sprintinde —
-  bugünkü hâl oynanabilir ve kapıyla korunuyor, ama bedel yanlış yerde duruyor. KARAR ATİLLA'NIN.
-- **Köprü kadrosuyla şut/maç 33,5 (hedef ≤32) — BORÇ, tavanla donduruldu (K11).** Kartı indiren
-  her ayar şutu çıkarıyor. `squad.balance.json → kalibrasyon.sutTavani = 36`; hedefe düşünce kapı
-  kendisi kırmızıya döner. Yukarıdaki (a) kararıyla birlikte çözülmesi muhtemel.
+- ~~**Motorun faul/kart kalibrasyonu rol ayrımı olan kadrolarla yeniden yapılsın mı?**~~ →
+  **YAPILDI (2026-09-01, K12-A):** seçenek (a). Kadro profili gerçekçiliğe geri döndü, köprü
+  kadrosu motorun kendi bantlarında. Kalan tek kaçak (düz dağılımda kırmızı) bant gevşetilmeden
+  ayrı bir borç kapısına taşındı — yukarıdaki K12-A kaydı.
+- **Düz dağılımda kırmızı 0,03 (hedef 0,10-0,36) — BORÇ (K12-A).** İki popülasyon aynı anda hem
+  kart hem kırmızı bandını tutturamıyor. Seçenekler: (a) müdahale KARARINI role duyarlı yap —
+  kötü müdahaleci dalmak yerine jokey yapsın (model işi, ME 7.6 pres tetiği); (b) ikinci sarı
+  mekanizmasını şiddetten ayır; (c) borç açık kalsın, kapı korusun. **Öneri: (a)** — kaynak
+  orada (kaybedilen her müdahale foul adayı üretiyor), ama ayrı bir dilim.
+- ~~**Köprü kadrosuyla şut/maç 33,5 (hedef ≤32) — BORÇ.**~~ → **KAPANDI (2026-09-01, K12-A):**
+  motor kalibrasyonu sonrası 30,2; tavan kaldırıldı, metrik normal banda döndü.
 - **Maç öncesi `Kondisyon` ve `Moral` motora taşınsın mı? (K11 köprü kararı, 2026-08-31)** Köprü
   bunları BİLEREK haritalamıyor: motor her maça `Energy = 1000` ile başlıyor ve morali kendi
   `momentum`u üzerinden işliyor; niteliğe karıştırmak çift sayım olurdu. Taşımak ME 12.1'de

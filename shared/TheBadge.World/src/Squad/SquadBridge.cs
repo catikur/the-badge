@@ -44,14 +44,19 @@ namespace TheBadge.World
             };
         }
 
-        /// <summary>Köprü kadrosuyla motorun kalmak zorunda olduğu bantlar — K11 kapısı okur.
-        /// `sutTavani` bir BORÇ tavanıdır: hedef `sutHedefi`, bugünkü ölçüm onun üstünde.</summary>
+        /// <summary>Köprü kadrosuyla motorun kalmak zorunda olduğu bantlar — K11/K12 kapısı okur.
+        /// HEPSİ motorun kendi `M4CalibrationBands` sözleşmesiyle AYNIDIR; köprü kadrosu için ayrı
+        /// bir tolerans YOKTUR. K11'de şut bir BORÇ TAVANIydı (ölçüm 33,5 · hedef 32) çünkü motorun
+        /// kart kalibrasyonu rol ayrımını görmemişti ve bedel kadro profilinde ödeniyordu; K12'de
+        /// motor tarafı kalibre edilince borç kapandı (27,8) ve tavan normal banda döndü.</summary>
         [Serializable] public sealed class KalibrasyonCfg
         {
             public string aciklama;
             public double[] golBandi = new double[0];
             public double[] kartBandi = new double[0];
-            public double kornerAlt, sutTavani, sutHedefi, kirmiziTavani;
+            public double[] sutBandi = new double[0];
+            public double[] kirmiziBandi = new double[0];
+            public double kornerAlt;
         }
 
         [Serializable] public sealed class DizilisCfg
@@ -102,10 +107,9 @@ namespace TheBadge.World
             }
             if (toplam != 11) throw new ArgumentException($"squad.balance: diziliş {toplam} oyuncu tanımlıyor, 11 olmalı.");
             if (yedekSayisi < 0 || yedekSayisi > 9) throw new ArgumentException("squad.balance: yedekSayisi 0-9 olmalı.");
-            if (kalibrasyon.golBandi.Length != 2 || kalibrasyon.kartBandi.Length != 2)
-                throw new ArgumentException("squad.balance: kalibrasyon bantları [alt,üst] olmalı.");
-            if (kalibrasyon.sutTavani < kalibrasyon.sutHedefi)
-                throw new ArgumentException("squad.balance: şut tavanı hedefin ALTINA inemez — hedefe düştüğünde borç kapanmıştır, tavan kaldırılmalı.");
+            if (kalibrasyon.golBandi.Length != 2 || kalibrasyon.kartBandi.Length != 2
+                || kalibrasyon.sutBandi.Length != 2 || kalibrasyon.kirmiziBandi.Length != 2)
+                throw new ArgumentException("squad.balance: kalibrasyon bantlarının hepsi [alt,üst] olmalı.");
         }
     }
 
