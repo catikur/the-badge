@@ -83,6 +83,11 @@ namespace TheBadge.World
             // Kasadan komut anında düşüldüğü için `NetTl`e girmez (WeekLedger notu).
             L.InsaatTl = st.Club.DonemInsaatGideriTl;
             if (L.InsaatTl != 0) j.Set(MutTarget.Kulup, 0, ClubField.DonemInsaatGideri, 0);
+            // TRANSFER: aynı desen (ECONOMY_MAP "Transfer bedelleri"). K11'e kadar bu satır
+            // hiçbir kaleme girmiyordu ve transfer yapan bir sezonun oranı olduğundan İYİ
+            // görünüyordu — inşaatın K3'te yaşadığı hatanın birebir aynısı.
+            L.TransferTl = st.Club.DonemTransferGideriTl;
+            if (L.TransferTl != 0) j.Set(MutTarget.Kulup, 0, ClubField.DonemTransferGideri, 0);
             L.PersonelTl = eco.gider.personelHaftalik;
             L.IsletmeTl = eco.gider.genelIsletmeHaftalik;
 

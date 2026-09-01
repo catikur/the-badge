@@ -429,6 +429,53 @@ namespace TheBadge.Checks
     }
 
     /// <summary>K2 dünya durumu kurulum yardımcıları.</summary>
+    /// <summary>ROL DAĞILIMI OLAN kadro — K11 köprüsü için. `WorldFixture` herkese `RolId = 1`
+    /// veriyor (o fikstürün derdi sahiplik denetimleriydi, diziliş değil); köprü ise hat başına
+    /// oyuncu ister. Güç indeksten TÜRETİLİR (RNG yok): kapı, seçimin GÜCE göre yapıldığını
+    /// ölçebilsin diye güçler bilinerek dağıtılır.</summary>
+    public static class KadroFixture
+    {
+        // rolId → hat eşlemesi `squad.balance.json`da: 1 KL · 2-8 DF · 9-20 OS · 21-32 FV
+        public const int Kaleci = 2, Defans = 6, Ortasaha = 6, Forvet = 4;   // 18 kişilik kadro
+
+        public static GameState Kur(WorldRules rules, long clubId, long ownerUserId, long kasaTl = 20_000_000)
+        {
+            var st = GameState.Olustur(rules, clubId, ownerUserId);
+            st.Club.KasaTl = kasaTl;
+            st.Club.StadyumKapasite = 30000;
+            var list = new List<PlayerState>();
+            // KİMLİK TABANI KULÜPTEN TÜRETİLİR. Sabit 100 tabanı iki kulübe aynı PlayerId'leri
+            // veriyordu ve motor bunu "PlayerId 101 iki takımda birden" diye reddetti — doğru
+            // yakaladı, ama fikstürün işi motora geçersiz veri göndermemek. Aralık motorun
+            // `short` kimlik genişliğinde kalır (SquadBridge bunu ayrıca denetler).
+            int pid = 1000 + (int)(clubId % 200) * 50;
+            Instruction[] Yuva() => new Instruction[rules.yapi.talimatYuvaSayisi];
+            void Ekle(int adet, int rolTaban, int rolAralik)
+            {
+                for (int i = 0; i < adet; i++)
+                {
+                    // Güç 48-88 arası, indeksten deterministik. Aynı hattaki oyuncular FARKLI
+                    // güçte olmalı ki "en iyisi seçildi mi" ölçülebilsin.
+                    byte guc = (byte)(48 + (pid * 7) % 41);
+                    list.Add(new PlayerState
+                    {
+                        PlayerId = pid, ClubId = clubId, HaftalikMaasTl = 40_000,
+                        SozlesmeKalanHafta = 100, Moral = 60, Kondisyon = 90,
+                        RolId = (byte)(rolTaban + (i % rolAralik)),
+                        Guc = guc, Potansiyel = (byte)System.Math.Min(99, guc + 6),
+                        Yas = (byte)(20 + (pid % 15)), Talimatlar = Yuva()
+                    });
+                    pid++;
+                }
+            }
+            Ekle(Kaleci, 1, 1); Ekle(Defans, 2, 7); Ekle(Ortasaha, 9, 12); Ekle(Forvet, 21, 12);
+            st.Oyuncular = list.ToArray();
+            st.Club.HaftalikMaasGiderTl = list.Count * 40_000L;
+            st.Validate();
+            return st;
+        }
+    }
+
     public static class WorldFixture
     {
         /// <summary>Kanonik kadro: PlayerId artan. `yabanciSayisi` kadar oyuncu BAŞKA kulüpte,

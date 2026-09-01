@@ -2689,6 +2689,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             ("ClubState.SponsorHaftalikTl",   s => s.Club.SponsorHaftalikTl += 1),
             ("ClubState.SponsorKalanHafta",   s => s.Club.SponsorKalanHafta += 1),
             ("ClubState.DonemInsaatGideriTl", s => s.Club.DonemInsaatGideriTl += 1),
+            ("ClubState.DonemTransferGideriTl", s => s.Club.DonemTransferGideriTl += 1),
             ("ClubState.Form",                s => s.Club.Form += 1),
             ("ClubState.SponsorTeklifleri",   s => s.Club.SponsorTeklifleri[0].TeklifId += 1),
             ("Construction.InsaatId",         s => s.Club.InsaatSlot[1].InsaatId += 1),
@@ -3729,6 +3730,285 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         }
     }
 
+    // ===================== K11 — KADRO → TEAMSHEET KÖPRÜSÜ (dikiş) =====================
+    // NEDEN: `PlayerState.Guc`'un XML yorumu "Maç motoru bunları HENÜZ kullanmıyor" diyordu ve
+    // DOĞRUYDU. Maç motoru sentetik `TeamSheet`lerle, dünya katmanı sentetik G-B-M sonuç
+    // döngüsüyle test ediliyordu; iki yarı hiç bağlanmamıştı. Bu kapı dikişi ölçer.
+    {
+        string hata = "";
+        var sqOpts = new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true };
+        var sqBal = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.SquadBalance>(
+            System.IO.File.ReadAllText(FindRepoFile("balance/squad.balance.json")), sqOpts);
+        sqBal.Validate();
+
+        var kadro = TheBadge.Checks.KadroFixture.Kur(eRules, 500L, 42L);
+        var ev = TheBadge.World.SquadBridge.Kur(kadro, 500L, sqBal, true, out string hEv);
+        if (ev == null) hata += $"ev kadrosu kurulamadı({hEv}) ";
+
+        if (ev != null)
+        {
+            // (1) HİÇBİR NİTELİK SIFIR OLAMAZ. `TeamSheet` kurucusundaki yorumun anlattığı ders:
+            //     eksik nitelik o alt sistemi (kaleci 1v1'i, hava topu, faul agresifliği) SESSİZCE
+            //     öldürür — M4 kalibrasyonunda yakalanmış. Köprü 26'sını da doldurmak zorunda.
+            int sifir = 0, giris = 0;
+            void Denetle(TheBadge.Sim.Match.PlayerEntry e)
+            {
+                giris++;
+                var a = e.Attributes;
+                byte[] hepsi = {
+                    a.Passing, a.Finishing, a.Dribbling, a.Tackling, a.Heading, a.FirstTouch, a.Crossing, a.SetPieces,
+                    a.Positioning, a.Decisions, a.Composure, a.Aggression, a.Workrate, a.Vision,
+                    a.Pace, a.Acceleration, a.Stamina, a.Strength, a.Agility, a.JumpReach,
+                    a.Reflexes, a.Handling, a.OneOnOne, a.AerialCommand, a.Kicking, a.Throwing };
+                if (hepsi.Length != 26) hata += "nitelik sayısı 26 değil ";
+                for (int i = 0; i < hepsi.Length; i++) if (hepsi[i] == 0) sifir++;
+            }
+            for (int i = 0; i < ev.Starters.Length; i++) Denetle(ev.Starters[i]);
+            for (int i = 0; i < ev.Bench.Length; i++) Denetle(ev.Bench[i]);
+            if (sifir > 0) hata += $"{sifir} nitelik SIFIR (alt sistem sessizce ölür) ";
+            if (ev.Bench.Length != sqBal.yedekSayisi) hata += $"yedek {ev.Bench.Length} ≠ {sqBal.yedekSayisi} ";
+
+            // (2) HAT SAYILARI DİZİLİŞE UYUYOR — `rolHat` üzerinden geri okunur.
+            var sayim = new int[4];
+            // MOTOR ROLÜ okunur, dünya rolü değil: motorun anlamı 1 KL · 2 DF · 3 OS · 4 FV
+            // ve bu aralığın DIŞINA çıkmak takımı sahada başka bir takıma çevirir.
+            for (int i = 0; i < ev.Starters.Length; i++)
+            {
+                int mr = ev.Starters[i].RoleId;
+                if (mr < 1 || mr > 4) { hata += $"motor rolü {mr} — 1-4 dışı (motor 4 üstünü forvet sayar) "; continue; }
+                sayim[mr - 1]++;
+            }
+            for (int h = 0; h < 4; h++)
+                if (sayim[h] != sqBal.dizilis.hatSayilari[h])
+                    hata += $"{sqBal.hatlar[h]} hattı {sayim[h]}, diziliş {sqBal.dizilis.hatSayilari[h]} istiyor ";
+
+            // (3) SEÇİM GÜCE GÖRE: her hattın İLK 11'e giren oyuncuları, o hattın kalanlarının
+            //     hepsinden güçlü olmalı. "En iyisini seçtim" iddiası ancak böyle ölçülür.
+            {
+                var ilkOnBir = new System.Collections.Generic.List<int>();
+                for (int i = 0; i < ev.Starters.Length; i++) ilkOnBir.Add(ev.Starters[i].PlayerId);
+                for (int h = 0; h < 4; h++)
+                {
+                    int enDusukSecilen = int.MaxValue, enYuksekSecilmeyen = int.MinValue;
+                    for (int i = 0; i < kadro.Oyuncular.Length; i++)
+                    {
+                        var p = kadro.Oyuncular[i];
+                        if (p.ClubId != 500L || sqBal.rolHat[p.RolId - 1] != h) continue;
+                        if (ilkOnBir.Contains(p.PlayerId)) { if (p.Guc < enDusukSecilen) enDusukSecilen = p.Guc; }
+                        else if (p.Guc > enYuksekSecilmeyen) enYuksekSecilmeyen = p.Guc;
+                    }
+                    if (enDusukSecilen != int.MaxValue && enYuksekSecilmeyen != int.MinValue
+                        && enYuksekSecilmeyen > enDusukSecilen)
+                        hata += $"{sqBal.hatlar[h]}: dışarıda kalan {enYuksekSecilmeyen} güçlü, seçilen {enDusukSecilen} zayıf ";
+                }
+            }
+
+            // (4) DETERMİNİZM — köprü bir EŞLEMEdir; iki çağrı bit-aynı kadro vermeli.
+            var ev2 = TheBadge.World.SquadBridge.Kur(kadro, 500L, sqBal, true, out _);
+            for (int i = 0; i < 11; i++)
+                if (ev2.Starters[i].PlayerId != ev.Starters[i].PlayerId
+                    || ev2.Starters[i].Attributes.Finishing != ev.Starters[i].Attributes.Finishing
+                    || ev2.Starters[i].AnchorXmm != ev.Starters[i].AnchorXmm)
+                { hata += "köprü DETERMİNİSTİK DEĞİL "; break; }
+
+            // (5) EV/DEPLASMAN AYNALAMA — ev sahibi kendi kalesi -x'te.
+            var dep = TheBadge.World.SquadBridge.Kur(kadro, 500L, sqBal, false, out _);
+            if (ev.Starters[0].AnchorXmm >= 0) hata += "ev kalecisi -x yarı sahasında değil ";
+            if (dep.Starters[0].AnchorXmm != -ev.Starters[0].AnchorXmm) hata += "deplasman çapası aynalanmıyor ";
+        }
+
+        // (6) GÜÇ MOTORA GERÇEKTEN ULAŞIYOR. Kapının çekirdek iddiası bu: `Guc` yalnız köprünün
+        //     içinde kalmıyor, motorun KENDİ okuması (`Lod2Resolver.TeamStrength`) değişiyor.
+        //     Nitelik ortalamasını karşılaştırmak yetmezdi — o, köprünün kendi çıktısını kendine
+        //     sormak olurdu; `TeamStrength` motorun sheet'i nasıl gördüğüdür.
+        double gucZayif = 0, gucGuclu = 0;
+        {
+            var k11Lod2 = new Lod2Resolver(simBal, lod2Tbl);   // 18. bölümdeki `lod2` blok-yerel
+            var zayifSt = TheBadge.Checks.KadroFixture.Kur(eRules, 501L, 42L);
+            for (int i = 0; i < zayifSt.Oyuncular.Length; i++)
+            {
+                var p = zayifSt.Oyuncular[i]; p.Guc = 40; p.Potansiyel = 50; zayifSt.Oyuncular[i] = p;
+            }
+            var gucluSt = TheBadge.Checks.KadroFixture.Kur(eRules, 501L, 42L);
+            for (int i = 0; i < gucluSt.Oyuncular.Length; i++)
+            {
+                var p = gucluSt.Oyuncular[i]; p.Guc = 85; p.Potansiyel = 90; gucluSt.Oyuncular[i] = p;
+            }
+            var sZayif = TheBadge.World.SquadBridge.Kur(zayifSt, 501L, sqBal, true, out _);
+            var sGuclu = TheBadge.World.SquadBridge.Kur(gucluSt, 501L, sqBal, true, out _);
+            gucZayif = k11Lod2.TeamStrength(sZayif);
+            gucGuclu = k11Lod2.TeamStrength(sGuclu);
+            if (!(gucGuclu > gucZayif))
+                hata += $"Guc motora ULAŞMIYOR: zayıf kadro {gucZayif:F1} ≥ güçlü kadro {gucGuclu:F1} ";
+        }
+
+        // (7) EKSİK KADRO SESSİZCE 11 UYDURMUYOR. Kaleci hattı boş bırakılırsa köprü `null` +
+        //     sebep döndürmeli; sessiz bir yedek 11 üretmek eksik kadro kuralını yok ederdi.
+        {
+            var eksik = TheBadge.Checks.KadroFixture.Kur(eRules, 502L, 42L);
+            var kalanlar = new System.Collections.Generic.List<TheBadge.World.PlayerState>();
+            for (int i = 0; i < eksik.Oyuncular.Length; i++)
+                if (sqBal.rolHat[eksik.Oyuncular[i].RolId - 1] != 0) kalanlar.Add(eksik.Oyuncular[i]);
+            eksik.Oyuncular = kalanlar.ToArray();
+            var yok = TheBadge.World.SquadBridge.Kur(eksik, 502L, sqBal, true, out string hYok);
+            if (yok != null) hata += "kalecisiz kadro için SESSİZCE 11 kuruldu ";
+            else if (hYok == null || hYok.IndexOf("kaleci", StringComparison.Ordinal) < 0)
+                hata += $"eksik kadro sebebi hattı söylemiyor({hYok}) ";
+        }
+
+        // (8) SIFIR AĞIRLIK REDDEDİLİYOR — balance sözleşmesinin kendi dişi.
+        {
+            var bozuk = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.SquadBalance>(
+                System.IO.File.ReadAllText(FindRepoFile("balance/squad.balance.json")), sqOpts);
+            bozuk.hatProfilleri.forvet.Finishing = 0;
+            bool yakalandi = false;
+            try { bozuk.Validate(); }
+            catch (ArgumentException ex) { yakalandi = ex.Message.IndexOf("Finishing", StringComparison.Ordinal) >= 0; }
+            if (!yakalandi) hata += "sıfır ağırlık Validate'ten GEÇTİ (sessiz ölü alt sistem) ";
+        }
+
+
+        // (10) İNCELEME BULGULARI (Codex, 2026-09-01) — dördü de kapıyla korunuyor.
+        {
+            // (a) SAKAT OYUNCU İLK 11'E GİRMEZ. En güçlü oyuncuyu sakatla; seçilmemeli.
+            var sk = TheBadge.Checks.KadroFixture.Kur(eRules, 620L, 42L);
+            int enGuclu = -1; byte enG = 0;
+            for (int i = 0; i < sk.Oyuncular.Length; i++)
+                if (sk.Oyuncular[i].Guc > enG) { enG = sk.Oyuncular[i].Guc; enGuclu = i; }
+            var once = TheBadge.World.SquadBridge.Kur(sk, 620L, sqBal, true, out _);
+            bool onceVardi = false;
+            for (int i = 0; i < 11; i++) if (once.Starters[i].PlayerId == sk.Oyuncular[enGuclu].PlayerId) onceVardi = true;
+            if (!onceVardi) hata += "[sakat] en güçlü oyuncu sağlamken de seçilmiyordu (test anlamsızlaşır) ";
+            var p0 = sk.Oyuncular[enGuclu]; p0.SakatlikHafta = 3; sk.Oyuncular[enGuclu] = p0;
+            var sonra = TheBadge.World.SquadBridge.Kur(sk, 620L, sqBal, true, out _);
+            if (sonra == null) hata += "[sakat] tek sakatla kadro kurulamaz oldu ";
+            else
+            {
+                for (int i = 0; i < 11; i++)
+                    if (sonra.Starters[i].PlayerId == sk.Oyuncular[enGuclu].PlayerId)
+                        hata += "[sakat] SAKAT oyuncu ilk 11'e girdi ";
+                for (int i = 0; i < sonra.Bench.Length; i++)
+                    if (sonra.Bench[i].PlayerId == sk.Oyuncular[enGuclu].PlayerId)
+                        hata += "[sakat] SAKAT oyuncu yedeğe girdi ";
+            }
+
+            // (b) YEDEKTE HER HAT TEMSİL EDİLİR. Hat hat doldurmak forvet yedeğini hiç
+            //     bırakmıyordu; `AutoSubstitute` rol eşleşmesine +1000 verdiği için bu,
+            //     forvet sakatlanınca mevkisi tutmayan bir oyuncunun girmesi demekti.
+            var yb = TheBadge.World.SquadBridge.Kur(
+                TheBadge.Checks.KadroFixture.Kur(eRules, 621L, 42L), 621L, sqBal, true, out _);
+            var hatVar = new bool[4];
+            for (int i = 0; i < yb.Bench.Length; i++)
+            {
+                int mr = yb.Bench[i].RoleId;
+                if (mr >= 1 && mr <= 4) hatVar[mr - 1] = true;
+            }
+            for (int h = 0; h < 4; h++)
+                if (!hatVar[h]) hata += $"[yedek] {sqBal.hatlar[h]} hattının yedeği YOK ";
+
+            // (c) AYNI HATTAN İKİ YEDEK AYNI ÇAPAYI ALMAZ. Motor değişiklikte GELEN oyuncunun
+            //     çapasını slota kopyalıyor; hepsi aynı yuvaya bakarsa yedek hep aynı noktaya
+            //     düşer. (Tek yedeği olan hatta iddia yok — çakışma ancak ikiden itibaren.)
+            for (int h = 0; h < 4; h++)
+            {
+                int bulundu = 0; var ys = new System.Collections.Generic.List<int>();
+                for (int i = 0; i < yb.Bench.Length; i++)
+                    if (yb.Bench[i].RoleId - 1 == h) { bulundu++; ys.Add(yb.Bench[i].AnchorYmm); }
+                for (int a = 0; a < ys.Count; a++)
+                    for (int b2 = a + 1; b2 < ys.Count; b2++)
+                        if (ys[a] == ys[b2]) hata += $"[yedek çapa] {sqBal.hatlar[h]} hattında iki yedek aynı y ({ys[a]}) ";
+            }
+
+            // (d) YEDEK ÇAPASI HATTIN MERKEZİNDEN BAŞLAR — en uçtan değil.
+            //     YALNIZ ayırt edilebilir bir merkezi OLAN hatlarda anlamlı: forvet hattı
+            //     [-8000, +8000] simetrik, iki yuvanın da |y|'si aynı ve "merkez" diye bir yer
+            //     yok. İlk yazımda bu ayrımı yapmayınca kapı KODU değil KENDİ iddiasını
+            //     yanlış kurduğu için düştü.
+            for (int i = 0; i < yb.Bench.Length; i++)
+            {
+                int h = yb.Bench[i].RoleId - 1;
+                var yy = sqBal.dizilis.capY[h];
+                if (yy.Length < 2) continue;
+                int enYakin = 0;
+                for (int k = 0; k < yy.Length; k++)
+                    if (System.Math.Abs(yy[k]) < System.Math.Abs(yy[enYakin])) enYakin = k;
+                bool merkezAyirtEdilir = false;
+                for (int k = 0; k < yy.Length; k++)
+                    if (System.Math.Abs(yy[k]) != System.Math.Abs(yy[enYakin])) merkezAyirtEdilir = true;
+                if (!merkezAyirtEdilir) continue;
+                int enUc = 0;
+                for (int k = 0; k < yy.Length; k++) if (System.Math.Abs(yy[k]) > System.Math.Abs(yy[enUc])) enUc = k;
+                bool ilkYedek = true;
+                for (int k = 0; k < i; k++) if (yb.Bench[k].RoleId == yb.Bench[i].RoleId) ilkYedek = false;
+                if (ilkYedek && yb.Bench[i].AnchorYmm == yy[enUc])
+                    hata += $"[yedek çapa] {sqBal.hatlar[h]} ilk yedeği hattın EN UCUNDA ";
+            }
+        }
+
+        // (9) KÖPRÜNÜN KURDUĞU KADROYLA MOTOR KENDİ BANDINDA KALIYOR MU?
+        //     Kapının en pahalı ama en değerli iddiası. `M4CalibrationBands` motoru SENTETİK
+        //     kadrolarla ölçüyor; köprü devreye girince motora BAŞKA bir kadro dağılımı gidiyor
+        //     ve kalibrasyon orada da geçerli olmak zorunda.
+        //     BU ÖLÇÜM İKİ HATA YAKALADI: (i) köprü DÜNYA rolünü (1-32) motora olduğu gibi
+        //     veriyordu ve motor `RoleId > 3`ü forvet saydığı için takım 14 forvetle sahaya
+        //     çıkıyordu (40-58 şut, 8-4 skorlar); (ii) rol profili keskinleştikçe ME 11.2 faul
+        //     şiddetindeki `marginGap` sistematik büyüyor ve kart üretiyordu (9,07/maç).
+        //     İKİ BAĞIMSIZ KADRO ÇİFTİ ölçülür: tek çift, profili o çifte uydurmak olurdu.
+        double kGol = 0, kSut = 0, kKart = 0, kKorner = 0, kKirmizi = 0;
+        {
+            const int NK = 40;
+            var ciftler = new (long ev, long dep)[] { (600L, 601L), (610L, 611L) };
+            foreach (var (evId, depId) in ciftler)
+            {
+                var sEv = TheBadge.World.SquadBridge.Kur(
+                    TheBadge.Checks.KadroFixture.Kur(eRules, evId, 42L), evId, sqBal, true, out _);
+                var sDep = TheBadge.World.SquadBridge.Kur(
+                    TheBadge.Checks.KadroFixture.Kur(eRules, depId, 43L), depId, sqBal, false, out _);
+                for (int n = 0; n < NK; n++)
+                {
+                    ulong sd = 0xB21D6EUL + (ulong)n * 7919UL;
+                    var c = new MatchConfig
+                    {
+                        Seed = sd, EngineVersion = "k11", Home = sEv, Away = sDep,
+                        Referee = RefereeProfile.Default, Lod = LodLevel.Lod0
+                    };
+                    var en = new MatchEngine(sd, new CommandQueue(), c, simBal) { AutoManage = true };
+                    var mst = MatchEngine.CreateInitialState(c);
+                    var r = en.Run(ref mst);
+                    kGol += r.HomeGoals + r.AwayGoals; kSut += r.Shots;
+                    kKart += r.Yellows + r.Reds; kKorner += r.Corners; kKirmizi += r.Reds;
+                }
+            }
+            int N = NK * ciftler.Length;
+            kGol /= N; kSut /= N; kKart /= N; kKorner /= N; kKirmizi /= N;
+
+            var kb = sqBal.kalibrasyon;
+            if (kGol < kb.golBandi[0] || kGol > kb.golBandi[1])
+                hata += $"köprü kadrosuyla gol/maç {kGol:F2} bant [{kb.golBandi[0]:F1}-{kb.golBandi[1]:F1}] dışı ";
+            if (kKart < kb.kartBandi[0] || kKart > kb.kartBandi[1])
+                hata += $"köprü kadrosuyla kart/maç {kKart:F2} bant [{kb.kartBandi[0]:F1}-{kb.kartBandi[1]:F1}] dışı ";
+            if (kKorner < kb.kornerAlt) hata += $"köprü kadrosuyla korner/maç {kKorner:F1} < {kb.kornerAlt:F1} ";
+            if (kKirmizi > kb.kirmiziTavani) hata += $"köprü kadrosuyla kırmızı/maç {kKirmizi:F2} > {kb.kirmiziTavani:F2} ";
+            // ŞUT: BORÇ TAVANI. Hedef `sutHedefi` (ME/M4 bandının üstü); bugünkü ölçüm onun
+            // üstünde ve TAVANLA donduruldu. Hedefe düşerse kapı KENDİSİ kırmızıya döner —
+            // borç kapandığında tavanın kaldırılması gerektiğini söyler.
+            if (kSut > kb.sutTavani)
+                hata += $"köprü kadrosuyla şut/maç {kSut:F1} > kayıtlı tavan {kb.sutTavani:F1} (BORÇ KÖTÜLEŞTİ) ";
+            else if (kSut <= kb.sutHedefi)
+                hata += $"şut {kSut:F1} ≤ hedef {kb.sutHedefi:F1} — BORÇ KAPANDI, tavan kaldırılmalı ";
+        }
+
+        Console.WriteLine($"[info] K11 kalibrasyon (80 maç, 2 bağımsız kadro çifti): gol {kGol:F2} · " +
+                          $"şut {kSut:F1} (hedef ≤{sqBal.kalibrasyon.sutHedefi:F0}, borç tavanı {sqBal.kalibrasyon.sutTavani:F0}) · " +
+                          $"kart {kKart:F2} · kırmızı {kKirmizi:F2} · korner {kKorner:F1}");
+        Console.WriteLine($"[info] K11 köprü: {sqBal.dizilis.ad} · ilk 11 + {sqBal.yedekSayisi} yedek · " +
+                          $"tüm 26 nitelik dolu · motor okuması Guc=40 → {gucZayif:F1}, Guc=85 → {gucGuclu:F1}");
+        if (hata.Length > 0) failures += Fail("K11KadroKoprusu", hata);
+        else Pass($"K11KadroKoprusu(26/26 nitelik dolu · motor rolü 1-4 · seçim güce göre · deterministik · " +
+                  $"aynalama · sakat oynamıyor · her hattın yedeği var · Guc MOTORA ulaşıyor {gucZayif:F1}→{gucGuclu:F1} · " +
+                  $"KÖPRÜ KADROSUYLA motor bandında: gol {kGol:F2} kart {kKart:F2} kırmızı {kKirmizi:F2} · şut {kSut:F1} BORÇ tavanı altında)");
+    }
+
     // Tycoon senaryo tablosu: geçerli payload + aksiyona ÖZGÜ kapı 3 ihlali reçetesi.
     // Kapı 3 ihlali üç biçimde kurulabilir: BAŞKA kullanıcı, durum kurulumu, ya da farklı payload.
     var tycoon = new (string aksiyon, Func<TheBadge.Checks.TestPayload> gecerli,
@@ -4356,6 +4636,116 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         var bus = new TheBadge.CommandBus.CommandBus(k4Bands, ctx,
             new SlidingWindowRateLimiter(k4RlCfg, 3, 300_000), new IdempotencyStore());
         return (depo, ctx, exec, bus);
+    }
+
+    // 29z) K11-E — TRANSFER SINK'İ LEDGER'A BAĞLI (ECONOMY_MAP "Transfer bedelleri")
+    // AÇIK UÇ: ECONOMY_MAP beş sink satırı sayıyor; transfer bedelleri HİÇBİR kaleme girmiyordu.
+    // İnşaatın K3 incelemesinde yaşadığı hatanın birebir aynısı: transfer YAPAN bir sezonun
+    // source/sink oranı olduğundan İYİ görünüyordu, çünkü harcama sink'e hiç yazılmıyordu.
+    {
+        string hata = "";
+        long TickBosalt(TheBadge.World.GameState g, out TheBadge.World.WeekLedger L)
+        {
+            var j = new TheBadge.World.WorldJournal();
+            L = TheBadge.World.EconomyTick.Hafta(g, k4Eco, k4Rules, 7UL,
+                                                 TheBadge.World.WeekResult.Beraberlik, false, j);
+            if (!j.Validate(g, out string hj)) throw new InvalidOperationException("tick journal: " + hj);
+            j.Apply(g);
+            return L.TransferTl;
+        }
+
+        // (1) ALIŞ → SINK POZİTİF, tutar bedelle TAM EŞİT.
+        {
+            var w = K5Kur();
+            var g = w.depo.State;
+            g.Club.KasaTl = 500_000_000L;
+            int hedef = -1;
+            for (int i = 0; i < g.Oyuncular.Length; i++)
+                if (g.Oyuncular[i].ClubId == 900L) { hedef = g.Oyuncular[i].PlayerId; break; }
+            const long Bedel = 4_000_000L;
+            g.Club.TransferTeklifleri[0] = new TheBadge.World.TransferOffer
+            {
+                TeklifId = 41, OyuncuId = hedef, TeklifEdenClubId = 500L, BedelTl = Bedel, HaftalikMaasTl = 80_000,
+                SonGecerlilikSezon = g.Takvim.Sezon, SonGecerlilikHafta = (ushort)(g.Takvim.Hafta + 2),
+                SiraTeklifEdende = true, TurSayisi = 2
+            };
+            long kasa0 = g.Club.KasaTl;
+            var o = w.bus.Submit(K4Env("transfer.respond_offer"),
+                new TheBadge.Checks.TestPayload().Set("teklifId", 41L).Set("cevap", "kabul"), w.exec, K4Host, K4User);
+            if (!o.Ok) hata += $"[alış] kabul geçmedi({o.Reason}) ";
+            if (kasa0 - g.Club.KasaTl != Bedel) hata += "[alış] kasa bedel kadar düşmedi ";
+            if (g.Club.DonemTransferGideriTl != Bedel) hata += $"[alış] biriktirici {g.Club.DonemTransferGideriTl} ≠ {Bedel} ";
+            long sink = TickBosalt(g, out var L1);
+            if (sink != Bedel) hata += $"[alış] sink'e {sink} girdi, {Bedel} bekleniyordu ";
+            if (g.Club.DonemTransferGideriTl != 0) hata += "[alış] biriktirici sıfırlanmadı ";
+            if (L1.ToplamGider < Bedel) hata += "[alış] ToplamGider transferi saymıyor ";
+            // ÇİFT MUHASEBE YOK — bağımsız hesapla. `NetTl` KULLANILMADAN beklenen kasa hareketi
+            // kurulur; `TransferTl` kasıtlı dışarıdadır (komut anında düşüldü). Biri onu `NetTl`e
+            // eklerse kasa `TransferTl` kadar sapar. (İnşaatta aynı koruma K3'te kurulmuştu.)
+            long kasaTickOncesi = kasa0 - Bedel;
+            long beklenen = L1.ToplamGelir
+                            - (L1.MaasTl + L1.BakimTl + L1.PersonelTl + L1.IsletmeTl + L1.FaizTl + L1.InsaatTl)
+                            - L1.AnaparaOdemeTl;
+            if (g.Club.KasaTl - kasaTickOncesi != beklenen)
+                hata += $"[alış] kasa ledger'la tutmuyor ({g.Club.KasaTl - kasaTickOncesi} ≠ {beklenen}; " +
+                        $"transfer {L1.TransferTl} çift sayılmış olabilir) ";
+        }
+
+        // (2) SATIŞ → SINK NEGATİF. Kalem NET transfer harcamasıdır; satışı ayrı bir SOURCE
+        //     saymak, ECONOMY_MAP'in source listesinde OLMAYAN bir gelir kalemi uydurmak olurdu.
+        {
+            var w = K5Kur();
+            var g = w.depo.State;
+            int hedef = -1;
+            for (int i = 0; i < g.Oyuncular.Length; i++)
+                if (g.Oyuncular[i].ClubId == 500L) { hedef = g.Oyuncular[i].PlayerId; break; }
+            const long Bedel = 3_000_000L;
+            g.Club.TransferTeklifleri[0] = new TheBadge.World.TransferOffer
+            {
+                TeklifId = 42, OyuncuId = hedef, TeklifEdenClubId = 900L, BedelTl = Bedel, HaftalikMaasTl = 80_000,
+                SonGecerlilikSezon = g.Takvim.Sezon, SonGecerlilikHafta = (ushort)(g.Takvim.Hafta + 2),
+                SiraTeklifEdende = false, TurSayisi = 1
+            };
+            var o = w.bus.Submit(K4Env("transfer.respond_offer"),
+                new TheBadge.Checks.TestPayload().Set("teklifId", 42L).Set("cevap", "kabul"), w.exec, K4Host, K4User);
+            if (!o.Ok) hata += $"[satış] kabul geçmedi({o.Reason}) ";
+            if (g.Club.DonemTransferGideriTl != -Bedel)
+                hata += $"[satış] biriktirici {g.Club.DonemTransferGideriTl} ≠ {-Bedel} ";
+            long sink = TickBosalt(g, out _);
+            if (sink != -Bedel) hata += $"[satış] sink {sink}, {-Bedel} bekleniyordu ";
+        }
+
+        // (3) FESİH → SINK POZİTİF. Fesih bedeli de kulübün transfer piyasasına ödediği paradır.
+        {
+            var w = K5Kur();
+            var g = w.depo.State;
+            g.Club.KasaTl = 500_000_000L;
+            int hedef = -1;
+            for (int i = 0; i < g.Oyuncular.Length; i++)
+                if (g.Oyuncular[i].ClubId == 500L) { hedef = g.Oyuncular[i].PlayerId; break; }
+            long beklenenFesih = 0;
+            for (int i = 0; i < g.Oyuncular.Length; i++)
+                if (g.Oyuncular[i].PlayerId == hedef)
+                    beklenenFesih = TheBadge.World.Valuation.FesihBedeli(g.Oyuncular[i], k5Tb);
+            var o = w.bus.Submit(K4Env("transfer.release_player"),
+                new TheBadge.Checks.TestPayload().Set("oyuncuId", (long)hedef), w.exec, K4Host, K4User);
+            if (!o.Ok) hata += $"[fesih] geçmedi({o.Reason}) ";
+            if (g.Club.DonemTransferGideriTl != beklenenFesih)
+                hata += $"[fesih] biriktirici {g.Club.DonemTransferGideriTl} ≠ {beklenenFesih} ";
+            long sink = TickBosalt(g, out _);
+            if (sink != beklenenFesih) hata += $"[fesih] sink {sink}, {beklenenFesih} bekleniyordu ";
+        }
+
+        // (4) TRANSFERSİZ HAFTA SIFIR YAZAR — kalem "her hafta bir şey" uydurmuyor.
+        {
+            var w = K5Kur();
+            long sink = TickBosalt(w.depo.State, out _);
+            if (sink != 0) hata += $"[boş] transfersiz haftada sink {sink} ≠ 0 ";
+        }
+
+        if (hata.Length > 0) failures += Fail("K11TransferSinki", hata);
+        else Pass("K11TransferSinki(alış +bedel · satış −bedel · fesih +bedel · transfersiz hafta 0 · " +
+                  "biriktirici sıfırlanıyor · çift muhasebe yok)");
     }
 
     // 29a) BAĞLANTI
