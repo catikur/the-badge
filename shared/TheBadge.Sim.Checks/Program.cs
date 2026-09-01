@@ -3635,6 +3635,18 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             SaveSlotId = 1, TeamIdx = 0, PayloadJson = new byte[0]
         };
 
+    // K12-C piyasa yapılandırması — merdiven sonrası borcun PİYASALI ölçümü için.
+    var k12Market = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.MarketBalance>(
+        System.IO.File.ReadAllText(System.IO.Path.Combine(
+            System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json")), "market.balance.json")),
+        new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true });
+    k12Market.Validate();
+    var k12Tb = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.TransferBalance>(
+        System.IO.File.ReadAllText(System.IO.Path.Combine(
+            System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json")), "transfer.balance.json")),
+        new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true });
+    k12Tb.Validate();
+
     // ===================== K10-D — CAPEX SÖZLEŞMESİ (ECONOMY_MAP açık ucu) =====================
     // AÇIK UÇ: `K3EkonomiSozlesmesi` source/sink bandını HİÇ İNŞAAT YAPMAYAN bir referans koşuda
     // ölçüyor (`InsaatTl == 0`). ECONOMY_MAP ise "İnşaat + tesis bakımı"nı sink sayıyor. Yani
@@ -3736,29 +3748,41 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         else Pass($"K10CapexSozlesmesi(merdiven {R.MerdivenSezon} sezon ∈ [{bAlt},{bUst}] · iflas yok · " +
                   $"capex DAHİL {pTam:F3} ∈ [{EkoOranAlt:F2}-{EkoOranUst:F2}] · capex HARİÇ {pIsletme:F3} bandın ÜSTÜNDE = inşaat yük taşıyor)");
 
-        // ---- MERDİVEN SONRASI: KAYITLI BORÇ ----
-        // Merdiven tükendikten sonra referans senaryoda GERİYE SINK KALMIYOR: kapasite 30K→90K
-        // olmuş, bakım tier'la doğrusal artmış ama gelir katlanmış; oran ~2,25'te kilitleniyor.
-        // Bu bir kapı hatası değil SENARYO kapsamının sonucudur: ECONOMY_MAP beş sink satırı
-        // sayıyor, referans koşu bunlardan TRANSFER BEDELLERİNİ hiç işletmiyor. Kapı bugünkü
-        // değeri TAVANLA dondurur (sessizce kötüleşmesin) ve hedefi yazar; hedefe nasıl
-        // inileceği Atilla'nın kararı — DECISIONS "Bekleyen kararlar".
+        // ---- MERDİVEN SONRASI: KAYITLI BORÇ (K12-C'de PİYASALI koşuya taşındı) ----
+        // K10'da bu ölçüm transfer sink'i HİÇ İŞLEMEYEN bir koşuda yapılıyordu ve 2,25 çıkıyordu.
+        // K12-C piyasayı kurdu (sezon başı havuz + pazarlık + kadro dönüşü) ve ölçüm 1,91'e indi:
+        // sink GERÇEKTEN çalışıyor. Ama borç KAPANMADI ve sebebi artık ölçülü —
+        // HAVUZUN KALİTE TAVANI: kadro havuzun tepesine ulaşınca alacak kimse kalmıyor, kasa
+        // şişiyor (32 sezonda 3,3 milyar ₺). Sınırlı bir yetenek havuzu sınırsız geliri ememez.
+        // Kalan asıl mesele gelirin kendisi: stadyum kapasitesi üçe katlanıp KALICI olarak
+        // yüksek gelir üretiyor, hiçbir gider onunla ölçeklenmiyor.
         {
             string h2 = "";
-            if (R.MerdivenSezon < 0) h2 += "merdiven tamamlanmadı — sonrası ölçülemez ";
+            var pSt = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+            var pR = TheBadge.Checks.KademeliInsaatKosu.Kos(pSt, eco, eRules, 0xEC0A0D1CUL, 24,
+                                                            k3Bands, k3RlCfg, 42L, k12Market, k12Tb);
+            if (pR.MerdivenSezon < 0) h2 += "piyasalı koşuda merdiven tamamlanmadı — sonrası ölçülemez ";
             else
             {
-                double sonra = TheBadge.Checks.KademeliInsaatKosu.MerdivenSonrasiOran(
-                    st0, eco, eRules, 0xEC0A0D1CUL, 5, k3Bands, k3RlCfg, 42L);
+                long sg = 0, ss = 0;
+                for (int i = pR.MerdivenSezon; i < pR.Sezonlar.Count; i++)
+                { sg += pR.Sezonlar[i].ToplamGelir; ss += pR.Sezonlar[i].ToplamGider; }
+                double sonra = ss == 0 ? 0 : (double)sg / ss;
                 double tavan = eco.capex.merdivenSonrasiOranTavani, hedef = eco.capex.merdivenSonrasiHedefOran;
-                Console.WriteLine($"[info] K10 merdiven sonrası: source/sink {sonra:F3} (tavan {tavan:F2} · hedef {hedef:F2}) — " +
-                                  $"referans senaryoda transfer sink'i İŞLETİLMİYOR");
-                if (sonra > tavan) h2 += $"merdiven sonrası oran {sonra:F3} > kayıtlı tavan {tavan:F2} (borç KÖTÜLEŞTİ) ";
-                if (sonra <= hedef) h2 += $"oran {sonra:F3} ≤ hedef {hedef:F2} — BORÇ KAPANDI, tavan kaldırılmalı ve bu kapı düşmeli ";
+                Console.WriteLine($"[info] K10/K12 merdiven sonrası (PİYASALI, {pR.Sezonlar.Count - pR.MerdivenSezon} sezon): " +
+                                  $"source/sink {sonra:F3} (tavan {tavan:F2} · hedef {hedef:F2}) · " +
+                                  $"havuza giren {pR.PiyasayaGiren} · alım {pR.Transfer} · fesih {pR.Fesih} · " +
+                                  $"transfer sink {pR.Toplam.TransferTl / 1e6:F0}M₺");
+                if (sonra > tavan) h2 += $"merdiven sonrası oran {sonra:F3} > kayıtlı tavan {tavan:F2} (BORÇ KÖTÜLEŞTİ) ";
+                if (sonra <= hedef) h2 += $"oran {sonra:F3} ≤ hedef {hedef:F2} — BORÇ KAPANDI, tavan kaldırılmalı ";
+                // PİYASA GERÇEKTEN İŞLİYOR olmalı: sink sıfırsa yukarıdaki sayı piyasayı değil
+                // piyasasız koşuyu ölçerdi ve borcun "iyileşmesi" sahte olurdu.
+                if (pR.Toplam.TransferTl <= 0) h2 += "piyasalı koşuda transfer sink'i SIFIR (piyasa işlemiyor) ";
+                if (pR.Transfer <= 0) h2 += "piyasalı koşuda hiç alım olmadı ";
             }
             if (h2.Length > 0) failures += Fail("K10MerdivenSonrasiSink", h2);
-            else Pass($"K10MerdivenSonrasiSink(BORÇ: merdiven tükenince sink kalmıyor — oran tavanla donduruldu, hedef " +
-                      $"{eco.capex.merdivenSonrasiHedefOran:F2}; transfer sink'i modellenince bu kapı düşer)");
+            else Pass($"K10MerdivenSonrasiSink(BORÇ: piyasa kuruldu ve çalışıyor, oran 2,25 → tavan altı; " +
+                      $"kapanmama sebebi HAVUZUN KALİTE TAVANI — sınırlı havuz sınırsız geliri ememez)");
         }
     }
 

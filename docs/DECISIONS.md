@@ -2409,6 +2409,35 @@ K11 köprü kararının (a) seçeneği: ME 12.1'e başlangıç enerjisi. Atilla 
 - **SPEC NOTU:** bu iki ek ME 12.1/12.3'e yapılmış EKLERDİR; spec dosyasına dokunulmadı, bu kayıt
   bağlayıcıdır (ME 13.4 precedent'i) ve sonraki ME revizyonunda işlenir.
 
+### K12-C: transfer piyasası kuruldu — borç İYİLEŞTİ ama kapanmadı, sebebi artık ÖLÇÜLÜ (2026-09-01)
+K11-E'nin bıraktığı yer: kalem (`WeekLedger.TransferTl`) bağlıydı ama borç ölçülemiyordu, çünkü
+piyasa yoktu. Atilla "hepsini yap" dedi; piyasa kuruldu.
+
+- **`TransferMarket` (World):** her sezon başı havuza yeni oyuncular katılır (`market.balance.json`
+  [KALİBRE]) — bir kısmı serbest, kalanı rakip kulüplerde. Tüm çekilişler sayaç-RNG + save seed.
+  Rakip kulüplerin KENDİ ekonomileri modellenmiyor ve bu gizlenmiyor: onlar oyuncu SAHİBİdir,
+  `Valuation` kurallarıyla pazarlık eder. Asgari gerçeklik bilinçli — daha fazlasını uydurmak
+  ölçümü varsayımın kendisine çevirirdi.
+- **Merdiven koşusuna transfer hattı eklendi:** teklif → karşı taraf sürücüsü (`TransferTick`) →
+  kabul, hepsi Command Bus'tan. Artı kadro dönüşü: kadro tavandayken piyasada belirgin daha iyisi
+  varsa en zayıf feshedilir (fesih bedeli de transfer sink'i).
+- **POLİTİKA İKİ KEZ DÜZELTİLDİ, ikisi de ölçümle:**
+  1. *Sınırsız politika iflas etti.* Kulüp hem inşa hem transfer yapmaya çalıştı; 6 alım kalıcı
+     maaş yükü olarak işletme fazlasının TAMAMINI yedi (oran 1,13 → 1,01), merdiven hiç bitmedi,
+     kasa −13M. Asıl sink BEDEL değil ÜCRET. → ECONOMY_MAP'in kendi maaş kuralı (%55 tavan) eklendi.
+  2. *Öncelik yoktu.* İki sink tek fazla için yarışıyordu. Sıralama ekonomik gerçekten geldi:
+     **capex SONLUdur ve geliri KALICI büyütür; transfer SONSUZ sink'tir ve geliri büyütmez.**
+     Önce merdiven, sonra kadro. → merdiven 11 sezonda bitti, sonra transfer devreye girdi.
+- **SONUÇ: merdiven sonrası oran 2,25 → 1,911.** Sink GERÇEKTEN çalışıyor (14 alım · 5 fesih ·
+  64M₺ transfer sink'i). Borç ratchet'i 2,40 → 2,00 sıkıldı ve ölçüm PİYASALI koşuya taşındı.
+- **BORÇ KAPANMADI ve sebebi artık ÖLÇÜLÜ: HAVUZUN KALİTE TAVANI.** Kadro havuzun tepesine
+  ulaşınca alacak kimse kalmıyor; 32 sezonda kasa 3,3 milyar ₺'ye çıkıyor. **Sınırlı bir yetenek
+  havuzu sınırsız geliri ememez.** Kalan asıl mesele gelirin kendisi: stadyum kapasitesi üçe
+  katlanıp KALICI yüksek gelir üretiyor, hiçbir gider onunla ölçeklenmiyor.
+- **Kapı bunu koruyor:** `K10MerdivenSonrasiSink` artık piyasalı koşuyu ölçüyor ve piyasanın
+  GERÇEKTEN işlediğini ayrıca denetliyor (transfer sink'i sıfırsa ya da hiç alım yoksa düşer) —
+  aksi hâlde "borç iyileşti" sahte bir iyileşme olurdu.
+
 ## Bekleyen kararlar
 
 - ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —
@@ -2450,14 +2479,19 @@ K11 köprü kararının (a) seçeneği: ME 12.1'e başlangıç enerjisi. Atilla 
   edilir.** Dokümanın zaten saydığı sink'i modellemek, yeni mekanik icat etmekten ucuz ve doğru;
   (c) (tesis tavanını açmak) Top Eleven anti-pattern'ine yakın olduğu için elendi, (b) (maaş
   enflasyonu) kadro gücü sistemine bağlı olduğu için sonraki dilime bırakıldı. Uygulama: K11-E.
-- **Oyuncu piyasası modeli — merdiven sonrası sink borcunun ÖN KOŞULU (K11-E, 2026-08-31).**
-  Transfer kalemi ledger'a bağlandı ve kapıyla korunuyor, ama borcu kapatacak ölçüm için
-  SÜREKLİ bir piyasa gerekiyor: bugün oyuncu havuzu fikstürle sınırlı, yenilenmiyor ve rakip
-  kulüplerin bütçesi yok. Seçenekler: (a) havuz yenilenmesi + rakip kulüp bütçeleri (dünya
-  katmanına çok-kulüp ekonomisi girer — büyük dilim); (b) referans koşuya SENTETİK bir piyasa
-  (havuz her sezon yenilenir, karşı taraf sabit bir kabul eşiğiyle davranır — ucuz, ama
-  ölçtüğü şey gerçek piyasa değil, varsayımın kendisi); (c) borç açık kalsın, kapı tavanla
-  korusun. **Öneri: (c) bugün, (a) FAZ 05'te** — (b) kapının ölçtüğünü ayarına çevirir.
+- ~~**Oyuncu piyasası modeli — merdiven sonrası sink borcunun ÖN KOŞULU (K11-E).**~~ →
+  **YAPILDI (2026-09-01, K12-C):** seçenek (a)'nın asgari hâli — havuz yenilenmesi + pazarlık +
+  kadro dönüşü kuruldu. Borç 2,25 → 1,911'e indi ama KAPANMADI.
+- **Sınırsız gelir büyümesi: merdiven sonrası borcun ASIL kaynağı (K12-C ölçümü, 2026-09-01).**
+  Piyasa kuruldu ve çalışıyor, ama havuzun kalite tavanı yüzünden sink doyuyor: kadro havuzun
+  tepesine ulaşınca kasa şişiyor (32 sezonda 3,3 milyar ₺). Sorun sink tarafında değil KAYNAK
+  tarafında: stadyum kapasitesi üçe katlanıp kalıcı yüksek gelir üretiyor ve hiçbir gider onunla
+  ölçeklenmiyor. Seçenekler: (a) maaş enflasyonu — kulüp büyüdükçe oyuncu ücret talebi büyüsün
+  (piyasa modeli hazır, `Valuation.MaasTalebi`'ye kulüp ölçeği girer); (b) havuz kalitesi kulüple
+  birlikte büyüsün (üst lig oyuncuları görünür olsun) — sink doymaz ama "her sezon daha iyisi
+  var" hissi Top Eleven'a yaklaşır, dikkat; (c) gelir tarafı doygunlaşsın (kapasite ötesi seyirci
+  getirisi azalan verimli olsun). **Öneri: (a) + (c)** — ikisi de ECONOMY_MAP'in kendi mantığı
+  içinde kalır ve rekabeti bozmaz. KARAR ATİLLA'NIN.
 - ~~**Motorun faul/kart kalibrasyonu rol ayrımı olan kadrolarla yeniden yapılsın mı?**~~ →
   **YAPILDI (2026-09-01, K12-A):** seçenek (a). Kadro profili gerçekçiliğe geri döndü, köprü
   kadrosu motorun kendi bantlarında. Kalan tek kaçak (düz dağılımda kırmızı) bant gevşetilmeden

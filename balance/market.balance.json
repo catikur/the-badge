@@ -1,0 +1,16 @@
+{
+  "surum": 1,
+  "aciklama": "K12-C transfer piyasasi [KALIBRE]. Her sezon basi havuza yeni oyuncular katilir; bir kismi serbest, kalani rakip kuluplerde. Amac ECONOMY_MAP 'Transfer bedelleri' sink'ini SUREKLI kilmak: K10MerdivenSonrasiSink borcu, merdiven tukendikten sonra harcanacak bir sey kalmadigi icin olculemiyordu. Rakip kuluplerin KENDI ekonomileri modellenmiyor - onlar oyuncu SAHIBIdir ve Valuation kurallariyla pazarlik eder; tam cok-kulup ekonomisi ayri bir dilim.",
+  "sezonBasiGiris": 24,
+  "serbestPayiYuzde": 25,
+  "gucAlt": 45,
+  "gucUst": 88,
+  "yasAlt": 17,
+  "yasUst": 33,
+  "potansiyelEkAlt": 0,
+  "potansiyelEkUst": 14,
+  "sozlesmeHaftaAlt": 52,
+  "sozlesmeHaftaUst": 208,
+  "rakipKulupSayisi": 19,
+  "havuzTavani": 600
+}
