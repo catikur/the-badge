@@ -3868,6 +3868,83 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         }
 
 
+        // (10) İNCELEME BULGULARI (Codex, 2026-09-01) — dördü de kapıyla korunuyor.
+        {
+            // (a) SAKAT OYUNCU İLK 11'E GİRMEZ. En güçlü oyuncuyu sakatla; seçilmemeli.
+            var sk = TheBadge.Checks.KadroFixture.Kur(eRules, 620L, 42L);
+            int enGuclu = -1; byte enG = 0;
+            for (int i = 0; i < sk.Oyuncular.Length; i++)
+                if (sk.Oyuncular[i].Guc > enG) { enG = sk.Oyuncular[i].Guc; enGuclu = i; }
+            var once = TheBadge.World.SquadBridge.Kur(sk, 620L, sqBal, true, out _);
+            bool onceVardi = false;
+            for (int i = 0; i < 11; i++) if (once.Starters[i].PlayerId == sk.Oyuncular[enGuclu].PlayerId) onceVardi = true;
+            if (!onceVardi) hata += "[sakat] en güçlü oyuncu sağlamken de seçilmiyordu (test anlamsızlaşır) ";
+            var p0 = sk.Oyuncular[enGuclu]; p0.SakatlikHafta = 3; sk.Oyuncular[enGuclu] = p0;
+            var sonra = TheBadge.World.SquadBridge.Kur(sk, 620L, sqBal, true, out _);
+            if (sonra == null) hata += "[sakat] tek sakatla kadro kurulamaz oldu ";
+            else
+            {
+                for (int i = 0; i < 11; i++)
+                    if (sonra.Starters[i].PlayerId == sk.Oyuncular[enGuclu].PlayerId)
+                        hata += "[sakat] SAKAT oyuncu ilk 11'e girdi ";
+                for (int i = 0; i < sonra.Bench.Length; i++)
+                    if (sonra.Bench[i].PlayerId == sk.Oyuncular[enGuclu].PlayerId)
+                        hata += "[sakat] SAKAT oyuncu yedeğe girdi ";
+            }
+
+            // (b) YEDEKTE HER HAT TEMSİL EDİLİR. Hat hat doldurmak forvet yedeğini hiç
+            //     bırakmıyordu; `AutoSubstitute` rol eşleşmesine +1000 verdiği için bu,
+            //     forvet sakatlanınca mevkisi tutmayan bir oyuncunun girmesi demekti.
+            var yb = TheBadge.World.SquadBridge.Kur(
+                TheBadge.Checks.KadroFixture.Kur(eRules, 621L, 42L), 621L, sqBal, true, out _);
+            var hatVar = new bool[4];
+            for (int i = 0; i < yb.Bench.Length; i++)
+            {
+                int mr = yb.Bench[i].RoleId;
+                if (mr >= 1 && mr <= 4) hatVar[mr - 1] = true;
+            }
+            for (int h = 0; h < 4; h++)
+                if (!hatVar[h]) hata += $"[yedek] {sqBal.hatlar[h]} hattının yedeği YOK ";
+
+            // (c) AYNI HATTAN İKİ YEDEK AYNI ÇAPAYI ALMAZ. Motor değişiklikte GELEN oyuncunun
+            //     çapasını slota kopyalıyor; hepsi aynı yuvaya bakarsa yedek hep aynı noktaya
+            //     düşer. (Tek yedeği olan hatta iddia yok — çakışma ancak ikiden itibaren.)
+            for (int h = 0; h < 4; h++)
+            {
+                int bulundu = 0; var ys = new System.Collections.Generic.List<int>();
+                for (int i = 0; i < yb.Bench.Length; i++)
+                    if (yb.Bench[i].RoleId - 1 == h) { bulundu++; ys.Add(yb.Bench[i].AnchorYmm); }
+                for (int a = 0; a < ys.Count; a++)
+                    for (int b2 = a + 1; b2 < ys.Count; b2++)
+                        if (ys[a] == ys[b2]) hata += $"[yedek çapa] {sqBal.hatlar[h]} hattında iki yedek aynı y ({ys[a]}) ";
+            }
+
+            // (d) YEDEK ÇAPASI HATTIN MERKEZİNDEN BAŞLAR — en uçtan değil.
+            //     YALNIZ ayırt edilebilir bir merkezi OLAN hatlarda anlamlı: forvet hattı
+            //     [-8000, +8000] simetrik, iki yuvanın da |y|'si aynı ve "merkez" diye bir yer
+            //     yok. İlk yazımda bu ayrımı yapmayınca kapı KODU değil KENDİ iddiasını
+            //     yanlış kurduğu için düştü.
+            for (int i = 0; i < yb.Bench.Length; i++)
+            {
+                int h = yb.Bench[i].RoleId - 1;
+                var yy = sqBal.dizilis.capY[h];
+                if (yy.Length < 2) continue;
+                int enYakin = 0;
+                for (int k = 0; k < yy.Length; k++)
+                    if (System.Math.Abs(yy[k]) < System.Math.Abs(yy[enYakin])) enYakin = k;
+                bool merkezAyirtEdilir = false;
+                for (int k = 0; k < yy.Length; k++)
+                    if (System.Math.Abs(yy[k]) != System.Math.Abs(yy[enYakin])) merkezAyirtEdilir = true;
+                if (!merkezAyirtEdilir) continue;
+                int enUc = 0;
+                for (int k = 0; k < yy.Length; k++) if (System.Math.Abs(yy[k]) > System.Math.Abs(yy[enUc])) enUc = k;
+                bool ilkYedek = true;
+                for (int k = 0; k < i; k++) if (yb.Bench[k].RoleId == yb.Bench[i].RoleId) ilkYedek = false;
+                if (ilkYedek && yb.Bench[i].AnchorYmm == yy[enUc])
+                    hata += $"[yedek çapa] {sqBal.hatlar[h]} ilk yedeği hattın EN UCUNDA ";
+            }
+        }
+
         // (9) KÖPRÜNÜN KURDUĞU KADROYLA MOTOR KENDİ BANDINDA KALIYOR MU?
         //     Kapının en pahalı ama en değerli iddiası. `M4CalibrationBands` motoru SENTETİK
         //     kadrolarla ölçüyor; köprü devreye girince motora BAŞKA bir kadro dağılımı gidiyor
@@ -3928,7 +4005,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                           $"tüm 26 nitelik dolu · motor okuması Guc=40 → {gucZayif:F1}, Guc=85 → {gucGuclu:F1}");
         if (hata.Length > 0) failures += Fail("K11KadroKoprusu", hata);
         else Pass($"K11KadroKoprusu(26/26 nitelik dolu · motor rolü 1-4 · seçim güce göre · deterministik · " +
-                  $"aynalama · Guc MOTORA ulaşıyor {gucZayif:F1}→{gucGuclu:F1} · eksik kadro sebeple reddediliyor · " +
+                  $"aynalama · sakat oynamıyor · her hattın yedeği var · Guc MOTORA ulaşıyor {gucZayif:F1}→{gucGuclu:F1} · " +
                   $"KÖPRÜ KADROSUYLA motor bandında: gol {kGol:F2} kart {kKart:F2} kırmızı {kKirmizi:F2} · şut {kSut:F1} BORÇ tavanı altında)");
     }
 

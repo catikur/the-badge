@@ -134,12 +134,18 @@ namespace TheBadge.World
         {
             if (st == null) throw new ArgumentNullException(nameof(st));
             if (bal == null) throw new ArgumentNullException(nameof(bal));
+            // SAKAT OYUNCU SAHAYA ÇIKMAZ (`SakatlikHafta` 0 = sağlam; `SquadActions` kaptanlıkta
+            // aynı ölçütü kullanıyor). Süzme BURADA yapılır, `KurDizi`de değil: `KurDizi`nin
+            // sözleşmesi "bunlar UYGUN oyuncular"dır ve rakip kulüpler gibi sakatlık modellemeyen
+            // çağıranlar o sözleşmeyi zaten karşılar. Süzme sonrası hat dolmuyorsa köprü `null`
+            // döner — eksik kadroyla maça çıkmak bir oyun kuralıdır, gizlenecek bir ayrıntı değil.
             int n = 0;
-            for (int i = 0; i < st.Oyuncular.Length; i++) if (st.Oyuncular[i].ClubId == clubId) n++;
+            for (int i = 0; i < st.Oyuncular.Length; i++)
+                if (st.Oyuncular[i].ClubId == clubId && st.Oyuncular[i].SakatlikHafta == 0) n++;
             var id = new int[n]; var rol = new byte[n]; var guc = new byte[n];
             for (int i = 0, k = 0; i < st.Oyuncular.Length; i++)
             {
-                if (st.Oyuncular[i].ClubId != clubId) continue;
+                if (st.Oyuncular[i].ClubId != clubId || st.Oyuncular[i].SakatlikHafta > 0) continue;
                 id[k] = st.Oyuncular[i].PlayerId; rol[k] = st.Oyuncular[i].RolId; guc[k] = st.Oyuncular[i].Guc; k++;
             }
             return KurDizi(bal, evSahibi, id, rol, guc, out hata);
@@ -149,6 +155,10 @@ namespace TheBadge.World
         /// rakip kulüpler (lig doldurma) dünya durumunda YAŞAMIYOR, ama onların kadrosu da AYNI
         /// eşlemeden geçmeli. İki ayrı diziliş mantığı yazmak, iki takımın farklı kurallarla
         /// sahaya çıkması demekti.
+        ///
+        /// SÖZLEŞME: gelen diziler YALNIZ UYGUN (sakat olmayan) oyuncuları taşır. Süzme
+        /// `Kur(GameState,…)` yolunda yapılır; sakatlık modellemeyen çağıranlar (lig doldurma)
+        /// bu sözleşmeyi zaten karşılar.
         ///
         /// GİRDİ SIRASI ÖNEMSİZDİR ama SONUÇ KANONİKTİR: hat içi sıralama güce göre azalan,
         /// eşitlikte PlayerId artan. Eşitlik kuralı şart — `Guc` bayt, eşitlik sık ve kararsız
@@ -210,15 +220,29 @@ namespace TheBadge.World
                                                 isaret * bal.dizilis.capX[h], bal.dizilis.capY[h][k]);
                 }
 
+            // YEDEKLER: HAT HAT DEĞİL, SIRAYLA (round-robin). Hat hat doldurmak, 18 kişilik
+            // varsayılan kadroda 5 yuvayı ilk üç hatta harcıyor ve FORVET YEDEĞİ HİÇ KALMIYORDU
+            // (inceleme bulgusu, Codex P2). `AutoSubstitute` rol eşleşmesine +1000 veriyor
+            // (MatchEngine:2775), yani forvet sakatlanınca yerine mevkisi tutmayan biri giriyordu.
+            // Sıralı dağıtım her hatta en az bir yedek garanti eder.
             var yedekler = new System.Collections.Generic.List<PlayerEntry>();
-            for (int h = 0; h < 4 && yedekler.Count < bal.yedekSayisi; h++)
-                for (int k = 0; k < hatta[h].Count && yedekler.Count < bal.yedekSayisi; k++)
+            var hatYedek = new int[4];              // hat başına kaç yedek yazıldı
+            var sonraki = new int[4];               // hat içinde nereye kadar bakıldı
+            bool eklendi = true;
+            while (yedekler.Count < bal.yedekSayisi && eklendi)
+            {
+                eklendi = false;
+                for (int h = 0; h < 4 && yedekler.Count < bal.yedekSayisi; h++)
                 {
-                    int i = hatta[h][k];
-                    if (kullanildi[i]) continue;
+                    while (sonraki[h] < hatta[h].Count && kullanildi[hatta[h][sonraki[h]]]) sonraki[h]++;
+                    if (sonraki[h] >= hatta[h].Count) continue;
+                    int i = hatta[h][sonraki[h]++];
+                    kullanildi[i] = true;
                     yedekler.Add(Giris(playerId[i], h, guc[i], bal,
-                                       isaret * bal.dizilis.capX[h], bal.dizilis.capY[h][0]));
+                                       isaret * bal.dizilis.capX[h], YedekCapaY(bal, h, hatYedek[h]++)));
+                    eklendi = true;
                 }
+            }
             sheet.Bench = yedekler.ToArray();
             sheet.Validate(evSahibi ? "ev" : "deplasman");
             return sheet;
@@ -255,6 +279,28 @@ namespace TheBadge.World
                     Kicking = N(24), Throwing = N(25)
                 }
             };
+        }
+
+        /// <summary>YEDEĞİN ÇAPASI — hattın MERKEZİNDEN dışa doğru. Motor değişiklikte GELEN
+        /// oyuncunun çapasını slota KOPYALIYOR (`ApplyPendingSubs`, MatchEngine:2896), yani
+        /// yedeğin çapası oyuncunun sahada duracağı yeri belirliyor. Hepsine `capY[h][0]`
+        /// vermek, sağ bek sakatlanınca yerine gireni EN SOLA taşıyordu (inceleme bulgusu,
+        /// Codex P2). Köprü kimin sakatlanacağını bilemez; bilinebilecek en az yanlış seçim
+        /// merkezdir — ortalama yer değiştirmeyi küçültür. Aynı hattan ikinci yedek bir sonraki
+        /// merkeze yakın yuvayı alır.</summary>
+        static int YedekCapaY(SquadBalance bal, int hat, int sira)
+        {
+            var y = bal.dizilis.capY[hat];
+            if (y.Length == 1) return y[0];
+            // |y|'ye göre artan sıralama — merkez önce. Kanonik: eşitlikte indeks artan.
+            var sirali = new int[y.Length];
+            for (int i = 0; i < y.Length; i++) sirali[i] = i;
+            Array.Sort(sirali, (a, b) =>
+            {
+                int c = Math.Abs(y[a]).CompareTo(Math.Abs(y[b]));
+                return c != 0 ? c : a.CompareTo(b);
+            });
+            return y[sirali[sira % y.Length]];
         }
 
         /// <summary>`Guc` × ağırlık → 1-99 nitelik. TABAN 1: sıfır nitelik alt sistemi sessizce

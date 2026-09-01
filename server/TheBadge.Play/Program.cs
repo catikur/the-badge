@@ -194,7 +194,9 @@ void Kadro()
     for (int i = 0; i < 11; i++)
     {
         var e = sheet.Starters[i];
-        int hat = sqBal.rolHat[e.RoleId - 1];
+        // MOTOR ROLÜNDEN DOĞRUDAN: `rolHat`i burada ikinci kez uygulamak, motor rolü 2/3/4'ü
+        // dünya rolü sanıp hepsini "DF" gösteriyordu (inceleme bulgusu, Codex P2).
+        int hat = e.RoleId - 1;
         byte guc = 0;
         for (int k = 0; k < st.Oyuncular.Length; k++) if (st.Oyuncular[k].PlayerId == e.PlayerId) guc = st.Oyuncular[k].Guc;
         Yaz($"   {hatAd[hat]}  #{e.PlayerId,-4} güç {guc,3}   pas {e.Attributes.Passing,3} " +
