@@ -28,8 +28,14 @@ namespace TheBadge.World
     {
         /// <summary>Bir haftayı hesaplar ve yazmalarını journal'a kuyruklar. Dönen `WeekLedger`
         /// yalnız RAPORdur (kasa hareketi journal'dadır).</summary>
+        /// <param name="tb">Ücret gözden geçirmesi için gerekli (K13-A). ZORUNLU parametre,
+        /// isteğe bağlı DEĞİL: varsayılan verseydim mevcut çağıranlar derlenmeye devam eder ve
+        /// ücret enflasyonunu SESSİZCE atlardı — bu oturumda tam olarak bu desen üç kez ısırdı
+        /// (`MacSonrasi.Isle` çağrılmıyordu, `LigKurucu.HaftaSonu` çağrılmıyordu). Derleyici
+        /// her çağıranı karar vermeye zorlasın.</param>
         public static WeekLedger Hafta(GameState st, EconomyBalance eco, WorldRules kural,
-                                       ulong saveSeed, WeekResult sonuc, bool evMaci, WorldJournal j)
+                                       ulong saveSeed, WeekResult sonuc, bool evMaci,
+                                       TransferBalance tb, WorldJournal j)
         {
             if (st == null) throw new ArgumentNullException(nameof(st));
             if (eco == null) throw new ArgumentNullException(nameof(eco));
@@ -76,8 +82,16 @@ namespace TheBadge.World
             if (sonuc == WeekResult.Galibiyet) L.PrimTl = eco.gelir.galibiyetPrimi;
             else if (sonuc == WeekResult.Beraberlik) L.PrimTl = eco.gelir.beraberlikPrimi;
 
+            // ---------- SEZON BAŞI ÜCRET GÖZDEN GEÇİRMESİ (K13-A) ----------
+            // Kombine geliriyle AYNI ANDA, sezonun ilk haftasında. Burada duruyor çünkü haftalık
+            // dünya adımı zaten atlanamaz; ayrı bir çağrı yeri, çağrılmayı unutulabilecek bir
+            // yer daha demekti.
+            long maasGideri = st.Club.HaftalikMaasGiderTl;
+            if (st.Takvim.Hafta == 1 && st.Takvim.Sezon > 1)
+                maasGideri = UcretEnflasyonu.SezonBasi(st, eco, tb, j);
+
             // ---------- GİDER ----------
-            L.MaasTl = st.Club.HaftalikMaasGiderTl;
+            L.MaasTl = maasGideri;
             L.BakimTl = BakimGideri(st, eco);
             // İNŞAAT: komutla yapılan harcama biriktiricisi bu haftanın sink'ine boşaltılır.
             // Kasadan komut anında düşüldüğü için `NetTl`e girmez (WeekLedger notu).
@@ -123,6 +137,35 @@ namespace TheBadge.World
 
         /// <summary>Seyirci sayısı — GDD 4.2: "kapasite × doluluk; doluluk takım başarısına ve
         /// bilet fiyatına duyarlıdır". Tesis tier'ı da hafifçe etkiler (GDD 4.1 konfor).</summary>
+        /// <summary>ETKİN KAPASİTE — K13-A gelir doygunluğu. `referansKapasite`ye kadar her
+        /// koltuk normal dolar; ötesi `ekKapasiteVerimi` oranında. ŞEHRİN TARAFTARI SONSUZ
+        /// DEĞİLDİR ve ilk model bunu hiç modellemiyordu: doluluk yalnız fiyata/forma/tesise
+        /// bakıyor, kapasite ise doğrudan çarpan olarak giriyordu — stadyumu üçe katlamak geliri
+        /// üçe katlıyordu, sonsuza dek. Ölçülen sonuç: merdiven sonrası gelir 1,73 → 3,14 milyar,
+        /// gider 1,67 → 1,58 milyar, oran 1,99'da kilitli.
+        ///
+        /// SERT KESME DEĞİL, AZALAN VERİM: stadyum büyütmek hâlâ kazandırır (yoksa capex
+        /// merdiveninin son basamakları anlamsızlaşır ve `K10CapexSozlesmesi` haklı olarak
+        /// kırmızıya döner), ama her yeni koltuk öncekinden az getirir.</summary>
+        public static double EtkinKapasite(GameState st, EconomyBalance eco)
+        {
+            double kap = st.Club.StadyumKapasite;
+            double referans = eco.doygunluk.referansKapasite;
+            if (kap <= referans) return kap;
+            return referans + (kap - referans) * eco.doygunluk.ekKapasiteVerimi;
+        }
+
+        /// <summary>KULÜP ÖLÇEĞİ — ücret talebinin çarpanı (K13-A ikinci kol). ETKİN kapasiteden
+        /// türetilir: oyuncu kulübün BETONUNA değil KAZANMA GÜCÜNE göre ücret ister. Doygunluk
+        /// kolu geliri kısarken ölçek de kısılır — iki kol aynı büyüklüğe bağlı kalır, biri
+        /// diğerinin varsayımını bozmaz.</summary>
+        public static double KulupOlcegi(GameState st, EconomyBalance eco)
+        {
+            double oran = EtkinKapasite(st, eco) / eco.doygunluk.referansKapasite;
+            double o = 1.0 + eco.doygunluk.ucretOlcekAgirligi * (oran - 1.0);
+            return o < 1.0 ? 1.0 : o;   // küçülen kulüp ücreti DÜŞÜRMEZ (sözleşme aşağı inmez)
+        }
+
         public static int Seyirci(GameState st, EconomyBalance eco, ulong saveSeed, uint hafta)
         {
             double fiyatOrani = OrtalamaBiletOrani(st, eco);
@@ -137,7 +180,9 @@ namespace TheBadge.World
                  * eco.seyirci.varyansSigma * Kok3;
             if (d < eco.seyirci.minDoluluk) d = eco.seyirci.minDoluluk;
             if (d > 1.0) d = 1.0;
-            return (int)Math.Round(st.Club.StadyumKapasite * d, MidpointRounding.AwayFromZero);
+            // KAPASİTE DEĞİL ETKİN KAPASİTE (K13-A): doygunluk noktasının ötesindeki koltuklar
+            // azalan verimle dolar.
+            return (int)Math.Round(EtkinKapasite(st, eco) * d, MidpointRounding.AwayFromZero);
         }
 
         /// <summary>Bilet geliri — tribün başına kapasite payı × o tribünün fiyatı.</summary>
@@ -163,7 +208,9 @@ namespace TheBadge.World
             double talep = eco.kombine.kapasiteOrani * (1.0 - eco.kombine.elastikiyet * (oran - 1.0));
             if (talep < 0) talep = 0;
             if (talep > 1) talep = 1;
-            return (long)Math.Round(st.Club.StadyumKapasite * talep * fiyat, MidpointRounding.AwayFromZero);
+            // Kombine de kapasiteyle ölçekleniyordu — aynı doygunluk buraya da işler, yoksa
+            // maç günü geliri doyarken sezonluk kombine sınırsız büyümeye devam ederdi.
+            return (long)Math.Round(EtkinKapasite(st, eco) * talep * fiyat, MidpointRounding.AwayFromZero);
         }
 
         /// <summary>Kişi başı harcama kalemleri (büfe, mağaza) — fiyat arttıkça kişi başı ADET

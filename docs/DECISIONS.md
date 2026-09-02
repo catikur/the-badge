@@ -2687,6 +2687,81 @@ ilk yeniden düzenlemede yanlış yerden kırmızıya döner ve kapı gevşetme 
 FAZ 02'de konsol yerini ekranlara bıraktığında kapanır — döngü test edilebilir bir servise
 taşındığında kapı doğrudan onu koşar.
 
+### K13-A: sınırsız gelir büyümesi kapatıldı — BORÇ KAPANDI (2026-09-02)
+
+**Atilla kararı:** "(a) maaş enflasyonu + (c) gelir doygunluğu ile devam et." İkisi de yapıldı.
+
+**ÖLÇÜLEN SORUN (önce şeklini çıkardım):** 40 sezonluk koşuda merdiven 11. sezonda bitiyor, sonra
+
+| | sezon 1-10 | 11-20 | 21-30 | 31-40 |
+|---|---|---|---|---|
+| gelir | 1,73mr | 3,15mr | 3,14mr | 3,14mr |
+| gider | 1,67mr | 1,72mr | 1,58mr | 1,58mr |
+| oran | 1,037 | 1,827 | 1,988 | 1,989 |
+
+Yani kapasite üçe katlanınca **gelir üçe katlanıyor, gider ise DÜŞÜYOR.** Borç tek satırda buydu.
+
+**(c) GELİR DOYGUNLUĞU:** `EconomyTick.EtkinKapasite` — `referansKapasite`ye (30.000) kadar her
+koltuk normal dolar, ötesi `ekKapasiteVerimi` (0,50) oranında. Şehrin taraftarı sonsuz değildir.
+Sert kesme DEĞİL: stadyum büyütmek hâlâ kazandırır, yoksa merdivenin son basamakları anlamsızlaşır
+ve `K10CapexSozlesmesi` haklı olarak kırmızıya dönerdi. Maç günü geliri, büfe/mağaza (kişi başı)
+ve KOMBİNE aynı doygunluktan geçer — kombineyi unutmak, maç günü doyarken sezonluğun sınırsız
+büyümesi demekti.
+
+**(a) ÜCRET ENFLASYONU:** `UcretEnflasyonu.SezonBasi` — her sezon başı kadro ücretleri kulübün
+bugünkü ölçeğindeki talebe doğru çekilir. Ölçek ETKİN kapasiteden gelir, yani doygunluk kolu
+geliri kısarken ücret baskısını da kısar; iki kol aynı büyüklüğe bağlı. `EconomyTick.Hafta`ın
+İÇİNDEN çağrılır (ayrı bir çağrı yeri, unutulabilecek bir yer daha demekti — bu oturumda o desen
+üç kez ısırdı) ve `tb` parametresi ZORUNLU yapıldı ki hiçbir çağıran enflasyonu sessizce atlamasın.
+
+**KAPILAR ÜÇ KEZ BENİ DÜZELTTİ:**
+1. İlk yazımda ücret doğrudan `MaasTalebi`ye EŞİTLENİYORDU. Bu enflasyon değil YENİDEN TÜRETMEydi:
+   fikstürün taban ücretleri formülden yüksekti, dolayısıyla ilk sezon başında bütün kadro
+   ucuzluyordu. `K3EkonomiSozlesmesi` anında yakaladı (maaş payı %50 → %36,6, oran 1,47) ve
+   `K3IflasEgrisi` de kırmızıya döndü. Model artık YALNIZ YUKARI çeker.
+2. `K3IflasEgrisi` ikinci kez konuştu: senaryo kulüp maaş TOPLAMINI ×1,5 yapıyor ama oyuncu
+   maaşlarına dokunmuyordu; sezon başı gözden geçirmesi toplamı kadrodan yeniden topladığı için
+   o ×1,5 siliniyordu. Senaryo tutarlı hâle getirildi (aşırı harcama artık oyuncu maaşından
+   gelir) ve **kulüp toplamı = kadro toplamı** değişmezi ilk kez kapıya bağlandı.
+3. Kalibrasyonda bandın ALTINA geçtim (1,025). Kapı iki taraflı olduğu için yakaladı.
+
+**KALİBRASYON TAHMİNLE DEĞİL SÜPÜRMEYLE:** 22 nokta ölçüldü.
+`referansKapasite × ekKapasiteVerimi × ucretOlcekAgirligi` ızgarası, sonra `tierMaliyetTaban`.
+
+**VE SÜPÜRME YAPISAL BİR ŞEY BULDU:** inşaat penceresi oranı hiçbir kalibrasyonda 1,05'e
+ulaşmıyordu (en iyi 1,044) — çünkü referans politika parası varken hep harcıyor, yani PARA
+SINIRLI, ve para sınırlı kulüpte gelirin tamamı capex'e gider: oran 1,00'a çakılır. Bandın orada
+tutması bakiyenin değil POLİTİKANIN işiymiş. Politikaya nakit rezervi eklendi (28 hafta işletme
+gideri) — bu aynı zamanda ölçümün kendi raporladığı bir yarayı da kapattı: referans kulübün en
+düşük kasası −5,8M₺ idi, yani düzenli olarak eksideydi. Şimdi +20,0M₺.
+
+`tierMaliyetTaban` ×0,70 ile ayarlandı: eski değer geliri SINIRSIZ büyüyen bir kulübe göre
+kalibreydi; doygunluk gelince aynı merdiven 11 → 18 sezona çıkıyor ve bandın alt ucunda hiç
+bitmiyordu.
+
+**SONUÇ (hepsi aynı koşuda):**
+
+| ölçüm | önce | sonra | bant |
+|---|---|---|---|
+| merdiven sonrası durağan oran | **1,99** | **1,107** | [1,05-1,15] ✓ |
+| inşaat penceresi (capex dahil) | 1,131 | 1,058 | [1,05-1,15] ✓ |
+| işletme oranı (capex hariç) | 1,49 | 1,298 | bandın üstünde ✓ |
+| merdiven süresi | 11 | 11 | [6,24] ✓ |
+| bant uçlarında merdiven | 19 / 9 | 15 / 11 | [6,24] ✓ |
+| maaş payı | %49 | %51,2 | [%45-60] ✓ |
+| 40 sezon sonu kasa | 4,62 milyar ₺ | ~0,6 milyar ₺ | — |
+| referans kulübün en düşük kasası | −5,8M₺ | +20,0M₺ | — |
+
+**BORÇ TAVANI KALDIRILDI.** `merdivenSonrasiOranTavani` (2,00) ve `merdivenSonrasiHedefOran`
+balance'tan SİLİNDİ; kapı artık ECONOMY_MAP'in kendi bandını **iki taraflı** uyguluyor. Yani
+gevşemedi, DARALDI — borç gözcüsünün işi buydu: hedefe ulaşıldığında kendini kapattırmak.
+
+**DİŞ ÖLÇÜMÜ (iki kol ayrı ayrı):** doygunluk kapatılınca durağan oran **1,382** (pencere de
+1,164 ile bant dışı), ücret enflasyonu kapatılınca **1,284**. İkisi açıkken 1,107 — yani ne biri
+tek başına yetiyor, ikisi de yük taşıyor. Mekanizma kapısı (`K13ADoygunlukVeUcret`) ayrıca
+şunları ölçüyor: referans altında kırpma yok, üstünde koltuk başına verim AZALIYOR, ücret yukarı
+çekiliyor ama aşağı çekilMİYOR, sezon tavanı aşılmıyor, kulüp toplamı = kadro toplamı.
+
 ## Bekleyen kararlar
 
 - ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —
@@ -2731,7 +2806,10 @@ taşındığında kapı doğrudan onu koşar.
 - ~~**Oyuncu piyasası modeli — merdiven sonrası sink borcunun ÖN KOŞULU (K11-E).**~~ →
   **YAPILDI (2026-09-01, K12-C):** seçenek (a)'nın asgari hâli — havuz yenilenmesi + pazarlık +
   kadro dönüşü kuruldu. Borç 2,25 → 1,911'e indi ama KAPANMADI.
-- **Sınırsız gelir büyümesi: merdiven sonrası borcun ASIL kaynağı (K12-C ölçümü, 2026-09-01).**
+- ~~**Sınırsız gelir büyümesi: merdiven sonrası borcun ASIL kaynağı (K12-C ölçümü, 2026-09-01).**~~
+  → **YAPILDI (2026-09-02, K13-A):** Atilla (a)+(c) dedi, ikisi de kuruldu; oran 1,99 → 1,107,
+  borç tavanı kaldırılıp yerine ECONOMY_MAP bandı iki taraflı kondu. Yukarıdaki K13-A kaydı.
+  Aşağıdaki eski metin, kararın alındığı andaki bilgi durumu olarak duruyor.
   Piyasa kuruldu ve çalışıyor, ama havuzun kalite tavanı yüzünden sink doyuyor: kadro havuzun
   tepesine ulaşınca kasa şişiyor (32 sezonda 3,3 milyar ₺). Sorun sink tarafında değil KAYNAK
   tarafında: stadyum kapasitesi üçe katlanıp kalıcı yüksek gelir üretiyor ve hiçbir gider onunla

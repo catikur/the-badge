@@ -56,7 +56,7 @@
     "aylikTaksitBolen": 1.0
   },
   "insaat": {
-    "tierMaliyetTaban": 4200000,
+    "tierMaliyetTaban": 2940000,
     "tierMaliyetCarpan": 1.85,
     "tierSureHafta": [
       0,
@@ -74,18 +74,24 @@
       30000,
       60000,
       90000
-    ]
+    ],
+    "aciklama": " K13-A: tierMaliyetTaban 0.70 ile carpildi. Eski deger geliri SINIRSIZ buyuyen bir kulube gore kalibreydi; gelir doygunlugu gelince ayni merdiven 11 -> 18 sezona cikti ve bandin alt ucunda hic bitmiyordu. Maliyet, merdivenin tasarim hizini (6-24 sezon, bandin HER IKI ucunda) korumak icin dusuruldu."
   },
   "iflas": {
     "esikTl": -25000000
   },
   "capex": {
-    "aciklama": "K10-D capex sozlesmesi [KALIBRE]. ECONOMY_MAP source/sink bandi INSAATSIZ referans kosuda olculuyordu; bu bolum insaat YAPAN kosunun kapisidir. merdivenSezonBandi BILEREK genistir: merdiven suresi tier maliyetine oldugu kadar isletme fazlasi oranina da baglidir (olcum: yayin geliri bandin alt ucundayken merdiven 40 sezonda bitmiyor, ust ucunda 10 sezonda bitiyor). Dar bir bant capex'i degil fazla oranini olcerdi; fazla orani zaten K3EkonomiSozlesmesi'nin isi. K12-C: merdiven sonrasi olcum PIYASALI kosuya tasindi (2,25 -> 1,91) ve tavan 2,40 -> 2,00 sikildi; borc ratchet kurali.",
+    "aciklama": "K10-D capex sozlesmesi [KALIBRE]. ECONOMY_MAP source/sink bandi INSAATSIZ referans kosuda olculuyordu; bu bolum insaat YAPAN kosunun kapisidir. merdivenSezonBandi BILEREK genistir: merdiven suresi tier maliyetine oldugu kadar isletme fazlasi oranina da baglidir (olcum: yayin geliri bandin alt ucundayken merdiven 40 sezonda bitmiyor, ust ucunda 10 sezonda bitiyor). Dar bir bant capex'i degil fazla oranini olcerdi; fazla orani zaten K3EkonomiSozlesmesi'nin isi. K12-C: merdiven sonrasi olcum PIYASALI kosuya tasindi (2,25 -> 1,91) ve tavan 2,40 -> 2,00 sikildi; borc ratchet kurali. K13-A: merdivenSonrasiOranTavani/HedefOran KALDIRILDI - borc kapandi (1.99 -> 1.107), kapi artik ECONOMY_MAP bandini [1.05-1.15] iki tarafli uyguluyor.",
     "merdivenSezonBandi": [
       6,
       24
-    ],
-    "merdivenSonrasiOranTavani": 2.0,
-    "merdivenSonrasiHedefOran": 1.15
+    ]
+  },
+  "doygunluk": {
+    "aciklama": "K13-A: gelir doygunlugu + ucret enflasyonu. OLCULEN SORUN: merdiven bitince kapasite 30k -> 90k, gelir 1.73 -> 3.14 milyar TL, gider 1.67 -> 1.58 milyar TL'ye DUSUYOR; oran 1.99'da kilitleniyor (ECONOMY_MAP hedefi 1.05-1.15). Iki kol: referans otesi koltuklar ekKapasiteVerimi oraninda dolar (sehrin taraftari sonsuz degil) ve oyuncu ucret talebi kulup olcegiyle buyur. referansKapasite baslangic stadyumuyla ayni: doygunluk noktasi 'bugunku kulup' demektir.",
+    "referansKapasite": 30000,
+    "ekKapasiteVerimi": 0.5,
+    "ucretOlcekAgirligi": 0.4,
+    "sezonlukEnUstDegisim": 0.25
   }
 }

@@ -53,10 +53,15 @@ namespace TheBadge.World
         }
 
         /// <summary>Serbest oyuncunun haftalık maaş talebi (₺) — bedel yok, maaş var.</summary>
-        public static long MaasTalebi(in PlayerState p, TransferBalance tb)
+        /// <param name="kulupOlcegi">Kulübün ölçeği (1,0 = referans kulüp). K13-A: oyuncu büyük
+        /// kulüpten daha çok ister; ölçek `EconomyTick.KulupOlcegi` ile ETKİN kapasiteden gelir.
+        /// Varsayılan 1,0 — transfer pazarlığı gibi ölçekten bağımsız çağrılar davranış
+        /// değiştirmez, yalnız sezon başı ücret gözden geçirmesi ölçek geçirir.</param>
+        public static long MaasTalebi(in PlayerState p, TransferBalance tb, double kulupOlcegi = 1.0)
         {
             long deger = PiyasaDegeri(p, tb);
             double m = deger * tb.pazarlik.maasTalepOran;
+            if (kulupOlcegi > 1.0) m *= kulupOlcegi;
             return (long)m;
         }
 

@@ -3411,6 +3411,11 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     var eco = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.EconomyBalance>(
         System.IO.File.ReadAllText(ecoPath), eOpts);
     eco.Validate();
+    // K13-A: ekonomi tick'i artık ücret gözden geçirmesi için TransferBalance istiyor.
+    var ecoTb = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.TransferBalance>(
+        System.IO.File.ReadAllText(System.IO.Path.Combine(
+            System.IO.Path.GetDirectoryName(ecoPath), "transfer.balance.json")), eOpts);
+    ecoTb.Validate();
     string wPath = System.IO.Path.Combine(
         System.IO.Path.GetDirectoryName(FindRepoFile("balance/sim.balance.json")), "world.balance.json");
     var eRules = System.Text.Json.JsonSerializer.Deserialize<TheBadge.World.WorldRules>(
@@ -3426,7 +3431,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     {
         const int Sezon = 10;
         var st = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
-        var T = TheBadge.Checks.EkonomiKosu.Kos(st, eco, eRules, 0xEC0A0D1CUL, Sezon, out _);
+        var T = TheBadge.Checks.EkonomiKosu.Kos(st, eco, eRules, 0xEC0A0D1CUL, Sezon, ecoTb, out _);
         double oran = T.ToplamGider == 0 ? 0 : (double)T.ToplamGelir / T.ToplamGider;
         double maasPayi = T.ToplamGider == 0 ? 0 : (double)T.MaasTl / T.ToplamGider;
         Console.WriteLine($"[info] K3 ekonomi ({Sezon} sezon, referans kulüp): source/sink {oran:F3} · " +
@@ -3450,7 +3455,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         (ulong hash, long kasa, long gelir) Kos(ulong seed)
         {
             var g = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
-            var T = TheBadge.Checks.EkonomiKosu.Kos(g, eco, eRules, seed, 3, out _);
+            var T = TheBadge.Checks.EkonomiKosu.Kos(g, eco, eRules, seed, 3, ecoTb, out _);
             return (TheBadge.World.WorldHash.Compute(g), g.Club.KasaTl, T.ToplamGelir);
         }
         var a = Kos(0xEC0A0D1CUL); var b = Kos(0xEC0A0D1CUL);
@@ -3501,7 +3506,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         for (int h = 0; h < 3; h++)
         {
             j.Clear();
-            TheBadge.World.EconomyTick.Hafta(g, eco, eRules, 0xEC0A0D1CUL, TheBadge.World.WeekResult.Beraberlik, false, j);
+            TheBadge.World.EconomyTick.Hafta(g, eco, eRules, 0xEC0A0D1CUL, TheBadge.World.WeekResult.Beraberlik, false, ecoTb, j);
             if (!j.Validate(g, out string hj)) { hata += "journal geçersiz: " + hj + " "; break; }
             j.Apply(g);
         }
@@ -3519,7 +3524,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         var g = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
         g.Club.Krediler[0] = new TheBadge.World.Loan
         { KrediId = 7, AnaparaTl = 2_400_000, KalanAy = 24, FaizBp = (ushort)eco.kredi.yillikFaizBp };
-        var T = TheBadge.Checks.EkonomiKosu.Kos(g, eco, eRules, 0xEC0A0D1CUL, 3, out _);
+        var T = TheBadge.Checks.EkonomiKosu.Kos(g, eco, eRules, 0xEC0A0D1CUL, 3, ecoTb, out _);
         if (g.Club.Krediler[0].AnaparaTl != 0) hata += $"kredi kapanmadı (kalan {g.Club.Krediler[0].AnaparaTl}) ";
         if (g.Club.Krediler[0].KrediId != 0) hata += "kredi slotu boşalmadı ";
         if (T.FaizTl <= 0) hata += "faiz hiç işlenmedi ";
@@ -3537,14 +3542,22 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     {
         string hata = "";
         var g = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+        // AŞIRI HARCAMA OYUNCU MAAŞLARINDAN GELİR, kulüp toplamından DEĞİL. İlk hâlde senaryo
+        // yalnız `HaftalikMaasGiderTl`i ×1,5 yapıyordu; K13-A'nın sezon başı ücret gözden
+        // geçirmesi toplamı kadrodan yeniden topladığı için o ×1,5 ikinci sezonda SİLİNİYOR ve
+        // iflas hiç gelmiyordu. Kapı haklıydı: senaryonun niyeti "kadroya fazla harcandı" ve
+        // bunun tutarlı gösterimi oyuncu maaşıdır — kulüp toplamı kadronun TÜREVİdir.
+        for (int i = 0; i < g.Oyuncular.Length; i++)
+            if (g.Oyuncular[i].ClubId == g.Club.ClubId)
+                g.Oyuncular[i].HaftalikMaasTl = (long)(g.Oyuncular[i].HaftalikMaasTl * 1.5);
         g.Club.HaftalikMaasGiderTl = (long)(g.Club.HaftalikMaasGiderTl * 1.5);
         for (int t = 0; t < 5; t++) g.Fiyat.BiletKurus[t] = (int)(g.Fiyat.BiletKurus[t] * 1.4);
-        TheBadge.Checks.EkonomiKosu.Kos(g, eco, eRules, 0xEC0A0D1CUL, 6, out int iflas);
+        TheBadge.Checks.EkonomiKosu.Kos(g, eco, eRules, 0xEC0A0D1CUL, 6, ecoTb, out int iflas);
         Console.WriteLine($"[info] K3 iflas senaryosu (maaş ×1,5 · bilet ×1,4): sezon {iflas} · son kasa {g.Club.KasaTl / 1e6:F1}M ₺");
         if (iflas < 2 || iflas > 3) hata += $"iflas sezonu {iflas} — ECONOMY_MAP 2-3 sezon diyor ";
         // İyi yönetilen kulüp AYNI eşikte iflas ETMEMELİ (eşik her kulübü batırmıyor)
         var iyi = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
-        TheBadge.Checks.EkonomiKosu.Kos(iyi, eco, eRules, 0xEC0A0D1CUL, 6, out int iyiIflas);
+        TheBadge.Checks.EkonomiKosu.Kos(iyi, eco, eRules, 0xEC0A0D1CUL, 6, ecoTb, out int iyiIflas);
         if (iyiIflas > 0) hata += $"iyi yönetilen kulüp de battı (sezon {iyiIflas}) ";
         if (hata.Length > 0) failures += Fail("K3IflasEgrisi", hata);
         else Pass($"K3IflasEgrisi(kötü yönetim → sezon {iflas} ∈ [2,3] · iyi yönetim 6 sezon ayakta)");
@@ -3681,7 +3694,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         string hata = "";
         var st0 = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
         var R = TheBadge.Checks.KademeliInsaatKosu.Kos(st0, eco, eRules, 0xEC0A0D1CUL, Ufuk,
-                                                       k3Bands, k3RlCfg, 42L);
+                                                       k3Bands, k3RlCfg, 42L, ecoTb);
         long pIsletmeGider = R.MerdivenToplam.ToplamGider - R.MerdivenToplam.InsaatTl;
         double pTam = R.MerdivenToplam.ToplamGider == 0 ? 0
                     : (double)R.MerdivenToplam.ToplamGelir / R.MerdivenToplam.ToplamGider;
@@ -3754,7 +3767,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         {
             var stD = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
             var RD = TheBadge.Checks.KademeliInsaatKosu.Kos(stD, eco, eRules, 0xEC0A0D1CUL, Ufuk,
-                                                            k3Bands, k3RlCfg, 42L);
+                                                            k3Bands, k3RlCfg, 42L, ecoTb);
             if (TheBadge.World.WorldHash.Compute(stD) != TheBadge.World.WorldHash.Compute(st0))
                 hata += "kademeli koşu DETERMİNİSTİK DEĞİL (aynı seed, farklı durum) ";
             if (RD.MerdivenSezon != R.MerdivenSezon) hata += "merdiven sezonu koşudan koşuya değişti ";
@@ -3781,7 +3794,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                 long eski = eco.gelir.yayinHaftalik;
                 eco.gelir.yayinHaftalik = yayin;
                 var g = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
-                var T = TheBadge.Checks.EkonomiKosu.Kos(g, eco, eRules, 0xEC0A0D1CUL, 6, out _);
+                var T = TheBadge.Checks.EkonomiKosu.Kos(g, eco, eRules, 0xEC0A0D1CUL, 6, ecoTb, out _);
                 eco.gelir.yayinHaftalik = eski;
                 return T.ToplamGider == 0 ? 0 : (double)T.ToplamGelir / T.ToplamGider;
             }
@@ -3806,7 +3819,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                 eco.gelir.yayinHaftalik = y;
                 var st1 = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
                 var R1 = TheBadge.Checks.KademeliInsaatKosu.Kos(st1, eco, eRules, 0xEC0A0D1CUL, UfukD,
-                                                                k3Bands, k3RlCfg, 42L);
+                                                                k3Bands, k3RlCfg, 42L, ecoTb);
                 eco.gelir.yayinHaftalik = yayinAsil;
                 sonuclar[u] = (gercek, R1.MerdivenSezon, R1.IflasSezonu);
                 if (R1.MerdivenSezon < 0)
@@ -3829,19 +3842,93 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                       $"ulaşılabilir: {sonuclar[0].sezon} ve {sonuclar[1].sezon} sezon, iflas yok)");
         }
 
-        // ---- MERDİVEN SONRASI: KAYITLI BORÇ (K12-C'de PİYASALI koşuya taşındı) ----
-        // K10'da bu ölçüm transfer sink'i HİÇ İŞLEMEYEN bir koşuda yapılıyordu ve 2,25 çıkıyordu.
-        // K12-C piyasayı kurdu (sezon başı havuz + pazarlık + kadro dönüşü) ve ölçüm 1,91'e indi:
-        // sink GERÇEKTEN çalışıyor. Ama borç KAPANMADI ve sebebi artık ölçülü —
-        // HAVUZUN KALİTE TAVANI: kadro havuzun tepesine ulaşınca alacak kimse kalmıyor, kasa
-        // şişiyor (32 sezonda 3,3 milyar ₺). Sınırlı bir yetenek havuzu sınırsız geliri ememez.
-        // Kalan asıl mesele gelirin kendisi: stadyum kapasitesi üçe katlanıp KALICI olarak
-        // yüksek gelir üretiyor, hiçbir gider onunla ölçeklenmiyor.
+        // ---- K13-A MEKANİZMA KAPISI: doygunluk + ücret enflasyonu ----
+        // Yukarıdaki oran kapıları SONUCU ölçüyor; bu kapı MEKANİZMAYI ölçüyor. İkisi ayrı:
+        // oran doğru sayıya başka bir yoldan da gelebilirdi ve o zaman "gelir doyuyor" iddiası
+        // ölçülmemiş kalırdı.
+        {
+            string hm = "";
+            // (a) DOYGUNLUK: kapasite referansın ALTINDAyken etkin kapasite kapasitenin KENDİSİ,
+            //     üstündeyken azalan verimle büyür — ve ASLA düşmez (stadyum büyütmek zarar
+            //     ettirmemeli, yoksa capex merdiveninin son basamakları anlamsızlaşır).
+            var dSt = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+            int refKap = eco.doygunluk.referansKapasite;
+            dSt.Club.StadyumKapasite = refKap / 2;
+            double e1 = TheBadge.World.EconomyTick.EtkinKapasite(dSt, eco);
+            if (System.Math.Abs(e1 - refKap / 2) > 0.5)
+                hm += $"[doygunluk] referans ALTINDA etkin kapasite kırpılıyor ({e1:F0} ≠ {refKap / 2}) ";
+            dSt.Club.StadyumKapasite = refKap;
+            double e2 = TheBadge.World.EconomyTick.EtkinKapasite(dSt, eco);
+            dSt.Club.StadyumKapasite = refKap * 3;
+            double e3 = TheBadge.World.EconomyTick.EtkinKapasite(dSt, eco);
+            if (!(e3 > e2)) hm += "[doygunluk] kapasite 3× olunca etkin kapasite ARTMADI — büyütmek anlamsız ";
+            if (!(e3 < refKap * 3)) hm += "[doygunluk] kapasite 3× olunca etkin kapasite de 3× — doygunluk YOK ";
+            // AZALAN VERİM: ikinci 2× artışın kazandırdığı, ilkinden AZ olmalı.
+            double ilkArtis = e2 - e1, ikinciArtis = e3 - e2;
+            double ilkKoltuk = refKap - refKap / 2, ikinciKoltuk = refKap * 2;
+            if (!(ikinciArtis / ikinciKoltuk < ilkArtis / ilkKoltuk))
+                hm += "[doygunluk] koltuk başına verim azalmıyor (doygunluk doğrusal) ";
+
+            // (b) ÜCRET ENFLASYONU: kulüp büyüdükçe ücret talebi büyür ve kadro maaşı YUKARI
+            //     çekilir — ama sözleşme AŞAĞI çekilmez ve tek sezonda tavanı aşmaz.
+            var uSt = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+            long maas0 = uSt.Club.HaftalikMaasGiderTl;
+            uSt.Club.StadyumKapasite = refKap * 3;                       // kulüp büyüdü
+            uSt.Takvim.Sezon = 2; uSt.Takvim.Hafta = 1;
+            var ju = new TheBadge.World.WorldJournal();
+            long yeniToplam = TheBadge.World.UcretEnflasyonu.SezonBasi(uSt, eco, ecoTb, ju);
+            if (!ju.Validate(uSt, out string uh)) hm += $"[ücret] journal geçersiz: {uh} ";
+            else ju.Apply(uSt);
+            if (!(yeniToplam > maas0))
+                hm += $"[ücret] kulüp 3× büyüdü ama maaş yükü ARTMADI ({maas0:N0} → {yeniToplam:N0}) ";
+            double artisOran = maas0 == 0 ? 0 : (double)yeniToplam / maas0 - 1.0;
+            if (artisOran > eco.doygunluk.sezonlukEnUstDegisim + 1e-9)
+                hm += $"[ücret] tek sezonda %{artisOran * 100:F1} arttı, tavan %{eco.doygunluk.sezonlukEnUstDegisim * 100:F0} ";
+            // KÜÇÜLEN KULÜP ÜCRETİ DÜŞÜRMEZ: aynı kadro, kapasite geri çekilirse maaş sabit kalır.
+            var kSt = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+            kSt.Club.StadyumKapasite = refKap / 3;
+            kSt.Takvim.Sezon = 2; kSt.Takvim.Hafta = 1;
+            var jk = new TheBadge.World.WorldJournal();
+            long kucukToplam = TheBadge.World.UcretEnflasyonu.SezonBasi(kSt, eco, ecoTb, jk);
+            if (kucukToplam != kSt.Club.HaftalikMaasGiderTl)
+                hm += $"[ücret] küçülen kulüpte maaş DEĞİŞTİ ({kSt.Club.HaftalikMaasGiderTl:N0} → {kucukToplam:N0}) — " +
+                      "sözleşme aşağı çekilemez ";
+            // KULÜP TOPLAMI = KADRO TOPLAMI. Bu değişmezi hiçbir yer denetlemiyordu ve K13-A
+            // onu ilk kez ZORUNLU kıldı: iflas senaryosu kulüp toplamını tek başına şişiriyor,
+            // sezon başı gözden geçirmesi de onu kadrodan yeniden topluyordu (kapı yakaladı).
+            long kadroToplam = 0;
+            for (int i = 0; i < uSt.Oyuncular.Length; i++)
+                if (uSt.Oyuncular[i].ClubId == uSt.Club.ClubId) kadroToplam += uSt.Oyuncular[i].HaftalikMaasTl;
+            if (kadroToplam != uSt.Club.HaftalikMaasGiderTl)
+                hm += $"[ücret] kulüp maaş toplamı kadroyla uyuşmuyor ({uSt.Club.HaftalikMaasGiderTl:N0} ≠ {kadroToplam:N0}) ";
+
+            Console.WriteLine($"[info] K13-A mekanizma: etkin kapasite {refKap / 2:N0}→{e1:F0} · {refKap:N0}→{e2:F0} · " +
+                              $"{refKap * 3:N0}→{e3:F0} (verim {eco.doygunluk.ekKapasiteVerimi:F2}) · " +
+                              $"ücret 3× kulüpte {maas0 / 1e6:F2}M→{yeniToplam / 1e6:F2}M₺/hafta (+%{artisOran * 100:F1})");
+            if (hm.Length > 0) failures += Fail("K13ADoygunlukVeUcret", hm);
+            else Pass($"K13ADoygunlukVeUcret(kapasite doyuyor ve azalan verimli · ücret kulüp ölçeğiyle YUKARI " +
+                      $"çekiliyor, aşağı çekilmiyor, sezon tavanına uyuyor · kulüp toplamı = kadro toplamı)");
+        }
+
+        // ---- MERDİVEN SONRASI DURAĞAN HÂL: BORÇ KAPANDI (K13-A) ----
+        // TARİHÇE, çünkü bu satırın nereden geldiği kapının ne ölçtüğünü açıklıyor:
+        // K10'da ölçüm transfer sink'i HİÇ İŞLEMEYEN bir koşuda 2,25'ti. K12-C piyasayı kurdu
+        // → 1,91. K12 inceleme turu donmuş teklif yuvasını açtı → sink 2,3 katına çıktı ama oran
+        // 1,91'de KALDI: sorunun sink tarafında olmadığı böylece KANITLANDI.
+        // K13-A kaynağı düzeltti (Atilla kararı: gelir doygunluğu + ücret enflasyonu) → 1,107.
+        //
+        // BU YÜZDEN BORÇ TAVANI KALKTI. Kapı artık "2,00'ın altında kal" demiyor; ECONOMY_MAP'in
+        // KENDİ bandını [1,05-1,15] iki taraflı uyguluyor — yani GEVŞEMEDİ, DARALDI. Borç
+        // gözcüsünün işi buydu: hedefe ulaşıldığında kendini kapattırmak.
+        //
+        // NEDEN DURAĞAN HÂL: ECONOMY_MAP bandı "sezon başına net arz" diyor ve "10K sezon
+        // simülasyonuyla doğrulanır" — yani UZUN VADELİ bir para arzı kuralı. Merdiven sonrası
+        // durağan hâl tam olarak odur.
         {
             string h2 = "";
             var pSt = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
             var pR = TheBadge.Checks.KademeliInsaatKosu.Kos(pSt, eco, eRules, 0xEC0A0D1CUL, 24,
-                                                            k3Bands, k3RlCfg, 42L, k12Market, k12Tb);
+                                                            k3Bands, k3RlCfg, 42L, k12Tb, k12Market);
             if (pR.MerdivenSezon < 0) h2 += "piyasalı koşuda merdiven tamamlanmadı — sonrası ölçülemez ";
             else
             {
@@ -3849,14 +3936,18 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                 for (int i = pR.MerdivenSezon; i < pR.Sezonlar.Count; i++)
                 { sg += pR.Sezonlar[i].ToplamGelir; ss += pR.Sezonlar[i].ToplamGider; }
                 double sonra = ss == 0 ? 0 : (double)sg / ss;
-                double tavan = eco.capex.merdivenSonrasiOranTavani, hedef = eco.capex.merdivenSonrasiHedefOran;
                 Console.WriteLine($"[info] K10/K12 merdiven sonrası (PİYASALI, {pR.Sezonlar.Count - pR.MerdivenSezon} sezon): " +
-                                  $"source/sink {sonra:F3} (tavan {tavan:F2} · hedef {hedef:F2}) · " +
+                                  $"source/sink {sonra:F3} (ECONOMY_MAP bandı [{EkoOranAlt:F2}-{EkoOranUst:F2}]) · " +
                                   $"havuza giren {pR.PiyasayaGiren} · alım {pR.Transfer} · fesih {pR.Fesih} · " +
                                   $"transfer sink {pR.Toplam.TransferTl / 1e6:F0}M₺ · en uzun engelli seri " +
                                   $"{pR.EnUzunEngelliSeri} hafta (ölü yuva geçildi {pR.OluYuvaGecildi})");
-                if (sonra > tavan) h2 += $"merdiven sonrası oran {sonra:F3} > kayıtlı tavan {tavan:F2} (BORÇ KÖTÜLEŞTİ) ";
-                if (sonra <= hedef) h2 += $"oran {sonra:F3} ≤ hedef {hedef:F2} — BORÇ KAPANDI, tavan kaldırılmalı ";
+                // İKİ TARAFLI: yalnız "çok yüksek değil" demek yetmez. Alt uç da bağlayıcı,
+                // çünkü doygunluk ve ücret enflasyonu FAZLA sıkı ayarlanırsa kulüp durağan
+                // hâlde para kaybeder ve tycoon döngüsü ölür — kalibrasyon sırasında tam olarak
+                // bu oldu (1,025'e kadar indi, bandın ALTINA geçti).
+                if (sonra < EkoOranAlt || sonra > EkoOranUst)
+                    h2 += $"merdiven sonrası durağan oran {sonra:F3} ECONOMY_MAP bandı dışı " +
+                          $"[{EkoOranAlt:F2}-{EkoOranUst:F2}] ";
                 // PİYASA GERÇEKTEN İŞLİYOR olmalı: sink sıfırsa yukarıdaki sayı piyasayı değil
                 // piyasasız koşuyu ölçerdi ve borcun "iyileşmesi" sahte olurdu.
                 if (pR.Toplam.TransferTl <= 0) h2 += "piyasalı koşuda transfer sink'i SIFIR (piyasa işlemiyor) ";
@@ -3882,9 +3973,10 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                           "donma geri geldi; iki hâlde de bu kapı boşa koşuyor ";
             }
             if (h2.Length > 0) failures += Fail("K10MerdivenSonrasiSink", h2);
-            else Pass($"K10MerdivenSonrasiSink(BORÇ: piyasa kuruldu ve çalışıyor, oran 2,25 → tavan altı; " +
-                      $"kapanmama sebebi HAVUZUN KALİTE TAVANI — sınırlı havuz sınırsız geliri ememez)");
+            else Pass($"K10MerdivenSonrasiSink(BORÇ KAPANDI — merdiven sonrası durağan oran " +
+                      $"ECONOMY_MAP bandında; piyasa çalışıyor: {pR.Transfer} alım, {pR.Fesih} fesih)");
         }
+
     }
 
     // ===================== K11 — KADRO → TEAMSHEET KÖPRÜSÜ (dikiş) =====================
@@ -4649,7 +4741,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             if (g.Club.DonemInsaatGideriTl != maliyet) hata += "dönem inşaat gideri birikmedi ";
             // Haftalık tick biriktiriciyi sink'e boşaltmalı ve sıfırlamalı
             var j = new TheBadge.World.WorldJournal();
-            var L = TheBadge.World.EconomyTick.Hafta(g, eco, eRules, 1UL, TheBadge.World.WeekResult.Beraberlik, false, j);
+            var L = TheBadge.World.EconomyTick.Hafta(g, eco, eRules, 1UL, TheBadge.World.WeekResult.Beraberlik, false, ecoTb, j);
             if (!j.Validate(g, out string hj)) hata += "tick journal geçersiz: " + hj + " ";
             else j.Apply(g);
             if (L.InsaatTl != maliyet) hata += $"inşaat sink'e girmedi ({L.InsaatTl}≠{maliyet}) ";
@@ -4693,7 +4785,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             for (int h = 0; h < 5; h++)
             {
                 j.Clear();
-                var L = TheBadge.World.EconomyTick.Hafta(g, eco, eRules, 1UL, TheBadge.World.WeekResult.Beraberlik, false, j);
+                var L = TheBadge.World.EconomyTick.Hafta(g, eco, eRules, 1UL, TheBadge.World.WeekResult.Beraberlik, false, ecoTb, j);
                 if (!j.Validate(g, out string hj2)) { hata += "sponsor tick journal geçersiz: " + hj2 + " "; break; }
                 j.Apply(g);
                 gelir[h] = L.SponsorTl;
@@ -5147,7 +5239,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         {
             var j = new TheBadge.World.WorldJournal();
             L = TheBadge.World.EconomyTick.Hafta(g, k4Eco, k4Rules, 7UL,
-                                                 TheBadge.World.WeekResult.Beraberlik, false, j);
+                                                 TheBadge.World.WeekResult.Beraberlik, false, k5Tb, j);
             if (!j.Validate(g, out string hj)) throw new InvalidOperationException("tick journal: " + hj);
             j.Apply(g);
             return L.TransferTl;
