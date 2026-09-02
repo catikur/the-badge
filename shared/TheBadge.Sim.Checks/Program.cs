@@ -1876,6 +1876,9 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
 {
     const int NE = 500;
     double g = 0, sh = 0, isb = 0, ko = 0, fa = 0, sa = 0, ki = 0, pe = 0, of = 0, inj = 0, pa = 0, pc = 0, xg = 0;
+    // K13-C: doğrudan kırmızı sayacı + ŞİDDET TAVANI. Bedava ölçüm — bu döngü zaten 500 maç
+    // koşuyor ve `FoulCommitted` olayının aux'u şiddeti ×1000 taşıyor (ME 15.1).
+    double dogrudanKi = 0, enYuksekSiddet = 0;
     var kilit16e = new object();
     System.Threading.Tasks.Parallel.For(0, NE, n =>
     {
@@ -1893,8 +1896,17 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         var e = new MatchEngine(sd, new CommandQueue(), cfg, simBal) { AutoManage = true };
         var s = MatchEngine.CreateInitialState(cfg);
         var r = e.Run(ref s);
+        double macEnYuksek = 0;
+        for (int q = 0; q < e.EventCount; q++)
+        {
+            var fe = e.GetEvent(q);
+            if (fe.Kind == EventType.FoulCommitted && fe.AuxData > macEnYuksek * 1000)
+                macEnYuksek = fe.AuxData / 1000.0;
+        }
         lock (kilit16e)
         {
+            if (macEnYuksek > enYuksekSiddet) enYuksekSiddet = macEnYuksek;
+            dogrudanKi += e.RedsDirect;
             g += r.HomeGoals + r.AwayGoals; sh += r.Shots; isb += e.ShotsOnTarget; ko += r.Corners;
             fa += r.Fouls; sa += r.Yellows; ki += r.Reds; pe += r.Penalties; of += e.Offsides;
             inj += e.Injuries; pa += e.PassAttempts; pc += e.PassCompletions; xg += r.XgHome + r.XgAway;
@@ -1915,7 +1927,56 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     if (!ok16e) failures += Fail("M16ECalibGenis", "yukarıdaki [info] satırı bant dışı değer içeriyor (kırmızı hariç)");
     else Pass("M16ECalibGenis(11 metrik, CI-geniş bant; kırmızı ayrı borç kapısında; dar bantlar calib10k 10000 ile)");
 
-    // ---- BORÇ: DÜZ DAĞILIMDA KIRMIZI (K12) ----
+    // ---- K13-C TEŞHİSİ: DOĞRUDAN KIRMIZI YOLU ÖLÜ ----
+    // Atilla kararı (c): "borcu kapatma, BANDI SORGULA." Sorgulandı; cevap bandı temize
+    // çıkardı ve borcun YANLIŞ YERE asıldığını gösterdi.
+    //
+    // ÖLÇÜM (500 maç × 3 popülasyon — DÜZ/LİG/KÖPRÜ):
+    //   · Kırmızıların TAMAMI ikinci sarı. Üç popülasyonda da doğrudan kırmızı SIFIR.
+    //   · Görülen en yüksek şiddet 0,692 / 0,746 / 0,754; eşik 0,80. Yol nadir değil, ERİŞİLEMEZ.
+    //   · Sarı yoğunlaşması popülasyonlar arası neredeyse sabit (1,021 / 1,025 / 1,056) —
+    //     "yapay kadroda sarılar dağılıyor" hipotezim ÇÜRÜDÜ.
+    //   · Düz kadro LİG'den DAHA ÇOK faul/sarı üretiyor (26,8/4,53 vs 19,9/2,94) — yani borç
+    //     "yapay kadro az kart üretiyor"la da açıklanmıyor.
+    //
+    // Yani eksik olan bant değil, MODELİN BİR KOLU: gerçek futbolda kırmızının iki kaynağı var
+    // (doğrudan + ikinci sarı), bu modelde bir tanesi hiç çalışmıyor.
+    //
+    // TEK PARAMETRELİ DÜZELTME DE ÖLÇÜLDÜ VE YETMEDİ: `kirmiziEsik` 0,70'e çekildiğinde kapının
+    // kendi koşusu LİG kırmızısını 0,05 veriyor (hedef 0,10) ve `K11KadroKoprusu`nun enerji
+    // iddiası kırmızı kart gürültüsünde bozuluyor; 0,68'de köprü kadrosu kendi bandını aşıyor
+    // (0,635 > 0,60). Yani borç tek anahtarla kapanmıyor.
+    {
+        double dogrudanMac = dogrudanKi / NE;
+        // BUGÜNKÜ GERÇEK DONDURULUYOR, HEDEF BASILIYOR: yol canlandığı gün kapı düşer.
+        string h13c = "";
+        if (dogrudanMac > 0)
+            h13c += $"doğrudan kırmızı {dogrudanMac:F3} > 0 — YOL CANLANDI, bu teşhis kapısı kaldırılıp " +
+                    "kırmızı metriği M16ECalibGenis'e geri konmalı ";
+        // BOŞLUK KÖTÜLEŞMESİN — ve BOŞLUK İKİ UÇLUDUR. İlk yazımda yalnız şiddet TAVANINI
+        // koruyordum ("tavan 0,70'in altına inmesin"); oysa borcun büyüklüğü
+        // `kirmiziEsik − enYuksekSiddet`. Eşik 0,80 → 0,90 yapılsaydı boşluk 0,054'ten 0,154'e
+        // çıkar, yani borç KÖTÜLEŞİR, ama tavan kıpırdamadığı için kapı YEŞİL kalırdı
+        // (inceleme bulgusu, Codex P2). Ekrana bastığım sayıyı iddiaya bağlamamıştım.
+        //
+        // TAVAN 0,08 NEREDEN: bugünkü boşluk 0,054 ve `enYuksekSiddet` 500 maçın MAKSİMUMU,
+        // yani uç-değer istatistiği — koşudan koşuya ±0,01 oynuyor (ölçüldü: 0,746 ve 0,754).
+        // 0,08 gürültüye yer bırakır, gerçek kötüleşmeyi (eşik oynatma ölçeğinde 0,10+) yakalar.
+        const double BoslukTavani = 0.08;
+        double bosluk = simBal.referee.kirmiziEsik - enYuksekSiddet;
+        if (bosluk > BoslukTavani)
+            h13c += $"doğrudan kırmızı boşluğu {bosluk:F3} > kayıtlı tavan {BoslukTavani:F2} " +
+                    "(BORÇ KÖTÜLEŞTİ — eşik yükseldi ya da şiddet kuyruğu daraldı) ";
+        Console.WriteLine($"[info] K13-C doğrudan kırmızı yolu: {dogrudanMac:F3}/maç · en yüksek şiddet " +
+                          $"{enYuksekSiddet:F3} · eşik {simBal.referee.kirmiziEsik:F2} · " +
+                          $"boşluk {bosluk:F3} (tavan {BoslukTavani:F2})");
+        if (h13c.Length > 0) failures += Fail("K13CDogrudanKirmiziOlu", h13c);
+        else Pass($"K13CDogrudanKirmiziOlu(TEŞHİS: kırmızının iki kaynağından biri ölü — doğrudan {dogrudanMac:F3}, " +
+                  $"boşluk {bosluk:F3} ≤ {BoslukTavani:F2}, şiddet tavanı {enYuksekSiddet:F3} vs eşik {simBal.referee.kirmiziEsik:F2}; " +
+                  "bant sorgulandı ve TEMİZ çıktı, borç model kolunda)");
+    }
+
+    // ---- BORÇ: LİG DAĞILIMINDA KIRMIZI (K12) ----
     // ME/M16-E hedefi 0,10-0,36. K12 motor kalibrasyonu rol ayrımı OLAN kadroyu banda soktu
     // (kart 8,69 → 5,95 · kırmızı 1,83 → 0,31) ama bedeli burada ödendi: `sariSonrasiIhtiyat`
     // 0,18 → 0,24 düz dağılımın ikinci sarılarını da azalttı ve kırmızı 0,26 → ~0,05'e indi.
