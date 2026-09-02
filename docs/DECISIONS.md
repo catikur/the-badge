@@ -2913,20 +2913,25 @@ CANLANDI`; `marginAgirlik` 0,20'ye indirilince `şiddet tavanı 0.588 < taban 0.
 `M16EKirmiziBorcu` (LİG kırmızı oranı) DURUYOR — semptom hâlâ ölçülüyor; yeni kapı SEBEBİ
 ölçüyor. Kayıttaki "düz dağılım" ifadesi de düzeltildi: ölçülen popülasyon LİG'dir.
 
-### Bundan sonrası — ATİLLA'NIN KARARI
+### KARAR (2026-09-02, Atilla): **(c) — teşhis kapısıyla BEKLE**
 
-Borç artık anlaşıldı, yani seçenekler de netleşti:
+Üç seçenek ölçümleriyle sunuldu:
 - **(a) Şiddet modeline gerçek bir "doğrudan kırmızı" kolu ekle** (DOGSO / ciddi faul / şiddetli
   hareket), eşik oyunuyla değil. Bugünkü formül `margin + hız + arkadan` ile en fazla 0,754
   üretiyor; doğrudan kırmızı ayrı bir OLAY sınıfı olmalı, aynı sürekli skorun kuyruğu değil.
-  Bu, borcu kapatacak DOĞRU çözüm ve ayrı bir dilim.
-- **(b) `kirmiziEsik`i düşür ve yan hasarı kabul et.** Ölçüldü: hedefi tutturmuyor, K11'i bozuyor,
-  golden/replay yenilemesi gerektiriyor. Önermiyorum.
-- **(c) Teşhis kapısıyla bekle.** Borç artık görünür, ölçülü ve iki taraflı korunuyor; FAZ 05
-  hakem modeli dilimine kadar bekleyebilir.
+- **(b) `kirmiziEsik`i düşür ve yan hasarı kabul et.** Ölçüldü: hedefi tutturmuyor (kapının kendi
+  koşusunda 0,05 < hedef 0,10), `K11KadroKoprusu`nun enerji iddiasını bozuyor, golden/replay
+  yenilemesi gerektiriyor. Önerilmedi.
+- **(c) Teşhis kapısıyla bekle.** ← **SEÇİLEN**
 
-**Önerim (c) şimdilik, (a) FAZ 05 hakem dilimiyle birlikte** — çünkü doğrudan kırmızı gerçek bir
-olay sınıfı istiyor ve onu bugün eklemek 11 kalibre metriği yeniden riske atardı.
+**Kararın anlamı:** borç BUGÜN kapatılmıyor ve bu bir erteleme değil, ölçülmüş bir tercih.
+Gerekçe: doğrudan kırmızı gerçek bir olay sınıfı istiyor; bugün eklemek bant içindeki 11 kalibre
+metriği yeniden riske atardı ve (b) ölçüldüğü gibi hedefi zaten tutturmuyor. Borç şu an
+**görünür, sayısal ve iki taraflı korunuyor** — `K13CDogrudanKirmiziOlu` yol canlandığında da
+boşluk kötüleştiğinde de kırmızıya döner (dişi iki yönde ölçüldü).
+
+**(a) kapatılmadı, TETİKLEYİCİYE bağlandı** — aşağıdaki "Bekleyen kararlar" listesine
+`LOD 1` satırıyla aynı biçimde geçti: bir karar değil, koşulu net bir bekleyiş.
 
 ## Bekleyen kararlar
 
@@ -2989,6 +2994,13 @@ olay sınıfı istiyor ve onu bugün eklemek 11 kalibre metriği yeniden riske a
   **YAPILDI (2026-09-01, K12-A):** seçenek (a). Kadro profili gerçekçiliğe geri döndü, köprü
   kadrosu motorun kendi bantlarında. Kalan tek kaçak (düz dağılımda kırmızı) bant gevşetilmeden
   ayrı bir borç kapısına taşındı — yukarıdaki K12-A kaydı.
+- **Doğrudan kırmızı olay sınıfı (K13-C (a)) — KARARLA DEĞİL, FAZ 05 HAKEM DİLİMİYLE açılır.**
+  2026-09-02'de Atilla (c) dedi: bugün kapatma, teşhis kapısıyla bekle. Bu satır bir karar değil
+  bir TETİKLEYİCİdir ve kapatan şey nettir: **FAZ 05 hakem modeli dilimi açıldığında** şiddet
+  skoruna ayrı bir "doğrudan kırmızı" olay sınıfı (DOGSO / ciddi faul / şiddetli hareket) eklenir;
+  eşik oynatmak çözüm DEĞİLDİR (ölçüldü — K13-C kaydı). O güne kadar borç korumasız değil:
+  `K13CDogrudanKirmiziOlu` yol canlandığında düşer, boşluk kötüleşirse kırmızıya döner;
+  `M16EKirmiziBorcu` da semptomu (LİG kırmızı oranı) ölçmeye devam eder.
 - **Kırmızı kart borcu — K13-C'de ÇERÇEVESİ DÜZELTİLDİ.** Bant sorgulandı ve TEMİZ çıktı; borç
   "düz dağılımda kırmızı" değil **"doğrudan kırmızı yolu erişilemez"** (üç popülasyonda da sıfır,
   en yüksek şiddet 0,754 vs eşik 0,80). Yeni kapı `K13CDogrudanKirmiziOlu` teşhisi iki taraflı
