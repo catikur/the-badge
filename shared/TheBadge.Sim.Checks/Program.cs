@@ -3902,6 +3902,31 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             if (kadroToplam != uSt.Club.HaftalikMaasGiderTl)
                 hm += $"[ücret] kulüp maaş toplamı kadroyla uyuşmuyor ({uSt.Club.HaftalikMaasGiderTl:N0} ≠ {kadroToplam:N0}) ";
 
+            // (c) REZERV, TICK'İN GERÇEKTEN İŞLEDİĞİ İŞLETME KALEMLERİNİ KAPSAR.
+            //     Bakım ilk yazımda unutulmuştu ve HİÇBİR KAPI kırmızıya dönmedi (diş ölçüldü:
+            //     pencere 1,104 → 1,075, hâlâ bant içi). Yani gerçek bir hata korumasız bir
+            //     yerde duruyordu. İddia SABİT LİSTEYE değil TİCK'İN KENDİSİNE karşı kurulur:
+            //     capex/transfer (komut anında düşülür) ve faiz (politika kredisiz) hariç,
+            //     tick'in yazdığı HER işletme kalemi rezerve girmeli. Yeni bir kalem eklenirse
+            //     kapı onu da ister — liste yazsaydım, yeni kalem yine sessizce dışarıda kalırdı.
+            {
+                var rSt = TheBadge.Checks.EkonomiFixture.Kur(eRules, eco, 500L, 42L);
+                var jr = new TheBadge.World.WorldJournal();
+                var rL = TheBadge.World.EconomyTick.Hafta(rSt, eco, eRules, 1UL,
+                             TheBadge.World.WeekResult.Beraberlik, false, ecoTb, jr);
+                long tickIsletme = rL.ToplamGider - rL.InsaatTl - rL.TransferTl - rL.FaizTl;
+                long beklenen = TheBadge.Checks.KademeliInsaatKosu.RezervHafta * tickIsletme;
+                long gercek = TheBadge.Checks.KademeliInsaatKosu.Rezerv(rSt, eco);
+                if (gercek != beklenen)
+                    hm += $"[rezerv] tampon {gercek:N0}₺, tick'in işlettiği işletme gideri " +
+                          $"{TheBadge.Checks.KademeliInsaatKosu.RezervHafta} hafta için {beklenen:N0}₺ — " +
+                          "rezerv bir kalemi atlıyor ";
+                if (rL.FaizTl != 0)
+                    hm += "[rezerv] referans kulüp faiz ödüyor — politika kredisiz, varsayım bozuk ";
+                Console.WriteLine($"[info] K13-A rezerv: {TheBadge.Checks.KademeliInsaatKosu.RezervHafta} hafta × " +
+                                  $"{tickIsletme / 1e6:F2}M₺ = {gercek / 1e6:F1}M₺ (bakım dahil)");
+            }
+
             Console.WriteLine($"[info] K13-A mekanizma: etkin kapasite {refKap / 2:N0}→{e1:F0} · {refKap:N0}→{e2:F0} · " +
                               $"{refKap * 3:N0}→{e3:F0} (verim {eco.doygunluk.ekKapasiteVerimi:F2}) · " +
                               $"ücret 3× kulüpte {maas0 / 1e6:F2}M→{yeniToplam / 1e6:F2}M₺/hafta (+%{artisOran * 100:F1})");

@@ -2762,6 +2762,40 @@ tek başına yetiyor, ikisi de yük taşıyor. Mekanizma kapısı (`K13ADoygunlu
 şunları ölçüyor: referans altında kırpma yok, üstünde koltuk başına verim AZALIYOR, ücret yukarı
 çekiliyor ama aşağı çekilMİYOR, sezon tavanı aşılmıyor, kulüp toplamı = kadro toplamı.
 
+### 🔴 BULGU (Codex, gerçek): nakit rezervi BAKIMI atlıyordu — ve hiçbir kapı görmüyordu (2026-09-02)
+
+K13-A'da referans politikaya eklediğim nakit rezervi "28 haftalık işletme gideri" diyordu ama
+personel + genel işletme + maaşı topluyor, **tesis BAKIMINI atlıyordu.** Bakım her hafta işlenen
+ve merdivenle BÜYÜYEN bir kalem (tier toplamı × tier başı ücret); referans tier'larda tampon
+~13,9M₺ eksik kalıyordu. Yani inşaat iddia edilenden ERKEN başlıyor ve capex oranları daha küçük
+bir tamponla ölçülüyordu.
+
+**VE ASIL DERS BURADA:** düzeltmeyi yapıp dişini ölçtüm — **bakımı geri çıkardığımda bütün
+kapılar YEŞİL kaldı** (pencere 1,104 → 1,075, hâlâ bant içi; alt uç 23 → 21). Gerçek bir hata,
+hiçbir korumanın olmadığı bir yerde duruyordu. Bu oturumda ikinci kez: serbest oyuncu yol
+ayrımının da dişi yoktu.
+
+Kapı eklendi ve iddiası SABİT LİSTEYE değil TİCK'İN KENDİSİNE karşı kuruldu:
+`rezerv == RezervHafta × (L.ToplamGider − InsaatTl − TransferTl − FaizTl)`. Capex ve transfer
+komut anında düşüldüğü için, faiz de politika kredisiz olduğu için hariç (kapı ayrıca faizin
+gerçekten sıfır olduğunu denetliyor). Bir liste yazsaydım, ileride eklenecek yeni bir işletme
+kalemi yine sessizce dışarıda kalırdı. Diş: bakım çıkarıldığında
+`tampon 63.635.000₺ ... 76.010.000₺ — rezerv bir kalemi atlıyor`.
+
+**YENİDEN KALİBRASYON:** rezerv büyüyünce merdiven yavaşladı ve bandın ALT ucunda 24 sezona
+(sınıra) dayandı. 22/25/28 yeniden ölçüldü:
+
+| rezerv | pencere | alt uçta merdiven | durağan |
+|---|---|---|---|
+| 22 | 1,058 | 22 | 1,108 |
+| **25** | **1,104** | **23** | **1,124** |
+| 28 | 1,081 | 24 (sınır) | 1,109 |
+
+25 seçildi: pencere bandın ortasında, alt uçta 1 sezon pay var. Gizlenmesin: **pencere oranı
+rezervde monoton değil** (28, 22'den iyi ama 25'ten kötü) — merdiven adımlarının sezon
+sınırlarına düşme zamanlaması ayrık bir etki yaratıyor. 25 bu ızgaranın en iyisi, kanıtlanmış
+bir optimum değil.
+
 ### 🔴 K13-B: "müdahale kararını role duyarlı yap" ÖNERİSİ ÖLÇÜMLE ÇÜRÜDÜ (2026-09-02)
 
 **Atilla kararı:** "düz dağılımda kırmızı borcu için (a) ile devam et" — yani müdahale KARARINI

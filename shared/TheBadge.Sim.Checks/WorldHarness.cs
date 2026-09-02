@@ -215,10 +215,34 @@ namespace TheBadge.Checks
         /// maliyeti) pencere hiç 1,05'e ulaşmadı; ECONOMY_MAP bandının orada tutması bakiyenin
         /// değil POLİTİKANIN işiymiş.
         ///
-        /// 28 HAFTA NEREDEN: rezerv × tier maliyeti ızgarası süpürüldü (12/20/28/38 × 1,00/0,85/0,70).
-        /// Dört şartı (pencere ∈ bant, durağan ∈ bant, merdiven ∈ [6,24], fakir kulüp de ∈ [6,24])
-        /// aynı anda sağlayan TEK nokta 28 hafta + tier ×0,70 çıktı.</summary>
-        public const int RezervHafta = 28;
+        /// KAPSAM: personel + genel işletme + MAAŞ + BAKIM. Bakım ilk yazımda UNUTULMUŞTU
+        /// (inceleme bulgusu, Codex P2): her hafta işlenen ve merdivenle BÜYÜYEN bir kalem, yani
+        /// "28 haftalık işletme gideri" diyen yorum ile kodun tuttuğu tampon uyuşmuyordu —
+        /// referans tier'larda tampon ~13,9M₺ eksikti ve inşaat iddia edilenden erken başlıyordu.
+        ///
+        /// 25 HAFTA NEREDEN: rezerv × tier maliyeti ızgarası süpürüldü (12/20/28/38 × 1,00/0,85/0,70),
+        /// dört şartı (pencere ∈ bant, durağan ∈ bant, merdiven ∈ [6,24], bandın ALT ucundaki
+        /// fakir kulüp de ∈ [6,24]) aynı anda sağlayan bölge bulundu; bakım düzeltmesinden sonra
+        /// 22/25/28 yeniden ölçüldü:
+        ///
+        ///   rezerv | pencere | alt uçta merdiven | durağan
+        ///     22   |  1,058  |        22         |  1,108
+        ///     25   |  1,104  |        23         |  1,124
+        ///     28   |  1,081  |        24 (sınır) |  1,109
+        ///
+        /// 25 seçildi: pencere bandın ORTASINDA ve alt uçta 1 sezon pay var. Not, gizlenmesin:
+        /// pencere oranı rezervde MONOTON DEĞİL (28'de 22'den iyi ama 25'ten kötü) — merdiven
+        /// adımlarının sezon sınırlarına düşme zamanlaması ayrık bir etki yaratıyor. Yani 25 bu
+        /// ızgaranın en iyisi, kanıtlanmış bir optimum değil.</summary>
+        public const int RezervHafta = 25;
+
+        /// <summary>Referans kulübün tutması gereken nakit tampon. AYRI METOT çünkü kapı bunu
+        /// tick'in GERÇEKTEN işlediği işletme kalemlerine karşı ölçüyor: bakım unutulduğunda
+        /// hiçbir kapı kırmızıya dönmemişti (diş ölçüldü — pencere 1,104 → 1,075, hâlâ bant içi).
+        /// Gerçek bir hata, hiçbir koruması olmayan bir yerde duruyordu.</summary>
+        public static long Rezerv(GameState st, EconomyBalance eco)
+            => RezervHafta * (eco.gider.personelHaftalik + eco.gider.genelIsletmeHaftalik
+                              + st.Club.HaftalikMaasGiderTl + EconomyTick.BakimGideri(st, eco));
 
         /// <summary>HEDEFİN SAHİPLİK DURUMUNA GÖRE DOĞRU AKSİYON — serbest oyuncu (`ClubId == 0`)
         /// için `sign_free_agent`, sahipli oyuncu için `propose_offer`. Ayrı bir metot çünkü
@@ -319,8 +343,14 @@ namespace TheBadge.Checks
                         // 22 kalibrasyon noktası ölçüldü (doygunluk × ücret × tier maliyeti);
                         // pencere oranı hiçbirinde 1,05'e ulaşmadı. Yani ECONOMY_MAP bandının
                         // inşaat penceresinde tutması, bakiyenin değil POLİTİKANIN işiydi.
-                        long rezerv = RezervHafta * (eco.gider.personelHaftalik + eco.gider.genelIsletmeHaftalik
-                                                     + st.Club.HaftalikMaasGiderTl);
+                        // BAKIM DA İŞLETME GİDERİDİR ve merdivenle birlikte BÜYÜR (tier toplamı ×
+                        // tier başı ücret). İlk yazımda rezerv onu atlıyordu: "28 haftalık işletme
+                        // gideri" diyen yorum ile kodun tuttuğu tampon uyuşmuyordu ve referans
+                        // tier'larda tampon ~13,9M₺ eksik kalıyordu — yani inşaat iddia edilenden
+                        // ERKEN başlıyor, capex oranları daha küçük bir tamponla ölçülüyordu
+                        // (inceleme bulgusu, Codex P2). Formül kopyalanmıyor, `EconomyTick`in
+                        // kendi sorgusu çağrılıyor.
+                        long rezerv = Rezerv(st, eco);
                         if (!st.CanAfford(maliyet + rezerv)) continue;      // para yok → BEKLE (kredi yok)
 
                         var zarf = new CommandEnvelope

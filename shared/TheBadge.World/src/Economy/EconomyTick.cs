@@ -224,7 +224,11 @@ namespace TheBadge.World
             return (long)Math.Round(seyirci * harcama, MidpointRounding.AwayFromZero);
         }
 
-        static long BakimGideri(GameState st, EconomyBalance eco)
+        /// <summary>Haftalık tesis bakım gideri — tier toplamı × tier başı ücret. PUBLIC, çünkü
+        /// kulübün haftalık işletme yükünü soran her yerin (ör. referans koşunun nakit rezervi)
+        /// aynı formülü İKİNCİ KEZ yazması gerekmesin: bu oturumda formül tekrarı tam olarak bu
+        /// sınıftan bir hataya yol açtı (rezerv bakımı unuttu, inceleme bulgusu P2).</summary>
+        public static long BakimGideri(GameState st, EconomyBalance eco)
         {
             long tierToplam = 0;
             for (int i = 0; i < st.Club.TesisTier.Length; i++) tierToplam += st.Club.TesisTier[i];
