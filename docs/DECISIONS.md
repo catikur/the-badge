@@ -2904,11 +2904,22 @@ ailesiyle ölç.* Yan yana koyduğun iki sayı farklı evrenlerdense karşılaş
 
 Borç artık teşhise bağlı ve **iki taraflı**:
 - **Yol canlanırsa** (doğrudan kırmızı > 0) kapı düşer ve borcun kapandığını söyler.
-- **Boşluk kötüleşirse** (şiddet tavanı 0,70'in altına inerse) kapı kırmızıya döner.
+- **Boşluk kötüleşirse** (`kirmiziEsik − enYuksekSiddet` > 0,08) kapı kırmızıya döner.
 - Ölçüm bedava: `M16ECalibGenis`in zaten koştuğu 500 maçın olay log'undan okunuyor.
 
-Diş iki yönde de ölçüldü: `kirmiziEsik` 0,70'e çekilince `doğrudan kırmızı 0.026 > 0 — YOL
-CANLANDI`; `marginAgirlik` 0,20'ye indirilince `şiddet tavanı 0.588 < taban 0.70 — BORÇ KÖTÜLEŞTİ`.
+**İlk yazımda kötüleşme iddiası TEK YANLIYDI** (inceleme bulgusu, Codex P2): yalnız şiddet
+TAVANINI koruyordum ("0,70'in altına inmesin"), oysa borcun büyüklüğü BOŞLUK. `kirmiziEsik`
+0,80 → 0,90 yapılsaydı boşluk 0,054'ten 0,154'e çıkar — borç kötüleşir — ama tavan kıpırdamadığı
+için kapı YEŞİL kalırdı. Ekrana bastığım sayıyı iddiaya bağlamamıştım; bu oturumda üçüncü kez
+aynı sınıf hata (doğru şeyi ölçüp yanlış şeyi iddia etmek).
+
+Tavan 0,08: bugünkü boşluk 0,054 ve `enYuksekSiddet` 500 maçın MAKSİMUMU, yani uç-değer
+istatistiği (koşudan koşuya 0,746-0,754 arası oynuyor). 0,08 gürültüye yer bırakır, eşik oynatma
+ölçeğindeki gerçek kötüleşmeyi (0,10+) yakalar.
+
+Diş üç senaryoda da ölçüldü: `kirmiziEsik` 0,70'e çekilince `doğrudan kırmızı 0.026 > 0 — YOL
+CANLANDI`; 0,90'a çıkarılınca `boşluk 0.154 > 0.08 — BORÇ KÖTÜLEŞTİ`; `marginAgirlik` 0,20'ye
+indirilince `boşluk 0.212 > 0.08 — BORÇ KÖTÜLEŞTİ`.
 
 `M16EKirmiziBorcu` (LİG kırmızı oranı) DURUYOR — semptom hâlâ ölçülüyor; yeni kapı SEBEBİ
 ölçüyor. Kayıttaki "düz dağılım" ifadesi de düzeltildi: ölçülen popülasyon LİG'dir.

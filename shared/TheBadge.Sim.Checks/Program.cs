@@ -1953,18 +1953,26 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         if (dogrudanMac > 0)
             h13c += $"doğrudan kırmızı {dogrudanMac:F3} > 0 — YOL CANLANDI, bu teşhis kapısı kaldırılıp " +
                     "kırmızı metriği M16ECalibGenis'e geri konmalı ";
-        // BOŞLUK KÖTÜLEŞMESİN: şiddet tavanı bugünkünün altına inerse model daha da uzaklaşmış
-        // demektir. Taban örneklem gürültüsünün altında (500 maçta tepe değeri oynar).
-        const double SiddetTavaniTaban = 0.70;
-        if (enYuksekSiddet < SiddetTavaniTaban)
-            h13c += $"şiddet tavanı {enYuksekSiddet:F3} < kayıtlı taban {SiddetTavaniTaban:F2} " +
-                    "(BORÇ KÖTÜLEŞTİ — model doğrudan kırmızıdan daha da uzaklaştı) ";
+        // BOŞLUK KÖTÜLEŞMESİN — ve BOŞLUK İKİ UÇLUDUR. İlk yazımda yalnız şiddet TAVANINI
+        // koruyordum ("tavan 0,70'in altına inmesin"); oysa borcun büyüklüğü
+        // `kirmiziEsik − enYuksekSiddet`. Eşik 0,80 → 0,90 yapılsaydı boşluk 0,054'ten 0,154'e
+        // çıkar, yani borç KÖTÜLEŞİR, ama tavan kıpırdamadığı için kapı YEŞİL kalırdı
+        // (inceleme bulgusu, Codex P2). Ekrana bastığım sayıyı iddiaya bağlamamıştım.
+        //
+        // TAVAN 0,08 NEREDEN: bugünkü boşluk 0,054 ve `enYuksekSiddet` 500 maçın MAKSİMUMU,
+        // yani uç-değer istatistiği — koşudan koşuya ±0,01 oynuyor (ölçüldü: 0,746 ve 0,754).
+        // 0,08 gürültüye yer bırakır, gerçek kötüleşmeyi (eşik oynatma ölçeğinde 0,10+) yakalar.
+        const double BoslukTavani = 0.08;
+        double bosluk = simBal.referee.kirmiziEsik - enYuksekSiddet;
+        if (bosluk > BoslukTavani)
+            h13c += $"doğrudan kırmızı boşluğu {bosluk:F3} > kayıtlı tavan {BoslukTavani:F2} " +
+                    "(BORÇ KÖTÜLEŞTİ — eşik yükseldi ya da şiddet kuyruğu daraldı) ";
         Console.WriteLine($"[info] K13-C doğrudan kırmızı yolu: {dogrudanMac:F3}/maç · en yüksek şiddet " +
                           $"{enYuksekSiddet:F3} · eşik {simBal.referee.kirmiziEsik:F2} · " +
-                          $"boşluk {simBal.referee.kirmiziEsik - enYuksekSiddet:F3}");
+                          $"boşluk {bosluk:F3} (tavan {BoslukTavani:F2})");
         if (h13c.Length > 0) failures += Fail("K13CDogrudanKirmiziOlu", h13c);
         else Pass($"K13CDogrudanKirmiziOlu(TEŞHİS: kırmızının iki kaynağından biri ölü — doğrudan {dogrudanMac:F3}, " +
-                  $"şiddet tavanı {enYuksekSiddet:F3} vs eşik {simBal.referee.kirmiziEsik:F2}; " +
+                  $"boşluk {bosluk:F3} ≤ {BoslukTavani:F2}, şiddet tavanı {enYuksekSiddet:F3} vs eşik {simBal.referee.kirmiziEsik:F2}; " +
                   "bant sorgulandı ve TEMİZ çıktı, borç model kolunda)");
     }
 
