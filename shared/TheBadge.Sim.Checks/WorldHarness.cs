@@ -141,7 +141,7 @@ namespace TheBadge.Checks
         /// örüntüden gelir (rastgelelik ekonomiyi değil, ölçümü bulanıklaştırırdı): sırayla
         /// G-B-M-G-B-M... → %33 galibiyet, %33 beraberlik, %33 mağlubiyet.</summary>
         public static WeekLedger Kos(GameState st, EconomyBalance eco, WorldRules kural,
-                                     ulong saveSeed, int sezon, out int iflasSezonu)
+                                     ulong saveSeed, int sezon, TransferBalance tb, out int iflasSezonu)
         {
             var toplam = new WeekLedger();
             var j = new WorldJournal();
@@ -154,7 +154,7 @@ namespace TheBadge.Checks
                     var sonuc = (WeekResult)(byte)(1 + (hafta % 3));      // G, B, M döngüsü
                     bool evMaci = (hafta % 2) == 0;
                     j.Clear();
-                    var L = EconomyTick.Hafta(st, eco, kural, saveSeed, sonuc, evMaci, j);
+                    var L = EconomyTick.Hafta(st, eco, kural, saveSeed, sonuc, evMaci, tb, j);
                     if (!j.Validate(st, out string hata))
                         throw new InvalidOperationException("ekonomi journal geçersiz: " + hata);
                     j.Apply(st);
@@ -201,6 +201,49 @@ namespace TheBadge.Checks
         /// <summary>Tavan tier — `eco.insaat.tierSureHafta` uzunluğundan türetilir, elle yazılmaz.</summary>
         public static int MaxTier(EconomyBalance eco) => eco.insaat.tierSureHafta.Length - 1;
 
+        /// <summary>Referans kulübün NAKİT REZERVİ, hafta cinsinden işletme gideri. Politikanın
+        /// bir parçası (balance değil): burası oyun verisi değil, ölçülen SENARYOdur. Bir sezonluk
+        /// işletme tamponu — kredisiz politikanın makul karşılığı.</summary>
+        /// <summary>Referans kulübün NAKİT REZERVİ, hafta cinsinden işletme gideri. Politikanın
+        /// parçası (balance DEĞİL): burası oyun verisi değil, ölçülen SENARYOdur.
+        ///
+        /// NEDEN VAR: ilk politika "para yetiyorsa yap"tı ve kasayı dibe vuruyordu (ölçüm: en
+        /// düşük kasa −5,8M₺ — referans kulüp düzenli olarak eksideydi). Rezervle +20,0M₺.
+        /// Ölçüme etkisi de var ve gizlenmiyor: rezervsiz politika kaçınılmaz olarak PARA
+        /// SINIRLIdır, para sınırlı kulüpte gelirin tamamı capex'e gider ve inşaat penceresi
+        /// source/sink 1,00'a çakılır. 22 kalibrasyon noktasında (doygunluk × ücret × tier
+        /// maliyeti) pencere hiç 1,05'e ulaşmadı; ECONOMY_MAP bandının orada tutması bakiyenin
+        /// değil POLİTİKANIN işiymiş.
+        ///
+        /// KAPSAM: personel + genel işletme + MAAŞ + BAKIM. Bakım ilk yazımda UNUTULMUŞTU
+        /// (inceleme bulgusu, Codex P2): her hafta işlenen ve merdivenle BÜYÜYEN bir kalem, yani
+        /// "28 haftalık işletme gideri" diyen yorum ile kodun tuttuğu tampon uyuşmuyordu —
+        /// referans tier'larda tampon ~13,9M₺ eksikti ve inşaat iddia edilenden erken başlıyordu.
+        ///
+        /// 25 HAFTA NEREDEN: rezerv × tier maliyeti ızgarası süpürüldü (12/20/28/38 × 1,00/0,85/0,70),
+        /// dört şartı (pencere ∈ bant, durağan ∈ bant, merdiven ∈ [6,24], bandın ALT ucundaki
+        /// fakir kulüp de ∈ [6,24]) aynı anda sağlayan bölge bulundu; bakım düzeltmesinden sonra
+        /// 22/25/28 yeniden ölçüldü:
+        ///
+        ///   rezerv | pencere | alt uçta merdiven | durağan
+        ///     22   |  1,058  |        22         |  1,108
+        ///     25   |  1,104  |        23         |  1,124
+        ///     28   |  1,081  |        24 (sınır) |  1,109
+        ///
+        /// 25 seçildi: pencere bandın ORTASINDA ve alt uçta 1 sezon pay var. Not, gizlenmesin:
+        /// pencere oranı rezervde MONOTON DEĞİL (28'de 22'den iyi ama 25'ten kötü) — merdiven
+        /// adımlarının sezon sınırlarına düşme zamanlaması ayrık bir etki yaratıyor. Yani 25 bu
+        /// ızgaranın en iyisi, kanıtlanmış bir optimum değil.</summary>
+        public const int RezervHafta = 25;
+
+        /// <summary>Referans kulübün tutması gereken nakit tampon. AYRI METOT çünkü kapı bunu
+        /// tick'in GERÇEKTEN işlediği işletme kalemlerine karşı ölçüyor: bakım unutulduğunda
+        /// hiçbir kapı kırmızıya dönmemişti (diş ölçüldü — pencere 1,104 → 1,075, hâlâ bant içi).
+        /// Gerçek bir hata, hiçbir koruması olmayan bir yerde duruyordu.</summary>
+        public static long Rezerv(GameState st, EconomyBalance eco)
+            => RezervHafta * (eco.gider.personelHaftalik + eco.gider.genelIsletmeHaftalik
+                              + st.Club.HaftalikMaasGiderTl + EconomyTick.BakimGideri(st, eco));
+
         /// <summary>HEDEFİN SAHİPLİK DURUMUNA GÖRE DOĞRU AKSİYON — serbest oyuncu (`ClubId == 0`)
         /// için `sign_free_agent`, sahipli oyuncu için `propose_offer`. Ayrı bir metot çünkü
         /// KAPI bunu ölçüyor: koşucu ayrımı yapmadığında serbest hedefe her hafta `propose_offer`
@@ -240,7 +283,10 @@ namespace TheBadge.Checks
         public static Sonuc Kos(GameState st, EconomyBalance eco, WorldRules kural, ulong saveSeed,
                                 int sezon, IBandProvider bantlar,
                                 Dictionary<RateClass, RateLimitCfg[]> rlCfg, long ownerUserId,
-                                MarketBalance mb = null, TransferBalance tb = null)
+                                // `tb` ZORUNLU: ekonomi tick'i sezon başı ücret gözden geçirmesi
+                                // için istiyor (K13-A). Varsayılan bırakmak, piyasasız koşuların
+                                // enflasyonu sessizce atlaması demekti.
+                                TransferBalance tb, MarketBalance mb = null)
         {
             var depo = new WorldStore(st);
             var ctx = new WorldContext(depo, kural);
@@ -285,7 +331,27 @@ namespace TheBadge.Checks
                         int mevcut = st.Club.TesisTier[tesis];
                         if (mevcut >= maxTier) continue;                   // tavan
                         long maliyet = eco.TierMaliyet(mevcut + 1);
-                        if (!st.CanAfford(maliyet)) continue;              // para yok → BEKLE (kredi yok)
+                        // NAKİT REZERVİ: kulüp kasayı SIFIRA kadar harcamaz. İlk politika
+                        // "para yetiyorsa yap"tı ve referans kulüp her tier'da kasayı dibe
+                        // vuruyordu (ölçüldü: en düşük kasa −5,8M₺, yani düzenli olarak eksiye
+                        // düşüyordu). Bu bir referans kulüp davranışı değil; gerçek kulüp
+                        // işletme gideri için tampon tutar.
+                        //
+                        // ÖLÇÜM SONUCU DA BUNA BAĞLI: rezervsiz politika kaçınılmaz olarak
+                        // PARA SINIRLIdır ve para sınırlı bir kulüpte source/sink inşaat
+                        // penceresi boyunca 1,00'a çakılır — gelirin tamamı capex'e gider.
+                        // 22 kalibrasyon noktası ölçüldü (doygunluk × ücret × tier maliyeti);
+                        // pencere oranı hiçbirinde 1,05'e ulaşmadı. Yani ECONOMY_MAP bandının
+                        // inşaat penceresinde tutması, bakiyenin değil POLİTİKANIN işiydi.
+                        // BAKIM DA İŞLETME GİDERİDİR ve merdivenle birlikte BÜYÜR (tier toplamı ×
+                        // tier başı ücret). İlk yazımda rezerv onu atlıyordu: "28 haftalık işletme
+                        // gideri" diyen yorum ile kodun tuttuğu tampon uyuşmuyordu ve referans
+                        // tier'larda tampon ~13,9M₺ eksik kalıyordu — yani inşaat iddia edilenden
+                        // ERKEN başlıyor, capex oranları daha küçük bir tamponla ölçülüyordu
+                        // (inceleme bulgusu, Codex P2). Formül kopyalanmıyor, `EconomyTick`in
+                        // kendi sorgusu çağrılıyor.
+                        long rezerv = Rezerv(st, eco);
+                        if (!st.CanAfford(maliyet + rezerv)) continue;      // para yok → BEKLE (kredi yok)
 
                         var zarf = new CommandEnvelope
                         {
@@ -456,7 +522,7 @@ namespace TheBadge.Checks
                     var sonuc = (WeekResult)(byte)(1 + (hafta % 3));      // G, B, M döngüsü
                     bool evMaci = (hafta % 2) == 0;
                     j.Clear();
-                    var L = EconomyTick.Hafta(st, eco, kural, saveSeed, sonuc, evMaci, j);
+                    var L = EconomyTick.Hafta(st, eco, kural, saveSeed, sonuc, evMaci, tb, j);
                     if (!j.Validate(st, out string hata))
                         throw new InvalidOperationException("kademeli koşu journal geçersiz: " + hata);
                     j.Apply(st);
@@ -477,7 +543,8 @@ namespace TheBadge.Checks
         /// koşup source/sink'i ölçer. `st` KOŞULMUŞ durumdur (merdiven tamamlanmış olmalı).</summary>
         public static double MerdivenSonrasiOran(GameState st, EconomyBalance eco, WorldRules kural, ulong saveSeed,
                                                  int sezon, IBandProvider bantlar,
-                                                 Dictionary<RateClass, RateLimitCfg[]> rlCfg, long ownerUserId)
+                                                 Dictionary<RateClass, RateLimitCfg[]> rlCfg, long ownerUserId,
+                                                 TransferBalance tb)
         {
             var toplam = new WeekLedger();
             var j = new WorldJournal();
@@ -487,7 +554,7 @@ namespace TheBadge.Checks
                 {
                     j.Clear();
                     var L = EconomyTick.Hafta(st, eco, kural, saveSeed,
-                                              (WeekResult)(byte)(1 + (hafta % 3)), (hafta % 2) == 0, j);
+                                              (WeekResult)(byte)(1 + (hafta % 3)), (hafta % 2) == 0, tb, j);
                     j.Validate(st, out _); j.Apply(st);
                     toplam.Topla(L);
                 }

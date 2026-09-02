@@ -2687,6 +2687,174 @@ ilk yeniden düzenlemede yanlış yerden kırmızıya döner ve kapı gevşetme 
 FAZ 02'de konsol yerini ekranlara bıraktığında kapanır — döngü test edilebilir bir servise
 taşındığında kapı doğrudan onu koşar.
 
+### K13-A: sınırsız gelir büyümesi kapatıldı — BORÇ KAPANDI (2026-09-02)
+
+**Atilla kararı:** "(a) maaş enflasyonu + (c) gelir doygunluğu ile devam et." İkisi de yapıldı.
+
+**ÖLÇÜLEN SORUN (önce şeklini çıkardım):** 40 sezonluk koşuda merdiven 11. sezonda bitiyor, sonra
+
+| | sezon 1-10 | 11-20 | 21-30 | 31-40 |
+|---|---|---|---|---|
+| gelir | 1,73mr | 3,15mr | 3,14mr | 3,14mr |
+| gider | 1,67mr | 1,72mr | 1,58mr | 1,58mr |
+| oran | 1,037 | 1,827 | 1,988 | 1,989 |
+
+Yani kapasite üçe katlanınca **gelir üçe katlanıyor, gider ise DÜŞÜYOR.** Borç tek satırda buydu.
+
+**(c) GELİR DOYGUNLUĞU:** `EconomyTick.EtkinKapasite` — `referansKapasite`ye (30.000) kadar her
+koltuk normal dolar, ötesi `ekKapasiteVerimi` (0,50) oranında. Şehrin taraftarı sonsuz değildir.
+Sert kesme DEĞİL: stadyum büyütmek hâlâ kazandırır, yoksa merdivenin son basamakları anlamsızlaşır
+ve `K10CapexSozlesmesi` haklı olarak kırmızıya dönerdi. Maç günü geliri, büfe/mağaza (kişi başı)
+ve KOMBİNE aynı doygunluktan geçer — kombineyi unutmak, maç günü doyarken sezonluğun sınırsız
+büyümesi demekti.
+
+**(a) ÜCRET ENFLASYONU:** `UcretEnflasyonu.SezonBasi` — her sezon başı kadro ücretleri kulübün
+bugünkü ölçeğindeki talebe doğru çekilir. Ölçek ETKİN kapasiteden gelir, yani doygunluk kolu
+geliri kısarken ücret baskısını da kısar; iki kol aynı büyüklüğe bağlı. `EconomyTick.Hafta`ın
+İÇİNDEN çağrılır (ayrı bir çağrı yeri, unutulabilecek bir yer daha demekti — bu oturumda o desen
+üç kez ısırdı) ve `tb` parametresi ZORUNLU yapıldı ki hiçbir çağıran enflasyonu sessizce atlamasın.
+
+**KAPILAR ÜÇ KEZ BENİ DÜZELTTİ:**
+1. İlk yazımda ücret doğrudan `MaasTalebi`ye EŞİTLENİYORDU. Bu enflasyon değil YENİDEN TÜRETMEydi:
+   fikstürün taban ücretleri formülden yüksekti, dolayısıyla ilk sezon başında bütün kadro
+   ucuzluyordu. `K3EkonomiSozlesmesi` anında yakaladı (maaş payı %50 → %36,6, oran 1,47) ve
+   `K3IflasEgrisi` de kırmızıya döndü. Model artık YALNIZ YUKARI çeker.
+2. `K3IflasEgrisi` ikinci kez konuştu: senaryo kulüp maaş TOPLAMINI ×1,5 yapıyor ama oyuncu
+   maaşlarına dokunmuyordu; sezon başı gözden geçirmesi toplamı kadrodan yeniden topladığı için
+   o ×1,5 siliniyordu. Senaryo tutarlı hâle getirildi (aşırı harcama artık oyuncu maaşından
+   gelir) ve **kulüp toplamı = kadro toplamı** değişmezi ilk kez kapıya bağlandı.
+3. Kalibrasyonda bandın ALTINA geçtim (1,025). Kapı iki taraflı olduğu için yakaladı.
+
+**KALİBRASYON TAHMİNLE DEĞİL SÜPÜRMEYLE:** 22 nokta ölçüldü.
+`referansKapasite × ekKapasiteVerimi × ucretOlcekAgirligi` ızgarası, sonra `tierMaliyetTaban`.
+
+**VE SÜPÜRME YAPISAL BİR ŞEY BULDU:** inşaat penceresi oranı hiçbir kalibrasyonda 1,05'e
+ulaşmıyordu (en iyi 1,044) — çünkü referans politika parası varken hep harcıyor, yani PARA
+SINIRLI, ve para sınırlı kulüpte gelirin tamamı capex'e gider: oran 1,00'a çakılır. Bandın orada
+tutması bakiyenin değil POLİTİKANIN işiymiş. Politikaya nakit rezervi eklendi (28 hafta işletme
+gideri) — bu aynı zamanda ölçümün kendi raporladığı bir yarayı da kapattı: referans kulübün en
+düşük kasası −5,8M₺ idi, yani düzenli olarak eksideydi. Şimdi +20,0M₺.
+
+`tierMaliyetTaban` ×0,70 ile ayarlandı: eski değer geliri SINIRSIZ büyüyen bir kulübe göre
+kalibreydi; doygunluk gelince aynı merdiven 11 → 18 sezona çıkıyor ve bandın alt ucunda hiç
+bitmiyordu.
+
+**SONUÇ (hepsi aynı koşuda):**
+
+| ölçüm | önce | sonra | bant |
+|---|---|---|---|
+| merdiven sonrası durağan oran | **1,99** | **1,107** | [1,05-1,15] ✓ |
+| inşaat penceresi (capex dahil) | 1,131 | 1,058 | [1,05-1,15] ✓ |
+| işletme oranı (capex hariç) | 1,49 | 1,298 | bandın üstünde ✓ |
+| merdiven süresi | 11 | 11 | [6,24] ✓ |
+| bant uçlarında merdiven | 19 / 9 | 15 / 11 | [6,24] ✓ |
+| maaş payı | %49 | %51,2 | [%45-60] ✓ |
+| 40 sezon sonu kasa | 4,62 milyar ₺ | ~0,6 milyar ₺ | — |
+| referans kulübün en düşük kasası | −5,8M₺ | +20,0M₺ | — |
+
+**BORÇ TAVANI KALDIRILDI.** `merdivenSonrasiOranTavani` (2,00) ve `merdivenSonrasiHedefOran`
+balance'tan SİLİNDİ; kapı artık ECONOMY_MAP'in kendi bandını **iki taraflı** uyguluyor. Yani
+gevşemedi, DARALDI — borç gözcüsünün işi buydu: hedefe ulaşıldığında kendini kapattırmak.
+
+**DİŞ ÖLÇÜMÜ (iki kol ayrı ayrı):** doygunluk kapatılınca durağan oran **1,382** (pencere de
+1,164 ile bant dışı), ücret enflasyonu kapatılınca **1,284**. İkisi açıkken 1,107 — yani ne biri
+tek başına yetiyor, ikisi de yük taşıyor. Mekanizma kapısı (`K13ADoygunlukVeUcret`) ayrıca
+şunları ölçüyor: referans altında kırpma yok, üstünde koltuk başına verim AZALIYOR, ücret yukarı
+çekiliyor ama aşağı çekilMİYOR, sezon tavanı aşılmıyor, kulüp toplamı = kadro toplamı.
+
+### 🔴 BULGU (Codex, gerçek): nakit rezervi BAKIMI atlıyordu — ve hiçbir kapı görmüyordu (2026-09-02)
+
+K13-A'da referans politikaya eklediğim nakit rezervi "28 haftalık işletme gideri" diyordu ama
+personel + genel işletme + maaşı topluyor, **tesis BAKIMINI atlıyordu.** Bakım her hafta işlenen
+ve merdivenle BÜYÜYEN bir kalem (tier toplamı × tier başı ücret); referans tier'larda tampon
+~13,9M₺ eksik kalıyordu. Yani inşaat iddia edilenden ERKEN başlıyor ve capex oranları daha küçük
+bir tamponla ölçülüyordu.
+
+**VE ASIL DERS BURADA:** düzeltmeyi yapıp dişini ölçtüm — **bakımı geri çıkardığımda bütün
+kapılar YEŞİL kaldı** (pencere 1,104 → 1,075, hâlâ bant içi; alt uç 23 → 21). Gerçek bir hata,
+hiçbir korumanın olmadığı bir yerde duruyordu. Bu oturumda ikinci kez: serbest oyuncu yol
+ayrımının da dişi yoktu.
+
+Kapı eklendi ve iddiası SABİT LİSTEYE değil TİCK'İN KENDİSİNE karşı kuruldu:
+`rezerv == RezervHafta × (L.ToplamGider − InsaatTl − TransferTl − FaizTl)`. Capex ve transfer
+komut anında düşüldüğü için, faiz de politika kredisiz olduğu için hariç (kapı ayrıca faizin
+gerçekten sıfır olduğunu denetliyor). Bir liste yazsaydım, ileride eklenecek yeni bir işletme
+kalemi yine sessizce dışarıda kalırdı. Diş: bakım çıkarıldığında
+`tampon 63.635.000₺ ... 76.010.000₺ — rezerv bir kalemi atlıyor`.
+
+**YENİDEN KALİBRASYON:** rezerv büyüyünce merdiven yavaşladı ve bandın ALT ucunda 24 sezona
+(sınıra) dayandı. 22/25/28 yeniden ölçüldü:
+
+| rezerv | pencere | alt uçta merdiven | durağan |
+|---|---|---|---|
+| 22 | 1,058 | 22 | 1,108 |
+| **25** | **1,104** | **23** | **1,124** |
+| 28 | 1,081 | 24 (sınır) | 1,109 |
+
+25 seçildi: pencere bandın ortasında, alt uçta 1 sezon pay var. Gizlenmesin: **pencere oranı
+rezervde monoton değil** (28, 22'den iyi ama 25'ten kötü) — merdiven adımlarının sezon
+sınırlarına düşme zamanlaması ayrık bir etki yaratıyor. 25 bu ızgaranın en iyisi, kanıtlanmış
+bir optimum değil.
+
+### 🔴 K13-B: "müdahale kararını role duyarlı yap" ÖNERİSİ ÖLÇÜMLE ÇÜRÜDÜ (2026-09-02)
+
+**Atilla kararı:** "düz dağılımda kırmızı borcu için (a) ile devam et" — yani müdahale KARARINI
+role duyarlı yap, kötü müdahaleci dalmak yerine jokey yapsın. Uygulandı, ölçüldü, **çürüdü** ve
+geri alındı. Kayıt burada duruyor ki aynı yol ikinci kez denenmesin.
+
+**NE YAPILDI:** `MatchEngine`'in tackle kararına jokey kolu eklendi —
+`p_jokey = clamp(egim × (def_etkin − atk_etkin − esik) / bolen, 0, tavan)`, `Domain.Decision`
+akışında ([KALİBRE] `sim.balance.json → possession`).
+
+**BİRİNCİ SÜRÜM SEÇİCİ DEĞİLDİ:** eşiksiz hâli (taban + eğim × fark) maç başına **~93 kez**
+tetikleniyor ve iki popülasyonu da aynı oranda bastırıyordu — rol ayrımı değil, küresel bir kart
+indirimi. Eşik eklendi (12 puan): tetiklenme 93 → **19**/maç, yani artık gerçekten yalnız geride
+kalan savunucu jokeyliyor.
+
+**VE ASIL BULGU:** seçici hâliyle de İKİ POPÜLASYONU AYIRMIYOR. `sariSonrasiIhtiyat` ince
+süpürüldü (jokey AÇIK, 300 lig + 80 köprü maçı):
+
+| ihtiyat | LİG kart | LİG kırmızı | KÖPRÜ kart | KÖPRÜ kırmızı |
+|---|---|---|---|---|
+| 0,18 | 2,77 ✓ | **0,107 ✓** | 8,00 ✗ | 1,350 ✗ |
+| 0,19 | 2,67 ✓ | 0,077 ✗ | 7,42 ✗ | 1,150 ✗ |
+| 0,20 | 2,69 ✓ | 0,073 ✗ | 6,83 ✓ | 0,775 ✗ |
+| 0,21 | 2,66 ✓ | 0,060 ✗ | 6,31 ✓ | 0,525 ✓ |
+| 0,22 | 2,62 ✓ | 0,037 ✗ | 5,78 ✓ | 0,312 ✓ |
+
+(Bantlar: LİG kart 2,6-5,5 · kırmızı hedefi 0,10-0,36 · KÖPRÜ kart 2,50-7,00 · kırmızı 0,05-0,60.)
+
+**Hiçbir değerde ikisi birden banda girmiyor.** K12-A'nın bulgusu, jokey kolu EKLENDİKTEN SONRA da
+aynen geçerli.
+
+**SEBEBİ ARTIK BİLİNİYOR — ve öneriyi çürüten şey bu:** köprü kadrosunun kart fazlası müdahale
+SAYISINDAN değil müdahale ŞİDDETİNDEN geliyor. Jokey kolu SAYIYI azaltıyor; ama köprüdeki fauller
+zaten iyi savunucu ↔ iyi hücumcu düellolarından çıkıyor (yetenek farkı ≈ 0, yani jokey hiç
+tetiklenmiyor) ve şiddeti `marginGap`in sistematik büyüklüğünden alıyor. Öneri (a), yanlış
+büyüklüğü hedefliyordu.
+
+**İKİNCİ HİPOTEZ DE ÖLÇÜLDÜ VE ELENDİ:** şiddet ağırlığını `marginAgirlik`ten duruma
+(hız + arkadan) kaydırmak. İki popülasyonun ORANINI gerçekten yaklaştırıyor (LİG/KÖPRÜ 0,33 →
+0,56) ama mutlak seviyeyi patlatıyor: `marginAgirlik` 0,40 → 0,25'te lig kartı 2,84 → 9,95,
+0,12'de 24,62. Kullanılabilmesi için `sariEsik` + `foulEsikTaban` ile birlikte dört parametreli
+bir yeniden kalibrasyon gerekir ve o da bugün bantta olan 11 metriği yeniden riske atar.
+
+**KARAR: jokey kolu GERİ ALINDI.** Borcu kapatmıyor, buna karşılık golden hash'leri (M2/M4/M6)
+ve M14 sarı bandını (2,94, bant 3,0-5,0) bozuyor — yani tam bir yeniden kalibrasyon faturası
+çıkarıyor, karşılığında ölçülmüş bir kazanç yok. Borç bugünkü hâliyle korunuyor:
+`M16EKirmiziBorcu` tavanı tutuyor ve hedefi basıyor.
+
+**AÇIK KALAN — ATİLLA'NIN KARARI:**
+- **(a) jokey kolunu KENDİ değeri için geri getir.** Umutsuz bir müdahalecinin her seferinde
+  dalması gerçekçi değil (ME 7.6 ruhu) ve mekanizma çalışıyor. Bedeli: 11 metriğin yeniden
+  kalibrasyonu + golden yenileme, borç yine açık kalır. Ayrı bir dilim olarak açılmalı.
+- **(b) dört parametreli şiddet yeniden kalibrasyonu** (marginAgirlik + sariEsik + foulEsikTaban
+  + ihtiyat). Borcu kapatabilecek TEK ölçülmüş yol; riski, bugün bantta olan 11 metrik.
+- **(c) borcu kapatma, bandı sorgula.** Düz/lig dağılımı YAPAY bir popülasyon: 11 özdeş oyuncu
+  gerçek futbolda yok, ve sarılar dağıldığı için ikinci sarı doğal olarak seyrek. Borcun
+  ölçtüğü şey bir model hatası değil, yapay kadronun kendi özelliği olabilir.
+  **Önerim (c) + sonra (a) ayrı dilim** — ama bu bir bant sorgusudur, kararı sende.
+
 ## Bekleyen kararlar
 
 - ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —
@@ -2731,7 +2899,10 @@ taşındığında kapı doğrudan onu koşar.
 - ~~**Oyuncu piyasası modeli — merdiven sonrası sink borcunun ÖN KOŞULU (K11-E).**~~ →
   **YAPILDI (2026-09-01, K12-C):** seçenek (a)'nın asgari hâli — havuz yenilenmesi + pazarlık +
   kadro dönüşü kuruldu. Borç 2,25 → 1,911'e indi ama KAPANMADI.
-- **Sınırsız gelir büyümesi: merdiven sonrası borcun ASIL kaynağı (K12-C ölçümü, 2026-09-01).**
+- ~~**Sınırsız gelir büyümesi: merdiven sonrası borcun ASIL kaynağı (K12-C ölçümü, 2026-09-01).**~~
+  → **YAPILDI (2026-09-02, K13-A):** Atilla (a)+(c) dedi, ikisi de kuruldu; oran 1,99 → 1,107,
+  borç tavanı kaldırılıp yerine ECONOMY_MAP bandı iki taraflı kondu. Yukarıdaki K13-A kaydı.
+  Aşağıdaki eski metin, kararın alındığı andaki bilgi durumu olarak duruyor.
   Piyasa kuruldu ve çalışıyor, ama havuzun kalite tavanı yüzünden sink doyuyor: kadro havuzun
   tepesine ulaşınca kasa şişiyor (32 sezonda 3,3 milyar ₺). Sorun sink tarafında değil KAYNAK
   tarafında: stadyum kapasitesi üçe katlanıp kalıcı yüksek gelir üretiyor ve hiçbir gider onunla
@@ -2745,7 +2916,12 @@ taşındığında kapı doğrudan onu koşar.
   **YAPILDI (2026-09-01, K12-A):** seçenek (a). Kadro profili gerçekçiliğe geri döndü, köprü
   kadrosu motorun kendi bantlarında. Kalan tek kaçak (düz dağılımda kırmızı) bant gevşetilmeden
   ayrı bir borç kapısına taşındı — yukarıdaki K12-A kaydı.
-- **Düz dağılımda kırmızı 0,03 (hedef 0,10-0,36) — BORÇ (K12-A).** İki popülasyon aynı anda hem
+- **Düz dağılımda kırmızı 0,03 (hedef 0,10-0,36) — BORÇ (K12-A), ÖNERİ (a) K13-B'DE ÇÜRÜDÜ.**
+  Jokey kolu uygulandı ve ölçüldü: iki popülasyonu ayırmıyor, çünkü köprünün kart fazlası
+  müdahale sayısından değil ŞİDDETİNDEN geliyor (yukarıdaki K13-B kaydı). Geri alındı; borç
+  bugünkü kapısıyla korunuyor. Yeni seçenekler ve önerim K13-B kaydının sonunda.
+  Eski metin, kararın alındığı andaki bilgi durumu olarak duruyor:
+- **[ESKİ] Düz dağılımda kırmızı 0,03 (hedef 0,10-0,36) — BORÇ (K12-A).** İki popülasyon aynı anda hem
   kart hem kırmızı bandını tutturamıyor. Seçenekler: (a) müdahale KARARINI role duyarlı yap —
   kötü müdahaleci dalmak yerine jokey yapsın (model işi, ME 7.6 pres tetiği); (b) ikinci sarı
   mekanizmasını şiddetten ayır; (c) borç açık kalsın, kapı korusun. **Öneri: (a)** — kaynak

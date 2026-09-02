@@ -54,6 +54,8 @@ var lod2Tbl = Yukle<TheBadge.Sim.Config.Lod2Table>("balance/sim.lod2.json");
 var kural = Yukle<WorldRules>("balance/world.balance.json"); kural.Validate();
 var eko = Yukle<EconomyBalance>("balance/economy.balance.json"); eko.Validate();
 var sqBal = Yukle<SquadBalance>("balance/squad.balance.json"); sqBal.Validate();
+// K13-A: sezon başı ücret gözden geçirmesi için gerekli — kulüp büyüdükçe kadro ücreti de büyür.
+var tb = Yukle<TransferBalance>("balance/transfer.balance.json"); tb.Validate();
 
 var bantlar = new Bantlar();
 var rlCfg = new Dictionary<RateClass, RateLimitCfg[]>();
@@ -442,7 +444,7 @@ void HaftayiOyna(int h, Mac benim)
 
     // HAFTA SONU EKONOMİSİ — ECONOMY_MAP source/sink
     var j = new WorldJournal();
-    var L = EconomyTick.Hafta(st, eko, kural, seed, benimSonuc, evde, j);
+    var L = EconomyTick.Hafta(st, eko, kural, seed, benimSonuc, evde, tb, j);
     if (!j.Validate(st, out string ej)) { Yaz($"  ! ekonomi journal geçersiz: {ej}"); return; }
     j.Apply(st);
 
