@@ -2855,6 +2855,79 @@ ve M14 sarı bandını (2,94, bant 3,0-5,0) bozuyor — yani tam bir yeniden kal
   ölçtüğü şey bir model hatası değil, yapay kadronun kendi özelliği olabilir.
   **Önerim (c) + sonra (a) ayrı dilim** — ama bu bir bant sorgusudur, kararı sende.
 
+### K13-C: bant SORGULANDI ve TEMİZ çıktı — borç yanlış yere asılmış (2026-09-02)
+
+**Atilla kararı:** "(c) ile devam et" — borcu kapatma, **bandı sorgula.** Sorgulandı. Cevap:
+**bant yanlış değil, borcun ÇERÇEVESİ yanlış.**
+
+**(c)'NİN KENDİ HİPOTEZİ ÇÜRÜDÜ.** Önerirken şöyle demiştim: "düz dağılım yapay bir popülasyon;
+11 özdeş oyuncu gerçek futbolda yok ve sarılar dağıldığı için ikinci sarı doğal olarak seyrek."
+Ölçüm (500 maç × 3 popülasyon) bunu tutmadı:
+
+| popülasyon | faul | sarı | kırmızı | doğrudan | ikinci sarı | sarı yoğunlaşması | ort şiddet | **en yüksek şiddet** |
+|---|---|---|---|---|---|---|---|---|
+| DÜZ | 26,8 | 4,53 | 0,000 | **0,000** | 0,000 | 1,021 | 0,498 | 0,692 |
+| LİG | 19,9 | 2,94 | 0,030 | **0,000** | 0,030 | 1,025 | 0,492 | 0,746 |
+| KÖPRÜ | 39,4 | 5,47 | 0,086 | **0,000** | 0,086 | 1,056 | 0,496 | 0,754 |
+
+- **Yoğunlaşma hipotezi ölü:** üç popülasyonda da ~1,02-1,06. Sarılar her yerde benzer dağılıyor.
+- **"Yapay kadro az kart üretiyor" da yanlış:** DÜZ, LİG'den DAHA ÇOK faul ve sarı üretiyor
+  (26,8/4,53 vs 19,9/2,94) — ve yine de sıfır kırmızı.
+- **GERÇEK BULGU:** kırmızıların TAMAMI ikinci sarı. Üç popülasyonda da **doğrudan kırmızı
+  SIFIR**, ve görülen en şiddetli faul 0,754 iken eşik 0,80. Yol nadir değil, **ERİŞİLEMEZ.**
+
+Yani gerçek futbolda kırmızının iki kaynağı var (doğrudan + ikinci sarı); bu modelde **bir tanesi
+hiç çalışmıyor**. Bant (0,10-0,36) iki kaynaklı bir gerçekliğe göre yazılmış; tek kaynakla
+tutturulamaması bandın değil modelin eksiği. Borç "düz dağılımda kırmızı" diye tek bir yapay
+popülasyona asılmıştı; asıl yeri model kolunun kendisi.
+
+**TEK PARAMETRELİ DÜZELTME DE ÖLÇÜLDÜ VE YETMEDİ.** `kirmiziEsik`i erişilebilir aralığa çekmek
+akla yakın geldi ve süpürüldü: 0,72 → LİG 0,065 · 0,70 → 0,095 · 0,68 → 0,115. Ama kapının
+KENDİ koşusunda (N=500, kendi tohum ailesi) 0,70 yalnız **0,05** veriyor — hedefin (0,10) altında
+— ve üstelik `K11KadroKoprusu`nun enerji iddiasını kırmızı kart gürültüsünde bozuyor. 0,68'de ise
+köprü kadrosu kendi bandını aşıyor (0,635 > 0,60). Borç tek anahtarla kapanmıyor.
+
+### 🔴 KENDİ ÖLÇÜMÜMDE İKİ METOT HATASI (ikisini de kapı/karşılaştırma yakaladı)
+
+1. **"DÜZ" popülasyonunu AYNA MAÇ olarak kurmuşum.** `entity 7`'ye karşı yine `entity 7`
+   (yalnız PlayerId farklı) — yani takım kendisiyle oynuyordu. Faul 15,5 / sarı 1,39 okuyup
+   "düz dağılım az kart üretiyor" diye yorumlamıştım. Gerçek popülasyon (7'ye karşı 8):
+   **26,8 / 4,53.** Yorumun yönü tersine döndü.
+2. **LİG'i kapının tohum ailesiyle değil kendi ailemle, üstelik N=200 ile ölçmüşüm.** 0,095
+   okumuştum; kapının kendi koşusu (0xCA11B0, N=500) aynı ayarda 0,05 veriyor. Az kalsın
+   200 maçlık bir örneklemden kalibrasyon kararı çıkaracaktım.
+
+**Kural (yeni):** *bir kapının ölçtüğü şeyi tartışacaksan, KAPININ KENDİ popülasyonu ve tohum
+ailesiyle ölç.* Yan yana koyduğun iki sayı farklı evrenlerdense karşılaştırma değil, gürültü.
+
+### Kapı yeniden çerçevelendi: `K13CDogrudanKirmiziOlu`
+
+Borç artık teşhise bağlı ve **iki taraflı**:
+- **Yol canlanırsa** (doğrudan kırmızı > 0) kapı düşer ve borcun kapandığını söyler.
+- **Boşluk kötüleşirse** (şiddet tavanı 0,70'in altına inerse) kapı kırmızıya döner.
+- Ölçüm bedava: `M16ECalibGenis`in zaten koştuğu 500 maçın olay log'undan okunuyor.
+
+Diş iki yönde de ölçüldü: `kirmiziEsik` 0,70'e çekilince `doğrudan kırmızı 0.026 > 0 — YOL
+CANLANDI`; `marginAgirlik` 0,20'ye indirilince `şiddet tavanı 0.588 < taban 0.70 — BORÇ KÖTÜLEŞTİ`.
+
+`M16EKirmiziBorcu` (LİG kırmızı oranı) DURUYOR — semptom hâlâ ölçülüyor; yeni kapı SEBEBİ
+ölçüyor. Kayıttaki "düz dağılım" ifadesi de düzeltildi: ölçülen popülasyon LİG'dir.
+
+### Bundan sonrası — ATİLLA'NIN KARARI
+
+Borç artık anlaşıldı, yani seçenekler de netleşti:
+- **(a) Şiddet modeline gerçek bir "doğrudan kırmızı" kolu ekle** (DOGSO / ciddi faul / şiddetli
+  hareket), eşik oyunuyla değil. Bugünkü formül `margin + hız + arkadan` ile en fazla 0,754
+  üretiyor; doğrudan kırmızı ayrı bir OLAY sınıfı olmalı, aynı sürekli skorun kuyruğu değil.
+  Bu, borcu kapatacak DOĞRU çözüm ve ayrı bir dilim.
+- **(b) `kirmiziEsik`i düşür ve yan hasarı kabul et.** Ölçüldü: hedefi tutturmuyor, K11'i bozuyor,
+  golden/replay yenilemesi gerektiriyor. Önermiyorum.
+- **(c) Teşhis kapısıyla bekle.** Borç artık görünür, ölçülü ve iki taraflı korunuyor; FAZ 05
+  hakem modeli dilimine kadar bekleyebilir.
+
+**Önerim (c) şimdilik, (a) FAZ 05 hakem dilimiyle birlikte** — çünkü doğrudan kırmızı gerçek bir
+olay sınıfı istiyor ve onu bugün eklemek 11 kalibre metriği yeniden riske atardı.
+
 ## Bekleyen kararlar
 
 - ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —
@@ -2916,7 +2989,12 @@ ve M14 sarı bandını (2,94, bant 3,0-5,0) bozuyor — yani tam bir yeniden kal
   **YAPILDI (2026-09-01, K12-A):** seçenek (a). Kadro profili gerçekçiliğe geri döndü, köprü
   kadrosu motorun kendi bantlarında. Kalan tek kaçak (düz dağılımda kırmızı) bant gevşetilmeden
   ayrı bir borç kapısına taşındı — yukarıdaki K12-A kaydı.
-- **Düz dağılımda kırmızı 0,03 (hedef 0,10-0,36) — BORÇ (K12-A), ÖNERİ (a) K13-B'DE ÇÜRÜDÜ.**
+- **Kırmızı kart borcu — K13-C'de ÇERÇEVESİ DÜZELTİLDİ.** Bant sorgulandı ve TEMİZ çıktı; borç
+  "düz dağılımda kırmızı" değil **"doğrudan kırmızı yolu erişilemez"** (üç popülasyonda da sıfır,
+  en yüksek şiddet 0,754 vs eşik 0,80). Yeni kapı `K13CDogrudanKirmiziOlu` teşhisi iki taraflı
+  koruyor. Bundan sonrası için üç seçenek ve önerim K13-C kaydının sonunda. Eski satırlar,
+  kararların alındığı andaki bilgi durumu olarak duruyor:
+- **[ESKİ] Düz dağılımda kırmızı 0,03 (hedef 0,10-0,36) — BORÇ (K12-A), ÖNERİ (a) K13-B'DE ÇÜRÜDÜ.**
   Jokey kolu uygulandı ve ölçüldü: iki popülasyonu ayırmıyor, çünkü köprünün kart fazlası
   müdahale sayısından değil ŞİDDETİNDEN geliyor (yukarıdaki K13-B kaydı). Geri alındı; borç
   bugünkü kapısıyla korunuyor. Yeni seçenekler ve önerim K13-B kaydının sonunda.
