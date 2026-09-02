@@ -4,7 +4,12 @@ namespace TheBadge.World
 {
     /// <summary>`balance/transfer.balance.json` karşılığı — GDD 17 FAZ 04 "Valuation algoritması
     /// + negotiation logic". Tüm katsayılar [KALİBRE]; kodda transfer sabiti YOKTUR.
-    /// config_hash İÇİdir: sezon içinde donuk (CLAUDE.md değişmez #4).</summary>
+    /// SEZON İÇİNDE DONUK (CLAUDE.md değişmez #4) — ama config_hash İÇİ DEĞİLDİR. İlk yazımda
+    /// öyle diyordu ve yanlıştı (inceleme bulgusu, Codex — 2026-09-02): `ConfigHash.Compute`
+    /// yalnız `sim.balance.json` ile `command.bands.json`un ham bayt özetlerini alır. Bu dosyayı
+    /// değiştirmek dünya sonucunu değiştirir (`K5PazarlikDongusu`, `K10MerdivenSonrasiSink`
+    /// ölçer) ama golden replay setini GEÇERSİZ KILMAZ — donukluk bir disiplin kuralıdır,
+    /// hash'in zorladığı bir şey değil.</summary>
     [Serializable]
     public sealed class TransferBalance
     {

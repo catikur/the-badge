@@ -11,7 +11,7 @@ Durum: **K1-K7 planı tamamlandı, üstüne K8-K13 ek dilimleri geldi** · Kapı
 
 ## 1. Plan neydi, ne oldu
 
-Açılış brifi yedi dilim planlamıştı. Hepsi kapandı:
+Açılış brifi yedi dilim planlamıştı. Altısı tam kapandı, K6 dikişe kadar:
 
 | Dilim | Plan | Durum | DECISIONS |
 | --- | --- | --- | --- |
@@ -20,8 +20,15 @@ Açılış brifi yedi dilim planlamıştı. Hepsi kapandı:
 | K3 | Tycoon Economy (9 aksiyon) | ✅ | K3-A/B + inceleme turu |
 | K4 | Squad Management (CB 4.2) | ✅ | K4 + inceleme turu |
 | K5 | Transfer Market AI (CB 4.3) | ✅ | K5 + inceleme turu |
-| K6 | Online (Nakama RPC) + SimWorker | ✅ | K6 + inceleme turu |
+| K6 | Online dikişi (`IKomutTasima`) + SimWorker | ⚠️ **dikişe kadar** — Nakama bağlaması yok (bölüm 4) | K6 + inceleme turu |
 | K7 | LLM hattı + injection savunması | ✅ | K7 — **katalog 32/32 kapandı** |
+
+**K6'nın sınırı (inceleme bulgusu, Codex — 2026-09-02):** bu satır bir ✅ değil, ilk yazımda
+öyleydi ve yanlıştı. Yapılan şey **taşımadan bağımsız dikiş**: `IKomutTasima` arayüzü, offline
+kuyruk, uzlaştırma, outbox ve SimWorker konağı — hepsi kapılı. **Nakama RPC kaydının kendisi
+yazılmadı**; bu ortamda koşturulamıyor ve CLAUDE.md kanıtlanamayan kodu yasaklıyor.
+`server/SERVER_SETUP.md` eksikleri açıkça listeler, bu brif de bölüm 4'te borç olarak taşır.
+Bir sonraki faz bu satıra bakıp "online üretimde hazır" diye plan YAPMAMALIDIR.
 
 Plana **girmeyen** ama ölçüm gerektirdiği için açılan altı dilim daha:
 
@@ -55,12 +62,20 @@ dikiş ölçülmemiş demektir.*
 | Tycoon ekonomi (ECONOMY_MAP sözleşmesi) | `World/Economy` | `K3EkonomiSozlesmesi`, `K3IflasEgrisi`, `K10CapexSozlesmesi` |
 | Kadro yönetimi + maç köprüsü | `World/Squad` | `K4HubYolu`, `K11KadroKoprusu` |
 | Transfer piyasası + değerleme + pazarlık | `World/Transfer` | `K5PazarlikDongusu`, `K10MerdivenSonrasiSink` |
-| Online: offline kuyruk, uzlaştırma, outbox | `World/Online`, `server/TheBadge.SimWorker` | `K6OfflineKuyruk`, `K9OutboxDayanikliligi` |
+| Online **dikişi**: offline kuyruk, uzlaştırma, outbox (bugün bellekte) | `World/Online`, `server/TheBadge.SimWorker` | `K6OfflineKuyruk`, `K9OutboxDayanikliligi` |
 | LLM hattı + injection savunması + eval | `World/Llm`, `docs/prompts`, `docs/evals` | `K7InjectionKorpusu`, `K9EvalKosuSozlesmesi` |
 | **Oynanabilir konsol** | `server/TheBadge.Play` | kendi nöbetçisi (aşağıda) |
 
-**Balance dosyaları (hepsi [KALİBRE], config_hash içi):** `sim`, `sim.lod2`, `world`, `economy`,
-`squad`, `transfer`, `market`, `command.bands`, `llm`, `ai`.
+**Balance dosyaları — hepsi [KALİBRE], ama hepsi aynı kimliğe girmiyor.** (İnceleme bulgusu,
+Codex — 2026-09-02: ilk yazımda "hepsi config_hash içi" diyordu; `ConfigHash.Compute` yalnız İKİ
+dosyanın ham bayt özetini alır. Fark önemli, çünkü config_hash golden replay setini geçersiz
+kılan şeydir.)
+
+| Sınıf | Dosyalar | Ne demek |
+| --- | --- | --- |
+| **config_hash İÇİ** (ME 3.3 replay dörtlüsü) | `sim.balance.json`, `command.bands.json` | Ham bayt özetleri `ConfigHash.Compute`a girer. Tek bayt değişirse golden set bayatlar; `M17ReplaySetiGuncel` yeniden üretim ister, `M17ConfigHashAyirtEdici` hash'in ayırt ediciliğini ölçer. |
+| **config_hash DIŞI, ama sonucu değiştirir** | `world`, `economy`, `squad`, `transfer`, `market`, `sim.lod2` | Dünya/lig sonucunu değiştirir; determinizmi `K2YurutmeDeterminizmi` + `K3EkonomiDeterminizmi` korur. Golden replay setini geçersiz KILMAZ — bu dosyaları değiştiren, replay kimliğinin değişimi yakalamadığını bilerek değiştirmelidir. |
+| **config_hash DIŞI, bilerek** | `llm.balance.json`, `ai.balance.json` | Oyun mekaniğini değil girdi hijyenini ve maliyet tavanını ayarlar; replay'i etkilemez (`LlmRules.cs` başlığı, CLAUDE.md LLM kuralı). |
 
 **Ekonomi bugün nerede** (`K10CapexSozlesmesi` + `K10MerdivenSonrasiSink`):
 merdiven 11 sezon ∈ [6,24] · inşaat penceresi 1,104 ∈ [1,05-1,15] · işletme 1,353 bandın üstünde ·
@@ -101,6 +116,7 @@ Sebebi: haftalık döngü üst-düzey deyimler içinde yerel bir fonksiyon ve `S
 | **LOD 1'in geleceği** | LOD 0'ın eşleniği | `M15Lod1Esdeger` + ME 16.4 CPU marjı her koşuda | FAZ 05 cihaz testi: ORTA cihazda LOD 0 bir maç > 800 ms ise LOD 1 ayrışır, değilse satır silinir |
 | **Haftalık döngü birim kapısı** | konsol nöbetçisi tutuyor | `TheBadge.Play` çıkış kodu 2 | FAZ 02: döngü test edilebilir bir servise taşınınca |
 | **LLM kalite eval'i model erişimi bekliyor** | alet hazır, ölçüm yok | `K9EvalKosuSozlesmesi` (koşucu sözleşmesi) | model erişimi olan ortamda golden set koşusu |
+| **Nakama bağlaması + kalıcı outbox + keyframe yayını** | dikiş hazır (`IKomutTasima`, `IOutboxStore`), taşıma yok; outbox bugün `BellekOutboxStore` | `K6OfflineKuyruk`, `K9OutboxDayanikliligi` — **dikişi** ölçer, taşımayı değil; eksikler `server/SERVER_SETUP.md`de yazılı | Nakama + PostgreSQL koşturulabilen ortam: RPC kaydı, outbox yazmasının durum yazmasıyla AYNI işlemde commit'i, keyframe yayını (ME 14.4) |
 
 **Kapanan borçlar (bu fazda):** `Rng.Gauss01` çarpışması (K8) · RNG adres çakışmaları (K9-A) ·
 xG sapması (K9-B) · `OzetKart` entity ayrımı (K10-A) · zaman çizelgesi eşiği (K10-C) ·
@@ -168,7 +184,7 @@ Bu fazda ölçümle öğrenilen ve kayda geçen kurallar:
 ## 8. Kapanış koşulu
 
 Bu brif, aşağıdakiler doğru olduğu için yazıldı:
-- [x] K1-K7 planının tamamı kapandı, katalog 32/32
+- [x] K1-K7 planının tamamı kapandı — K6 **taşımadan bağımsız dikişe kadar** (bölüm 1 ve 4), katalog 32/32
 - [x] 176 kapı yeşil (`dotnet run --project shared/TheBadge.Sim.Checks -c Release`)
 - [x] Oyun uçtan uca oynanabiliyor (38 haftalık sezon, determinist)
 - [x] ECONOMY_MAP sözleşmesi hem inşaat penceresinde hem durağan hâlde bandında
