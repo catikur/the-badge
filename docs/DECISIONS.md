@@ -2762,6 +2762,65 @@ tek başına yetiyor, ikisi de yük taşıyor. Mekanizma kapısı (`K13ADoygunlu
 şunları ölçüyor: referans altında kırpma yok, üstünde koltuk başına verim AZALIYOR, ücret yukarı
 çekiliyor ama aşağı çekilMİYOR, sezon tavanı aşılmıyor, kulüp toplamı = kadro toplamı.
 
+### 🔴 K13-B: "müdahale kararını role duyarlı yap" ÖNERİSİ ÖLÇÜMLE ÇÜRÜDÜ (2026-09-02)
+
+**Atilla kararı:** "düz dağılımda kırmızı borcu için (a) ile devam et" — yani müdahale KARARINI
+role duyarlı yap, kötü müdahaleci dalmak yerine jokey yapsın. Uygulandı, ölçüldü, **çürüdü** ve
+geri alındı. Kayıt burada duruyor ki aynı yol ikinci kez denenmesin.
+
+**NE YAPILDI:** `MatchEngine`'in tackle kararına jokey kolu eklendi —
+`p_jokey = clamp(egim × (def_etkin − atk_etkin − esik) / bolen, 0, tavan)`, `Domain.Decision`
+akışında ([KALİBRE] `sim.balance.json → possession`).
+
+**BİRİNCİ SÜRÜM SEÇİCİ DEĞİLDİ:** eşiksiz hâli (taban + eğim × fark) maç başına **~93 kez**
+tetikleniyor ve iki popülasyonu da aynı oranda bastırıyordu — rol ayrımı değil, küresel bir kart
+indirimi. Eşik eklendi (12 puan): tetiklenme 93 → **19**/maç, yani artık gerçekten yalnız geride
+kalan savunucu jokeyliyor.
+
+**VE ASIL BULGU:** seçici hâliyle de İKİ POPÜLASYONU AYIRMIYOR. `sariSonrasiIhtiyat` ince
+süpürüldü (jokey AÇIK, 300 lig + 80 köprü maçı):
+
+| ihtiyat | LİG kart | LİG kırmızı | KÖPRÜ kart | KÖPRÜ kırmızı |
+|---|---|---|---|---|
+| 0,18 | 2,77 ✓ | **0,107 ✓** | 8,00 ✗ | 1,350 ✗ |
+| 0,19 | 2,67 ✓ | 0,077 ✗ | 7,42 ✗ | 1,150 ✗ |
+| 0,20 | 2,69 ✓ | 0,073 ✗ | 6,83 ✓ | 0,775 ✗ |
+| 0,21 | 2,66 ✓ | 0,060 ✗ | 6,31 ✓ | 0,525 ✓ |
+| 0,22 | 2,62 ✓ | 0,037 ✗ | 5,78 ✓ | 0,312 ✓ |
+
+(Bantlar: LİG kart 2,6-5,5 · kırmızı hedefi 0,10-0,36 · KÖPRÜ kart 2,50-7,00 · kırmızı 0,05-0,60.)
+
+**Hiçbir değerde ikisi birden banda girmiyor.** K12-A'nın bulgusu, jokey kolu EKLENDİKTEN SONRA da
+aynen geçerli.
+
+**SEBEBİ ARTIK BİLİNİYOR — ve öneriyi çürüten şey bu:** köprü kadrosunun kart fazlası müdahale
+SAYISINDAN değil müdahale ŞİDDETİNDEN geliyor. Jokey kolu SAYIYI azaltıyor; ama köprüdeki fauller
+zaten iyi savunucu ↔ iyi hücumcu düellolarından çıkıyor (yetenek farkı ≈ 0, yani jokey hiç
+tetiklenmiyor) ve şiddeti `marginGap`in sistematik büyüklüğünden alıyor. Öneri (a), yanlış
+büyüklüğü hedefliyordu.
+
+**İKİNCİ HİPOTEZ DE ÖLÇÜLDÜ VE ELENDİ:** şiddet ağırlığını `marginAgirlik`ten duruma
+(hız + arkadan) kaydırmak. İki popülasyonun ORANINI gerçekten yaklaştırıyor (LİG/KÖPRÜ 0,33 →
+0,56) ama mutlak seviyeyi patlatıyor: `marginAgirlik` 0,40 → 0,25'te lig kartı 2,84 → 9,95,
+0,12'de 24,62. Kullanılabilmesi için `sariEsik` + `foulEsikTaban` ile birlikte dört parametreli
+bir yeniden kalibrasyon gerekir ve o da bugün bantta olan 11 metriği yeniden riske atar.
+
+**KARAR: jokey kolu GERİ ALINDI.** Borcu kapatmıyor, buna karşılık golden hash'leri (M2/M4/M6)
+ve M14 sarı bandını (2,94, bant 3,0-5,0) bozuyor — yani tam bir yeniden kalibrasyon faturası
+çıkarıyor, karşılığında ölçülmüş bir kazanç yok. Borç bugünkü hâliyle korunuyor:
+`M16EKirmiziBorcu` tavanı tutuyor ve hedefi basıyor.
+
+**AÇIK KALAN — ATİLLA'NIN KARARI:**
+- **(a) jokey kolunu KENDİ değeri için geri getir.** Umutsuz bir müdahalecinin her seferinde
+  dalması gerçekçi değil (ME 7.6 ruhu) ve mekanizma çalışıyor. Bedeli: 11 metriğin yeniden
+  kalibrasyonu + golden yenileme, borç yine açık kalır. Ayrı bir dilim olarak açılmalı.
+- **(b) dört parametreli şiddet yeniden kalibrasyonu** (marginAgirlik + sariEsik + foulEsikTaban
+  + ihtiyat). Borcu kapatabilecek TEK ölçülmüş yol; riski, bugün bantta olan 11 metrik.
+- **(c) borcu kapatma, bandı sorgula.** Düz/lig dağılımı YAPAY bir popülasyon: 11 özdeş oyuncu
+  gerçek futbolda yok, ve sarılar dağıldığı için ikinci sarı doğal olarak seyrek. Borcun
+  ölçtüğü şey bir model hatası değil, yapay kadronun kendi özelliği olabilir.
+  **Önerim (c) + sonra (a) ayrı dilim** — ama bu bir bant sorgusudur, kararı sende.
+
 ## Bekleyen kararlar
 
 - ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —
@@ -2823,7 +2882,12 @@ tek başına yetiyor, ikisi de yük taşıyor. Mekanizma kapısı (`K13ADoygunlu
   **YAPILDI (2026-09-01, K12-A):** seçenek (a). Kadro profili gerçekçiliğe geri döndü, köprü
   kadrosu motorun kendi bantlarında. Kalan tek kaçak (düz dağılımda kırmızı) bant gevşetilmeden
   ayrı bir borç kapısına taşındı — yukarıdaki K12-A kaydı.
-- **Düz dağılımda kırmızı 0,03 (hedef 0,10-0,36) — BORÇ (K12-A).** İki popülasyon aynı anda hem
+- **Düz dağılımda kırmızı 0,03 (hedef 0,10-0,36) — BORÇ (K12-A), ÖNERİ (a) K13-B'DE ÇÜRÜDÜ.**
+  Jokey kolu uygulandı ve ölçüldü: iki popülasyonu ayırmıyor, çünkü köprünün kart fazlası
+  müdahale sayısından değil ŞİDDETİNDEN geliyor (yukarıdaki K13-B kaydı). Geri alındı; borç
+  bugünkü kapısıyla korunuyor. Yeni seçenekler ve önerim K13-B kaydının sonunda.
+  Eski metin, kararın alındığı andaki bilgi durumu olarak duruyor:
+- **[ESKİ] Düz dağılımda kırmızı 0,03 (hedef 0,10-0,36) — BORÇ (K12-A).** İki popülasyon aynı anda hem
   kart hem kırmızı bandını tutturamıyor. Seçenekler: (a) müdahale KARARINI role duyarlı yap —
   kötü müdahaleci dalmak yerine jokey yapsın (model işi, ME 7.6 pres tetiği); (b) ikinci sarı
   mekanizmasını şiddetten ayır; (c) borç açık kalsın, kapı korusun. **Öneri: (a)** — kaynak
