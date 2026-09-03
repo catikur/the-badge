@@ -178,6 +178,10 @@ Bu fazda ölçümle öğrenilen ve kayda geçen kurallar:
   ölçmeli.* (K13-A — yorgunluk cırcırı)
 - *6 maçlık bir örneklemden model sonucu çıkarma.* (K13-A)
 - *Bir kapının ölçtüğü şeyi tartışacaksan, KAPININ KENDİ popülasyonu ve tohum ailesiyle ölç.* (K13-C)
+- *Yapıldığını hatırladığın şey, ölçülmüş şey değildir.* (BU brif — önce beş sayı, sonra iki
+  kapsam iddiası yanlış çıktı; ikisi de oturum içi hafızadan yazılmıştı. Bir devir teslim
+  belgesinde her sayı taze koşudan, her kapsam iddiası kaynak dosyadan doğrulanır: 176 kapı
+  yeşilken bile brif yanlış olabilir, çünkü hiçbir kapı bir markdown cümlesini ölçmez.)
 
 ---
 

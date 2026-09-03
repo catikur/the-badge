@@ -2944,6 +2944,36 @@ boşluk kötüleştiğinde de kırmızıya döner (dişi iki yönde ölçüldü)
 **(a) kapatılmadı, TETİKLEYİCİYE bağlandı** — aşağıdaki "Bekleyen kararlar" listesine
 `LOD 1` satırıyla aynı biçimde geçti: bir karar değil, koşulu net bir bekleyiş.
 
+### 📐 KURAL: yapıldığını hatırladığın şey, ölçülmüş şey değildir (2026-09-02)
+
+FAZ 04 kapanış brifi (PR #29) bu kuralı iki turda iki kez kanıtladı ve ikisi de **aynı kökten**
+geldi: brifi oturum içi hafızadan yazdım, sonra kaynağa karşı doğruladım.
+
+**Birinci tur — beş SAYI yanlıştı.** Taze koşuya karşı karşılaştırınca: kapı sayısı 177 → **176**,
+inşaat penceresi 1,058 → **1,104**, işletme oranı 1,298 → **1,353**, merdiven sonrası durağan
+1,107 → **1,124**, bant uçlarında merdiven 15/11 → **23/10**. Hepsi son kalibrasyondan (rezerv
+haftası 25) ÖNCEKİ ölçümlerden kalmıştı — yani bir zamanlar doğruydular, bu da tam olarak onları
+tehlikeli yapan şey.
+
+**İkinci tur — iki KAPSAM iddiası yanlıştı** (Codex inceleme bulguları, ikisi de gerçek):
+- K6 satırı "Online (Nakama RPC) + SimWorker ✅" diyordu. Oysa `server/SERVER_SETUP.md` RPC
+  kaydını, PostgreSQL persist'i ve keyframe yayınını "YAPILMADI" başlığı altında SAYIYORDU. Brif
+  kendi kaynak dosyasıyla çelişiyordu; ben o dosyayı yazan taraftım ve yine de yanlış hatırladım.
+- "Balance dosyaları (hepsi config_hash içi)" diyordu. `ConfigHash.Compute` yalnız
+  `sim.balance.json` + `command.bands.json` alır. Yani `world/economy/squad/transfer/market/
+  sim.lod2` değişince golden set **bayatlamaz** — brife güvenen biri var olmayan bir güvenceye
+  yaslanırdı. Aynı hata bir seviye daha derinde, `TransferBalance.cs` başlığında da vardı.
+
+**Kural:** *Yapıldığını hatırladığın şey, ölçülmüş şey değildir.* Bir devir teslim belgesindeki
+her sayı taze bir koşudan, her kapsam iddiası ise onu YAPAN ya da YAPMADIĞINI SÖYLEYEN kaynak
+dosyadan doğrulanır. "Bunu ben yazdım, biliyorum" bir kanıt değildir — hafıza, koda dokunulduğu
+anda bayatlar ve bayatladığını kendisi söylemez.
+
+**Neden bu kural ayrı yazıldı:** projedeki diğer kurallar KODUN ölçülmesini düzenliyor. Bu kural
+RAPORUN ölçülmesini düzenliyor ve boşluk oradaydı — 176 kapı yeşilken bile brif yanlış olabilir,
+çünkü hiçbir kapı bir markdown cümlesini ölçmez. Kanıt yükü belgeyi yazanda; bir sonraki fazın
+yaslandığı yüzey, o belgede yazan yüzeydir.
+
 ## Bekleyen kararlar
 
 - ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —
