@@ -69,6 +69,21 @@ namespace TheBadge.Sim.Config
         /// <summary>LOD bütçeleri + LOD 2 güç bileşimi — ME Spec 16.1 [KALİBRE].
         /// Regresyon KATSAYILARI burada DEĞİL, üretilmiş `balance/sim.lod2.json` dosyasındadır.</summary>
         public LodCfg lod = new LodCfg();
+        public CanliOlasilikCfg canliOlasilik = new CanliOlasilikCfg();
+
+        /// <summary>CANLI kazanma olasılığı [KALİBRE] — `LiveWinProb`. Katsayılar motorun KENDİ
+        /// davranışından oturtuldu (49 eşleşme × 300 maç, log-lineer en küçük kareler, R² = 0,977);
+        /// uydurma değil ÖLÇÜLMÜŞ değerlerdir. Yeniden oturtmak için: `-- fit-winprob`.</summary>
+        [System.Serializable]
+        public sealed class CanliOlasilikCfg
+        {
+            /// <summary>Güç farkı sıfırken takım başına 90 dakikalık beklenen gol.</summary>
+            public double lambdaTaban;
+            /// <summary>Güç farkının 1 biriminin gol oranına üstel etkisi.</summary>
+            public double gucKatsayisi;
+            /// <summary>Poisson toplamının kesme noktası (kalan sürede takım başına en çok kaç gol).</summary>
+            public int maxEkGol;
+        }
 
         [System.Serializable]
         public sealed class LodCfg

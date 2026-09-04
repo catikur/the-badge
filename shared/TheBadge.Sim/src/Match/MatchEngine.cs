@@ -125,6 +125,10 @@ namespace TheBadge.Sim.Match
         // Dakika başına örneklem [90] — ME 15.3/15.4 eğrileri. Hash DIŞI.
         readonly sbyte[] momHomeCurve = new sbyte[90], momAwayCurve = new sbyte[90];
         readonly float[] winProbCurve = new float[90];
+        // 5G S2 — üç sonuçlu canlı olasılık eğrileri (sunum yüzeyi; StateHash'e GİRMEZ)
+        readonly float[] wp3Home = new float[90];
+        readonly float[] wp3Draw = new float[90];
+        readonly float[] wp3Away = new float[90];
         int sampledMinutes;
         readonly long[] possessionTicks = new long[2];
         readonly bool[] staminaAlerted = new bool[22];  // uyarı oyuncu başına BİR KEZ
@@ -2120,8 +2124,36 @@ namespace TheBadge.Sim.Match
                 momHomeCurve[sampledMinutes] = st.HomeRt.Momentum;
                 momAwayCurve[sampledMinutes] = st.AwayRt.Momentum;
                 winProbCurve[sampledMinutes] = (float)WinProb(st.HomeGoals - st.AwayGoals, sampledMinutes);
+                // 5G S2: ÜÇ SONUÇLU canlı olasılık. Yukarıdaki ME 15.3 eğrisinden AYRI bir
+                // büyüklüktür ve onun yerine geçmez — o highlight sıralamasının çekirdeği.
+                // Güç SAHADAKİ oyunculardan okunur: kırmızı kart ve oyuncu değişikliği şeridi
+                // gerçekten oynatır (greybox'ın "karar ver → ihtimal değişsin" vaadi).
+                var u3 = LiveWinProb.Hesapla(bal, CanliGuc(in st, 0), CanliGuc(in st, 1),
+                                             st.HomeGoals - st.AwayGoals, 90.0 - sampledMinutes);
+                wp3Home[sampledMinutes] = (float)u3.Ev;
+                wp3Draw[sampledMinutes] = (float)u3.Beraberlik;
+                wp3Away[sampledMinutes] = (float)u3.Deplasman;
                 sampledMinutes++;
             }
+        }
+
+        /// <summary>SAHADAKİ 11'in gücü (5G S2). `TeamRating` tek tanımını kullanır.
+        /// Atılan/ağır sakat oyuncu 0 sayılır ve bölen yine 10'dur — on kişi kalan takımın gücü
+        /// böylece DÜŞER (gerçek sayıya bölmek etkiyi tamamen yok ederdi).
+        ///
+        /// SINIR (ölçülmedi, bilerek yazılıyor): kırmızı kartın gücü ne kadar düşürmesi gerektiği
+        /// motora karşı ÖLÇÜLMEDİ — kalibrasyon kapısı da yakalayamaz, çünkü kırmızı maç başına
+        /// 0,03-0,09 ve toplu ortalamayı oynatmaz. Bu bir tahmindir ve borç olarak kayıtlıdır.
+        /// Kaleci atılırsa kaleci bileşeni 0 olur; gerçekte yerine yedek kaleci girer ve motorun
+        /// değişiklik mekanizması `attrs`i güncellediği için bu yol normalde kendiliğinden kapanır.</summary>
+        double CanliGuc(in MatchState st, int taraf)
+        {
+            int b = taraf * 11;
+            double kaleci = st.Agents[b].Active ? TeamRating.Kaleci(bal, attrs[b]) : 0.0;
+            double saha = 0;
+            for (int i = 1; i < 11; i++)
+                if (st.Agents[b + i].Active) saha += TeamRating.SahaOyuncusu(bal, attrs[b + i]);
+            return TeamRating.Birlestir(bal, kaleci, saha);
         }
 
         /// <summary>Ev sahibinin kazanma olasılığı — ME 15.3'ün "kayan WinProb modeli".
@@ -2236,7 +2268,10 @@ namespace TheBadge.Sim.Match
                 EventsDropped = eventsDropped,
                 MomentumHome = (sbyte[])momHomeCurve.Clone(),
                 MomentumAway = (sbyte[])momAwayCurve.Clone(),
-                WinProbHome = (float[])winProbCurve.Clone()
+                WinProbHome = (float[])winProbCurve.Clone(),
+                WinProb3Home = (float[])wp3Home.Clone(),
+                WinProb3Draw = (float[])wp3Draw.Clone(),
+                WinProb3Away = (float[])wp3Away.Clone()
             };
 
             // Tek geçişte: skoru taşı, H'yi hesapla, en iyi 10'u seçim sıralamasıyla tut.

@@ -46,27 +46,10 @@ namespace TheBadge.Sim.Match
             table = lod2Table;
         }
 
-        /// <summary>Takım gücü (0-100) — kadrodan TÜRETİLİR, simülasyon gerektirmez.
-        /// Ağırlıklar `sim.balance.json` → `lod.guc` altındadır [KALİBRE]; kaleci ayrı bileşen
-        /// çünkü nitelik seti ortak değildir (Reflexes/Handling saha oyuncusunda anlamsızdır).</summary>
-        public double TeamStrength(TeamSheet sheet)
-        {
-            var g = bal.lod.guc;
-            var k = sheet.Starters[0].Attributes;
-            double gk = g.kaleci.reflexes * k.Reflexes + g.kaleci.handling * k.Handling
-                      + g.kaleci.oneOnOne * k.OneOnOne + g.kaleci.aerialCommand * k.AerialCommand;
-            double saha = 0;
-            for (int i = 1; i < 11; i++)
-            {
-                var a = sheet.Starters[i].Attributes;
-                var o = g.sahaOyuncusu;
-                saha += o.passing * a.Passing + o.finishing * a.Finishing + o.tackling * a.Tackling
-                      + o.pace * a.Pace + o.positioning * a.Positioning + o.decisions * a.Decisions
-                      + o.firstTouch * a.FirstTouch + o.strength * a.Strength;
-            }
-            saha /= 10.0;
-            return g.kaleciPayi * gk + (1.0 - g.kaleciPayi) * saha;
-        }
+        /// <summary>Takım gücü (0-100) — TEK TANIM `TeamRating`dedir; bu yalnız devreden
+        /// sarmalayıcıdır. Kopya tutmak, ağırlıklar değiştiğinde iki tarafın sessizce
+        /// ayrışması demek olurdu (bu projenin tekrar eden hata sınıfı).</summary>
+        public double TeamStrength(TeamSheet sheet) => TeamRating.FromSheet(bal, sheet);
 
         /// <summary>Maçı tablodan çözer — ME 16.1. Dönen `MatchResult` LOD 0'ınkiyle AYNI tiptedir:
         /// çağıran taraf (lig tablosu, haber katmanı) LOD'u bilmek zorunda kalmaz.
