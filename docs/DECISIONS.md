@@ -3030,7 +3030,90 @@ dışında `.cs` kalmadığını doğruluyor.
 sınırın DİĞER TARAFTAKİ derleyicisinin ne göreceğini ölçmek gerekir. Bu ortamda Unity yok, ama
 Unity'nin derleyeceği DOSYA KÜMESİ ölçülebilir; kapı orayı tutuyor.
 
+### D-B: KARAR (2026-09-04, Atilla) — **canlı yol**
+
+Dikey dilim yalnız **canlı maç yolunu** final kaliteye çeker. Replay/özet yolu (tezin "canlıyı
+kaçırmak ceza değildir" vaadi) dilim DIŞINDA — iki sunum yolunu birden final kaliteye çekmek
+dilimi ikiye katlardı. Kabul edilen risk açıkça yazılı: dilim, tezin "kaçırsan da olur" kolunu
+test ETMEZ; o kol sonraki dilime kalır. Playtest turu için insanları Atilla bulacak
+(kayıtlı kural: mülakatsız playtest koşulmaz).
+
+### 🔴 S2 BULGUSU: sunumun yaslanacağı KAZANMA OLASILIĞI motorda YOK (2026-09-04)
+
+S2'nin ilk işi "sunumu gerçek motor üstünde yeniden tasarla"ydı. Tasarıma başlamadan önce motorun
+maç ORTASINDA ne verdiğine baktım ve greybox'ın fun hipotezinin dayandığı büyüklüğün karşılığının
+olmadığını **ölçtüm**.
+
+**Greybox'ın hipotezi** (RA#1 revizyonu, 2026-08-02): *"model + görünür olasılıklar + müdahale
+döngüsü — **karar ver → kazanma ihtimali DEĞİŞSİN → sonucu yaşa**"*. Greybox bunu KESİN DP ile
+üretiyordu ve şeridi KALİBREydi (tahmin %37 vs gerçekleşen %40, <0,10 bant).
+
+**Motorda bugün ne var:** `MatchEngine.WinProb(int golFarki, int dakika)` — imzası bu, başka
+girdisi YOK. Takım gücü, momentum, xG, kırmızı kart, müdahale: hiçbiri girmiyor. Bu bir hata
+değil, ME 15.3'ün `xG_salınımı` terimi için yazılmış ve o işi yapıyor (highlight sıralamasında
+yalnız GÖRECELİ sıçrama gerekir). Sunum omurgası olmak için yazılmamıştı.
+
+**ÖLÇÜM** (3 senaryo × 300 maç, ORTA chaos, `BuildSheetSide` ofsetleriyle 60v60 / 75v55 / 55v75;
+tohum ailesi `0xA5E7000 + n×7919`, `AutoManage = true`, eğri `BuildSummary(...).WinProbHome`ten
+okundu — yeniden üretmek için bu üçü birlikte gerekir, K13-C'nin dersi):
+
+| senaryo | gerçek EV galibiyeti | şerit 0. dk | şerit 45. dk | şeridin tam %50'de kaldığı süre |
+| --- | --- | --- | --- | --- |
+| dengeli 60v60 | %35,7 (B %29 · M %36) | **%50,0** | %50,0 | **%51** |
+| güçlü EV 75v55 | **%80,7** | **%50,0** | %74,7 | %34 |
+| güçlü DEP 55v75 | **%5,3** | **%50,0** | %25,5 | %32 |
+
+Kalibrasyon (dakika başına örnek, üç senaryo birlikte) — en kalabalık kova en kötüsü:
+
+| kova | n | tahmin | gerçekleşen | sapma |
+| --- | --- | --- | --- | --- |
+| %20-30 | 8.469 | %25,6 | %7,0 | **−18,6** |
+| **%50-60** | **31.547** | %50,0 | **%31,5** | **−18,5** |
+| %70-80 | 8.428 | %74,6 | %80,3 | +5,6 |
+| %90-100 | 11.716 | %97,2 | %98,6 | +1,5 |
+
+**Üç ayrı sorun, üçü de ölçülü:**
+1. **Güce kör.** Kaç vuruşta şerit ÜÇ senaryoda da tam %50 diyor — gerçek galibiyet oranı %80,7
+   ile %5,3 arasında değişirken. 75v55 maçına başlayan oyuncu "50/50" görüyor.
+2. **Maçın üçte biri-yarısı boyunca DONUK.** Şerit yalnız skor değişince oynuyor; dengeli maçta
+   dakikaların %51'inde tam %50'de duruyor.
+3. **Ortada kalibre değil.** 0-0 "yarı yarıya" demek değil: beraberlik ayrı bir sonuç. En kalabalık
+   kova 18,5 puan sapıyor.
+
+**Ve asıl sonuç:** `WinProb`un girdisi (gol farkı, dakika) olduğu için bir **taktik müdahalesi
+şeridi TAM OLARAK SIFIR kadar oynatır**. Yani greybox'ın şeridi motora olduğu gibi taşınsaydı,
+fun döngüsünün çekirdek vaadi — *"karar ver → ihtimal değişsin"* — sessizce ölürdü. Kapı bunu
+görmezdi: `M14PaketSemasi` yalnız dizinin 90 elemanlı OLDUĞUNU denetliyor, DEĞERİNİ değil.
+
+**Bugün canlı bir hata YOK:** `WinProbHome`u motor dışında tüketen kimse yok (röportaj promptu,
+Hikaye Motoru, Panorama — hiçbiri okumuyor). Eğri atıl. Sorun "bozuk tüketici" değil, **sunumun
+ihtiyaç duyduğu büyüklüğün henüz var olmaması**.
+
+**ÖNEMLİ ÇERÇEVE (kararı etkiler):** greybox'ın şeridi ÇALIŞIYORDU ve %40 onunla ölçüldü. Yani
+doğru bir şerit yapmak bir DÜZELTME değil, **PARİTE**dir — onsuz motor sunumu, zaten kalan
+greybox'tan daha kötü başlar. Redesign'ın kendisi ayrıca bir şey değiştirmek zorunda.
+
+Seçenekler ve önerim "Bekleyen kararlar"da (S2-A).
+
 ## Bekleyen kararlar
+
+- **S2-A: sunumun omurgası ne olacak? (2026-09-04 ölçümü, yukarıdaki S2 bulgusu) — KARAR ATİLLA'NIN.**
+  - **(a) Gerçek bir canlı kazanma olasılığı kur:** 3 sonuçlu (G/B/M), güç farkına duyarlı, kırmızı
+    kart/momentum/xG girdili, deterministik ve ucuz; N maçla KALİBRE edilir ve kalibrasyon bir kapı
+    olur (greybox'ın <0,10 bandının motor karşılığı). Artı: fun hipotezini dürüstçe test edilebilir
+    hâle getirir, müdahale şeridi gerçekten oynatır. Eksi: gerçek bir modelleme işi ve
+    **tek başına bir DÜZELTME değil, PARİTE** — %40 zaten çalışan bir şeritle ölçülmüştü.
+  - **(b) Şeridi omurga olmaktan çıkar:** sunum başka bir eksene otursun (motorun kendi xG'siyle
+    blok kartı "gol ihtimali BİZ %18", ya da momentum/baskı ekseni). Artı: (a)'nın maliyeti yok ve
+    redesign'ı gerçekten YENİ bir şeye zorlar. Eksi: greybox'la karşılaştırma zemini kaybolur —
+    %40'ın neden geldiğini hâlâ bilmiyoruz, ekseni değiştirmek değişkeni değiştirmek olur.
+  - **(c) Ertele:** `WinProb`u ME 15.3 işinde bırak, sunum eksenine S2'nin tasarım turunda karar ver.
+    Artı: karar veri geldikten sonra. Eksi: S2'nin çıkış kapısı zaten o veri turu; ekseni
+    seçmeden tur koşulamaz.
+  - **Önerim: (a) + (b) birlikte, ama sırayla** — (a) pariteyi kurar (ölçülebilir, burada
+    kanıtlanabilir, kapıyla korunur); redesign'ın YENİ olan kısmı (b)'nin ekseninden gelir ve
+    mülakatlı tur ikisini birden test eder. Tek başına (a) eski hipotezi tekrar eder, tek başına
+    (b) kıyas zeminini atar.
 
 - ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —
   `idx`i kapatmak 20. karttan sonrasını log'dan düşürürdü; ayrımı `SummaryCapacity`ye çekmek aynı
