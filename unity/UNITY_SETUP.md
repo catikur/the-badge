@@ -32,17 +32,38 @@ Sorun giderme:
 - `Assets/Greybox/Resources/greybox.balance.json` → tüm [KALİBRE-G] his/ekonomi ayarları (config_hash DIŞI; `balance/sim.balance.json`'a karışmaz).
 - Sahne neredeyse boş: tek `Bootstrap` objesi her şeyi runtime'da kurar (kamera, saha, UI). Elle sahne düzenlemesi gerekmez.
 
-## Assets asmdef Haritası (FAZ 01'de kurulacak)
+## Paylaşılan paketler (5G S1 — ADR-002)
+
+Unity üç yerel paketi `manifest.json` üzerinden `shared/` altından alır; hepsi
+`noEngineReferences: true` (CLAUDE.md değişmez #3) ve dış paket referansı yok:
+
+| Paket | Klasör | asmdef referansları |
+| --- | --- | --- |
+| `com.thebadge.sim` | `shared/TheBadge.Sim` | — |
+| `com.thebadge.commandbus` | `shared/TheBadge.CommandBus` | `TheBadge.Sim` |
+| `com.thebadge.world` | `shared/TheBadge.World` | `TheBadge.Sim`, `TheBadge.CommandBus` |
+
+> **Paket klasörüne `.cs` bırakma.** Unity paket klasöründeki TÜM `.cs`'i derler; MSBuild'in
+> ürettiği `obj/**/*.AssemblyInfo.cs` orada kalırsa Unity CS0579 ile düşer. Üç pakette
+> `Directory.Build.props` çıktıyı repo kökündeki `artifacts/`e yönlendirir — o dosyaları silme.
+>
+> Bu maddelerin hepsini `S1UnityPaketSiniri` kapısı her koşuda ölçüyor
+> (`dotnet run --project shared/TheBadge.Sim.Checks -c Release`).
+
+## Assets asmdef Haritası (5G S1'de kuruluyor)
 
 | asmdef | İçerik | Referanslar |
 | --- | --- | --- |
-| Game.Commands | Command Bus istemci ucu, katalog önbelleği | TheBadge.Sim |
-| Game.Services | Nakama istemcisi, save/load, telemetri | Game.Commands |
+| Game.Commands | Command Bus istemci ucu, katalog önbelleği | **TheBadge.CommandBus**, TheBadge.Sim |
+| Game.Services | Nakama istemcisi, save/load, telemetri | Game.Commands, **TheBadge.World** |
 | Game.UI | UI Toolkit ekranları, Rive köprüleri | Game.Services |
 | Game.Match | Maç sunum katmanı (izleme/replay oynatıcı) | TheBadge.Sim, Game.Services |
 | Tests.EditMode / Tests.PlayMode | Unity testleri | ilgili modüller |
 
-> FAZ 00.5'te bilinçli sapma: tek `Game.Greybox` asmdef'i (+ `Game.Greybox.EditModeTests`) kullanılır;
-> greybox Fun Gate sonrası atılacağı için beş modüllü harita FAZ 01'e ertelendi.
+> Bu harita FAZ 01'de yazılmış ve FAZ 04'ten ESKİYDİ: `Game.Commands`ı `TheBadge.Sim`e bağlıyordu,
+> oysa Command Bus ayrı bir pakette. ADR-002 ile düzeltildi.
+>
+> FAZ 00.5'te bilinçli sapma tek `Game.Greybox` asmdef'iydi; greybox **emekli** (Fun Gate kapandı,
+> `docs/GREYBOX_3G_RAPOR.md`), beş modüllü harita 5G Dikey Dilim'de kuruluyor.
 
 Kural: sunum katmanı sim durumunu OKUR, asla doğrudan yazmaz — durum değişikliği yalnız Command Bus (Tek Kapı).

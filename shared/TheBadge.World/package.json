@@ -1,0 +1,7 @@
+{
+  "name": "com.thebadge.world",
+  "version": "0.1.0",
+  "displayName": "The Badge World",
+  "description": "Dünya durumu, atomik commit, ekonomi/kadro/transfer kuralları (UnityEngine bağımsız).",
+  "unity": "6000.0"
+}

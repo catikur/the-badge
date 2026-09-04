@@ -51,7 +51,7 @@ dikiş ölçülmemiş demektir.*
 ## 2. Bugünkü taban (kanıt)
 
 `dotnet run --project shared/TheBadge.Sim.Checks -c Release` → **176 kapı, hepsi yeşil**
-(81'i FAZ 03'ten M\*, 81'i FAZ 04'ten K\*, kalanı ortak).
+(85'i FAZ 03'ten M\*, 81'i FAZ 04'ten K\*, 10'u ortak).
 
 **Çalışan yüzeyler:**
 

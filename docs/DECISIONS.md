@@ -2974,6 +2974,62 @@ RAPORUN ölçülmesini düzenliyor ve boşluk oradaydı — 176 kapı yeşilken 
 çünkü hiçbir kapı bir markdown cümlesini ölçmez. Kanıt yükü belgeyi yazanda; bir sonraki fazın
 yaslandığı yüzey, o belgede yazan yüzeydir.
 
+## 5G DİKEY DİLİM AÇILDI (2026-09-04)
+
+Açılış brifi: `docs/briefs/BRIEF_5G_DIKEY_DILIM.md`. Anayasa v2.1 **Aşama 5G / 4G.7**.
+Dilimin tanımı DECISIONS'ın kendi eski kaydından geliyor: **tek maç günü final kalitede**
+(+ sandbox IAP + cihazda fps) — ve "maç günü" GAME_THESIS'in Session Shape'idir (8-15 dk).
+
+> İSİM UYARISI: Anayasa'nın **Aşama 5G**'si ile GDD'nin **FAZ 05**'i (Asset Üretimi) AYNI ŞEY
+> DEĞİLDİR. Seri asset üretimi bu kapının ARKASINDADIR.
+
+### D-A: KARAR (2026-09-04, Atilla) — **(a) 5G iki kapılı açılır**
+
+**Sorun:** Anayasa'nın sırası Fun Gate → Vertical Slice'tır ve 4G.10/19 nettir: *fun kanıtlanmadan
+art ve içerik üretimine para/zaman gömülmez.* Bizim Fun Gate'imiz **%40 (2/5) ile NO-GO** kapandı
+ve **kopuş nedeni ölçülmedi** (mülakat kaydedilmedi, telemetri repoya kopyalanmadı). DECISIONS
+iki aşama tarif ediyor ve bunlar çelişmiyor: *"Dikey Dilim (5G) **öncesi** ... küçük, MÜLAKATLI
+gözlem turuyla doğrulanır"* (önkoşul) ve *"fun doğrulamasının **nihai yükü** 5G'ye taşındı"*
+(kapının kendisi). **Birincisi ödenmemişti** — ve ödenmemiş olması sadece bir gecikme değil:
+sunum yeniden tasarımının GİRDİSİ yok.
+
+| | Kapsam | Çıkış kapısı |
+| --- | --- | --- |
+| **5G-a** | Paket köprüsü + maç sunumunun GERÇEK motor üstünde yeniden tasarımı (**placeholder art**) + mülakatlı gözlem turu (3-5 kişi) | "bir maç daha" sinyali + **kopuş nedeninin YAZILI olması** |
+| **5G-b** | Final kalite: art, ses/haptic, FTUE ilk 5 dk, sandbox IAP, analytics hunisi, cihaz performansı | 4G.7 Vertical Slice Gate + persona paneli (9.7) |
+
+Kapıyı gevşetmek değil **sırasını düzeltmek**: 5G-a günler, 5G-b haftalar ve art üretimi geri
+alınamaz. Elenen (b) tam dilimi şimdi başlatmak (girdisiz tasarım + geri alınamaz harcama),
+elenen (c) fun borcunu tamamen kapıya bırakmak (kayıttaki "öncesi" satırını sessizce silerdi).
+
+### D-C: KARAR (2026-09-04, Atilla) — **(a) `World` + `CommandBus` Unity paketi olur** → ADR-002
+
+Gerekçe ve elenen seçenekler `docs/adr/ADR-002-unity-paket-siniri.md`de. Özet: (b) ince cephe
+CB'nin kendi "istemci ön-doğrular" mimarisine aykırıydı, (c) sunucu-only bugün Nakama bağlaması
+olmadığı için çalışmıyor.
+
+### S1 UYGULANDI — Unity paket köprüsü (2026-09-04)
+
+`TheBadge.World` ve `TheBadge.CommandBus` artık `TheBadge.Sim` ile aynı desende Unity paketi.
+Yeni kapı **`S1UnityPaketSiniri`** altı şeyi birden ölçüyor; dişi dört koruma SÖKÜLEREK ölçüldü.
+
+**Kapının ilk koşusunda YAKALADIĞI ilk şey benim kendi hatam oldu:** Unity manifest'indeki
+`file:` yolları **Packages klasörüne** görelidir, proje köküne değil; ben proje kökünü taban
+almıştım ve üç paketin de yolu "çözülmüyor" diye kırmızıya döndü. Kapı yazılırken ölçtüğü şeyi
+gerçekten ölçtüğünün kanıtı budur.
+
+**BULUNAN GİZLİ TUZAK (ölçüm sırasında çıktı):** Unity, paket klasöründeki **TÜM** `.cs`
+dosyalarını derler. `dotnet build`in ürettiği `obj/Release/netstandard2.1/*.AssemblyInfo.cs`
+paket klasöründe kalıyordu — Unity CS0579 (yinelenen öznitelik) ile düşerdi. Tuzak **bugün
+`TheBadge.Sim` için de vardı** ve patlamamasının tek sebebi, Unity'yi açan kişinin o klasörde
+henüz `dotnet build` koşmamış olmasıydı: yani sessizce bekleyen bir mayındı. Üç pakete
+`Directory.Build.props` konup çıktı repo kökündeki `artifacts/`e yönlendirildi; kapı `src/`
+dışında `.cs` kalmadığını doğruluyor.
+
+**Ders (kural adayı değil, gözlem):** bir paket sınırını "dosya var mı" diye ölçmek yetmez —
+sınırın DİĞER TARAFTAKİ derleyicisinin ne göreceğini ölçmek gerekir. Bu ortamda Unity yok, ama
+Unity'nin derleyeceği DOSYA KÜMESİ ölçülebilir; kapı orayı tutuyor.
+
 ## Bekleyen kararlar
 
 - ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —

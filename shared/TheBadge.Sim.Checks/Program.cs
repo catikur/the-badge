@@ -7877,5 +7877,136 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     }
 }
 
+// 24) 5G S1 — UNITY PAKET SINIRI (Dikey Dilim açılış brifi S1; Atilla kararı 2026-09-04: D-C (a))
+// NEDEN VAR: FAZ 04'ün tamamı (Tek Kapı, 32 aksiyon, kadro, ekonomi, transfer) Unity'den
+// ERİŞİLEMEZ durumdaydı — `TheBadge.World` ve `TheBadge.CommandBus` .NET-only projelerdi,
+// ne `package.json` ne `.asmdef` vardı. Bu, K11'in dersinin bir üst seviyedeki hâliydi: orada
+// iki alt sistem arasındaki DİKİŞ ölçülmemişti, burada dikiş için gereken PAKET SINIRI hiç yoktu.
+//
+// Bu kapı Unity'yi ÇALIŞTIRMAZ (bu ortamda Unity yok; CLAUDE.md: kanıtlanamayan kod eklenmez).
+// Ölçtüğü şey, Unity derlemesinin SESSİZCE bozulabileceği yapısal koşullar:
+//   1. Paket kimliği: package.json ↔ Unity manifest anahtarı ↔ asmdef adı üçlüsü tutarlı mı
+//   2. Bağımsızlık: noEngineReferences + kaynakta UnityEngine izi yok + csproj'da PackageReference yok
+//   3. GRAFİK SÜRÜKLENMESİ: asmdef referansları csproj ProjectReference'larıyla BİREBİR aynı mı —
+//      bu kapının en değerli dişi. Biri csproj'a referans ekleyip asmdef'i unutursa .NET yeşil
+//      kalır, Unity kırmızıya döner ve bunu ancak Unity açan biri görür.
+//   4. Unity uyumluluğu: netstandard2.1 + C# 9 (paketler Unity'de bu profille derlenir)
+//   5. KLASÖR TUZAĞI: Unity paket klasöründeki TÜM .cs'i derler; `dotnet build`in ürettiği
+//      obj/**/*.AssemblyInfo.cs orada kalırsa Unity CS0579 ile düşer — üstelik yalnız birisi
+//      dotnet build koştuktan SONRA, yani tuzak sessizce bekler. `Directory.Build.props`
+//      çıktıyı repo kökündeki artifacts/'a yönlendiriyor; kapı sonucu doğruluyor.
+{
+    string manifestYolu = FindRepoFile("unity/TheBadge/Packages/manifest.json");
+    // Unity manifest'indeki "file:" yollari PACKAGES klasorune goredir, proje kokune gore DEGIL.
+    // (Ilk yazimda proje kokunu taban aldim ve kapi bunu ilk kosuda yakaladi.)
+    string paketlerKok = System.IO.Path.GetDirectoryName(manifestYolu);
+    string repoKok = System.IO.Path.GetFullPath(
+        System.IO.Path.Combine(System.IO.Path.GetDirectoryName(manifestYolu), "..", "..", ".."));
+
+    // (klasör, Unity paket anahtarı, asmdef/assembly adı)
+    var paketler = new (string Klasor, string PaketAdi, string Asm)[]
+    {
+        ("shared/TheBadge.Sim",        "com.thebadge.sim",        "TheBadge.Sim"),
+        ("shared/TheBadge.CommandBus", "com.thebadge.commandbus", "TheBadge.CommandBus"),
+        ("shared/TheBadge.World",      "com.thebadge.world",      "TheBadge.World"),
+    };
+
+    var manifestDeps = new Dictionary<string, string>(StringComparer.Ordinal);
+    using (var mdoc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(manifestYolu)))
+        foreach (var dep in mdoc.RootElement.GetProperty("dependencies").EnumerateObject())
+            manifestDeps[dep.Name] = dep.Value.GetString();
+
+    string s1hata = "";
+    int s1kaynak = 0;
+    foreach (var pk in paketler)
+    {
+        string dizin = System.IO.Path.Combine(repoKok, pk.Klasor.Replace('/', System.IO.Path.DirectorySeparatorChar));
+        string ad = pk.Asm;
+
+        // 1) package.json + Unity manifest kaydı
+        string pjYolu = System.IO.Path.Combine(dizin, "package.json");
+        if (!System.IO.File.Exists(pjYolu)) { s1hata += $"{ad}: package.json YOK; "; continue; }
+        using (var pj = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(pjYolu)))
+        {
+            string pjAd = pj.RootElement.GetProperty("name").GetString();
+            if (pjAd != pk.PaketAdi) s1hata += $"{ad}: package.json adi '{pjAd}' ≠ '{pk.PaketAdi}'; ";
+        }
+        if (!manifestDeps.TryGetValue(pk.PaketAdi, out string yol))
+            s1hata += $"{ad}: Unity manifest'inde YOK ('{pk.PaketAdi}'); ";
+        else
+        {
+            // Yol GERÇEKTEN çözülmeli — yanlış bir "file:" yolu Unity'de paketi düşürür.
+            if (!yol.StartsWith("file:", StringComparison.Ordinal))
+                s1hata += $"{ad}: manifest yolu 'file:' degil ({yol}); ";
+            else
+            {
+                string coz = System.IO.Path.GetFullPath(System.IO.Path.Combine(
+                    paketlerKok, yol.Substring(5).Replace('/', System.IO.Path.DirectorySeparatorChar)));
+                if (!System.IO.File.Exists(System.IO.Path.Combine(coz, "package.json")))
+                    s1hata += $"{ad}: manifest yolu cozulmuyor ({yol}); ";
+            }
+        }
+
+        // 2) asmdef: bagimsizlik + ad
+        string asmYolu = System.IO.Path.Combine(dizin, ad + ".asmdef");
+        if (!System.IO.File.Exists(asmYolu)) { s1hata += $"{ad}: asmdef YOK; "; continue; }
+        var asmRefs = new List<string>();
+        using (var adoc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(asmYolu)))
+        {
+            var kok = adoc.RootElement;
+            if (kok.GetProperty("name").GetString() != ad)
+                s1hata += $"{ad}: asmdef adi uyusmuyor; ";
+            if (!kok.TryGetProperty("noEngineReferences", out var ner) || !ner.GetBoolean())
+                s1hata += $"{ad}: noEngineReferences TRUE degil (CLAUDE.md degismez #3); ";
+            if (kok.TryGetProperty("references", out var rl))
+                foreach (var r in rl.EnumerateArray()) asmRefs.Add(r.GetString());
+        }
+
+        // 3) GRAFİK: asmdef referansları ↔ csproj ProjectReference'ları BİREBİR
+        string csprojYolu = System.IO.Path.Combine(dizin, ad + ".csproj");
+        var projRefs = new List<string>();
+        var xdoc = System.Xml.Linq.XDocument.Load(csprojYolu);
+        foreach (var el in xdoc.Descendants("ProjectReference"))
+        {
+            string inc = (string)el.Attribute("Include");
+            projRefs.Add(System.IO.Path.GetFileNameWithoutExtension(inc));
+        }
+        foreach (var el in xdoc.Descendants("PackageReference"))
+            s1hata += $"{ad}: DIS PAKET referansi var ({(string)el.Attribute("Include")}) — cekirdek bagimsiz kalir; ";
+
+        projRefs.Sort(StringComparer.Ordinal); asmRefs.Sort(StringComparer.Ordinal);
+        if (!projRefs.SequenceEqual(asmRefs))
+            s1hata += $"{ad}: asmdef referanslari csproj ile UYUSMUYOR (csproj: [{string.Join(",", projRefs)}] vs asmdef: [{string.Join(",", asmRefs)}]); ";
+
+        // 4) Unity uyumlulugu: hedef cerceve + dil surumu
+        string tf = xdoc.Descendants("TargetFramework").Select(e => e.Value).FirstOrDefault();
+        string lv = xdoc.Descendants("LangVersion").Select(e => e.Value).FirstOrDefault();
+        if (tf != "netstandard2.1") s1hata += $"{ad}: TargetFramework '{tf}' ≠ netstandard2.1; ";
+        if (lv != "9.0") s1hata += $"{ad}: LangVersion '{lv}' ≠ 9.0 (Unity uyumlulugu, CLAUDE.md); ";
+
+        // 5) KLASOR TUZAGI: src/ disinda derlenebilir .cs kalmamali
+        string src = System.IO.Path.Combine(dizin, "src");
+        foreach (var f in System.IO.Directory.GetFiles(dizin, "*.cs", System.IO.SearchOption.AllDirectories))
+        {
+            if (!f.StartsWith(src + System.IO.Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                s1hata += $"{ad}: src/ DISINDA .cs var ({System.IO.Path.GetFileName(f)}) — Unity bunu da derler; ";
+        }
+
+        // 6) Kaynakta UnityEngine izi olmamali (paket cekirdegi motor bagimsiz)
+        foreach (var f in System.IO.Directory.GetFiles(src, "*.cs", System.IO.SearchOption.AllDirectories))
+        {
+            s1kaynak++;
+            string metin = System.IO.File.ReadAllText(f);
+            if (metin.IndexOf("UnityEngine", StringComparison.Ordinal) >= 0 ||
+                metin.IndexOf("UnityEditor", StringComparison.Ordinal) >= 0)
+                s1hata += $"{ad}: {System.IO.Path.GetFileName(f)} UnityEngine/UnityEditor'e dokunuyor; ";
+        }
+    }
+
+    if (s1hata.Length > 0) failures += Fail("S1UnityPaketSiniri", s1hata);
+    else Pass($"S1UnityPaketSiniri(3 paket Unity'den erisilebilir: kimlik + manifest yolu + noEngineReferences + " +
+              $"asmdef/csproj grafigi birebir + netstandard2.1/C#9 + src disi .cs yok + {s1kaynak} kaynakta UnityEngine izi yok)");
+}
+
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");
 return failures == 0 ? 0 : 1;

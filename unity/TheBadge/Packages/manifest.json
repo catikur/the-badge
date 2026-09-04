@@ -1,6 +1,8 @@
 {
   "dependencies": {
     "com.thebadge.sim": "file:../../../shared/TheBadge.Sim",
+    "com.thebadge.commandbus": "file:../../../shared/TheBadge.CommandBus",
+    "com.thebadge.world": "file:../../../shared/TheBadge.World",
     "com.unity.inputsystem": "1.11.2",
     "com.unity.test-framework": "1.4.5",
     "com.unity.ugui": "2.0.0",

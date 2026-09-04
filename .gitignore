@@ -14,3 +14,6 @@ unity/**/*.csproj
 unity/**/*.sln
 # OS
 .DS_Store
+
+# MSBuild ciktilari (Unity paket klasorlerinden yonlendirildi — S1UnityPaketSiniri)
+artifacts/
