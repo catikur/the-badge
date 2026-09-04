@@ -46,6 +46,7 @@ namespace TheBadge.Sim.Match
         /// <summary>Üç sonucun olasılığı. `golFarki` = ev − deplasman (BUGÜNKÜ skor),
         /// `kalanDk` = kalan dakika (0 → skor kesinleşmiş demektir).</summary>
         public static Sonuc Hesapla(SimBalance bal, double gucEv, double gucDep,
+                                    in TacticDelta evTaktik, in TacticDelta depTaktik,
                                     int golFarki, double kalanDk)
         {
             var c = bal.canliOlasilik;
@@ -53,8 +54,15 @@ namespace TheBadge.Sim.Match
             if (f < 0) f = 0;
 
             double fark = gucEv - gucDep;
-            double lamEv = c.lambdaTaban * Math.Exp(c.gucKatsayisi * fark) * f;
-            double lamDep = c.lambdaTaban * Math.Exp(-c.gucKatsayisi * fark) * f;
+            // TAKTİK (5G S2-B): ölçüldü ki taktik sonucu güç farkından bile GENİŞ bir aralıkta
+            // oynatıyor (%7 tam kapanma → %44 hat+2, dengeli kadrolarla). Şeridin oyuncunun EN
+            // BÜYÜK kolunu görmemesi, greybox'ın "karar ver → ihtimal değişsin" vaadini ikinci
+            // kez kırmak olurdu.
+            double tEv = TaktikUssu(c.taktik, in evTaktik, in depTaktik);
+            double tDep = TaktikUssu(c.taktik, in depTaktik, in evTaktik);
+
+            double lamEv = c.lambdaTaban * Math.Exp(c.gucKatsayisi * fark + tEv) * f;
+            double lamDep = c.lambdaTaban * Math.Exp(-c.gucKatsayisi * fark + tDep) * f;
 
             int n = c.maxEkGol;
             // Poisson pmf'leri yinelemeli: p[k] = p[k-1] × λ/k (faktöriyel taşması yok)
@@ -80,6 +88,24 @@ namespace TheBadge.Sim.Match
             double t = ev + be + de;
             if (t <= 0) return new Sonuc { Ev = 0, Beraberlik = 1, Deplasman = 0 };
             return new Sonuc { Ev = ev / t, Beraberlik = be / t, Deplasman = de / t };
+        }
+
+        /// <summary>Bir tarafın gol oranının taktik üssü: KENDİ kadranları + RAKİBİN kadranları.
+        /// Ölçülen ana etkiler (`-- fit-winprob` ile oturtulur, balance'ta [KALİBRE]).</summary>
+        static double TaktikUssu(SimBalance.CanliOlasilikCfg.TaktikCfg t,
+                                 in TacticDelta kendi, in TacticDelta rakip)
+        {
+            // AŞIRI UÇ: kadranların karelerinin toplamı. Ana etkiler toplanabilir varsayımı
+            // ÖLÇÜMLE ÇÜRÜDÜ — bu terim onun yerine geçmiyor, EKSİĞİNİ kapatıyor.
+            int kendiKare = kendi.Mentalite * kendi.Mentalite + kendi.Tempo * kendi.Tempo
+                          + kendi.Pres * kendi.Pres + kendi.Hat * kendi.Hat;
+            int rakipKare = rakip.Mentalite * rakip.Mentalite + rakip.Tempo * rakip.Tempo
+                          + rakip.Pres * rakip.Pres + rakip.Hat * rakip.Hat;
+            return t.mentaliteKendi * kendi.Mentalite + t.mentaliteRakip * rakip.Mentalite
+                 + t.tempoKendi * kendi.Tempo + t.tempoRakip * rakip.Tempo
+                 + t.presKendi * kendi.Pres + t.presRakip * rakip.Pres
+                 + t.hatKendi * kendi.Hat + t.hatRakip * rakip.Hat
+                 + t.asiriUcKendi * kendiKare + t.asiriUcRakip * rakipKare;
         }
 
         static void Doldur(Span<double> p, double lam, int n)

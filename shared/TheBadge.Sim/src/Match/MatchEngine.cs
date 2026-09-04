@@ -2129,6 +2129,8 @@ namespace TheBadge.Sim.Match
                 // Güç SAHADAKİ oyunculardan okunur: kırmızı kart ve oyuncu değişikliği şeridi
                 // gerçekten oynatır (greybox'ın "karar ver → ihtimal değişsin" vaadi).
                 var u3 = LiveWinProb.Hesapla(bal, CanliGuc(in st, 0), CanliGuc(in st, 1),
+                                             new TacticDelta(st.HomeRt.Mentalite, st.HomeRt.Tempo, st.HomeRt.Pres, st.HomeRt.Hat),
+                                             new TacticDelta(st.AwayRt.Mentalite, st.AwayRt.Tempo, st.AwayRt.Pres, st.AwayRt.Hat),
                                              st.HomeGoals - st.AwayGoals, 90.0 - sampledMinutes);
                 wp3Home[sampledMinutes] = (float)u3.Ev;
                 wp3Draw[sampledMinutes] = (float)u3.Beraberlik;

@@ -3169,7 +3169,62 @@ oyuncunun elindeki EN BÜYÜK kolu hiç görmüyor.
 **MODEL BU VERİYLE HENÜZ BESLENMEDİ ve bu bilinçli:** `pres` kalibrasyonu düzelirse oturtulan
 katsayılar çöp olur; kararsız zemine model kurmak israf. Karar S2-B'de.
 
+### S2-B KARARI (2026-09-04, Atilla): **(a)** — ayrı motor dilimi, (b) beklemeden devam
+
+Taktiğin üç tuhaflığı (pres saf ceza · pres negatif tarafta doyuyor · savunmacı yön daha çok gol
+yediriyor) AYRI bir motor dilimine gitti; (b) onu beklemeden taktiği şeride kattı.
+
+### S2-A/(b) UYGULANDI — şerit artık taktiğe cevap veriyor (2026-09-04)
+
+`LiveWinProb` taktik girdisi aldı: her kadran için `*Kendi`/`*Rakip` katsayısı + bir `asiriUc`
+terimi. Şerit ölçülen davranışı izliyor: kontrol %34,5 · mentalite+2 %43,6 · tam kapanma %17,2.
+
+**ÜÇ ŞEY YANLIŞTI, ÜÇÜ DE ÖLÇÜMLE BULUNDU:**
+
+1. **Katsayıları GOL ORANINDAN oturtmuştum.** Doğal görünen yol; model yönü tutturuyor ama
+   büyüklüğü ıskalıyordu (`tamHücum` %63,4 derken gerçek %38,8). Hedef sonuç olasılığı, gol oranı
+   ise yalnız bir VEKİL. Doğrudan sonuca oturtmak hatayı 0,419 → 0,267'ye indirdi.
+2. **Ana etkiler TEK BAŞINA yetmedi.** Kadranlar toplanabilir değil: dördü birden uca çekilince
+   sapma 18-22 puan. Fiziksel olarak anlamlı TEK bir terim eklendi — kadran karelerinin toplamı
+   (`asiriUc`): dengesiz, her kolu uca çeken kurulum kendine az fayda, rakibe çok alan verir.
+   Hata 0,267 → **0,053**, en büyük sapma 0,225 → **0,080**. `tamHücum` artık birebir tutuyor.
+3. **Beceri örneğini dakika 0'dan alıyordum.** Motorun tick döngüsünde `SampleCurves` komut
+   uygulamasından ÖNCE koşuyor (MatchEngine 422 vs 424), yani dakika 0 örneği kaç vuruşunda
+   verilen taktiği HENÜZ GÖRMEZ. Dakika 1'e alındı.
+   **Bu aynı zamanda sunum tarafında gerçek bir kusurdur:** şeridin İLK okuması, oyuncunun maç
+   öncesi taktik kurulumunu yok sayar. Bugün kapı dakika 1'den ölçerek etrafından dolaşıyor;
+   ekran yazılırken bu görünür hale gelir (borç).
+
+### 📐 KURAL: mutlak bir eşik değil, ULAŞILABİLİR TAVANIN PAYI ölçülür (2026-09-04)
+
+Ayırt edicilik kapısına önce mutlak taban (0,10) koymuştum. Taktik alt popülasyonu 0,042 verdi ve
+kapı düştü. **Modeli suçlamadan önce tavanı hesapladım:** her kolun KENDİ gerçek frekansını bilen
+KÂHİN model bile ancak **0,045** alıyor. Yani 0,10'luk taban TEORİK MAKSİMUMUN ÜSTÜNDEYDİ —
+kapı kötü modeli değil İMKÂNSIZI istiyordu. Modelin gerçek başarısı tavanın %93'ü.
+
+Sebebi futbolun kendisi: sonuçlara maçtan maça rastgelelik hâkim ve hiçbir model onu açıklayamaz.
+Açıklanabilir olan yalnız KOLLAR ARASI fark; büyüklüğü de alt popülasyona göre değişir (güç
+kolları %5-92 yayılıyor, taktik kolları %6-44). **Mutlak eşik bu yüzden anlamsızdır; doğru soru
+"bilinebilirin ne kadarını yakalıyor".** Kapı artık payı ölçüyor (taban %50).
+
+Bugün: **güç tavanın %97'si · taktik %86'sı** · kalibrasyon sapması 0,057.
+Diş: taktik katsayıları sıfırlanınca −%40, `gucKatsayisi` sıfırlanınca −%2 → ikisi de kırmızı.
+
 ## Bekleyen kararlar
+
+- **MOTOR DİLİMİ (5G S2-B'den ayrıldı, 2026-09-04, Atilla (a) dedi) — taktiğin üç tuhaflığı.**
+  Bir karar değil, bir TETİKLEYİCİ: motor kalibrasyon dilimi açıldığında ele alınır.
+  (1) `pres` saf ceza — kendi golünü hiç artırmıyor, rakibinkini +2'de %49 artırıyor; gerçek
+  futbolda pres topu yukarıda kazanıp şans üretir. (2) `pres` −1 ile −2 BİREBİR aynı sonucu
+  veriyor: kadran negatif tarafta doyuyor, oyuncuya sunulan bir seçenek hiçbir şey yapmıyor
+  (`K10TalimatAtilligi`nin kardeşi). (3) Savunmacı yön daha ÇOK gol yediriyor (tam kapanmada
+  rakip 1,38, kontrolde 0,95). Düzeltildiğinde `-- fit-winprob` yeniden koşulur ve
+  `S2WinProbKalibrasyon` katsayıları doğrular — bağ ucuz, bu yüzden (b) beklemedi.
+- **Şeridin ilk okuması taktiği görmüyor (5G S2, 2026-09-04).** `SampleCurves` komut
+  uygulamasından önce koştuğu için dakika 0 örneği maç öncesi taktik kurulumunu yok sayar.
+  Kapı dakika 1'den ölçerek etrafından dolaşıyor; ekran yazılırken görünür hale gelir.
+  Seçenekler o gün netleşir: örnekleme sırasını değiştirmek (motor semantiği) ya da sunumun
+  ilk kareyi dakika 1'den okuması (yalnız sunum).
 
 - **S2-B: taktiğin üç tuhaflığı nereye ait? (2026-09-04 ölçümü) — KARAR ATİLLA'NIN.**
   Şeride taktiği sokmak (b)'nin işi ve ölçüm bunun MÜMKÜN olduğunu gösterdi. Ama ölçüm ayrıca
