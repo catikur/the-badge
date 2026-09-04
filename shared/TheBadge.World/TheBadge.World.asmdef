@@ -1,0 +1,10 @@
+{
+  "name": "TheBadge.World",
+  "rootNamespace": "TheBadge.World",
+  "references": [
+    "TheBadge.Sim",
+    "TheBadge.CommandBus"
+  ],
+  "noEngineReferences": true,
+  "autoReferenced": true
+}

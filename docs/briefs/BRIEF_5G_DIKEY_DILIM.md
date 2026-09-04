@@ -115,7 +115,7 @@ Bu, kapıyı gevşetmek değil **sırasını düzeltmek**: pahalı yarı, ucuz y
 
 | # | Dilim | Neden burada | Faz |
 | --- | --- | --- | --- |
-| **S1** | **Paket köprüsü:** `TheBadge.World` + `TheBadge.CommandBus` Unity paketi olur; `UNITY_SETUP.md`'nin 5 modüllü asmdef haritası kurulur (FAZ 01 borcu) | Bunsuz Unity dünyayı GÖREMEZ. Her şeyin önkoşulu. | 5G-a |
+| **S1** ✅ | **Paket köprüsü:** `TheBadge.World` + `TheBadge.CommandBus` Unity paketi olur; `UNITY_SETUP.md`'nin asmdef haritası güncellenir (FAZ 01 borcu) | Bunsuz Unity dünyayı GÖREMEZ. Her şeyin önkoşulu. | 5G-a |
 | **S2** | **Maç sunumu yeniden tasarımı** gerçek motor üstünde + **mülakatlı gözlem turu** | Fun borcunun ödenmesi; 5G-b'nin girdisi | 5G-a |
 | **S3** | **Maç günü döngüsü uçtan uca:** hafta hazırlığı (taktik + 1 tycoon aksiyonu + 1 konuşma) → maç → kapanış (röportaj + plan) | Dilimin TANIMI bu. Dünya-motor dikişi burada UI'dan geçer. | 5G-b |
 | **S4** | **FTUE ilk 5 dakika** (GDD 9.2 "Enkazı Devral" akışının başı) + progressive disclosure hafta 1 | 4G.7 zorunlu; persona P4'ün "≤3 dk ilk değer anı" MAJOR'ı burada karşılanır | 5G-b |
@@ -154,7 +154,7 @@ Kalan ikisi (App Preview dili, erken arkadaş daveti) store/soft-launch işidir 
 
 Hiçbiri varsayımla kapatılmadı (CLAUDE.md: "Belirsizlikte varsayım üretme").
 
-### D-A. Kapı sırası: 5G iki kapılı mı açılsın?
+### D-A. Kapı sırası — ✅ **KAPANDI (2026-09-04, Atilla): (a) iki kapılı**
 
 | Seçenek | Artı | Eksi |
 | --- | --- | --- |
@@ -169,7 +169,7 @@ FTUE'nun da ilk dokunuşu), **1 konuşma** (maç sonu röportaj), **1 taktik dok
 Alternatif: replay yolunu da içeri almak (tezin "canlıyı kaçırmak ceza değildir" vaadi orada) —
 ama iki sunum yolunu birden final kaliteye çekmek dilimi ikiye katlar. **Karar Atilla'nın.**
 
-### D-C. Unity paket sınırı (ADR gerektirir)
+### D-C. Unity paket sınırı — ✅ **KAPANDI (2026-09-04, Atilla): (a)** → `docs/adr/ADR-002-unity-paket-siniri.md`
 
 | Seçenek | Artı | Eksi |
 | --- | --- | --- |
@@ -177,8 +177,15 @@ ama iki sunum yolunu birden final kaliteye çekmek dilimi ikiye katlar. **Karar 
 | (b) İnce cephe paketi (`TheBadge.Client`) — yalnız DTO + katalog önbelleği | Yüzey küçük | Doğrulama sunucuya kayar; offline akış ve anlık UI geri bildirimi zayıflar; **CB'nin kendi mimarisine aykırı** |
 | (c) Sunucu-only + REST/RPC DTO'lar | En az istemci kodu | G3 otoritesi zaten sunucuda; ama Nakama bağlaması YOK — bugün çalışacak bir yol değil |
 
-Not: `UNITY_SETUP.md`'deki asmdef haritası FAZ 04'ten ESKİ — `Game.Commands`ı `TheBadge.Sim`e
-bağlıyor, oysa Command Bus ayrı pakette. Harita bu kararla birlikte güncellenmeli.
+Not: `UNITY_SETUP.md`'deki asmdef haritası FAZ 04'ten ESKİYDİ — `Game.Commands`ı `TheBadge.Sim`e
+bağlıyordu, oysa Command Bus ayrı pakette. **Kararla birlikte güncellendi.**
+
+**S1 UYGULANDI (2026-09-04).** Üç paket de Unity'den erişilebilir; `S1UnityPaketSiniri` kapısı
+kimlik + manifest yolu + `noEngineReferences` + **asmdef↔csproj grafiğinin birebirliği** +
+netstandard2.1/C#9 + klasör disiplinini ölçüyor. Uygularken **gizli bir tuzak** çıktı: Unity paket
+klasöründeki TÜM `.cs`'i derler ve `dotnet build`in ürettiği `obj/**/*.AssemblyInfo.cs` orada
+kalıyordu. Tuzak `TheBadge.Sim` için de vardı; patlamamasının tek sebebi Unity'yi açanın o klasörde
+henüz `dotnet build` koşmamış olmasıydı. Çıktı `artifacts/`e yönlendirildi.
 
 ### D-D. Art direction: stil rehberi ne zaman?
 
@@ -263,6 +270,9 @@ diye raporlanmaz.
 
 ## 10. Açılış koşulu
 
-Bu brif bir plan önerisidir, kapı değil. Uygulamaya başlamadan önce **D-A ve D-C** kapanmalı
-(sıra ve paket sınırı); D-B/D-D/D-E ilk dilim koşarken kapanabilir. Kararlar `docs/DECISIONS.md`'ye
-işlenir; sohbette kalan karar yok hükmündedir (Anayasa 9 + CLAUDE.md).
+Bu brif bir plan önerisidir, kapı değil. **D-A ve D-C 2026-09-04'te kapandı** (DECISIONS +
+ADR-002) ve **S1 uygulandı**; sıradaki iş **S2** — maç sunumunun gerçek motor üstünde yeniden
+tasarımı ve mülakatlı gözlem turu. **D-B, D-D ve D-E hâlâ açık:** D-B (dilim kapsamı) S2 biterken,
+D-D (stil rehberi) ve D-E (analytics sağlayıcı — GDD↔anayasa çelişkisi) 5G-b başlamadan kapanmalı.
+Kararlar `docs/DECISIONS.md`'ye işlenir; sohbette kalan karar yok hükmündedir (Anayasa 9 +
+CLAUDE.md).
