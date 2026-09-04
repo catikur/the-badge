@@ -3095,7 +3095,94 @@ greybox'tan daha kötü başlar. Redesign'ın kendisi ayrıca bir şey değişti
 
 Seçenekler ve önerim "Bekleyen kararlar"da (S2-A).
 
+### S2-A KARARI (2026-09-04, Atilla): **(a) + (b), sırayla**
+
+### S2-A/(a) UYGULANDI — canlı kazanma olasılığı (2026-09-04)
+
+`TeamRating` (takım gücünün TEK tanımı, `Lod2Resolver` buraya devretti) + `LiveWinProb`
+(üç sonuçlu Poisson konvolüsyonu). Katsayılar motorun kendi davranışından oturtuldu
+(28 eşleşme × 300 maç, R² = 0,977); `-- fit-winprob` yeniden oturtur ama balance'ı EZMEZ.
+
+| | en büyük kova sapması |
+| --- | --- |
+| Eski şerit (ME 15.3 `WinProb`) | 0,214 |
+| Yeni `LiveWinProb` | **0,051** |
+
+Doğrulama oturtma verisinden AYRI tohum ailesiyle. **Sunum-only olduğu kanıtlandı:** 50 golden
+replay'in durum hash'leri ve skorları birebir aynı; yalnız config_hash kaydı.
+
+**KAPININ İKİ KEZ DİŞİ YOKTU — ikincisi bir DERS:**
+
+1. Kapıyı M16-E'nin döngüsüne "bedava" bindirmiştim. `gucKatsayisi = 0` ile modeli güce KÖR
+   yaptım, kapı geçti (0,048): M16-E'nin ofset çekilişi farkı 0 civarında yoğunlaştırıyor.
+   Doğru büyüklük, YANLIŞ popülasyon. Kapı kendi popülasyonuna taşındı (fark −24..+24).
+2. **Geniş popülasyonda DA geçti (0,059).** Sebebi daha derin: simetrik bir popülasyonda
+   TABAN ORANI basan model MARJİNAL olarak kalibredir ve tamamen işe yaramazdır.
+   **Kalibrasyon, AYIRT EDİCİLİĞİ ölçmez.** Kapıya kaç vuruşu Brier BECERİ payı eklendi.
+
+Diş (son hâl): güce kör model → beceri −0,008 → "AYIRT EDİCİLİK YOK" (kalibrasyonu 0,059 ile
+hâlâ geçiyor, ölçünün gerekçesi bu) · bir eğri dizisi dolmazsa → 0,248 + toplam hatası ·
+bozulmamış → sapma 0,051, beceri 0,177.
+
+### 🔴 S2-B ÖLÇÜMÜ: TAKTİK sonucu ÇOK güçlü değiştiriyor — ve üç tuhaflık var (2026-09-04)
+
+(b)'nin ilk sorusu şuydu: şerit bugün gol, kırmızı kart ve oyuncu değişikliğiyle oynuyor ama
+taktikle OYNAMIYOR — bu modelin eksiği mi, yoksa motorda taktik zaten etkisiz mi?
+
+**Ölçüm** (dengeli 60v60, AYNI tohumlar, 400 maç/kol, `TacticChangeCmd` kaç vuruşunda):
+
+| kol | EV galibiyeti | kontrole göre |
+| --- | --- | --- |
+| hat +2 | %44 | +9 |
+| mentalite +2 | %42 | +7 |
+| **KONTROL** | %35 | — |
+| tempo +2 | %34 | −1 |
+| pres +2 | %26 | −9 |
+| mentalite −2 | %23 | −12 |
+| **tam hücum (2,2,2,2)** | **%28** | **−7** |
+| tam kapanma (−2,−2,−2,−2) | **%7** | −28 |
+
+**Ana sonuç: greybox'ın vaadi motorda DOĞRU.** Taktik kazanma olasılığını 37 puanlık bir
+aralıkta oynatıyor — `LiveWinProb`un yakaladığı güç farkından bile geniş. Yani şerit bugün
+oyuncunun elindeki EN BÜYÜK kolu hiç görmüyor.
+
+**Kadran başına ölçüm** (250 maç/kol, gol oranının kontrole göre log oranı):
+
+| kadran | kendi golü | rakip golü |
+| --- | --- | --- |
+| mentalite −2 → +2 | −0,145 → +0,341 (tekdüze artan) | +0,213 → +0,118 (**tekdüze DEĞİL**) |
+| tempo −2 → +2 | −0,809 → +0,131 (−2 felaket) | −0,062 → +0,188 |
+| **pres −2 → +2** | **+0,051 → +0,039 (DÜZ)** | **+0,152 → +0,486 (tekdüze artan)** |
+| hat −2 → +2 | −0,181 → +0,154 | +0,195 → −0,148 |
+
+**ÜÇ TUHAFLIK (gözlendi, sebebi ÖLÇÜLMEDİ):**
+1. **Kadranlar toplanabilir değil:** mentalite +2 (+7) ve hat +2 (+9) tek tek iyi, ama dördü
+   birden hücuma alınınca sonuç kontrolden KÖTÜ (−7). Etkileşim gerçek.
+2. **`pres` saf ceza:** kendi golünü hiç artırmıyor (düz), rakibin golünü tekdüze artırıyor
+   (+2'de %49 daha fazla). Motorda pres yapmak KESİN olarak kötü. Gerçek futbolda pres topu
+   yukarıda kazanıp şans üretir; bu, kalibrasyon sorunu olabilir.
+3. **`pres` −1 ile −2 BİREBİR AYNI** (0,96/1,08 her ikisinde de, aynı tohumlarla): kadran
+   negatif tarafta DOYUYOR — yani oyuncuya sunulan bir seçenek hiçbir şey yapmıyor.
+4. Savunmacı yön daha ÇOK gol yediriyor: mentalite −2'de rakip +0,213, tam kapanmada rakip
+   1,38 (kontrolde 0,95).
+
+**MODEL BU VERİYLE HENÜZ BESLENMEDİ ve bu bilinçli:** `pres` kalibrasyonu düzelirse oturtulan
+katsayılar çöp olur; kararsız zemine model kurmak israf. Karar S2-B'de.
+
 ## Bekleyen kararlar
+
+- **S2-B: taktiğin üç tuhaflığı nereye ait? (2026-09-04 ölçümü) — KARAR ATİLLA'NIN.**
+  Şeride taktiği sokmak (b)'nin işi ve ölçüm bunun MÜMKÜN olduğunu gösterdi. Ama ölçüm ayrıca
+  motor tarafında üç şey buldu: `pres` saf ceza, `pres` negatif tarafta doyuyor, savunmacı yön
+  daha çok gol yediriyor.
+  - **(a) Ayrı motor dilimi aç, (b) onu beklemeden taktiği modele katsın** ← **önerilen**.
+    (b)'nin işi taktiği ŞERİDE göstermek; taktiğin kendisinin doğru kalibre olup olmadığı ayrı
+    bir soru. Eksi: `pres` düzelirse katsayılar yeniden oturtulur (ucuz — `-- fit-winprob`).
+  - **(b) Önce motoru düzelt, sonra modele kat.** Artı: tek oturtma. Eksi: 5G-a'yı motor
+    kalibrasyonuna bağımlı kılar; dikey dilimin sunum işi motoru beklemek zorunda kalır.
+  - **(c) Taktiği modele hiç katma, sunum başka eksene otursun.** Artı: tuhaflıklardan bağımsız.
+    Eksi: ölçüm taktiğin EN BÜYÜK kol olduğunu gösterdi; onu göstermeyen bir şerit oyuncunun
+    kararını görmezden gelir — greybox'ın vaadini ikinci kez kırar.
 
 - **S2-A: sunumun omurgası ne olacak? (2026-09-04 ölçümü, yukarıdaki S2 bulgusu) — KARAR ATİLLA'NIN.**
   - **(a) Gerçek bir canlı kazanma olasılığı kur:** 3 sonuçlu (G/B/M), güç farkına duyarlı, kırmızı
