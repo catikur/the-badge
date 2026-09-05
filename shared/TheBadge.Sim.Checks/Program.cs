@@ -2255,6 +2255,71 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                   $"ayırt edicilik: güç tavanın %{100 * payGuc:0}'i · taktik %{100 * payTaktik:0}'i (≥ %{100 * S2Pay:0}) · üç sonuç 1'e toplanıyor · en kötü: {enBuyukNerede})");
     }
 
+    // ---- 5G S2: MÜDAHALE ŞERİDİ ANINDA OYNATIYOR MU ----
+    // NEDEN VAR (inceleme bulgusu, Codex — 2026-09-05, P1): `wp3*` dizileri yalnız dakika
+    // başlarında ve `ApplyDue`dan ÖNCE yazılıyor, üstelik dışarıya ancak maç SONUNDA veriliyordu.
+    // Canlı şerit için motor hiçbir şey sunmuyordu. `AnlikOlasilik` o boşluğu kapatıyor; bu kapı
+    // onun GERÇEKTEN anında cevap verdiğini ölçüyor — dilimin bütün tezi bu döngüde.
+    //
+    // ÖLÇÜM ŞEKLİ: aynı tick içinde ÖNCE/SONRA. Komut kuyruğa konur, `Tick` bir kez çağrılır ve
+    // olasılık o tick'te değişmiş olmalıdır. Dakika sınırını beklemek zorunda kalırsa kapı düşer.
+    {
+        var evK = BuildSheetSide(300, 7, home: true);
+        var depK = BuildSheetSide(300, 7, home: false, idEntity: 8);
+        string s2mHata = "";
+        var s2mSatir = new List<string>();
+
+        // (ad, taktik, beklenen yön: +1 ev lehine, -1 aleyhine, en az bu kadar oynamalı)
+        var senaryolar = new (string Ad, TacticDelta Tk, int Yon)[]
+        {
+            ("mentalite+2", new TacticDelta(2, 0, 0, 0), +1),
+            ("hat+2",       new TacticDelta(0, 0, 0, 2), +1),
+            ("tam kapanma", new TacticDelta(-2, -2, -2, -2), -1),
+            ("pres+2",      new TacticDelta(0, 0, 2, 0), -1),
+        };
+        const double S2MinOynama = 0.02;   // en az 2 puan — gürültü değil, GÖRÜNÜR bir hareket
+
+        foreach (var sen in senaryolar)
+        {
+            var q = new CommandQueue();
+            var cfg = new MatchConfig { Seed = 0x5E7A1, EngineVersion = "s2anlik",
+                Home = evK, Away = depK, Referee = RefereeProfile.Default };
+            var eng = new MatchEngine(0x5E7A1, q, cfg, simBal) { AutoManage = true };
+            var st = MatchEngine.CreateInitialState(cfg);
+            // Maçın ortasına kadar koş (müdahale anı gerçekçi olsun)
+            for (int t = 0; t < 12000; t++) eng.Tick(ref st);
+            var once = eng.AnlikOlasilik(in st);
+            q.Enqueue(new TacticChangeCmd(st.Tick, 0, sen.Tk));
+            eng.Tick(ref st);                       // TEK tick — dakika sınırı beklenmiyor
+            var sonra = eng.AnlikOlasilik(in st);
+            double delta = sonra.Ev - once.Ev;
+            s2mSatir.Add($"{sen.Ad} {100 * once.Ev:0.0}→{100 * sonra.Ev:0.0}");
+            if (sen.Yon > 0 && delta < S2MinOynama)
+                s2mHata += $"{sen.Ad}: şerit ev lehine oynamadı ({100 * delta:+0.0;-0.0} puan); ";
+            if (sen.Yon < 0 && delta > -S2MinOynama)
+                s2mHata += $"{sen.Ad}: şerit ev aleyhine oynamadı ({100 * delta:+0.0;-0.0} puan); ";
+        }
+
+        // KIRMIZI KART / EKSİK OYUNCU: canlı güç sahadakilerden okunduğu için şerit düşmeli.
+        {
+            var cfg = new MatchConfig { Seed = 0x5E7A2, EngineVersion = "s2anlik",
+                Home = evK, Away = depK, Referee = RefereeProfile.Default };
+            var eng = new MatchEngine(0x5E7A2, new CommandQueue(), cfg, simBal) { AutoManage = true };
+            var st = MatchEngine.CreateInitialState(cfg);
+            for (int t = 0; t < 12000; t++) eng.Tick(ref st);
+            var once = eng.AnlikOlasilik(in st);
+            st.Agents[5].SentOff = true;            // ev takımından bir saha oyuncusu düşüyor
+            var sonra = eng.AnlikOlasilik(in st);
+            double d = sonra.Ev - once.Ev;
+            s2mSatir.Add($"kırmızı {100 * once.Ev:0.0}→{100 * sonra.Ev:0.0}");
+            if (d > -S2MinOynama) s2mHata += $"kırmızı kart şeridi düşürmedi ({100 * d:+0.0;-0.0} puan); ";
+        }
+
+        Console.WriteLine($"[info] 5G S2 anlık şerit (aynı tick): {string.Join(" · ", s2mSatir)}");
+        if (s2mHata.Length > 0) failures += Fail("S2AnlikOlasilikCanli", s2mHata);
+        else Pass($"S2AnlikOlasilikCanli(4 taktik + kırmızı kart AYNI TICK içinde şeridi ≥{100 * S2MinOynama:0} puan oynatıyor: {string.Join(" · ", s2mSatir)})");
+    }
+
     // ---- K13-C TEŞHİSİ: DOĞRUDAN KIRMIZI YOLU ÖLÜ ----
     // Atilla kararı (c): "borcu kapatma, BANDI SORGULA." Sorgulandı; cevap bandı temize
     // çıkardı ve borcun YANLIŞ YERE asıldığını gösterdi.

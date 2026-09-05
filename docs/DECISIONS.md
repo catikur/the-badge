@@ -3210,7 +3210,39 @@ kolları %5-92 yayılıyor, taktik kolları %6-44). **Mutlak eşik bu yüzden an
 Bugün: **güç tavanın %97'si · taktik %86'sı** · kalibrasyon sapması 0,057.
 Diş: taktik katsayıları sıfırlanınca −%40, `gucKatsayisi` sıfırlanınca −%2 → ikisi de kırmızı.
 
+### 🔴 BULGU (Codex, P1, gerçek): canlı şerit için motor HİÇBİR ŞEY sunmuyordu (2026-09-05)
+
+Bulgunun kendisi: `wp3*` dizileri yalnız dakika başlarında ve `queue.ApplyDue`dan ÖNCE yazılıyor,
+bu yüzden müdahalenin etkisi bir sonraki dakika sınırına kadar görünmüyor.
+
+**Doğrularken bulgu daha da keskin çıktı:** diziler `private` ve dışarıya YALNIZ maç sonunda
+`BuildSummary` ile veriliyor. Yani canlı şerit için motor bir dakika gecikmeli değil, **hiç**
+veri sunmuyordu. Kendi kaydımda ("şeridin ilk okuması taktiği görmüyor") sorunu dakika 0'a özel
+sanmıştım; Codex genelleştirdi ve haklıydı — sorun her müdahalede, her dakika içinde vardı.
+
+**Düzeltme:** `MatchEngine.AnlikOlasilik(in MatchState)` — durumu okur, yazmaz; kalan süreyi tick
+çözünürlüğünde hesaplar. Dizilerin anlamı da kesinleştirildi: onlar MAÇ SONU İNCELEME eğrisidir
+("dakika m'nin başı, o tick'in müdahaleleri uygulanmadan önce"), canlı sunum onları OKUMAMALIDIR.
+
+**Kapı `S2AnlikOlasilikCanli`** — dört taktik + kırmızı kart, hepsi AYNI TICK içinde şeridi en az
+2 puan oynatmalı. Bugün: mentalite+2 %32,1→%37,4 · hat+2 →%39,0 · tam kapanma →%9,1 ·
+pres+2 →%22,2 · kırmızı →%23,5. **Diş:** kusur geri konunca (dizinin son dakikası okunursa)
+beş senaryonun BEŞİ de düşüyor.
+
+Ölçüm çıktısını okurken kendi biçim hatamı da yakaladım: `{x:+0.0}` .NET'te LİTERAL artı basar,
+işareti değil (negatif değerler "-+0.2" görünüyordu). Bölüm ayırıcısına çevrildi (`+0.0;-0.0`).
+
 ## Bekleyen kararlar
+
+- **İnceleme eğrisinin bir dakikalık gecikmesi (5G S2, 2026-09-05).** CANLI yol `AnlikOlasilik`
+  ile kapandı; geriye maç sonu inceleme eğrisi kalıyor: `SampleCurves` tick döngüsünde
+  `queue.ApplyDue`dan önce koştuğu için 37. dakikadaki bir müdahale dizide 38'de görünür.
+  Seçenekler: (a) `SampleCurves`i `ApplyDue`dan SONRAYA al — ME 15.3'ün momentum örneklemesini
+  de bir adım kaydırır, yani ilgisiz bir sebeple spec'li bir davranışı değiştirmek olur;
+  (b) yalnız `wp3*` örneklemesini ayır — iki örnekleme noktası, atlanan dakika mantığı
+  ikilenir; (c) olduğu gibi bırak, anlamı belgede kesin — bugünkü hâl budur ve inceleme
+  eğrisi için bir dakikalık gecikme zararsız olabilir. **Önerim (c)**, ama karar ekranı yazan
+  turda verilmeli: eğriyi kim, ne için okuyacak henüz belli değil.
 
 - **MOTOR DİLİMİ (5G S2-B'den ayrıldı, 2026-09-04, Atilla (a) dedi) — taktiğin üç tuhaflığı.**
   Bir karar değil, bir TETİKLEYİCİ: motor kalibrasyon dilimi açıldığında ele alınır.

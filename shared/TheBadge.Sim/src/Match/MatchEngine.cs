@@ -2128,6 +2128,14 @@ namespace TheBadge.Sim.Match
                 // büyüklüktür ve onun yerine geçmez — o highlight sıralamasının çekirdeği.
                 // Güç SAHADAKİ oyunculardan okunur: kırmızı kart ve oyuncu değişikliği şeridi
                 // gerçekten oynatır (greybox'ın "karar ver → ihtimal değişsin" vaadi).
+                //
+                // BU DİZİ MAÇ SONU İNCELEME EĞRİSİDİR, CANLI OKUMA DEĞİL. Anlamı kesin:
+                // "dakika m'nin BAŞI, o tick'in müdahaleleri UYGULANMADAN ÖNCE" — çünkü
+                // `SampleCurves` tick döngüsünde `queue.ApplyDue`dan önce koşar. Dolayısıyla
+                // 37. dakikada yapılan bir taktik değişikliği bu dizide 38'de görünür.
+                // CANLI sunum bu diziyi OKUMAMALIDIR; onun yolu `AnlikOlasilik` (aşağıda).
+                // İnceleme eğrisinin bir dakikalık gecikmesi DECISIONS'ta karar bekliyor —
+                // örnekleme noktasını kaydırmak ME 15.3'ün momentum örneklemesini de kaydırırdı.
                 var u3 = LiveWinProb.Hesapla(bal, CanliGuc(in st, 0), CanliGuc(in st, 1),
                                              new TacticDelta(st.HomeRt.Mentalite, st.HomeRt.Tempo, st.HomeRt.Pres, st.HomeRt.Hat),
                                              new TacticDelta(st.AwayRt.Mentalite, st.AwayRt.Tempo, st.AwayRt.Pres, st.AwayRt.Hat),
@@ -2137,6 +2145,29 @@ namespace TheBadge.Sim.Match
                 wp3Away[sampledMinutes] = (float)u3.Deplasman;
                 sampledMinutes++;
             }
+        }
+
+        /// <summary>ANLIK üç sonuçlu kazanma olasılığı — SUNUM KATMANININ CANLI OKUMASI (5G S2).
+        ///
+        /// NEDEN VAR (inceleme bulgusu, Codex — 2026-09-05, P1): `wp3*` dizileri yalnız DAKİKA
+        /// BAŞLARINDA ve `queue.ApplyDue`dan ÖNCE yazılıyor, üstelik dışarıya ancak maç SONUNDA
+        /// `BuildSummary` ile veriliyordu. Yani canlı şerit için motor hiçbir şey sunmuyordu; bir
+        /// taktik değişikliğinin, oyuncu değişikliğinin, kırmızı kartın veya golün etkisi bir
+        /// sonraki dakika sınırına kadar GÖRÜNMEZDİ. Bu, tam da oyuncunun müdahale ettiği anda
+        /// geri bildirim döngüsünü kopardığı için dilimin bütün tezine aykırıydı
+        /// ("karar ver → ihtimal DEĞİŞSİN → sonucu yaşa").
+        ///
+        /// Durumu OKUR, yazmaz (`in MatchState`): her tick, her karede çağrılabilir. Kalan süre
+        /// tick çözünürlüğünde hesaplanır — dakika yuvarlaması yapılmaz, çünkü şeridin son
+        /// dakikalardaki hareketi tam da orada anlam kazanır.</summary>
+        public LiveWinProb.Sonuc AnlikOlasilik(in MatchState st)
+        {
+            double kalan = 90.0 - st.Tick / 600.0;
+            if (kalan < 0) kalan = 0;
+            return LiveWinProb.Hesapla(bal, CanliGuc(in st, 0), CanliGuc(in st, 1),
+                new TacticDelta(st.HomeRt.Mentalite, st.HomeRt.Tempo, st.HomeRt.Pres, st.HomeRt.Hat),
+                new TacticDelta(st.AwayRt.Mentalite, st.AwayRt.Tempo, st.AwayRt.Pres, st.AwayRt.Hat),
+                st.HomeGoals - st.AwayGoals, kalan);
         }
 
         /// <summary>SAHADAKİ 11'in gücü (5G S2). `TeamRating` tek tanımını kullanır.
