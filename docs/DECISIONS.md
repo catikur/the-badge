@@ -3277,6 +3277,34 @@ iddiası birbirinin yedeği değil — eşiği iki taraftan sıkıştırıyorlar
 **TASK-002 bu karara göre güncellendi;** brif "mekanizma hazır, yeniden yazma" diyor ve ME 15.3
 eşiğini kullanmayı açıkça yasaklıyor.
 
+### K2 KARARI (2026-09-05, Atilla): **UI Toolkit**
+
+`com.unity.modules.uielements` (1.0.0) zaten Unity manifest'inde — **yeni bağımlılık değil,
+ADR gerekmiyor** (CLAUDE.md "yeni Unity paketi = ADR" kuralı tetiklenmiyor). Placeholder için
+UXML/USS dosyası şart değil; arayüz C#'ta kurulabilir.
+
+**FAZ 00.5'in bir satırını ÖNE ÇEKİYOR:** o kayıt "kodla üretilen uGUI (UI Toolkit seti FAZ
+02'de)" diyordu. Çelişki yok, çünkü o karar greybox içindi ve greybox emekli; ayrıca greybox'ın
+uGUI kodu (`UiShell.cs`, `UiWidgets.cs`) zaten taşınmıyordu. Bu satır, FAZ 02'nin UI Toolkit
+setini 5G-a'nın placeholder ihtiyacıyla erken başlatıyor.
+
+### K3 KARARI (2026-09-05, Atilla): **greybox arşiv olarak kalsın**
+
+Silinmez; dosyalar git'te durur. Ama "arşiv" pratikte bir şey daha demek: **derlenmemeli.**
+`Game.Greybox` asmdef'i `TheBadge.Sim`e referans veriyor, yani arşivlenmezse çekirdek API'si her
+değiştiğinde emekli kod kırılır ve birinin onu düzeltmesi gerekir.
+
+**SIRA ÖNEMLİ — yoksa motor test sahnesi sessizce ölür.** `Assets/Greybox/` bugün hem emekli
+greybox'ı hem de hâlâ gereken `EngineDev.unity` + `EngineDevBootstrap.cs`'i barındırıyor:
+1. EngineDev kendi klasörüne taşınır (kendi asmdef'i, referans `TheBadge.Sim`).
+2. Kalan greybox `Assets/Greybox~/` olur — Unity `~` ile biten klasörü içe aktarmaz.
+3. **Kabul edilen bedel:** dört EditMode test dosyası koşmayı bırakır (`FlowSimTests`,
+   `ModelMatchTests`, `EconomyAndBusTests`, `SahneSozlesmesiTests`). Hepsi greybox'ın KENDİ
+   koduna bakıyor; paylaşılan çekirdeği ölçen tek satır yok. **Bu bir kapı gevşetmesi değil** —
+   ölçtüğü şey emekli. (Çekirdeği ölçen 180 kapı `Sim.Checks`te ve dokunulmuyor.)
+
+TASK-002 bu sırayı adım adım yazıyor.
+
 ## Bekleyen kararlar
 
 - **İnceleme eğrisinin bir dakikalık gecikmesi (5G S2, 2026-09-05).** CANLI yol `AnlikOlasilik`
