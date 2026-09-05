@@ -3309,6 +3309,38 @@ greybox'ı hem de hâlâ gereken `EngineDev.unity` + `EngineDevBootstrap.cs`'i b
    ölçtüğü şey emekli. (Çekirdeği ölçen 180 kapı `Sim.Checks`te ve dokunulmuyor.)
 
 TASK-002 bu sırayı adım adım yazıyor.
+### 📐 KURAL: tehlikeyi ADLANDIRAN çare, zincirin SONUNA kadar sürülmeden bitmez (2026-09-05)
+
+**Tekrar eden iki olay** (ikisi de inceleme turunda yakalandı, ikisi de aynı şekle sahip):
+
+1. **5G S2 — şeridin canlı okuması.** `SampleCurves`in `queue.ApplyDue`dan ÖNCE koştuğunu KENDİM
+   buldum ve "şeridin ilk okuması taktiği görmüyor" diye borç yazdım. Codex (P1) altındaki
+   katmanı buldu: `wp3*` dizileri `private` ve dışarıya YALNIZ maç sonunda veriliyor — yani sorun
+   dakika 0'a özel değil, canlı şerit için motor **hiçbir şey** sunmuyordu.
+2. **TASK-002 — greybox arşivi.** "Önce EngineDev'i çıkar, **yoksa motor test sahnesi sessizce
+   ölür**" diye uyarı yazdım ve taşıma listesine yalnız sahne + bootstrap koydum. Codex (P1)
+   `EngineDevBootstrap`ın `SpriteFactory`ye bağlı olduğunu buldu: yazdığım sıra, tam olarak
+   önlemeye çalıştığı şeyi yapardı.
+
+**ORTAK TELL (kuralın kendisi):** her iki durumda da **tehlikeyi ben adlandırdım**, sonra o
+tehlike için EKSİK bir çare yazdım. Tehlikeyi görmek, çarenin tam olduğunu göstermez — aksine,
+tehlikeyi adlandırdığın an zincirin nerede bittiğini KANITLAMA yükümlülüğü doğar.
+
+**Uygulaması:** bir tuzağı adlandırdıysan, çareyi yazmadan önce bağımlılık/sonuç zincirini
+sonuna kadar sür ve **nerede bittiğini yaz**. `SpriteFactory` düzeltmesinde yapılan buydu:
+"zincir burada bitiyor — `SpriteFactory` yalnız `UnityEngine` kullanıyor; bootstrap balance'ı
+repo kökünden okuyor, `Greybox/Resources`tan değil". Bu cümle olmadan çare yarımdır.
+
+**AYRI BİR HATA MODU, karıştırılmasın:** TASK-002'nin ilk hâli "gerçek `CommandBus.Submit`
+kullan" derken `TheBadge.World`ü kapsam DIŞINA atıyordu. Bu zincir sürmemek değil, **belgeyi
+kendi içinde denetlememek**. Çaresi de farklı: bir brif yazıldıktan sonra kuralları ile kapsam
+listesi KARŞILIKLI okunmalı.
+
+**Bu kaydın kendisi bir düzeltme içeriyor:** sohbette bu örüntüyü dört örnekle anlatmıştım.
+Kayda geçirmeden önce saydım: dördünün ikisini (`obj/` tuzağı, kapı popülasyonunun ayırt
+edicilik sorunu) KENDİ ölçümümle yakalamıştım. Yani örüntü gerçek ama iddia ettiğimden DAR.
+Dört örnekli bir kural, kendi kanıt tabanını abartmış olurdu — ki bu tam olarak
+"yapıldığını hatırladığın şey, ölçülmüş şey değildir" kuralının yasakladığı şey.
 
 ## Bekleyen kararlar
 
