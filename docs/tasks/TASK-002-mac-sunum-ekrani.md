@@ -61,9 +61,24 @@ doğrula — 179 kapı yeşil kalmalı.
 (`Scenes/EngineDev.unity` + `Scripts/EngineDev/EngineDevBootstrap.cs`) barındırıyor. Klasörü
 olduğu gibi arşivlemek motor test sahnesini de götürür.
 
+**TAŞINACAK TAM LİSTE** (zincir sonuna kadar sürüldü — inceleme bulgusu, Codex P1: ilk yazımda
+yalnız sahne + bootstrap diyordum ve bu, önlemeye çalıştığım şeyi yapardı):
+
+| Dosya | Neden |
+| --- | --- |
+| `Scenes/EngineDev.unity` (+ `.meta`) | motor test sahnesi |
+| `Scripts/EngineDev/EngineDevBootstrap.cs` (+ `.meta`) | sahnenin kurucusu |
+| `Scripts/View/SpriteFactory.cs` (+ `.meta`) | **bootstrap bunu ÇAĞIRIYOR** (`using TheBadge.Greybox.View`; `NewSprite`/`Circle`/`Solid`). Geride kalırsa yeni asmdef onu çözemez, konsol derleme hatası verir ve sahne koşmaz. |
+
+**Zincir burada BİTİYOR (doğrulandı):** `SpriteFactory` yalnız `UnityEngine` kullanıyor.
+`EngineDevBootstrap`ın diğer `using`leri `System.IO` + `TheBadge.Sim.*` + `UnityEngine`.
+Balance dosyasını **repo kökünden** okuyor (`Application.dataPath/../../../balance/sim.balance.json`),
+`Greybox/Resources/greybox.balance.json`dan DEĞİL — o dosya arşivle kalabilir.
+
 Sıra:
-1. `EngineDev.unity` ve `EngineDevBootstrap.cs` **kendi klasörüne taşınır** (ör.
-   `Assets/EngineDev/`, kendi asmdef'iyle, referans `TheBadge.Sim`).
+1. Yukarıdaki üç dosya (+ `.meta`ları) **kendi klasörüne taşınır** (ör. `Assets/EngineDev/`,
+   kendi asmdef'iyle, referans `TheBadge.Sim`). Namespace'ler `TheBadge.Greybox.*` kalabilir —
+   derlemeyi etkilemez; istenirse ayrı bir adımda düzeltilir.
 2. Kalan greybox `Assets/Greybox~/` olarak yeniden adlandırılır. Unity `~` ile biten klasörleri
    içe aktarmaz: **dosyalar git'te kalır, derlenmez, bakım yükü olmaz.**
 3. **Bilinen bedel (kabul edilmiş):** dört EditMode test dosyası (`FlowSimTests`,
