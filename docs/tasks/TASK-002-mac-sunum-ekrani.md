@@ -36,7 +36,8 @@ doğrula — 179 kapı yeşil kalmalı.
 ## Scope
 
 **In:**
-- `Game.Match` asmdef'i + tek sahne: canlı maç sunumu (portre, dikey saha — FAZ 00.5 kararı).
+- `Game.Match` asmdef'i + tek sahne: canlı maç sunumu (portre, dikey saha — FAZ 00.5 kararı),
+  **UI Toolkit** ile (K2 kararı).
 - Canlı **üç sonuçlu kazanma şeridi** (G/B/M): `MatchEngine.AnlikOlasilik(in MatchState)`.
 - **Kritik an duraklaması** (K1 kararı): `KritikAnDedektoru` ateşlediğinde sunum durur/vurgular.
 - Skor + saat + faz; spiker akışı (`EventCount` / `GetEvent(i)`).
@@ -52,7 +53,40 @@ doğrula — 179 kapı yeşil kalmalı.
 - Maç günü döngüsünün DÜNYASI (ekonomi, transfer, takvim, kadro ekranları) → **S3**. `World`
   paketi bu ekranda YALNIZ komut köprüsü için kullanılır (aşağıya bak), oyun durumu ekranı için değil.
 - Greybox'ın `MatchModel`/`ModelMatchDirector` kodu → **taşınmaz**. Greybox emekli
-  (`docs/GREYBOX_3G_RAPOR.md`); `EngineDev.unity` motor testi için kalabilir.
+  (`docs/GREYBOX_3G_RAPOR.md`).
+
+### Greybox arşivi (K3) — ÖNCE EngineDev'i ÇIKAR
+
+`Assets/Greybox/` bugün hem emekli greybox'ı hem de **hâlâ gereken motor test sahnesini**
+(`Scenes/EngineDev.unity` + `Scripts/EngineDev/EngineDevBootstrap.cs`) barındırıyor. Klasörü
+olduğu gibi arşivlemek motor test sahnesini de götürür.
+
+**TAŞINACAK TAM LİSTE** (zincir sonuna kadar sürüldü — inceleme bulgusu, Codex P1: ilk yazımda
+yalnız sahne + bootstrap diyordum ve bu, önlemeye çalıştığım şeyi yapardı):
+
+| Dosya | Neden |
+| --- | --- |
+| `Scenes/EngineDev.unity` (+ `.meta`) | motor test sahnesi |
+| `Scripts/EngineDev/EngineDevBootstrap.cs` (+ `.meta`) | sahnenin kurucusu |
+| `Scripts/View/SpriteFactory.cs` (+ `.meta`) | **bootstrap bunu ÇAĞIRIYOR** (`using TheBadge.Greybox.View`; `NewSprite`/`Circle`/`Solid`). Geride kalırsa yeni asmdef onu çözemez, konsol derleme hatası verir ve sahne koşmaz. |
+
+**Zincir burada BİTİYOR (doğrulandı):** `SpriteFactory` yalnız `UnityEngine` kullanıyor.
+`EngineDevBootstrap`ın diğer `using`leri `System.IO` + `TheBadge.Sim.*` + `UnityEngine`.
+Balance dosyasını **repo kökünden** okuyor (`Application.dataPath/../../../balance/sim.balance.json`),
+`Greybox/Resources/greybox.balance.json`dan DEĞİL — o dosya arşivle kalabilir.
+
+Sıra:
+1. Yukarıdaki üç dosya (+ `.meta`ları) **kendi klasörüne taşınır** (ör. `Assets/EngineDev/`,
+   kendi asmdef'iyle, referans `TheBadge.Sim`). Namespace'ler `TheBadge.Greybox.*` kalabilir —
+   derlemeyi etkilemez; istenirse ayrı bir adımda düzeltilir.
+2. Kalan greybox `Assets/Greybox~/` olarak yeniden adlandırılır. Unity `~` ile biten klasörleri
+   içe aktarmaz: **dosyalar git'te kalır, derlenmez, bakım yükü olmaz.**
+3. **Bilinen bedel (kabul edilmiş):** dört EditMode test dosyası (`FlowSimTests`,
+   `ModelMatchTests`, `EconomyAndBusTests`, `SahneSozlesmesiTests`) koşmayı bırakır. Hepsi
+   greybox'ın KENDİ koduna bakıyor (emekli `MatchModel`, `GreyboxCommandBus`, `TycoonEconomy`) —
+   paylaşılan çekirdeği ölçen tek satır yok. Bu bir kapı gevşetmesi değil, ölçtüğü şey emekli.
+4. Neden bakım yükü: `Game.Greybox` asmdef'i `TheBadge.Sim`e referans veriyor. Arşivlenmezse
+   çekirdek API'si her değiştiğinde emekli kod kırılır ve birinin onu düzeltmesi gerekir.
 
 ## Context to read first
 
@@ -132,14 +166,22 @@ Canlı yol `AnlikOlasilik`tır — inceleme turunda bir P1 bulgusu tam olarak bu
    sınırda olmak zorunda değil ama paketlere sızma olmamalı.
 6. **Determinizm:** ekran kodu maç sonucunu ETKİLEMEZ. Aynı seed + aynı komutlar = aynı maç.
 
-## Karar maddeleri — ATİLLA'YA SORULACAK (varsayım üretme)
+## Karar maddeleri — ✅ ÜÇÜ DE KAPANDI (2026-09-05)
+
+**Bu bölümde sorulacak bir şey KALMADI; kayıt olarak duruyor.** Başlığı "Atilla'ya sorulacak"
+diye okuyup durma — üç maddenin üçü de karara bağlandı ve karşılıkları brifin gövdesine işlendi.
+Yeni bir belirsizlik çıkarsa CLAUDE.md'nin kuralı zaten geçerli (varsayım üretme, seçenekleri
+artı/eksileriyle sun, karar iste) — ama o, bu listeye ait değil.
 
 - ~~**K1. Sunum ritmi.**~~ → **KAPANDI (2026-09-05, Atilla): (b)** — motor sürekli koşar,
   **sunum kritik anlarda durur/vurgular.** Mekanizması ölçüldü ve `main`'e girdi, aşağıya bak.
-- **K2. UI teknolojisi.** Greybox kodla üretilen uGUI kullandı ("UI Toolkit seti FAZ 02'de").
-  5G-a placeholder olduğu için uGUI devam mı, yoksa UI Toolkit'e şimdi mi geçilsin?
-- **K3. Greybox sahnesinin akıbeti.** `Greybox.unity` emekli; silinsin mi, arşiv olarak
-  kalsın mı? (`EngineDev.unity` motor testi için kalmalı.)
+- ~~**K2. UI teknolojisi.**~~ → **KAPANDI (2026-09-05, Atilla): UI Toolkit.**
+  `com.unity.modules.uielements` zaten manifest'te (1.0.0) — **yeni bağımlılık değil, ADR
+  gerekmiyor.** Placeholder için UXML/USS dosyası şart değil, arayüz C#'ta kurulabilir.
+  Bu, FAZ 00.5'in "UI Toolkit seti FAZ 02'de" satırını ÖNE ÇEKİYOR; greybox'ın uGUI kodu
+  (`UiShell.cs`, `UiWidgets.cs`) zaten taşınmıyordu, çelişki yok.
+- ~~**K3. Greybox sahnesinin akıbeti.**~~ → **KAPANDI (2026-09-05, Atilla): arşiv olarak kalsın.**
+  Uygulaması aşağıda — **sırası önemli, yoksa motor test sahnesi sessizce ölür.**
 
 ## Acceptance criteria
 
