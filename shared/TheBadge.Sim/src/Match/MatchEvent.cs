@@ -125,6 +125,15 @@ namespace TheBadge.Sim.Match
         public sbyte[] MomentumAway = new sbyte[0];
         public float[] WinProbHome = new float[0];
 
+        /// <summary>5G S2 — ÜÇ SONUÇLU canlı olasılık, dakika başına [90]. `WinProbHome`un yerine
+        /// GEÇMEZ: o, ME 15.3 highlight sıralamasının çekirdeğidir (gol farkı + dakika, göreli
+        /// sıçrama için yeterli). Bunlar SUNUM yüzeyidir — güç farkına, kırmızı karta ve oyuncu
+        /// değişikliğine duyarlı, `LiveWinProb` ile kalibre (`S2WinProbKalibrasyon`).
+        /// Üçü her dakikada 1'e toplanır.</summary>
+        public float[] WinProb3Home = new float[0];
+        public float[] WinProb3Draw = new float[0];
+        public float[] WinProb3Away = new float[0];
+
         /// <summary>Aktif hikaye arkına dokunan olaylar — FAZ 04 Hikaye Motoru bağlanınca dolar
         /// (ME 15.3 "hikaye_ilgisi" ile aynı kanca). FAZ 03'te bilinçli olarak BOŞ.</summary>
         public MatchEvent[] ArcEvents = new MatchEvent[0];

@@ -69,6 +69,47 @@ namespace TheBadge.Sim.Config
         /// <summary>LOD bütçeleri + LOD 2 güç bileşimi — ME Spec 16.1 [KALİBRE].
         /// Regresyon KATSAYILARI burada DEĞİL, üretilmiş `balance/sim.lod2.json` dosyasındadır.</summary>
         public LodCfg lod = new LodCfg();
+        public CanliOlasilikCfg canliOlasilik = new CanliOlasilikCfg();
+
+        /// <summary>CANLI kazanma olasılığı [KALİBRE] — `LiveWinProb`. Katsayılar motorun KENDİ
+        /// davranışından oturtuldu (49 eşleşme × 300 maç, log-lineer en küçük kareler, R² = 0,977);
+        /// uydurma değil ÖLÇÜLMÜŞ değerlerdir. Yeniden oturtmak için: `-- fit-winprob`.</summary>
+        [System.Serializable]
+        public sealed class CanliOlasilikCfg
+        {
+            /// <summary>Güç farkı sıfırken takım başına 90 dakikalık beklenen gol.</summary>
+            public double lambdaTaban;
+            /// <summary>Güç farkının 1 biriminin gol oranına üstel etkisi.</summary>
+            public double gucKatsayisi;
+            /// <summary>Poisson toplamının kesme noktası (kalan sürede takım başına en çok kaç gol).</summary>
+            public int maxEkGol;
+            /// <summary>Taktik kadranlarının gol oranına ÜSTEL etkisi (5G S2-B ölçümü).</summary>
+            public TaktikCfg taktik = new TaktikCfg();
+
+            /// <summary>Her kadran için İKİ katsayı: `*Kendi` kadranı ÇEVİREN takımın gol oranını,
+            /// `*Rakip` KARŞI takımın gol oranını nasıl kaydırır. İkisi ayrı olmak zorunda —
+            /// ölçüm `pres`in kendi golünü hiç artırmadığını ama rakibinkini %49 artırdığını
+            /// gösterdi; tek katsayılı bir model bunu taşıyamazdı.
+            ///
+            /// ANA ETKİ MODELİ (bilinçli sınır): kadranlar TOPLANABİLİR varsayılıyor, oysa ölçüm
+            /// etkileşimin gerçek olduğunu gösterdi (dördü birden hücuma alınca sonuç tek tek
+            /// toplamından KÖTÜ). Kapı bileşik ayarları da içeren bir popülasyonda koşuyor;
+            /// ana etkiler yetmezse ORADA düşer, sessizce geçmez.</summary>
+            [System.Serializable]
+            public sealed class TaktikCfg
+            {
+                public double mentaliteKendi, mentaliteRakip;
+                public double tempoKendi, tempoRakip;
+                public double presKendi, presRakip;
+                public double hatKendi, hatRakip;
+                /// <summary>AŞIRI UÇ CEZASI — kadran karelerinin toplamıyla çarpılır.
+                /// Ana etkiler TEK BAŞINA yetmedi: dördü birden uca çekilince model gerçeği
+                /// 18-22 puan ıskalıyordu (`tamHücum` %46,9 derken gerçek %33,0). Bu terimle
+                /// en büyük sapma 0,225 → 0,080. Anlamı futbolca okunur: her kadranı uca çeken
+                /// dengesiz bir kurulum kendine az fayda, rakibe çok alan verir.</summary>
+                public double asiriUcKendi, asiriUcRakip;
+            }
+        }
 
         [System.Serializable]
         public sealed class LodCfg

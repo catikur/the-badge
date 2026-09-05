@@ -331,6 +331,150 @@ if (args.Length > 0 && args[0] == "gen-replays")
     return 0;
 }
 
+// 5G S2 ÜRETİCİ — `-- fit-winprob`: canlı kazanma olasılığının katsayılarını motorun KENDİ
+// davranışından oturtur. Balance dosyasını YAZMAZ, değerleri basar: `canliOlasilik` elle
+// ayarlanan değerlerle aynı dosyada yaşıyor ve bir üreticinin o dosyayı toptan ezmesi,
+// insanın bilmediği bir değişiklik demek olurdu. Karar insanın, ölçüm makinenin.
+if (args.Length > 0 && args[0] == "fit-winprob")
+{
+    var fwOpts = new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true };
+    var fwBal = System.Text.Json.JsonSerializer.Deserialize<TheBadge.Sim.Config.SimBalance>(
+        System.IO.File.ReadAllText(FindRepoFile("balance/sim.balance.json")), fwOpts);
+    int nMac = args.Length > 1 ? int.Parse(args[1]) : 200;
+    int[] ofsetler = { -12, -8, -4, 0, 4, 8, 12 };
+    var nokta = new List<(double Fark, double Lam)>();
+    Console.WriteLine($"[fit-winprob] {ofsetler.Length * (ofsetler.Length + 1) / 2} eşleşme × {nMac} maç");
+    foreach (int oe in ofsetler)
+        foreach (int od in ofsetler)
+        {
+            if (oe < od) continue;                       // simetri: yalnız üst üçgen
+            var evK = BuildSheetSide(300, 7, home: true, offset: oe);
+            var depK = BuildSheetSide(300, 7, home: false, idEntity: 8, offset: od);
+            double gEv = TeamRating.FromSheet(fwBal, evK);
+            double gDep = TeamRating.FromSheet(fwBal, depK);
+            double golEv = 0, golDep = 0;
+            var kl = new object();
+            System.Threading.Tasks.Parallel.For(0, nMac, n =>
+            {
+                ulong sd = 0xA5E7000UL + (ulong)n * 7919UL;
+                var cfg = new MatchConfig { Seed = sd, EngineVersion = "fit-winprob",
+                    Home = evK, Away = depK, Referee = RefereeProfile.Default, Chaos = ChaosLevel.Orta };
+                var eng = new MatchEngine(sd, new CommandQueue(), cfg, fwBal) { AutoManage = true };
+                var stt = MatchEngine.CreateInitialState(cfg);
+                var rr = eng.Run(ref stt);
+                lock (kl) { golEv += rr.HomeGoals; golDep += rr.AwayGoals; }
+            });
+            // Her eşleşme İKİ veri noktası verir (her takım kendi farkıyla)
+            nokta.Add((gEv - gDep, golEv / nMac));
+            nokta.Add((gDep - gEv, golDep / nMac));
+        }
+
+    // log(λ) = log(λ0) + c × fark — en küçük kareler
+    int m2 = nokta.Count;
+    double sx = 0, sy = 0, sxx = 0, sxy = 0;
+    foreach (var (f, l) in nokta) { double y = Math.Log(l); sx += f; sy += y; sxx += f * f; sxy += f * y; }
+    double cKat = (m2 * sxy - sx * sy) / (m2 * sxx - sx * sx);
+    double aKat = (sy - cKat * sx) / m2;
+    double lam0 = Math.Exp(aKat);
+    double ssRes = 0, ssTot = 0, yOrt = sy / m2;
+    foreach (var (f, l) in nokta) { double y = Math.Log(l); ssRes += (y - (aKat + cKat * f)) * (y - (aKat + cKat * f)); ssTot += (y - yOrt) * (y - yOrt); }
+
+    Console.WriteLine($"[fit-winprob] n={m2} nokta · R² = {1 - ssRes / ssTot:0.0000}");
+    Console.WriteLine($"[fit-winprob] OTURTULAN : lambdaTaban {lam0:0.0000} · gucKatsayisi {cKat:0.00000}");
+    Console.WriteLine($"[fit-winprob] BUGÜNKÜ   : lambdaTaban {fwBal.canliOlasilik.lambdaTaban:0.0000} · gucKatsayisi {fwBal.canliOlasilik.gucKatsayisi:0.00000}");
+
+    // ---- TAKTİK KATSAYILARI (5G S2-B) ----
+    // SONUCA oturtulur, gol oranına DEĞİL — ve bu fark ölçümle öğrenildi. Önce gol oranından
+    // oturtmuştum (kolay ve doğal görünen yol); model yönü tutturuyor ama büyüklüğü ıskalıyordu
+    // (`tamHücum` %63,4 derken gerçek %38,8). Sebebi basit: HEDEF sonuç olasılığı, gol oranı ise
+    // yalnız bir VEKİL — Poisson varsayımı ve etkileşimler arada kayboluyor. Doğrudan hedefe
+    // oturtmak + aşırı-uç terimi en büyük sapmayı 0,225 → 0,080'e indirdi.
+    //
+    // Yöntem: 20 kol (tek kadran + BİLEŞİK + karma) × nMac maç ölçülür, sonra `LiveWinProb`in
+    // KENDİSİ çağrılarak koordinat inişiyle 10 katsayı aranır. Modelin kopyası çıkarılmaz —
+    // oturtucu ile üretim aynı fonksiyonu kullanır, yoksa ikisi sessizce ayrışırdı.
+    {
+        var evK0 = BuildSheetSide(300, 7, home: true);
+        var depK0 = BuildSheetSide(300, 7, home: false, idEntity: 8);
+        var kollar = new (string Ad, sbyte M, sbyte T, sbyte P, sbyte H)[]
+        {
+            ("kontrol",0,0,0,0),
+            ("mentalite+2",2,0,0,0), ("mentalite-2",-2,0,0,0), ("mentalite+1",1,0,0,0), ("mentalite-1",-1,0,0,0),
+            ("tempo+2",0,2,0,0), ("tempo-2",0,-2,0,0), ("tempo+1",0,1,0,0), ("tempo-1",0,-1,0,0),
+            ("pres+2",0,0,2,0), ("pres-2",0,0,-2,0), ("pres+1",0,0,1,0),
+            ("hat+2",0,0,0,2), ("hat-2",0,0,0,-2), ("hat+1",0,0,0,1), ("hat-1",0,0,0,-1),
+            ("tamHucum",2,2,2,2), ("tamKapanma",-2,-2,-2,-2),
+            ("karma1",2,0,-2,2), ("karma2",-2,2,0,-1),
+        };
+        var olculen = new double[kollar.Length, 3];
+        for (int ki = 0; ki < kollar.Length; ki++)
+        {
+            var k = kollar[ki];
+            int ev = 0, be = 0, de = 0; var kl = new object();
+            System.Threading.Tasks.Parallel.For(0, nMac, n =>
+            {
+                ulong sd = 0xD1CE000UL + (ulong)n * 7919UL;
+                var q = new CommandQueue();
+                if (k.M != 0 || k.T != 0 || k.P != 0 || k.H != 0)
+                    q.Enqueue(new TacticChangeCmd(0, 0, new TacticDelta(k.M, k.T, k.P, k.H)));
+                var cfg = new MatchConfig { Seed = sd, EngineVersion = "fit-winprob",
+                    Home = evK0, Away = depK0, Referee = RefereeProfile.Default, Chaos = ChaosLevel.Orta };
+                var eng = new MatchEngine(sd, q, cfg, fwBal) { AutoManage = true };
+                var stt = MatchEngine.CreateInitialState(cfg);
+                var rr = eng.Run(ref stt);
+                lock (kl) { if (rr.HomeGoals > rr.AwayGoals) ev++; else if (rr.HomeGoals == rr.AwayGoals) be++; else de++; }
+            });
+            olculen[ki, 0] = (double)ev / nMac; olculen[ki, 1] = (double)be / nMac; olculen[ki, 2] = (double)de / nMac;
+        }
+
+        double guc0 = TeamRating.FromSheet(fwBal, evK0);
+        double Kayip(double[] a)
+        {
+            var t = fwBal.canliOlasilik.taktik;
+            t.mentaliteKendi = a[0]; t.tempoKendi = a[1]; t.presKendi = a[2]; t.hatKendi = a[3];
+            t.mentaliteRakip = a[4]; t.tempoRakip = a[5]; t.presRakip = a[6]; t.hatRakip = a[7];
+            t.asiriUcKendi = a[8]; t.asiriUcRakip = a[9];
+            double toplam = 0;
+            for (int ki = 0; ki < kollar.Length; ki++)
+            {
+                var k = kollar[ki];
+                var u = LiveWinProb.Hesapla(fwBal, guc0, guc0,
+                            new TacticDelta(k.M, k.T, k.P, k.H), new TacticDelta(0, 0, 0, 0), 0, 89.0);
+                toplam += (u.Ev - olculen[ki, 0]) * (u.Ev - olculen[ki, 0])
+                        + (u.Beraberlik - olculen[ki, 1]) * (u.Beraberlik - olculen[ki, 1])
+                        + (u.Deplasman - olculen[ki, 2]) * (u.Deplasman - olculen[ki, 2]);
+            }
+            return toplam;
+        }
+
+        var tb0 = fwBal.canliOlasilik.taktik;
+        var kat = new[] { tb0.mentaliteKendi, tb0.tempoKendi, tb0.presKendi, tb0.hatKendi,
+                          tb0.mentaliteRakip, tb0.tempoRakip, tb0.presRakip, tb0.hatRakip,
+                          tb0.asiriUcKendi, tb0.asiriUcRakip };
+        double bas = Kayip(kat);
+        double adimK = 0.06;
+        for (int tur = 0; tur < 800 && adimK > 1e-5; tur++)
+        {
+            bool ilerledi = false;
+            for (int a = 0; a < kat.Length && !ilerledi; a++)
+                foreach (int yon in new[] { 1, -1 })
+                {
+                    var aday = (double[])kat.Clone(); aday[a] += yon * adimK;
+                    if (Kayip(aday) < Kayip(kat) - 1e-12) { kat = aday; ilerledi = true; break; }
+                }
+            if (!ilerledi) adimK /= 2;
+        }
+        Console.WriteLine($"[fit-winprob] taktik kaybı {bas:0.00000} → {Kayip(kat):0.00000} ({kollar.Length} kol × {nMac} maç)");
+        string[] adlar = { "mentalite", "tempo", "pres", "hat" };
+        for (int a = 0; a < 4; a++)
+            Console.WriteLine($"[fit-winprob] {adlar[a],-10} kendi {kat[a],+8:0.0000} · rakip {kat[a + 4],+8:0.0000}");
+        Console.WriteLine($"[fit-winprob] {"asiriUc",-10} kendi {kat[8],+8:0.0000} · rakip {kat[9],+8:0.0000}");
+    }
+    Console.WriteLine("[fit-winprob] balance/sim.balance.json → canliOlasilik ELLE güncellenir; " +
+                      "sonra `-- gen-replays` (config_hash kayar) ve `S2WinProbKalibrasyon` yeniden koşulur.");
+    return 0;
+}
+
 if (args.Length > 0 && args[0] == "fit-lod2")
 {
     var fitOpts = new System.Text.Json.JsonSerializerOptions { IncludeFields = true, PropertyNameCaseInsensitive = true };
@@ -1926,6 +2070,255 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
               && inj / NE is >= 0.28 and <= 0.68 && pasP is >= 76 and <= 88 && xgSap <= 10;
     if (!ok16e) failures += Fail("M16ECalibGenis", "yukarıdaki [info] satırı bant dışı değer içeriyor (kırmızı hariç)");
     else Pass("M16ECalibGenis(11 metrik, CI-geniş bant; kırmızı ayrı borç kapısında; dar bantlar calib10k 10000 ile)");
+
+    // ---- 5G S2: CANLI KAZANMA OLASILIĞI KALİBRASYONU ----
+    // NE ÖLÇER: (1) model "%X" dediğinde o sonuç gerçekten %X sıklıkta mı oluyor (kalibrasyon),
+    // (2) model taban oranı basmaktan FAZLASINI yapıyor mu (ayırt edicilik / Brier becerisi).
+    // Üç sonuç AYRI kalibre edilir — yalnız "ev" tutup beraberliğin kaçtığı bir model,
+    // kullanıcıya yalan söyleyen bir şerittir.
+    //
+    // İKİ AYRI POPÜLASYON, İKİ AYRI BECERİ — ve bu tasarım iki hatadan öğrenildi:
+    //   1. Kapıyı önce M16-E'nin döngüsüne "bedava" bindirmiştim. `gucKatsayisi = 0` ile modeli
+    //      GÜCE KÖR yaptım ve kapı geçti (0,048): M16-E'nin ofset çekilişi farkı 0 civarında
+    //      yoğunlaştırıyor. Doğru büyüklük, YANLIŞ popülasyon.
+    //   2. Geniş popülasyonda DA geçti (0,059). Sebebi daha derin: simetrik bir popülasyonda
+    //      TABAN ORANI basan model MARJİNAL olarak kalibredir ve tamamen işe yaramazdır.
+    //      **Kalibrasyon, ayırt ediciliği ÖLÇMEZ.** Brier becerisi eklendi.
+    // Aynı tuzak taktik için de kurulurdu: GÜÇ kolları taktik körlüğünü maskelerdi. Bu yüzden
+    // taktik kolları AYRI bir alt popülasyondur (kadrolar EŞİT, tek bilgi kaynağı taktiktir)
+    // ve kendi beceri tabanı vardır.
+    //
+    // BİLEŞİK AYARLAR BİLEREK İÇERİDE: model kadranları TOPLANABİLİR sayıyor, oysa ölçüm
+    // etkileşimin gerçek olduğunu gösterdi (dördü birden hücuma alınca sonuç tek tek toplamından
+    // KÖTÜ). "tam hücum" ve "tam kapanma" kolları o varsayımı zorlar — ana etkiler yetmezse
+    // kapı ORADA düşer, sessizce geçmez.
+    //
+    // BANT 0,10: greybox'ın kendi şeridinin tuttuğu bant (tahmin %37 vs gerçekleşen %40).
+    // SINIRI: kırmızı kartın etkisini bu kapı YAKALAYAMAZ (maç başına 0,03-0,09, ortalamayı
+    // oynatmaz) — ayrı borç.
+    {
+        const double S2Bant = 0.10;
+        const int S2MinOrnek = 200;
+        const int S2NGuc = 50;      // güç eşleşmesi başına maç
+        const int S2NTaktik = 80;   // taktik kolu başına maç
+        int[] s2ofs = { -12, -6, 0, 6, 12 };
+        var s2n = new int[3, 10]; var s2t = new double[3, 10]; var s2g = new double[3, 10];
+        double s2toplamHata = 0;
+        // [0] güç alt popülasyonu, [1] taktik alt popülasyonu
+        var brier = new double[2]; var brierN = new int[2]; var sonucSay = new int[2, 3];
+        // KOL BAŞINA sonuç sayacı: ulaşılabilir TAVANI hesaplamak için (aşağıdaki uzun nota bak).
+        var kolSay = new List<int[]>(); var kolAltPop = new List<int>();
+        var s2kilit = new object();
+
+        void S2Kos(TeamSheet evK, TeamSheet depK, TacticDelta? tk, int nAdet, ulong tohumTaban, int altPop)
+        {
+            int kolIdx;
+            lock (s2kilit) { kolSay.Add(new int[3]); kolAltPop.Add(altPop); kolIdx = kolSay.Count - 1; }
+            System.Threading.Tasks.Parallel.For(0, nAdet, nn =>
+            {
+                ulong sdS = tohumTaban + (ulong)nn * 7919UL;
+                var qS = new CommandQueue();
+                if (tk.HasValue) qS.Enqueue(new TacticChangeCmd(0, 0, tk.Value));
+                var cfgS = new MatchConfig { Seed = sdS, EngineVersion = "s2kalib",
+                    Home = evK, Away = depK, Referee = RefereeProfile.Default, Chaos = ChaosLevel.Orta };
+                var engS = new MatchEngine(sdS, qS, cfgS, simBal) { AutoManage = true };
+                var stS = MatchEngine.CreateInitialState(cfgS);
+                var rS = engS.Run(ref stS);
+                var pS = engS.BuildSummary(in stS);
+                int sonucS = rS.HomeGoals > rS.AwayGoals ? 0 : rS.HomeGoals == rS.AwayGoals ? 1 : 2;
+                lock (s2kilit)
+                {
+                    sonucSay[altPop, sonucS]++;
+                    kolSay[kolIdx][sonucS]++;
+                    // BECERİ ÖRNEĞİ DAKİKA 1'DEN alınır, 0'dan DEĞİL — ve bu bir ayrıntı değil,
+                    // ölçülmüş bir sıra gerçeği: motorun tick döngüsünde `SampleCurves` komut
+                    // uygulamasından ÖNCE koşuyor (MatchEngine 422 vs 424). Dakika 0 örneği bu
+                    // yüzden kaç vuruşunda verilen taktik komutunu HENÜZ GÖRMEZ. İlk yazımda 0'dan
+                    // ölçüyordum ve kapı "TAKTİĞE duyarlılık YOK" diye düştü — kapı haklıydı ama
+                    // sebep modelde değil örnekleme noktasındaydı. Dakika 1'de skor neredeyse her
+                    // zaman hâlâ 0-0, yani taktik kolları için tek bilgi kaynağı taktiktir.
+                    double h0 = pS.WinProb3Home[1], b0 = pS.WinProb3Draw[1], a0 = pS.WinProb3Away[1];
+                    brier[altPop] += (h0 - (sonucS == 0 ? 1 : 0)) * (h0 - (sonucS == 0 ? 1 : 0))
+                                   + (b0 - (sonucS == 1 ? 1 : 0)) * (b0 - (sonucS == 1 ? 1 : 0))
+                                   + (a0 - (sonucS == 2 ? 1 : 0)) * (a0 - (sonucS == 2 ? 1 : 0));
+                    brierN[altPop]++;
+                    for (int m = 0; m < 90; m++)
+                    {
+                        double h = pS.WinProb3Home[m], b = pS.WinProb3Draw[m], a = pS.WinProb3Away[m];
+                        double d = Math.Abs(h + b + a - 1.0);
+                        if (d > s2toplamHata) s2toplamHata = d;
+                        for (int o = 0; o < 3; o++)
+                        {
+                            double pr = o == 0 ? h : o == 1 ? b : a;
+                            int kv = (int)(pr * 10); if (kv > 9) kv = 9; if (kv < 0) kv = 0;
+                            s2n[o, kv]++; s2t[o, kv] += pr; s2g[o, kv] += (sonucS == o ? 1 : 0);
+                        }
+                    }
+                }
+            });
+        }
+
+        // (1) GÜÇ alt popülasyonu — varsayılan taktik, fark −24..+24
+        foreach (int oeS in s2ofs)
+            foreach (int odS in s2ofs)
+                S2Kos(BuildSheetSide(300, 7, home: true, offset: oeS),
+                      BuildSheetSide(300, 7, home: false, idEntity: 8, offset: odS),
+                      null, S2NGuc, 0xB0CA000UL, 0);
+
+        // (2) TAKTİK alt popülasyonu — kadrolar EŞİT, tek bilgi kaynağı taktik.
+        //     Son iki kol BİLEŞİK: ana etki varsayımını zorlar.
+        var evEsit = BuildSheetSide(300, 7, home: true);
+        var depEsit = BuildSheetSide(300, 7, home: false, idEntity: 8);
+        var taktikKollari = new TacticDelta[]
+        {
+            new TacticDelta(2, 0, 0, 0), new TacticDelta(-2, 0, 0, 0),
+            new TacticDelta(0, 2, 0, 0), new TacticDelta(0, -2, 0, 0),
+            new TacticDelta(0, 0, 2, 0), new TacticDelta(0, 0, 0, 2),
+            new TacticDelta(0, 0, 0, -2),
+            new TacticDelta(2, 2, 2, 2), new TacticDelta(-2, -2, -2, -2),   // BİLEŞİK
+        };
+        foreach (var tk in taktikKollari)
+            S2Kos(evEsit, depEsit, tk, S2NTaktik, 0xD1CE000UL, 1);
+
+        string[] s2ad = { "ev", "beraberlik", "deplasman" };
+        double enBuyuk = 0; string enBuyukNerede = ""; int kovaSayisi = 0;
+        for (int o = 0; o < 3; o++)
+            for (int k = 0; k < 10; k++)
+            {
+                if (s2n[o, k] < S2MinOrnek) continue;
+                kovaSayisi++;
+                double t = s2t[o, k] / s2n[o, k], gg = s2g[o, k] / s2n[o, k];
+                double sap = Math.Abs(gg - t);
+                if (sap > enBuyuk) { enBuyuk = sap; enBuyukNerede = $"{s2ad[o]} %{k * 10}-{k * 10 + 10} (tahmin %{100 * t:0.0} vs gerçek %{100 * gg:0.0}, n={s2n[o, k]})"; }
+            }
+
+        // BECERİ, ULAŞILABİLİR TAVANIN PAYI OLARAK ölçülür — ve bu tasarım bir hatadan öğrenildi.
+        // Önce mutlak bir taban (0,10) koymuştum. Taktik alt popülasyonu 0,042 verdi ve kapı
+        // düştü; modeli suçlamadan önce TAVANI hesapladım: her kolun KENDİ gerçek frekansını
+        // bilen KÂHİN model bile ancak **0,045** alıyor. Yani 0,10'luk taban TEORİK MAKSİMUMUN
+        // ÜSTÜNDEYDİ — kapı kötü modeli değil, İMKÂNSIZI istiyordu. Modelin gerçek başarısı
+        // tavanın %93'ü.
+        //
+        // Sebebi futbolun kendisi: sonuçlara maçtan maça rastgelelik hâkim; hiçbir model onu
+        // açıklayamaz. Açıklanabilir olan yalnız KOLLAR ARASI fark, ve o farkın büyüklüğü alt
+        // popülasyona göre değişir (güç kolları %5-92 yayılıyor, taktik kolları %6-44).
+        // Mutlak bir eşik bu yüzden anlamsız; doğru soru "bilinebilirin ne kadarını yakalıyor".
+        //
+        // TAVANIN kendisi aynı örneklemden hesaplandığı için hafif İYİMSER (kol frekansları
+        // gürültülü). Bu, payı zorlaştırır — yani yanlış yönde değil güvenli yönde sapar.
+        double Beceri(int ap, out double tavan)
+        {
+            tavan = 0;
+            if (brierN[ap] == 0) return 0;
+            double bs = brier[ap] / brierN[ap], bt = 0, bk = 0;
+            double[] tab = { (double)sonucSay[ap, 0] / brierN[ap], (double)sonucSay[ap, 1] / brierN[ap], (double)sonucSay[ap, 2] / brierN[ap] };
+            for (int o = 0; o < 3; o++)
+                for (int k = 0; k < 3; k++)
+                    bt += tab[o] * (tab[k] - (k == o ? 1 : 0)) * (tab[k] - (k == o ? 1 : 0));
+            // KÂHİN: her kolun kendi frekansını basan model
+            int toplamN = 0;
+            for (int c = 0; c < kolSay.Count; c++)
+            {
+                if (kolAltPop[c] != ap) continue;
+                int nk = kolSay[c][0] + kolSay[c][1] + kolSay[c][2];
+                if (nk == 0) continue;
+                double[] f = { (double)kolSay[c][0] / nk, (double)kolSay[c][1] / nk, (double)kolSay[c][2] / nk };
+                double kolBs = 0;
+                for (int o = 0; o < 3; o++)
+                    for (int k = 0; k < 3; k++)
+                        kolBs += f[o] * (f[k] - (k == o ? 1 : 0)) * (f[k] - (k == o ? 1 : 0));
+                bk += kolBs * nk; toplamN += nk;
+            }
+            if (toplamN > 0) bk /= toplamN;
+            if (bt <= 0) return 0;
+            tavan = 1.0 - bk / bt;
+            return 1.0 - bs / bt;
+        }
+        double tavGuc, tavTaktik;
+        double becGuc = Beceri(0, out tavGuc), becTaktik = Beceri(1, out tavTaktik);
+        double payGuc = tavGuc <= 0 ? 0 : becGuc / tavGuc;
+        double payTaktik = tavTaktik <= 0 ? 0 : becTaktik / tavTaktik;
+
+        Console.WriteLine($"[info] 5G S2 canlı olasılık (beceri dk 1): güç {s2ofs.Length * s2ofs.Length}×{S2NGuc} + taktik {taktikKollari.Length}×{S2NTaktik} maç · " +
+                          $"{kovaSayisi} kova · en büyük sapma {enBuyuk:0.000} · toplam hatası {s2toplamHata:0.000000} · " +
+                          $"beceri/tavan: güç {becGuc:0.000}/{tavGuc:0.000} (%{100 * payGuc:0}) · taktik {becTaktik:0.000}/{tavTaktik:0.000} (%{100 * payTaktik:0})");
+        string s2hata = "";
+        if (kovaSayisi < 12) s2hata += $"yalnız {kovaSayisi} kova doldu — örneklem eğriyi kapsamıyor; ";
+        if (enBuyuk > S2Bant) s2hata += $"kalibrasyon bant DIŞI: {enBuyukNerede} → sapma {enBuyuk:0.000} > {S2Bant:0.00}; ";
+        if (s2toplamHata > 1e-6) s2hata += $"üç sonuç 1'e TOPLANMIYOR (en kötü {s2toplamHata:0.000000}); ";
+        // AYIRT EDİCİLİK: bilinebilirin en az YARISI, her iki yetenek AYRI korunur.
+        const double S2Pay = 0.50;
+        if (payGuc < S2Pay) s2hata += $"GÜCE duyarlılık ZAYIF: beceri {becGuc:0.000} = tavanın (%{100 * tavGuc:0.0}) %{100 * payGuc:0}'i < %{100 * S2Pay:0}; ";
+        if (payTaktik < S2Pay) s2hata += $"TAKTİĞE duyarlılık ZAYIF: beceri {becTaktik:0.000} = tavanın (%{100 * tavTaktik:0.0}) %{100 * payTaktik:0}'i < %{100 * S2Pay:0} — kadrolar eşit, tek bilgi taktikti; ";
+        if (s2hata.Length > 0) failures += Fail("S2WinProbKalibrasyon", s2hata);
+        else Pass($"S2WinProbKalibrasyon({kovaSayisi} kova · sapma {enBuyuk:0.000} ≤ {S2Bant:0.00} · " +
+                  $"ayırt edicilik: güç tavanın %{100 * payGuc:0}'i · taktik %{100 * payTaktik:0}'i (≥ %{100 * S2Pay:0}) · üç sonuç 1'e toplanıyor · en kötü: {enBuyukNerede})");
+    }
+
+    // ---- 5G S2: MÜDAHALE ŞERİDİ ANINDA OYNATIYOR MU ----
+    // NEDEN VAR (inceleme bulgusu, Codex — 2026-09-05, P1): `wp3*` dizileri yalnız dakika
+    // başlarında ve `ApplyDue`dan ÖNCE yazılıyor, üstelik dışarıya ancak maç SONUNDA veriliyordu.
+    // Canlı şerit için motor hiçbir şey sunmuyordu. `AnlikOlasilik` o boşluğu kapatıyor; bu kapı
+    // onun GERÇEKTEN anında cevap verdiğini ölçüyor — dilimin bütün tezi bu döngüde.
+    //
+    // ÖLÇÜM ŞEKLİ: aynı tick içinde ÖNCE/SONRA. Komut kuyruğa konur, `Tick` bir kez çağrılır ve
+    // olasılık o tick'te değişmiş olmalıdır. Dakika sınırını beklemek zorunda kalırsa kapı düşer.
+    {
+        var evK = BuildSheetSide(300, 7, home: true);
+        var depK = BuildSheetSide(300, 7, home: false, idEntity: 8);
+        string s2mHata = "";
+        var s2mSatir = new List<string>();
+
+        // (ad, taktik, beklenen yön: +1 ev lehine, -1 aleyhine, en az bu kadar oynamalı)
+        var senaryolar = new (string Ad, TacticDelta Tk, int Yon)[]
+        {
+            ("mentalite+2", new TacticDelta(2, 0, 0, 0), +1),
+            ("hat+2",       new TacticDelta(0, 0, 0, 2), +1),
+            ("tam kapanma", new TacticDelta(-2, -2, -2, -2), -1),
+            ("pres+2",      new TacticDelta(0, 0, 2, 0), -1),
+        };
+        const double S2MinOynama = 0.02;   // en az 2 puan — gürültü değil, GÖRÜNÜR bir hareket
+
+        foreach (var sen in senaryolar)
+        {
+            var q = new CommandQueue();
+            var cfg = new MatchConfig { Seed = 0x5E7A1, EngineVersion = "s2anlik",
+                Home = evK, Away = depK, Referee = RefereeProfile.Default };
+            var eng = new MatchEngine(0x5E7A1, q, cfg, simBal) { AutoManage = true };
+            var st = MatchEngine.CreateInitialState(cfg);
+            // Maçın ortasına kadar koş (müdahale anı gerçekçi olsun)
+            for (int t = 0; t < 12000; t++) eng.Tick(ref st);
+            var once = eng.AnlikOlasilik(in st);
+            q.Enqueue(new TacticChangeCmd(st.Tick, 0, sen.Tk));
+            eng.Tick(ref st);                       // TEK tick — dakika sınırı beklenmiyor
+            var sonra = eng.AnlikOlasilik(in st);
+            double delta = sonra.Ev - once.Ev;
+            s2mSatir.Add($"{sen.Ad} {100 * once.Ev:0.0}→{100 * sonra.Ev:0.0}");
+            if (sen.Yon > 0 && delta < S2MinOynama)
+                s2mHata += $"{sen.Ad}: şerit ev lehine oynamadı ({100 * delta:+0.0;-0.0} puan); ";
+            if (sen.Yon < 0 && delta > -S2MinOynama)
+                s2mHata += $"{sen.Ad}: şerit ev aleyhine oynamadı ({100 * delta:+0.0;-0.0} puan); ";
+        }
+
+        // KIRMIZI KART / EKSİK OYUNCU: canlı güç sahadakilerden okunduğu için şerit düşmeli.
+        {
+            var cfg = new MatchConfig { Seed = 0x5E7A2, EngineVersion = "s2anlik",
+                Home = evK, Away = depK, Referee = RefereeProfile.Default };
+            var eng = new MatchEngine(0x5E7A2, new CommandQueue(), cfg, simBal) { AutoManage = true };
+            var st = MatchEngine.CreateInitialState(cfg);
+            for (int t = 0; t < 12000; t++) eng.Tick(ref st);
+            var once = eng.AnlikOlasilik(in st);
+            st.Agents[5].SentOff = true;            // ev takımından bir saha oyuncusu düşüyor
+            var sonra = eng.AnlikOlasilik(in st);
+            double d = sonra.Ev - once.Ev;
+            s2mSatir.Add($"kırmızı {100 * once.Ev:0.0}→{100 * sonra.Ev:0.0}");
+            if (d > -S2MinOynama) s2mHata += $"kırmızı kart şeridi düşürmedi ({100 * d:+0.0;-0.0} puan); ";
+        }
+
+        Console.WriteLine($"[info] 5G S2 anlık şerit (aynı tick): {string.Join(" · ", s2mSatir)}");
+        if (s2mHata.Length > 0) failures += Fail("S2AnlikOlasilikCanli", s2mHata);
+        else Pass($"S2AnlikOlasilikCanli(4 taktik + kırmızı kart AYNI TICK içinde şeridi ≥{100 * S2MinOynama:0} puan oynatıyor: {string.Join(" · ", s2mSatir)})");
+    }
 
     // ---- K13-C TEŞHİSİ: DOĞRUDAN KIRMIZI YOLU ÖLÜ ----
     // Atilla kararı (c): "borcu kapatma, BANDI SORGULA." Sorgulandı; cevap bandı temize
@@ -6971,10 +7364,15 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     // KASITLI PAYLAŞIM — (dosya, satırA, satırB) ve gerekçesi.
     var kasitliPaylasim = new (string Dosya, int A, int B, string Gerekce)[]
     {
-        ("Lod2Resolver.cs", 92, 105,
-         "AYNI çekiliş bilerek iki kez okunur: satır 92 sarı kart TOPLAMINI, satır 105 aynı " +
+        ("Lod2Resolver.cs", 75, 88,
+         "AYNI çekiliş bilerek iki kez okunur: satır 75 sarı kart TOPLAMINI, satır 88 aynı " +
          "saltlarla taraf başına değerleri türetir. Farklı adres kullanmak ikisini AYRIŞTIRIRDI " +
-         "(toplam ≠ parçaların toplamı)."),
+         "(toplam ≠ parçaların toplamı). " +
+         "NOT (5G S2, 2026-09-04): bu bildirim SATIR NUMARASINA bağlıdır ve kırılgandır — " +
+         "`TeamStrength` gövdesi `TeamRating`e devredilince satırlar 17 kaydı ve kapı düştü. " +
+         "Kapı haklıydı, paylaşım aynı paylaşım (salt 7/8, aynı yeniden türetme); yalnız adres " +
+         "eskimişti. Numarayı düşünmeden güncellemek, paylaşımın HÂLÂ aynı olup olmadığını " +
+         "denetlemeden geçmek olurdu."),
     };
 
     // SALT SPAN TABLOSU — salt'ı bir DÖNGÜ DEĞİŞKENİNDEN gelen çağrılar `taban..taban+span-1`

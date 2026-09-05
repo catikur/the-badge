@@ -453,5 +453,22 @@
       "limitEkrani"
     ],
     "_comment": "Anayasa 8.2 maliyet tavani [KALIBRE]"
+  },
+  "canliOlasilik": {
+    "lambdaTaban": 1.0048,
+    "gucKatsayisi": 0.04433,
+    "maxEkGol": 10,
+    "taktik": {
+      "mentaliteKendi": 0.1304,
+      "mentaliteRakip": -0.0484,
+      "tempoKendi": 0.1704,
+      "tempoRakip": 0.0722,
+      "presKendi": -0.0784,
+      "presRakip": 0.0658,
+      "hatKendi": 0.211,
+      "hatRakip": 0.038,
+      "asiriUcKendi": -0.0146,
+      "asiriUcRakip": 0.0347
+    }
   }
 }

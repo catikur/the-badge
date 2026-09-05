@@ -3030,7 +3030,272 @@ dışında `.cs` kalmadığını doğruluyor.
 sınırın DİĞER TARAFTAKİ derleyicisinin ne göreceğini ölçmek gerekir. Bu ortamda Unity yok, ama
 Unity'nin derleyeceği DOSYA KÜMESİ ölçülebilir; kapı orayı tutuyor.
 
+### D-B: KARAR (2026-09-04, Atilla) — **canlı yol**
+
+Dikey dilim yalnız **canlı maç yolunu** final kaliteye çeker. Replay/özet yolu (tezin "canlıyı
+kaçırmak ceza değildir" vaadi) dilim DIŞINDA — iki sunum yolunu birden final kaliteye çekmek
+dilimi ikiye katlardı. Kabul edilen risk açıkça yazılı: dilim, tezin "kaçırsan da olur" kolunu
+test ETMEZ; o kol sonraki dilime kalır. Playtest turu için insanları Atilla bulacak
+(kayıtlı kural: mülakatsız playtest koşulmaz).
+
+### 🔴 S2 BULGUSU: sunumun yaslanacağı KAZANMA OLASILIĞI motorda YOK (2026-09-04)
+
+S2'nin ilk işi "sunumu gerçek motor üstünde yeniden tasarla"ydı. Tasarıma başlamadan önce motorun
+maç ORTASINDA ne verdiğine baktım ve greybox'ın fun hipotezinin dayandığı büyüklüğün karşılığının
+olmadığını **ölçtüm**.
+
+**Greybox'ın hipotezi** (RA#1 revizyonu, 2026-08-02): *"model + görünür olasılıklar + müdahale
+döngüsü — **karar ver → kazanma ihtimali DEĞİŞSİN → sonucu yaşa**"*. Greybox bunu KESİN DP ile
+üretiyordu ve şeridi KALİBREydi (tahmin %37 vs gerçekleşen %40, <0,10 bant).
+
+**Motorda bugün ne var:** `MatchEngine.WinProb(int golFarki, int dakika)` — imzası bu, başka
+girdisi YOK. Takım gücü, momentum, xG, kırmızı kart, müdahale: hiçbiri girmiyor. Bu bir hata
+değil, ME 15.3'ün `xG_salınımı` terimi için yazılmış ve o işi yapıyor (highlight sıralamasında
+yalnız GÖRECELİ sıçrama gerekir). Sunum omurgası olmak için yazılmamıştı.
+
+**ÖLÇÜM** (3 senaryo × 300 maç, ORTA chaos, `BuildSheetSide` ofsetleriyle 60v60 / 75v55 / 55v75;
+tohum ailesi `0xA5E7000 + n×7919`, `AutoManage = true`, eğri `BuildSummary(...).WinProbHome`ten
+okundu — yeniden üretmek için bu üçü birlikte gerekir, K13-C'nin dersi):
+
+| senaryo | gerçek EV galibiyeti | şerit 0. dk | şerit 45. dk | şeridin tam %50'de kaldığı süre |
+| --- | --- | --- | --- | --- |
+| dengeli 60v60 | %35,7 (B %29 · M %36) | **%50,0** | %50,0 | **%51** |
+| güçlü EV 75v55 | **%80,7** | **%50,0** | %74,7 | %34 |
+| güçlü DEP 55v75 | **%5,3** | **%50,0** | %25,5 | %32 |
+
+Kalibrasyon (dakika başına örnek, üç senaryo birlikte) — en kalabalık kova en kötüsü:
+
+| kova | n | tahmin | gerçekleşen | sapma |
+| --- | --- | --- | --- | --- |
+| %20-30 | 8.469 | %25,6 | %7,0 | **−18,6** |
+| **%50-60** | **31.547** | %50,0 | **%31,5** | **−18,5** |
+| %70-80 | 8.428 | %74,6 | %80,3 | +5,6 |
+| %90-100 | 11.716 | %97,2 | %98,6 | +1,5 |
+
+**Üç ayrı sorun, üçü de ölçülü:**
+1. **Güce kör.** Kaç vuruşta şerit ÜÇ senaryoda da tam %50 diyor — gerçek galibiyet oranı %80,7
+   ile %5,3 arasında değişirken. 75v55 maçına başlayan oyuncu "50/50" görüyor.
+2. **Maçın üçte biri-yarısı boyunca DONUK.** Şerit yalnız skor değişince oynuyor; dengeli maçta
+   dakikaların %51'inde tam %50'de duruyor.
+3. **Ortada kalibre değil.** 0-0 "yarı yarıya" demek değil: beraberlik ayrı bir sonuç. En kalabalık
+   kova 18,5 puan sapıyor.
+
+**Ve asıl sonuç:** `WinProb`un girdisi (gol farkı, dakika) olduğu için bir **taktik müdahalesi
+şeridi TAM OLARAK SIFIR kadar oynatır**. Yani greybox'ın şeridi motora olduğu gibi taşınsaydı,
+fun döngüsünün çekirdek vaadi — *"karar ver → ihtimal değişsin"* — sessizce ölürdü. Kapı bunu
+görmezdi: `M14PaketSemasi` yalnız dizinin 90 elemanlı OLDUĞUNU denetliyor, DEĞERİNİ değil.
+
+**Bugün canlı bir hata YOK:** `WinProbHome`u motor dışında tüketen kimse yok (röportaj promptu,
+Hikaye Motoru, Panorama — hiçbiri okumuyor). Eğri atıl. Sorun "bozuk tüketici" değil, **sunumun
+ihtiyaç duyduğu büyüklüğün henüz var olmaması**.
+
+**ÖNEMLİ ÇERÇEVE (kararı etkiler):** greybox'ın şeridi ÇALIŞIYORDU ve %40 onunla ölçüldü. Yani
+doğru bir şerit yapmak bir DÜZELTME değil, **PARİTE**dir — onsuz motor sunumu, zaten kalan
+greybox'tan daha kötü başlar. Redesign'ın kendisi ayrıca bir şey değiştirmek zorunda.
+
+Seçenekler ve önerim "Bekleyen kararlar"da (S2-A).
+
+### S2-A KARARI (2026-09-04, Atilla): **(a) + (b), sırayla**
+
+### S2-A/(a) UYGULANDI — canlı kazanma olasılığı (2026-09-04)
+
+`TeamRating` (takım gücünün TEK tanımı, `Lod2Resolver` buraya devretti) + `LiveWinProb`
+(üç sonuçlu Poisson konvolüsyonu). Katsayılar motorun kendi davranışından oturtuldu
+(28 eşleşme × 300 maç, R² = 0,977); `-- fit-winprob` yeniden oturtur ama balance'ı EZMEZ.
+
+| | en büyük kova sapması |
+| --- | --- |
+| Eski şerit (ME 15.3 `WinProb`) | 0,214 |
+| Yeni `LiveWinProb` | **0,051** |
+
+Doğrulama oturtma verisinden AYRI tohum ailesiyle. **Sunum-only olduğu kanıtlandı:** 50 golden
+replay'in durum hash'leri ve skorları birebir aynı; yalnız config_hash kaydı.
+
+**KAPININ İKİ KEZ DİŞİ YOKTU — ikincisi bir DERS:**
+
+1. Kapıyı M16-E'nin döngüsüne "bedava" bindirmiştim. `gucKatsayisi = 0` ile modeli güce KÖR
+   yaptım, kapı geçti (0,048): M16-E'nin ofset çekilişi farkı 0 civarında yoğunlaştırıyor.
+   Doğru büyüklük, YANLIŞ popülasyon. Kapı kendi popülasyonuna taşındı (fark −24..+24).
+2. **Geniş popülasyonda DA geçti (0,059).** Sebebi daha derin: simetrik bir popülasyonda
+   TABAN ORANI basan model MARJİNAL olarak kalibredir ve tamamen işe yaramazdır.
+   **Kalibrasyon, AYIRT EDİCİLİĞİ ölçmez.** Kapıya kaç vuruşu Brier BECERİ payı eklendi.
+
+Diş (son hâl): güce kör model → beceri −0,008 → "AYIRT EDİCİLİK YOK" (kalibrasyonu 0,059 ile
+hâlâ geçiyor, ölçünün gerekçesi bu) · bir eğri dizisi dolmazsa → 0,248 + toplam hatası ·
+bozulmamış → sapma 0,051, beceri 0,177.
+
+### 🔴 S2-B ÖLÇÜMÜ: TAKTİK sonucu ÇOK güçlü değiştiriyor — ve üç tuhaflık var (2026-09-04)
+
+(b)'nin ilk sorusu şuydu: şerit bugün gol, kırmızı kart ve oyuncu değişikliğiyle oynuyor ama
+taktikle OYNAMIYOR — bu modelin eksiği mi, yoksa motorda taktik zaten etkisiz mi?
+
+**Ölçüm** (dengeli 60v60, AYNI tohumlar, 400 maç/kol, `TacticChangeCmd` kaç vuruşunda):
+
+| kol | EV galibiyeti | kontrole göre |
+| --- | --- | --- |
+| hat +2 | %44 | +9 |
+| mentalite +2 | %42 | +7 |
+| **KONTROL** | %35 | — |
+| tempo +2 | %34 | −1 |
+| pres +2 | %26 | −9 |
+| mentalite −2 | %23 | −12 |
+| **tam hücum (2,2,2,2)** | **%28** | **−7** |
+| tam kapanma (−2,−2,−2,−2) | **%7** | −28 |
+
+**Ana sonuç: greybox'ın vaadi motorda DOĞRU.** Taktik kazanma olasılığını 37 puanlık bir
+aralıkta oynatıyor — `LiveWinProb`un yakaladığı güç farkından bile geniş. Yani şerit bugün
+oyuncunun elindeki EN BÜYÜK kolu hiç görmüyor.
+
+**Kadran başına ölçüm** (250 maç/kol, gol oranının kontrole göre log oranı):
+
+| kadran | kendi golü | rakip golü |
+| --- | --- | --- |
+| mentalite −2 → +2 | −0,145 → +0,341 (tekdüze artan) | +0,213 → +0,118 (**tekdüze DEĞİL**) |
+| tempo −2 → +2 | −0,809 → +0,131 (−2 felaket) | −0,062 → +0,188 |
+| **pres −2 → +2** | **+0,051 → +0,039 (DÜZ)** | **+0,152 → +0,486 (tekdüze artan)** |
+| hat −2 → +2 | −0,181 → +0,154 | +0,195 → −0,148 |
+
+**ÜÇ TUHAFLIK (gözlendi, sebebi ÖLÇÜLMEDİ):**
+1. **Kadranlar toplanabilir değil:** mentalite +2 (+7) ve hat +2 (+9) tek tek iyi, ama dördü
+   birden hücuma alınınca sonuç kontrolden KÖTÜ (−7). Etkileşim gerçek.
+2. **`pres` saf ceza:** kendi golünü hiç artırmıyor (düz), rakibin golünü tekdüze artırıyor
+   (+2'de %49 daha fazla). Motorda pres yapmak KESİN olarak kötü. Gerçek futbolda pres topu
+   yukarıda kazanıp şans üretir; bu, kalibrasyon sorunu olabilir.
+3. **`pres` −1 ile −2 BİREBİR AYNI** (0,96/1,08 her ikisinde de, aynı tohumlarla): kadran
+   negatif tarafta DOYUYOR — yani oyuncuya sunulan bir seçenek hiçbir şey yapmıyor.
+4. Savunmacı yön daha ÇOK gol yediriyor: mentalite −2'de rakip +0,213, tam kapanmada rakip
+   1,38 (kontrolde 0,95).
+
+**MODEL BU VERİYLE HENÜZ BESLENMEDİ ve bu bilinçli:** `pres` kalibrasyonu düzelirse oturtulan
+katsayılar çöp olur; kararsız zemine model kurmak israf. Karar S2-B'de.
+
+### S2-B KARARI (2026-09-04, Atilla): **(a)** — ayrı motor dilimi, (b) beklemeden devam
+
+Taktiğin üç tuhaflığı (pres saf ceza · pres negatif tarafta doyuyor · savunmacı yön daha çok gol
+yediriyor) AYRI bir motor dilimine gitti; (b) onu beklemeden taktiği şeride kattı.
+
+### S2-A/(b) UYGULANDI — şerit artık taktiğe cevap veriyor (2026-09-04)
+
+`LiveWinProb` taktik girdisi aldı: her kadran için `*Kendi`/`*Rakip` katsayısı + bir `asiriUc`
+terimi. Şerit ölçülen davranışı izliyor: kontrol %34,5 · mentalite+2 %43,6 · tam kapanma %17,2.
+
+**ÜÇ ŞEY YANLIŞTI, ÜÇÜ DE ÖLÇÜMLE BULUNDU:**
+
+1. **Katsayıları GOL ORANINDAN oturtmuştum.** Doğal görünen yol; model yönü tutturuyor ama
+   büyüklüğü ıskalıyordu (`tamHücum` %63,4 derken gerçek %38,8). Hedef sonuç olasılığı, gol oranı
+   ise yalnız bir VEKİL. Doğrudan sonuca oturtmak hatayı 0,419 → 0,267'ye indirdi.
+2. **Ana etkiler TEK BAŞINA yetmedi.** Kadranlar toplanabilir değil: dördü birden uca çekilince
+   sapma 18-22 puan. Fiziksel olarak anlamlı TEK bir terim eklendi — kadran karelerinin toplamı
+   (`asiriUc`): dengesiz, her kolu uca çeken kurulum kendine az fayda, rakibe çok alan verir.
+   Hata 0,267 → **0,053**, en büyük sapma 0,225 → **0,080**. `tamHücum` artık birebir tutuyor.
+3. **Beceri örneğini dakika 0'dan alıyordum.** Motorun tick döngüsünde `SampleCurves` komut
+   uygulamasından ÖNCE koşuyor (MatchEngine 422 vs 424), yani dakika 0 örneği kaç vuruşunda
+   verilen taktiği HENÜZ GÖRMEZ. Dakika 1'e alındı.
+   **Bu aynı zamanda sunum tarafında gerçek bir kusurdur:** şeridin İLK okuması, oyuncunun maç
+   öncesi taktik kurulumunu yok sayar. Bugün kapı dakika 1'den ölçerek etrafından dolaşıyor;
+   ekran yazılırken bu görünür hale gelir (borç).
+
+### 📐 KURAL: mutlak bir eşik değil, ULAŞILABİLİR TAVANIN PAYI ölçülür (2026-09-04)
+
+Ayırt edicilik kapısına önce mutlak taban (0,10) koymuştum. Taktik alt popülasyonu 0,042 verdi ve
+kapı düştü. **Modeli suçlamadan önce tavanı hesapladım:** her kolun KENDİ gerçek frekansını bilen
+KÂHİN model bile ancak **0,045** alıyor. Yani 0,10'luk taban TEORİK MAKSİMUMUN ÜSTÜNDEYDİ —
+kapı kötü modeli değil İMKÂNSIZI istiyordu. Modelin gerçek başarısı tavanın %93'ü.
+
+Sebebi futbolun kendisi: sonuçlara maçtan maça rastgelelik hâkim ve hiçbir model onu açıklayamaz.
+Açıklanabilir olan yalnız KOLLAR ARASI fark; büyüklüğü de alt popülasyona göre değişir (güç
+kolları %5-92 yayılıyor, taktik kolları %6-44). **Mutlak eşik bu yüzden anlamsızdır; doğru soru
+"bilinebilirin ne kadarını yakalıyor".** Kapı artık payı ölçüyor (taban %50).
+
+Bugün: **güç tavanın %97'si · taktik %86'sı** · kalibrasyon sapması 0,057.
+Diş: taktik katsayıları sıfırlanınca −%40, `gucKatsayisi` sıfırlanınca −%2 → ikisi de kırmızı.
+
+### 🔴 BULGU (Codex, P1, gerçek): canlı şerit için motor HİÇBİR ŞEY sunmuyordu (2026-09-05)
+
+Bulgunun kendisi: `wp3*` dizileri yalnız dakika başlarında ve `queue.ApplyDue`dan ÖNCE yazılıyor,
+bu yüzden müdahalenin etkisi bir sonraki dakika sınırına kadar görünmüyor.
+
+**Doğrularken bulgu daha da keskin çıktı:** diziler `private` ve dışarıya YALNIZ maç sonunda
+`BuildSummary` ile veriliyor. Yani canlı şerit için motor bir dakika gecikmeli değil, **hiç**
+veri sunmuyordu. Kendi kaydımda ("şeridin ilk okuması taktiği görmüyor") sorunu dakika 0'a özel
+sanmıştım; Codex genelleştirdi ve haklıydı — sorun her müdahalede, her dakika içinde vardı.
+
+**Düzeltme:** `MatchEngine.AnlikOlasilik(in MatchState)` — durumu okur, yazmaz; kalan süreyi tick
+çözünürlüğünde hesaplar. Dizilerin anlamı da kesinleştirildi: onlar MAÇ SONU İNCELEME eğrisidir
+("dakika m'nin başı, o tick'in müdahaleleri uygulanmadan önce"), canlı sunum onları OKUMAMALIDIR.
+
+**Kapı `S2AnlikOlasilikCanli`** — dört taktik + kırmızı kart, hepsi AYNI TICK içinde şeridi en az
+2 puan oynatmalı. Bugün: mentalite+2 %32,1→%37,4 · hat+2 →%39,0 · tam kapanma →%9,1 ·
+pres+2 →%22,2 · kırmızı →%23,5. **Diş:** kusur geri konunca (dizinin son dakikası okunursa)
+beş senaryonun BEŞİ de düşüyor.
+
+Ölçüm çıktısını okurken kendi biçim hatamı da yakaladım: `{x:+0.0}` .NET'te LİTERAL artı basar,
+işareti değil (negatif değerler "-+0.2" görünüyordu). Bölüm ayırıcısına çevrildi (`+0.0;-0.0`).
+
 ## Bekleyen kararlar
+
+- **İnceleme eğrisinin bir dakikalık gecikmesi (5G S2, 2026-09-05).** CANLI yol `AnlikOlasilik`
+  ile kapandı; geriye maç sonu inceleme eğrisi kalıyor: `SampleCurves` tick döngüsünde
+  `queue.ApplyDue`dan önce koştuğu için 37. dakikadaki bir müdahale dizide 38'de görünür.
+  Seçenekler: (a) `SampleCurves`i `ApplyDue`dan SONRAYA al — ME 15.3'ün momentum örneklemesini
+  de bir adım kaydırır, yani ilgisiz bir sebeple spec'li bir davranışı değiştirmek olur;
+  (b) yalnız `wp3*` örneklemesini ayır — iki örnekleme noktası, atlanan dakika mantığı
+  ikilenir; (c) olduğu gibi bırak, anlamı belgede kesin — bugünkü hâl budur ve inceleme
+  eğrisi için bir dakikalık gecikme zararsız olabilir. **Önerim (c)**, ama karar ekranı yazan
+  turda verilmeli: eğriyi kim, ne için okuyacak henüz belli değil.
+
+- **MOTOR DİLİMİ (5G S2-B'den ayrıldı, 2026-09-04, Atilla (a) dedi) — taktiğin üç tuhaflığı.**
+  Bir karar değil, bir TETİKLEYİCİ: motor kalibrasyon dilimi açıldığında ele alınır.
+  (1) `pres` saf ceza — kendi golünü hiç artırmıyor, rakibinkini +2'de %49 artırıyor; gerçek
+  futbolda pres topu yukarıda kazanıp şans üretir. (2) `pres` −1 ile −2 BİREBİR aynı sonucu
+  veriyor: kadran negatif tarafta doyuyor, oyuncuya sunulan bir seçenek hiçbir şey yapmıyor
+  (`K10TalimatAtilligi`nin kardeşi). (3) Savunmacı yön daha ÇOK gol yediriyor (tam kapanmada
+  rakip 1,38, kontrolde 0,95). Düzeltildiğinde `-- fit-winprob` yeniden koşulur ve
+  `S2WinProbKalibrasyon` katsayıları doğrular — bağ ucuz, bu yüzden (b) beklemedi.
+- **Şeridin ilk okuması taktiği görmüyor (5G S2, 2026-09-04).** `SampleCurves` komut
+  uygulamasından önce koştuğu için dakika 0 örneği maç öncesi taktik kurulumunu yok sayar.
+  Kapı dakika 1'den ölçerek etrafından dolaşıyor; ekran yazılırken görünür hale gelir.
+  Seçenekler o gün netleşir: örnekleme sırasını değiştirmek (motor semantiği) ya da sunumun
+  ilk kareyi dakika 1'den okuması (yalnız sunum).
+
+- ~~**S2-B: taktiğin üç tuhaflığı nereye ait?**~~ → **KAPANDI (2026-09-04, Atilla): (a)** —
+  ayrı motor dilimi açıldı, (b) beklemeden taktiği modele kattı. Uygulaması yukarıdaki
+  "S2-B KARARI" ve "S2-A/(b) UYGULANDI" kayıtlarında; motor dilimi bu listenin başındaki
+  MOTOR DİLİMİ satırında tetikleyicisiyle duruyor. Aşağıdaki seçenek menüsü, kararın
+  alındığı andaki bilgi durumu olarak kalıyor:
+  Şeride taktiği sokmak (b)'nin işi ve ölçüm bunun MÜMKÜN olduğunu gösterdi. Ama ölçüm ayrıca
+  motor tarafında üç şey buldu: `pres` saf ceza, `pres` negatif tarafta doyuyor, savunmacı yön
+  daha çok gol yediriyor.
+  - **(a) Ayrı motor dilimi aç, (b) onu beklemeden taktiği modele katsın** ← **önerilen**.
+    (b)'nin işi taktiği ŞERİDE göstermek; taktiğin kendisinin doğru kalibre olup olmadığı ayrı
+    bir soru. Eksi: `pres` düzelirse katsayılar yeniden oturtulur (ucuz — `-- fit-winprob`).
+  - **(b) Önce motoru düzelt, sonra modele kat.** Artı: tek oturtma. Eksi: 5G-a'yı motor
+    kalibrasyonuna bağımlı kılar; dikey dilimin sunum işi motoru beklemek zorunda kalır.
+  - **(c) Taktiği modele hiç katma, sunum başka eksene otursun.** Artı: tuhaflıklardan bağımsız.
+    Eksi: ölçüm taktiğin EN BÜYÜK kol olduğunu gösterdi; onu göstermeyen bir şerit oyuncunun
+    kararını görmezden gelir — greybox'ın vaadini ikinci kez kırar.
+
+- ~~**S2-A: sunumun omurgası ne olacak?**~~ → **KAPANDI (2026-09-04, Atilla): (a) + (b),
+  sırayla.** İkisi de UYGULANDI ve sevk edildi: `LiveWinProb` (kalibrasyon sapması 0,057;
+  ayırt edicilik güç tavanın %97'si, taktik %86'sı) + `AnlikOlasilik` canlı okuma.
+  Kapılar: `S2WinProbKalibrasyon`, `S2AnlikOlasilikCanli`. **Bu satır yeniden açılamaz;**
+  aşağıdaki seçenek menüsü kararın alındığı andaki bilgi durumu olarak kalıyor:
+  - **(a) Gerçek bir canlı kazanma olasılığı kur:** 3 sonuçlu (G/B/M), güç farkına duyarlı, kırmızı
+    kart/momentum/xG girdili, deterministik ve ucuz; N maçla KALİBRE edilir ve kalibrasyon bir kapı
+    olur (greybox'ın <0,10 bandının motor karşılığı). Artı: fun hipotezini dürüstçe test edilebilir
+    hâle getirir, müdahale şeridi gerçekten oynatır. Eksi: gerçek bir modelleme işi ve
+    **tek başına bir DÜZELTME değil, PARİTE** — %40 zaten çalışan bir şeritle ölçülmüştü.
+  - **(b) Şeridi omurga olmaktan çıkar:** sunum başka bir eksene otursun (motorun kendi xG'siyle
+    blok kartı "gol ihtimali BİZ %18", ya da momentum/baskı ekseni). Artı: (a)'nın maliyeti yok ve
+    redesign'ı gerçekten YENİ bir şeye zorlar. Eksi: greybox'la karşılaştırma zemini kaybolur —
+    %40'ın neden geldiğini hâlâ bilmiyoruz, ekseni değiştirmek değişkeni değiştirmek olur.
+  - **(c) Ertele:** `WinProb`u ME 15.3 işinde bırak, sunum eksenine S2'nin tasarım turunda karar ver.
+    Artı: karar veri geldikten sonra. Eksi: S2'nin çıkış kapısı zaten o veri turu; ekseni
+    seçmeden tur koşulamaz.
+  - **Önerim: (a) + (b) birlikte, ama sırayla** — (a) pariteyi kurar (ölçülebilir, burada
+    kanıtlanabilir, kapıyla korunur); redesign'ın YENİ olan kısmı (b)'nin ekseninden gelir ve
+    mülakatlı tur ikisini birden test eder. Tek başına (a) eski hipotezi tekrar eder, tek başına
+    (b) kıyas zeminini atar.
 
 - ~~**`OzetKart` entity ayrımı.**~~ → **YAPILDI (2026-08-31, K10-A):** seçenek (a) yerine (b) —
   `idx`i kapatmak 20. karttan sonrasını log'dan düşürürdü; ayrımı `SummaryCapacity`ye çekmek aynı
