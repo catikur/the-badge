@@ -3258,7 +3258,11 @@ işareti değil (negatif değerler "-+0.2" görünüyordu). Bölüm ayırıcıs�
   Seçenekler o gün netleşir: örnekleme sırasını değiştirmek (motor semantiği) ya da sunumun
   ilk kareyi dakika 1'den okuması (yalnız sunum).
 
-- **S2-B: taktiğin üç tuhaflığı nereye ait? (2026-09-04 ölçümü) — KARAR ATİLLA'NIN.**
+- ~~**S2-B: taktiğin üç tuhaflığı nereye ait?**~~ → **KAPANDI (2026-09-04, Atilla): (a)** —
+  ayrı motor dilimi açıldı, (b) beklemeden taktiği modele kattı. Uygulaması yukarıdaki
+  "S2-B KARARI" ve "S2-A/(b) UYGULANDI" kayıtlarında; motor dilimi bu listenin başındaki
+  MOTOR DİLİMİ satırında tetikleyicisiyle duruyor. Aşağıdaki seçenek menüsü, kararın
+  alındığı andaki bilgi durumu olarak kalıyor:
   Şeride taktiği sokmak (b)'nin işi ve ölçüm bunun MÜMKÜN olduğunu gösterdi. Ama ölçüm ayrıca
   motor tarafında üç şey buldu: `pres` saf ceza, `pres` negatif tarafta doyuyor, savunmacı yön
   daha çok gol yediriyor.
@@ -3271,7 +3275,11 @@ işareti değil (negatif değerler "-+0.2" görünüyordu). Bölüm ayırıcıs�
     Eksi: ölçüm taktiğin EN BÜYÜK kol olduğunu gösterdi; onu göstermeyen bir şerit oyuncunun
     kararını görmezden gelir — greybox'ın vaadini ikinci kez kırar.
 
-- **S2-A: sunumun omurgası ne olacak? (2026-09-04 ölçümü, yukarıdaki S2 bulgusu) — KARAR ATİLLA'NIN.**
+- ~~**S2-A: sunumun omurgası ne olacak?**~~ → **KAPANDI (2026-09-04, Atilla): (a) + (b),
+  sırayla.** İkisi de UYGULANDI ve sevk edildi: `LiveWinProb` (kalibrasyon sapması 0,057;
+  ayırt edicilik güç tavanın %97'si, taktik %86'sı) + `AnlikOlasilik` canlı okuma.
+  Kapılar: `S2WinProbKalibrasyon`, `S2AnlikOlasilikCanli`. **Bu satır yeniden açılamaz;**
+  aşağıdaki seçenek menüsü kararın alındığı andaki bilgi durumu olarak kalıyor:
   - **(a) Gerçek bir canlı kazanma olasılığı kur:** 3 sonuçlu (G/B/M), güç farkına duyarlı, kırmızı
     kart/momentum/xG girdili, deterministik ve ucuz; N maçla KALİBRE edilir ve kalibrasyon bir kapı
     olur (greybox'ın <0,10 bandının motor karşılığı). Artı: fun hipotezini dürüstçe test edilebilir
