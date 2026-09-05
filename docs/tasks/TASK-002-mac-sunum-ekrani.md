@@ -39,7 +39,8 @@ doğrula — 179 kapı yeşil kalmalı.
 - `Game.Match` asmdef'i + tek sahne: canlı maç sunumu (portre, dikey saha — FAZ 00.5 kararı).
 - Canlı **üç sonuçlu kazanma şeridi** (G/B/M): `MatchEngine.AnlikOlasilik(in MatchState)`.
 - Skor + saat + faz; spiker akışı (`EventCount` / `GetEvent(i)`).
-- **Müdahale:** taktik dört kadran (mentalite/tempo/pres/hat), −2..+2.
+- **Müdahale:** taktik dört kadran (mentalite/tempo/pres/hat), −2..+2 — **gerçek Command Bus
+  zinciriyle** (`World` köprüsü dahil, Kural 1).
 - Hız kontrolü: 1x / 2x / atla.
 - Placeholder art (renkli şekiller yeter).
 
@@ -47,8 +48,8 @@ doğrula — 179 kapı yeşil kalmalı.
 - Gerçek art, ses, haptic, FTUE, IAP, analytics → **5G-b**.
 - Maç günü döngüsü (hafta hazırlığı, tycoon, röportaj) → **S3**. Bu ekran yalnız MAÇ.
 - Replay/özet yolu → D-B kararıyla dilim DIŞINDA (yalnız canlı yol).
-- `TheBadge.World` / `GameState` → bu ekran için GEREKMİYOR; maç motoru kendi durumunu tutar.
-  World S3'te devreye girer.
+- Maç günü döngüsünün DÜNYASI (ekonomi, transfer, takvim, kadro ekranları) → **S3**. `World`
+  paketi bu ekranda YALNIZ komut köprüsü için kullanılır (aşağıya bak), oyun durumu ekranı için değil.
 - Greybox'ın `MatchModel`/`ModelMatchDirector` kodu → **taşınmaz**. Greybox emekli
   (`docs/GREYBOX_3G_RAPOR.md`); `EngineDev.unity` motor testi için kalabilir.
 
@@ -67,7 +68,10 @@ doğrula — 179 kapı yeşil kalmalı.
 | Skor / saat / faz | `st.HomeGoals`, `st.AwayGoals`, `st.Tick` (600 tick = 1 dk), `st.Phase` |
 | Olay akışı | `eng.EventCount`, `eng.GetEvent(i)` |
 | Maç sonu paketi | `eng.BuildSummary(in st)` — istatistik ekranlarının TEK kaynağı |
-| Reddedilen komut | `eng.RejectedCommands`, `eng.TacticChanges` |
+| **Komut gönder** | `bus.Submit(env, payload, executor, receivedAtUnixMs, userId)` → `CommandOutcome` |
+| **Red sebebi (bus)** | `outcome.Reason` (`RejectionReason`) + `outcome.Detail` — kullanıcıya BU gösterilir |
+| Red sayacı (motor) | `eng.RejectedCommands` — yalnız SAYI, sebep taşımaz; aşağıdaki nota bak |
+| Uygulanan taktik | `eng.TacticChanges` |
 
 **`MatchSummaryPacket.WinProb3*` dizilerini CANLI OKUMA.** Onlar maç sonu inceleme eğrisidir
 (dakika başı, o tick'in müdahaleleri uygulanmadan önce) ve maç bitmeden zaten dolmaz.
@@ -75,16 +79,39 @@ Canlı yol `AnlikOlasilik`tır — inceleme turunda bir P1 bulgusu tam olarak bu
 
 ## Kurallar (ihlali review reddi)
 
-1. **TEK KAPI.** Taktik değişikliği doğrudan `CommandQueue.Enqueue` ile YAZILMAZ. Gerçek
-   `CommandBus.Submit` kullanılır (`squad.set_team_tactic`, Tier 0, Context.Match) → kabul
-   edilirse motorun kuyruğuna düşer. Bus artık Unity'de var; greybox'ın "hafif bus"u geçersiz.
-   Reddedilen komut kullanıcıya SEBEBİYLE gösterilir (CB 11.1) — sessizce yutulmaz.
-2. **Sunum katmanı durumu OKUR, yazmaz.** `MatchState`e doğrudan atama yapan UI kodu reddedilir.
-3. **Magic number yok.** Ekran ayarları (kare başı tick, şerit animasyon süresi, feed uzunluğu)
+1. **TEK KAPI — ve kablolaması şöyle** (inceleme bulgusu, Codex P1: ilk yazımda "gerçek bus
+   kullan" derken `World`ü kapsam dışına atmıştım; ikisi aynı anda mümkün değildi).
+   Taktik değişikliği doğrudan `CommandQueue.Enqueue` ile YAZILMAZ. Zincir:
+
+   ```
+   UI → CommandBus.Submit(zarf, payload, WorldExecutor, saat, userId)
+        → 4 kapı → SquadActions.TaktikHandler → IMatchCommandSink → motorun CommandQueue'su
+   ```
+
+   `Submit` **`ICommandExecutor` ZORUNLU ister** (null verirsen `ArgumentNullException` — bu
+   bilinçli: yürütücüsüz çağrı durumu değiştirmeden "başarılı" der). `squad.set_team_tactic`i
+   işleyen tek uygulama `TheBadge.World`teki `WorldExecutor` + `SquadActions.Baglan(...)`.
+   **Bu köprüyü YENİDEN YAZMA** — üç paket de Unity'de mevcut.
+
+   Referans kablolama: `shared/TheBadge.Sim.Checks/WorldHarness.cs` (satır ~290: `WorldStore` →
+   `WorldContext` → `WorldExecutor` → `*Actions.Baglan` → `new CommandBus(...)`) ve
+   `SpyMatchSink` (aynı dosyada, `IMatchCommandSink`in en küçük uygulaması). Ekranın sink'i
+   `MatchCommand`ı motorun `CommandQueue`suna iletir.
+
+2. **İKİ AYRI RED YOLU VAR, İKİSİ DE GÖSTERİLİR** (Codex P1).
+   - **Bus reddi:** komut motora HİÇ ULAŞMAZ, `eng.RejectedCommands` DEĞİŞMEZ. Sebep
+     `CommandOutcome.Reason` + `.Detail`tedir. Kullanıcıya gösterilecek olan budur.
+   - **Motor geç reddi:** bus kabul etti ama uygulama anında düştü (bant dışı delta, değişiklik
+     hakkı bitti, motivasyon 10 dk beklemesi). Bu yalnız `eng.RejectedCommands` sayacını artırır
+     ve **sebep taşımaz** — sayacın arttığını görmek yeter, sebebi bugün yok.
+
+   Hiçbir red sessizce yutulmaz (CB 11.1).
+3. **Sunum katmanı durumu OKUR, yazmaz.** `MatchState`e doğrudan atama yapan UI kodu reddedilir.
+4. **Magic number yok.** Ekran ayarları (kare başı tick, şerit animasyon süresi, feed uzunluğu)
    tek bir yerde toplanır ve `[KALİBRE]` adayı olarak işaretlenir.
-4. **C# 9 / netstandard2.1** sınırı paylaşılan paketler için geçerli; Unity tarafı kodu bu
+5. **C# 9 / netstandard2.1** sınırı paylaşılan paketler için geçerli; Unity tarafı kodu bu
    sınırda olmak zorunda değil ama paketlere sızma olmamalı.
-5. **Determinizm:** ekran kodu maç sonucunu ETKİLEMEZ. Aynı seed + aynı komutlar = aynı maç.
+6. **Determinizm:** ekran kodu maç sonucunu ETKİLEMEZ. Aynı seed + aynı komutlar = aynı maç.
 
 ## Karar maddeleri — ATİLLA'YA SORULACAK (varsayım üretme)
 
@@ -103,7 +130,8 @@ Canlı yol `AnlikOlasilik`tır — inceleme turunda bir P1 bulgusu tam olarak bu
 - Tek maç baştan sona izlenebiliyor; şerit maç boyunca oynuyor.
 - **Taktik değişikliği şeridi ANINDA oynatıyor** (aynı tick) — motor tarafında
   `S2AnlikOlasilikCanli` bunu zaten ölçüyor; ekranda GÖRÜNÜR olmalı.
-- Reddedilen komut sebebiyle gösteriliyor.
+- **Bus reddi sebebiyle gösteriliyor** (`CommandOutcome.Detail`); motor geç reddi en az
+  sayaç olarak görünüyor. Bant dışı bir delta ile ikisi de elle denenip raporlanır.
 - Aynı seed + aynı müdahaleler = aynı skor (elle doğrula, raporla).
 - `dotnet run --project shared/TheBadge.Sim.Checks -c Release` yeşil (179 kapı).
 
