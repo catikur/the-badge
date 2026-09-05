@@ -3232,6 +3232,51 @@ beş senaryonun BEŞİ de düşüyor.
 Ölçüm çıktısını okurken kendi biçim hatamı da yakaladım: `{x:+0.0}` .NET'te LİTERAL artı basar,
 işareti değil (negatif değerler "-+0.2" görünüyordu). Bölüm ayırıcısına çevrildi (`+0.0;-0.0`).
 
+### K1 KARARI (2026-09-05, Atilla): **(b) — sunum kritik anlarda duraklar**
+
+Motor sürekli koşar; sunum, sonucun maddi olarak kaydığı anlarda durur/vurgular. Bu, greybox'ın
+8-12 bloklu ritmini gerçek motorun sürekli akışına taşımanın yolu.
+
+### 🔴 TUZAK: ME 15.3'ün eşiği bu işi SÜREMEZ (2026-09-05)
+
+Kararın doğal uygulaması "highlight eşiğini kullan" olurdu. Ölçüm bunu çürüttü — ve bu zaten
+kayıtlıydı: `H > highlight.esik` maç başına **0,5-0,8** işaret veriyor ve **maçların yarısı BOŞ**
+(`TimelineMarks`ın eşikten değil "en yüksek N"den beslenmesinin sebebi de buydu). Sıfır ya da bir
+duraklamalı bir maç ritim değildir. "En yüksek N" ise CANLI kullanılamaz: maç bitmeden kimin ilk
+altıda olduğu bilinemez.
+
+**Kullanılan ölçüt: kazanma olasılığının SIÇRAMASI** (son duraklamadan bu yana toplam değişim
+mesafesi). Döngünün kendi vaadine bağlı — duraklama tam da sonucun kaydığı anda olur.
+
+**ÖLÇÜM** (200 maç, karışık güç dağılımı, örnekleme 3 sn maç zamanı):
+
+| eşik | an/maç | boş maç |
+| --- | --- | --- |
+| 0,02 | 19,0 | %0 |
+| 0,03 | 12,9 | %0 |
+| **0,04** | **9,9** | **%0** |
+| 0,05 | 8,1 | %0 |
+| 0,10 | 4,5 | %0 |
+| 0,15 | 3,2 | %2 |
+
+0,04 seçildi: greybox'ın 8-12 blok ritmine oturuyor, hiçbir maç boş kalmıyor.
+
+**KADANS BAĞIMSIZLIĞI ÖLÇÜLDÜ, VARSAYILMADI.** Taban yalnız ateşlendiğinde sıfırlandığı için
+sık örnekleme aynı sıçramayı daha ERKEN yakalar, daha ÇOK değil — ama bu bir tasarım İDDİASIydı,
+ölçmeden yazmadım: 1 sn → 30 sn arası 30 kat aralıkta sayı 10,0 / 9,9 / 9,9 / 9,7 / 9,5.
+Sunum kare hızını serbestçe seçebilir.
+
+**Uygulama:** `TheBadge.Sim/src/Match/KritikAn.cs` (`KritikAnDedektoru`, durumsuz sunum aracı;
+`MatchState`e dokunmaz), eşik `canliOlasilik.kritikAnEsigi` [KALİBRE].
+
+**Kapı `S2KritikAnRitmi`** üç şeyi birden ölçüyor: ritim 8-12 bandında · hiçbir maç boş değil ·
+kadans bağımsızlığı korunuyor. **Diş:** eşik 0,15 → 3,2 an/maç (bant dışı); eşik 0,015 → 24,9
+(bant dışı) **VE kadans bağımsızlığı da bozuluyor** (3 sn 24,9 vs 30 sn 22,1). Yani kapının iki
+iddiası birbirinin yedeği değil — eşiği iki taraftan sıkıştırıyorlar.
+
+**TASK-002 bu karara göre güncellendi;** brif "mekanizma hazır, yeniden yazma" diyor ve ME 15.3
+eşiğini kullanmayı açıkça yasaklıyor.
+
 ## Bekleyen kararlar
 
 - **İnceleme eğrisinin bir dakikalık gecikmesi (5G S2, 2026-09-05).** CANLI yol `AnlikOlasilik`
