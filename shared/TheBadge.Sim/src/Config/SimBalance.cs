@@ -83,6 +83,11 @@ namespace TheBadge.Sim.Config
             public double gucKatsayisi;
             /// <summary>Poisson toplamının kesme noktası (kalan sürede takım başına en çok kaç gol).</summary>
             public int maxEkGol;
+            /// <summary>KRİTİK AN eşiği — sunum bu kadar sıçramada duraklar (`KritikAnDedektoru`).
+            /// Ölçülerek seçildi: 0,04 → maç başına 9,9 an, boş maç %0 (greybox'ın 8-12 blok
+            /// ritmi). ME 15.3'ün `highlight.esik`i BU İŞ İÇİN KULLANILMAZ — o maç başına 0,5-0,8
+            /// verir ve maçların yarısını boş bırakır.</summary>
+            public double kritikAnEsigi;
             /// <summary>Taktik kadranlarının gol oranına ÜSTEL etkisi (5G S2-B ölçümü).</summary>
             public TaktikCfg taktik = new TaktikCfg();
 

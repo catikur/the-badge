@@ -2320,6 +2320,64 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         else Pass($"S2AnlikOlasilikCanli(4 taktik + kırmızı kart AYNI TICK içinde şeridi ≥{100 * S2MinOynama:0} puan oynatıyor: {string.Join(" · ", s2mSatir)})");
     }
 
+    // ---- 5G S2: KRİTİK AN RİTMİ (sunum duraklama sıklığı) ----
+    // Atilla K1 kararı (2026-09-05): sunum ritmi (b) — motor sürekli koşar, sunum kritik anlarda
+    // durur. "Kritik an" ME 15.3'ün eşiğinden GELMEZ (maç başına 0,5-0,8, maçların yarısı boş);
+    // olasılık SIÇRAMASINDAN gelir. Bu kapı iki şeyi birden korur:
+    //   1. RİTİM: maç başına an sayısı 8-12 bandında ve HİÇBİR maç boş değil.
+    //   2. KADANS BAĞIMSIZLIĞI: sunum kare hızını değiştirerek ritmi bozamamalı. Taban yalnız
+    //      ateşlendiğinde sıfırlandığı için bu tasarımdan gelir — ama tasarım bozulabilir,
+    //      o yüzden ÖLÇÜLÜR (ilk ölçüm: 1 sn ↔ 30 sn arası 10,0 ↔ 9,5).
+    {
+        const int S2KN = 60;
+        int[] kadans = { 30, 300 };            // 3 sn ve 30 sn maç zamanı
+        double esikKA = simBal.canliOlasilik.kritikAnEsigi;
+        var kaSay = new double[kadans.Length];
+        var kaBos = new int[kadans.Length];
+        var kaKilit = new object();
+        System.Threading.Tasks.Parallel.For(0, S2KN, n =>
+        {
+            int oe = (int)(Rng.Rand01((ulong)n, Domain.Chaos, 9000, 0, 1) * 25) - 12;
+            int od = (int)(Rng.Rand01((ulong)n, Domain.Chaos, 9000, 0, 2) * 25) - 12;
+            ulong sd = 0xE7A0000UL + (ulong)n * 7919UL;
+            var cfg = new MatchConfig { Seed = sd, EngineVersion = "s2kritik",
+                Home = BuildSheetSide(300, 7, home: true, offset: oe),
+                Away = BuildSheetSide(300, 7, home: false, idEntity: 8, offset: od),
+                Referee = RefereeProfile.Default, Chaos = ChaosLevel.Orta };
+            var eng = new MatchEngine(sd, new CommandQueue(), cfg, simBal) { AutoManage = true };
+            var st = MatchEngine.CreateInitialState(cfg);
+            var det = new KritikAnDedektoru[kadans.Length];
+            var ilk = eng.AnlikOlasilik(in st);
+            for (int k = 0; k < kadans.Length; k++) det[k].Sifirla(in ilk);
+            var yerel = new int[kadans.Length];
+            uint t = 0;
+            while (st.Phase != MatchPhase.FullTime && t < 80000)
+            {
+                eng.Tick(ref st); t++;
+                var u = eng.AnlikOlasilik(in st);
+                for (int k = 0; k < kadans.Length; k++)
+                {
+                    if (t % kadans[k] != 0) continue;
+                    if (det[k].Kontrol(in u, esikKA, out _)) yerel[k]++;
+                }
+            }
+            lock (kaKilit)
+                for (int k = 0; k < kadans.Length; k++) { kaSay[k] += yerel[k]; if (yerel[k] == 0) kaBos[k]++; }
+        });
+
+        double an0 = kaSay[0] / S2KN, an1 = kaSay[1] / S2KN;
+        double kadansFarki = Math.Abs(an0 - an1);
+        Console.WriteLine($"[info] 5G S2 kritik an ritmi (eşik {esikKA:0.00}, {S2KN} maç): " +
+                          $"3 sn kadansta {an0:0.0} an/maç · 30 sn kadansta {an1:0.0} · fark {kadansFarki:0.0} · " +
+                          $"boş maç {kaBos[0]}/{S2KN}");
+        string kaHata = "";
+        if (an0 < 8.0 || an0 > 12.0) kaHata += $"ritim bant DIŞI: {an0:0.0} an/maç ∉ [8,12] — greybox'ın blok ritmi; ";
+        if (kaBos[0] > 0) kaHata += $"{kaBos[0]} maç HİÇ duraklamıyor (sunum o maçta ölü); ";
+        if (kadansFarki > 1.5) kaHata += $"KADANS BAĞIMSIZLIĞI bozuldu: 3 sn {an0:0.0} vs 30 sn {an1:0.0} (fark {kadansFarki:0.0} > 1,5) — sunum kare hızıyla ritmi değiştirebilir; ";
+        if (kaHata.Length > 0) failures += Fail("S2KritikAnRitmi", kaHata);
+        else Pass($"S2KritikAnRitmi({an0:0.0} an/maç ∈ [8,12] · boş maç yok · kadans bağımsız: 3 sn {an0:0.0} ↔ 30 sn {an1:0.0})");
+    }
+
     // ---- K13-C TEŞHİSİ: DOĞRUDAN KIRMIZI YOLU ÖLÜ ----
     // Atilla kararı (c): "borcu kapatma, BANDI SORGULA." Sorgulandı; cevap bandı temize
     // çıkardı ve borcun YANLIŞ YERE asıldığını gösterdi.

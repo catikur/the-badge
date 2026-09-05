@@ -458,6 +458,7 @@
     "lambdaTaban": 1.0048,
     "gucKatsayisi": 0.04433,
     "maxEkGol": 10,
+    "kritikAnEsigi": 0.04,
     "taktik": {
       "mentaliteKendi": 0.1304,
       "mentaliteRakip": -0.0484,

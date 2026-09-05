@@ -38,6 +38,7 @@ doğrula — 179 kapı yeşil kalmalı.
 **In:**
 - `Game.Match` asmdef'i + tek sahne: canlı maç sunumu (portre, dikey saha — FAZ 00.5 kararı).
 - Canlı **üç sonuçlu kazanma şeridi** (G/B/M): `MatchEngine.AnlikOlasilik(in MatchState)`.
+- **Kritik an duraklaması** (K1 kararı): `KritikAnDedektoru` ateşlediğinde sunum durur/vurgular.
 - Skor + saat + faz; spiker akışı (`EventCount` / `GetEvent(i)`).
 - **Müdahale:** taktik dört kadran (mentalite/tempo/pres/hat), −2..+2 — **gerçek Command Bus
   zinciriyle** (`World` köprüsü dahil, Kural 1).
@@ -72,6 +73,24 @@ doğrula — 179 kapı yeşil kalmalı.
 | **Red sebebi (bus)** | `outcome.Reason` (`RejectionReason`) + `outcome.Detail` — kullanıcıya BU gösterilir |
 | Red sayacı (motor) | `eng.RejectedCommands` — yalnız SAYI, sebep taşımaz; aşağıdaki nota bak |
 | Uygulanan taktik | `eng.TacticChanges` |
+| **Kritik an** | `KritikAnDedektoru.Kontrol(in olasilik, bal.canliOlasilik.kritikAnEsigi, out sicrama)` |
+
+### Kritik an duraklaması — mekanizma hazır, YENİDEN YAZMA
+
+K1 kararının karşılığı `main`'de: `TheBadge.Sim/src/Match/KritikAn.cs`. Kullanımı:
+maç başında `det.Sifirla(eng.AnlikOlasilik(in st))`, sonra her örneklemede `det.Kontrol(...)`
+— `true` dönerse duraklama anı; `sicrama` o anın büyüklüğüdür (vurgunun şiddeti buna bağlanabilir).
+
+**ME 15.3'ün `highlight.esik`ini bu iş için KULLANMA.** O ölçüt maç başına 0,5-0,8 işaret verir
+ve **maçların yarısını boş bırakır**; sıfır duraklamalı bir maç ritim değildir. Kullanılan ölçüt
+kazanma olasılığının SIÇRAMASI — duraklama tam da sonucun maddi olarak kaydığı anda olur.
+
+Ölçülmüş davranış (`S2KritikAnRitmi` her koşuda doğruluyor):
+- eşik 0,04 → **maç başına 9,9 duraklama**, greybox'ın 8-12 blok ritmine oturuyor
+- **hiçbir maç boş değil** (%0)
+- **kadanstan bağımsız**: 1 sn ↔ 30 sn arası 30 kat aralıkta sayı 10,0 ↔ 9,5. Yani kare hızını
+  serbestçe seç; taban yalnız ateşlendiğinde sıfırlandığı için sık örnekleme aynı sıçramayı daha
+  ERKEN yakalar, daha ÇOK değil.
 
 **`MatchSummaryPacket.WinProb3*` dizilerini CANLI OKUMA.** Onlar maç sonu inceleme eğrisidir
 (dakika başı, o tick'in müdahaleleri uygulanmadan önce) ve maç bitmeden zaten dolmaz.
@@ -115,10 +134,8 @@ Canlı yol `AnlikOlasilik`tır — inceleme turunda bir P1 bulgusu tam olarak bu
 
 ## Karar maddeleri — ATİLLA'YA SORULACAK (varsayım üretme)
 
-- **K1. Sunum ritmi.** Greybox 8-12 blokluydu ve oyuncu bloklar arası müdahale ediyordu; gerçek
-  motor 90 dakika SÜREKLİ. (a) sürekli izleme, oyuncu istediği an müdahale eder; (b) motor
-  sürekli koşar ama sunum kritik anlarda durur/vurgular. **Bu, redesign'ın merkezi sorusudur** —
-  %40'ın nedeni bilinmediği için ikisi arasında ölçümle seçim yapılamıyor.
+- ~~**K1. Sunum ritmi.**~~ → **KAPANDI (2026-09-05, Atilla): (b)** — motor sürekli koşar,
+  **sunum kritik anlarda durur/vurgular.** Mekanizması ölçüldü ve `main`'e girdi, aşağıya bak.
 - **K2. UI teknolojisi.** Greybox kodla üretilen uGUI kullandı ("UI Toolkit seti FAZ 02'de").
   5G-a placeholder olduğu için uGUI devam mı, yoksa UI Toolkit'e şimdi mi geçilsin?
 - **K3. Greybox sahnesinin akıbeti.** `Greybox.unity` emekli; silinsin mi, arşiv olarak
@@ -128,6 +145,8 @@ Canlı yol `AnlikOlasilik`tır — inceleme turunda bir P1 bulgusu tam olarak bu
 
 - Unity konsolu temiz; proje derleniyor (Adım 0 raporlandı).
 - Tek maç baştan sona izlenebiliyor; şerit maç boyunca oynuyor.
+- **Duraklama ritmi hissediliyor:** bir maçta duraklama sayısı raporlanır ve 8-12 civarındadır
+  (motor tarafı `S2KritikAnRitmi` ile zaten korunuyor; ekranda GÖRÜNÜR olmalı).
 - **Taktik değişikliği şeridi ANINDA oynatıyor** (aynı tick) — motor tarafında
   `S2AnlikOlasilikCanli` bunu zaten ölçüyor; ekranda GÖRÜNÜR olmalı.
 - **Bus reddi sebebiyle gösteriliyor** (`CommandOutcome.Detail`); motor geç reddi en az
