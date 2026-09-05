@@ -166,7 +166,12 @@ Canlı yol `AnlikOlasilik`tır — inceleme turunda bir P1 bulgusu tam olarak bu
    sınırda olmak zorunda değil ama paketlere sızma olmamalı.
 6. **Determinizm:** ekran kodu maç sonucunu ETKİLEMEZ. Aynı seed + aynı komutlar = aynı maç.
 
-## Karar maddeleri — ATİLLA'YA SORULACAK (varsayım üretme)
+## Karar maddeleri — ✅ ÜÇÜ DE KAPANDI (2026-09-05)
+
+**Bu bölümde sorulacak bir şey KALMADI; kayıt olarak duruyor.** Başlığı "Atilla'ya sorulacak"
+diye okuyup durma — üç maddenin üçü de karara bağlandı ve karşılıkları brifin gövdesine işlendi.
+Yeni bir belirsizlik çıkarsa CLAUDE.md'nin kuralı zaten geçerli (varsayım üretme, seçenekleri
+artı/eksileriyle sun, karar iste) — ama o, bu listeye ait değil.
 
 - ~~**K1. Sunum ritmi.**~~ → **KAPANDI (2026-09-05, Atilla): (b)** — motor sürekli koşar,
   **sunum kritik anlarda durur/vurgular.** Mekanizması ölçüldü ve `main`'e girdi, aşağıya bak.
