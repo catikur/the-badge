@@ -8512,12 +8512,30 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         if (System.IO.Directory.Exists(servis) && !System.IO.File.Exists(servis + ".meta"))
             s2thata += "Services.meta (klasor) YOK; ";
 
-        // 3) Game.Services asmdef: var mi, adi dogru mu, Services/ altindaki her .cs onun kapsaminda mi
+        // 3) Game.Services asmdef: var mi, adi dogru mu, PLATFORM/DEFINE kapsami tuketicilerini
+        //    karsiliyor mu.
+        //    Yalniz ADA bakmak yetmez (inceleme bulgusu, Codex P2): asmdef'e
+        //    includePlatforms:["Editor"], bir excludePlatforms girdisi ya da SAGLANMAYAN bir
+        //    defineConstraints eklenirse Unity o hedef icin Game.Services'i URETMEZ; her
+        //    platformda derlenen Game.Match onu cozemez ve TelemetryLog yine erisilemez olur —
+        //    yani kapinin YAKALADIGINI IDDIA ETTIGI hatanin ta kendisi, kapi yesilken.
         string gsYolu = System.IO.Path.Combine(servis, "Game.Services.asmdef");
+        var gsInc = new List<string>(); var gsExc = new List<string>(); var gsDef = new List<string>();
         if (!System.IO.File.Exists(gsYolu)) s2thata += "Game.Services.asmdef YOK — .cs Assembly-CSharp'a duser ve asmdef'li derlemeler onu REFERANSLAYAMAZ; ";
         else using (var d = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(gsYolu)))
-            if (d.RootElement.GetProperty("name").GetString() != "Game.Services")
+        {
+            var k = d.RootElement;
+            if (k.GetProperty("name").GetString() != "Game.Services")
                 s2thata += "Game.Services.asmdef adi 'Game.Services' degil; ";
+            void Topla(string alan, List<string> hedef)
+            {
+                if (k.TryGetProperty(alan, out var dizi))
+                    foreach (var x in dizi.EnumerateArray()) hedef.Add(x.GetString());
+            }
+            Topla("includePlatforms", gsInc);
+            Topla("excludePlatforms", gsExc);
+            Topla("defineConstraints", gsDef);
+        }
 
         // 4) Logger saf C# olmali — referanssiz asmdef ancak o zaman dogru.
         if (System.IO.File.Exists(logger))
@@ -8543,6 +8561,43 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                     foreach (var r in rl.EnumerateArray()) refs.Add(r.GetString());
             if (!refs.Contains("Game.Services"))
                 s2thata += $"{etiket} 'Game.Services'i REFERANSLAMIYOR — TelemetryLog erisilemez; ";
+
+            // Saglayici, tuketicinin YASADIGI HER YERDE var olmali.
+            var tInc = new List<string>(); var tExc = new List<string>(); var tDef = new List<string>();
+            using (var d = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(yol)))
+            {
+                var k = d.RootElement;
+                void Topla2(string alan, List<string> hedef)
+                {
+                    if (k.TryGetProperty(alan, out var dizi))
+                        foreach (var x in dizi.EnumerateArray()) hedef.Add(x.GetString());
+                }
+                Topla2("includePlatforms", tInc);
+                Topla2("excludePlatforms", tExc);
+                Topla2("defineConstraints", tDef);
+            }
+            // includePlatforms bos = TUM platformlar. Saglayici daraltilmissa, tuketicinin
+            // platformlarini kapsamak zorunda.
+            if (gsInc.Count > 0)
+            {
+                if (tInc.Count == 0)
+                    s2thata += $"Game.Services includePlatforms=[{string.Join(",", gsInc)}] ile daraltilmis ama " +
+                               $"{etiket} TUM platformlarda derleniyor — daraltilan hedeflerde TelemetryLog erisilemez; ";
+                else
+                    foreach (var pl in tInc)
+                        if (!gsInc.Contains(pl))
+                            s2thata += $"Game.Services '{pl}' platformunda YOK ama {etiket} orada derleniyor; ";
+            }
+            // Saglayicinin disladigi bir platformda tuketici yasiyorsa kirilir.
+            foreach (var pl in gsExc)
+                if ((tInc.Count == 0 || tInc.Contains(pl)) && !tExc.Contains(pl))
+                    s2thata += $"Game.Services '{pl}' platformunu DISLIYOR ama {etiket} orada derleniyor; ";
+            // Saglayicida olup tuketicide OLMAYAN bir define kisiti: kisit saglanmazsa saglayici
+            // dusuyor, tuketici derlenmeye devam ediyor ve referans cozulmuyor.
+            foreach (var dc in gsDef)
+                if (!tDef.Contains(dc))
+                    s2thata += $"Game.Services defineConstraints '{dc}' tasiyor, {etiket} tasimiyor — " +
+                               $"kisit saglanmazsa saglayici duser ve referans cozulmez; ";
 
             // 6) HARITA SURUKLENMESI: UNITY_SETUP.md'nin asmdef tablosu asmdef ile ayni seyi
             //    soylemeli. Bu tablo iki kez bayatladi ve bir keresinde ona dayanarak YANLIS bir
@@ -8581,7 +8636,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     if (s2thata.Length > 0) failures += Fail("S2TelemetriErisimi", s2thata);
     else Pass("S2TelemetriErisimi(TelemetryLog ice aktarilan klasorde + .meta tam + Game.Services asmdef'i + " +
               "logger saf C# + Game.Match ve test aynasi Game.Services'i referansliyor + " +
-              "UNITY_SETUP.md haritasi asmdef ile BIREBIR ayni (cift yonlu))");
+              "UNITY_SETUP.md haritasi asmdef ile BIREBIR ayni (cift yonlu) + platform/define kapsami tuketicileri karsiliyor)");
 }
 
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");
