@@ -16,11 +16,16 @@ playtest koşulmaz.*
 ## Önkoşul — ÖNCE BUNU DOĞRULA (Adım 0)
 
 `main` üç paylaşılan paketi Unity paketi olarak bağladı (ADR-002): `com.thebadge.sim`,
-`com.thebadge.commandbus`, `com.thebadge.world`. **Bunların Unity'de gerçekten derlendiği
-HENÜZ KANITLANMADI** — S1'i yazan ortamda Unity yok, kapı yalnız yapısal koşulları ölçüyor
-(`S1UnityPaketSiniri`).
+`com.thebadge.commandbus`, `com.thebadge.world`.
 
-Projeyi aç ve konsolu kontrol et. Beklenen: hata/uyarı yok, üç paket Packages altında görünüyor.
+**→ ARTIK KANITLANDI (PR #39).** Bu brif yazıldığında değildi — S1'i yazan ortamda Unity yok ve
+`S1UnityPaketSiniri` yalnız yapısal koşulları ölçer. Yerel oturum derleyiciye sordu:
+`CompilationPipeline` çıktısı `Game.Match refs=[TheBadge.Sim, TheBadge.CommandBus,
+TheBadge.World, Game.Services]` veriyor ve `Game.Services.dll` üretiliyor; **EditMode 22/22
+yeşil.** Üç paket Unity'de gerçekten çözülüyor ve derleniyor.
+
+Yine de projeyi ilk kez açıyorsan konsolu bir kez kontrol et (yerel Unity sürümü/önbellek farkı).
+Beklenen: hata/uyarı yok, üç paket Packages altında görünüyor.
 Patlarsa muhtemel sebepler ve ilk bakılacak yerler:
 - **CS0579 yinelenen öznitelik** → paket klasöründe `obj/`/`bin/` kalmış. Üç pakette
   `Directory.Build.props` çıktıyı repo kökündeki `artifacts/`e yönlendiriyor; o dosyalar

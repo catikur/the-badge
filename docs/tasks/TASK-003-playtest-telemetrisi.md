@@ -3,6 +3,16 @@
 > TASK-002'nin turunu koşulabilir kılar. Bağlayıcı üst belge:
 > `docs/briefs/BRIEF_5G_DIKEY_DILIM.md`; tur tanımı `docs/PLAYTEST_3G.md`.
 
+> ## ✅ UYGULANDI — PR #39 (2026-09-06)
+>
+> Bu brif **koşuldu**; aşağısı artık yapılacak iş değil, uygulanan tasarımın gerekçesi.
+> Kod: `Assets/Match/MacTelemetri.cs` (olay adları tek dosyada) + `MacSunumEkrani` çağrıları;
+> yazıcı `Assets/Services/TelemetryLog.cs` yeniden yazılmadan kullanıldı. Bant dışı hata
+> uyarısı ekranda (`TelemetriUyarisiTazele`). Örnek çıktı:
+> `docs/samples/playtest_ornek_oturum.jsonl`. Karar kaydı: `docs/DECISIONS.md` → *S2/T3 UYGULANDI*.
+>
+> **Sıradaki iş kod değil, TURU KOŞMAK.**
+
 ## Objective
 
 Mülakatlı gözlem turunun ölçebilmesi için **yerel bir JSONL olay logu**. Tur kapısının iki

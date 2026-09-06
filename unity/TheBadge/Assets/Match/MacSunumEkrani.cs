@@ -46,6 +46,15 @@ namespace TheBadge.Match
         int macNo;
         bool bitisGosterildi;
 
+        // ---- telemetri (TASK-003). Ekran olay ADI bilmez; `MacTelemetri`ye çağrı yapar.
+        MacTelemetri telemetri;
+        float macGercekSure;          // maçın GERÇEK zamanda izlenme süresi (kapı metriği)
+        uint sonIlerlemeTick;
+        byte sonDevre;
+        int sonKritikAnSayisi, sonTaktikDegisiklik;
+        Label telemetriUyariEt;
+        VisualElement telemetriUyariKutu;
+
         // Kadranların İSTENEN değeri (UI niyeti). Motorun UYGULADIĞI değer ayrı gösterilir:
         // komut ME 14.2'ye göre güvenli bir anda uygulanır, o yüzden ikisi bir süre ayrışır ve
         // bu ayrışma kullanıcıdan SAKLANMAZ.
@@ -75,14 +84,40 @@ namespace TheBadge.Match
         {
             ayarlar.Dogrula();
             balans = BalansKaynagi.Yukle();
+            // TELEMETRİ EKRANDAN ÖNCE: kurulumu başarısız olursa `ArayuzKur` uyarı şeridini
+            // açabilsin. Kurulum İSTİSNA ATMAZ — telemetri oynanışı düşürmez (Kural 3).
+            telemetri = MacTelemetri.Kur(TelemetriDizini(), Application.version, SystemInfo.deviceModel);
             ArayuzKur();
             MacBaslat();
+        }
+
+        /// <summary>Telemetri dizini. Ayarlardaki geçersiz kılma DOLUYSA o kullanılır — kabul
+        /// ölçütünün "yazılamayan bir dizine yönlendir" senaryosu bu kapıdan koşulur.</summary>
+        string TelemetriDizini()
+            => string.IsNullOrEmpty(ayarlar.telemetriDiziniGecersizKil)
+                ? System.IO.Path.Combine(Application.persistentDataPath, "telemetry")
+                : ayarlar.telemetriDiziniGecersizKil;
+
+        void OnDisable()
+        {
+            // TEMİZ ÇIKIŞ işareti. Yokluğu terk demektir — o yüzden buna GÜVENİLMEZ, yalnız
+            // yazılır (TASK-003: terk çıkarsanır, raporlanmaz).
+            telemetri?.SeansBitti(macNo + 1);
+            telemetri?.Dispose();
+            telemetri = null;
         }
 
         // ------------------------------------------------------------------ MAÇ YAŞAM DÖNGÜSÜ
 
         void MacBaslat()
         {
+            // ÖNCEKİ MAÇ BİTMEDEN yeni maça geçildiyse onu `tamamlandi=0` ile kapat: "bir maç
+            // daha" sinyali ancak biten maçlarla sayılabilir, yarıda bırakılan da bir veridir.
+            if (kosucu != null && !kosucu.Bitti)
+                telemetri?.MacBitti(macNo, kosucu.EvGol, kosucu.DeplasmanGol, macGercekSure,
+                                    kosucu.KritikAnSayisi, koprusu?.MotoraIletilen ?? 0,
+                                    busRedSayaci, kosucu.MotorRedSayaci, false);
+
             kosucu = new MacKosucu(balans.Sim, tohum + (ulong)macNo, ayarlar.kritikAnOrneklemeTick);
             // KÖPRÜ MOTORUN KENDİ KUYRUĞUNA BAĞLANIR — komut ancak dört kapıdan geçince oraya
             // düşer. Kuyruğun kendisi bu sınıfa hiç verilmez (bkz. `MacKosucu.KopruKur`).
@@ -94,6 +129,9 @@ namespace TheBadge.Match
             duraklamaKatman.style.display = DisplayStyle.None;
             bitisKatman.style.display = DisplayStyle.None;
             bitisGosterildi = false;
+            macGercekSure = 0f; sonIlerlemeTick = 0; sonDevre = 0;
+            sonKritikAnSayisi = 0; sonTaktikDegisiklik = 0;
+            telemetri?.MacBasladi(macNo, tohum + (ulong)macNo);
             // KOŞULLU YAZILAN ETİKETLER ELLE TEMİZLENİR. `Ciz()` her kare yazdığı etiketleri
             // zaten tazeliyor; bu ikisi ise YALNIZ olay olunca yazılıyor, yani yeni maça
             // önceki maçın satırı olarak taşınıyorlardı. `taktikEtkiEt` turun ölçtüğü
@@ -103,8 +141,8 @@ namespace TheBadge.Match
             duraklamaEt.text = "";
             // HIZ 1x'E DÖNER. Maç ATLA'dayken bitirilip "bir maç daha" denince yeni maç da
             // anında bitiyordu — gözlem turunda "bir maç daha" sinyalini ölçmek imkânsız olurdu
-            // (Play modunda görüldü).
-            HizSec(Hiz.Bir);
+            // (Play modunda görüldü). OTOMATİK: telemetriye kullanıcı eylemi olarak yazılmaz.
+            HizSec(Hiz.Bir, kullaniciEylemi: false);
         }
 
         void Update()
@@ -114,6 +152,10 @@ namespace TheBadge.Match
             if (redMesajiKalan > 0) redMesajiKalan -= Time.deltaTime;
 
             if (kosucu.Bitti) { BitisGoster(); Ciz(); return; }
+
+            // MAÇIN GERÇEK ZAMANDA İZLENME SÜRESİ — kapı metriği ("maç başına izleme süresi").
+            // Duraklama da izlemedir, o yüzden erken dönüşlerden ÖNCE sayılır.
+            macGercekSure += Time.deltaTime;
 
             // DURAKLAMA: tick İŞLENMEZ. Motor yavaşlatılmaz, sunum durur — maç sonucu
             // etkilenmez (Kural 6).
@@ -129,7 +171,15 @@ namespace TheBadge.Match
             {
                 // ATLA: duraklamaya girilmez ama kritik anlar YİNE SAYILIR — ritim raporu
                 // hızdan bağımsız kalsın diye.
-                for (int n = 0; n < ayarlar.atlaTickTavani && !kosucu.Bitti; n++) kosucu.Ilerlet(1);
+                // TELEMETRİ HER TICK'TE İŞLENİR, toplu DEĞİL (inceleme bulgusu, codex P1).
+                // Önce 4000 tick'lik döngüyü tek bir bayrağa indirip döngüden SONRA bir kez
+                // işliyordum; `MacKosucu` yalnız EN SON kritik anı taşıdığı için aradakiler
+                // kayboluyordu — commit'lenen örnekte `kritik_an` sıra 2'den başlıyordu, sıra 1
+                // yutulmuştu. Bu, turun çekirdek oranının (duraklama başına müdahale) PAYDASINI
+                // bozar. `TelemetriTick` zaten değişim-tetiklemeli, bu yüzden her tick çağırmak
+                // hem doğru hem ucuz.
+                for (int n = 0; n < ayarlar.atlaTickTavani && !kosucu.Bitti; n++)
+                    TelemetriTick(kosucu.Ilerlet(1));
                 Ciz();
                 return;
             }
@@ -140,7 +190,9 @@ namespace TheBadge.Match
             if (butce > 0)
             {
                 tickBirikimi -= butce;
-                if (kosucu.Ilerlet(butce) && ayarlar.duraklamaSaniye > 0f)
+                bool kritikAn = kosucu.Ilerlet(butce);
+                TelemetriTick(kritikAn);
+                if (kritikAn && ayarlar.duraklamaSaniye > 0f)
                 {
                     // `> 0` ŞARTI ZORUNLU: süre 0 iken katman `Flex` yapılıyor ama aşağıdaki
                     // geri sayım hiç çalışmadığı için bir daha KAPANMIYORDU — maç kalıcı bir
@@ -157,10 +209,53 @@ namespace TheBadge.Match
             Ciz();
         }
 
+        /// <summary>Tick bloğundan sonra düşen telemetri olayları. TEK YERDEN çağrılır ki
+        /// hız modları arasında olay kümesi ayrışmasın (ATLA'da da aynı satırlar düşer).</summary>
+        void TelemetriTick(bool kritikAnAtesledi)
+        {
+            if (telemetri == null) return;
+
+            // KRİTİK AN — `mudahale` ile eşleştirildiğinde turun en kritik oranını verir.
+            if (kritikAnAtesledi && kosucu.KritikAnSayisi != sonKritikAnSayisi)
+            {
+                sonKritikAnSayisi = kosucu.KritikAnSayisi;
+                telemetri.KritikAn(macNo, kosucu.KritikAnSayisi, kosucu.SonSicrama,
+                                   kosucu.Tick, kosucu.Olasilik.Ev);
+            }
+
+            // ŞERİDİN HAREKETİ — motor taktiği UYGULADIĞI an; gönderim anında "sonra" yok.
+            if (kosucu.TaktikEtkisiVar && kosucu.TaktikDegisiklik != sonTaktikDegisiklik)
+            {
+                sonTaktikDegisiklik = kosucu.TaktikDegisiklik;
+                telemetri.TaktikUygulandi(macNo, kosucu.TaktikTick,
+                                          kosucu.TaktikOncesi.Ev, kosucu.TaktikSonrasi.Ev);
+            }
+
+            // FAZ — devre değişimi olduğu ANDA yazılır ("nerede bıraktı" okuması için).
+            if (kosucu.Devre != sonDevre)
+            {
+                sonDevre = kosucu.Devre;
+                telemetri.Faz(macNo, "devre_" + sonDevre, kosucu.Tick);
+            }
+
+            // İLERLEME — terk terminal olaya bağlanamadığı için konum SON SATIRDAN okunur.
+            uint aralik = (uint)(ayarlar.telemetriIlerlemeDakika * 60 * MatchEngine.TicksPerSecond);
+            if (kosucu.Tick >= sonIlerlemeTick + aralik)
+            {
+                sonIlerlemeTick = kosucu.Tick;
+                telemetri.Ilerleme(macNo, kosucu.Tick, kosucu.EvGol, kosucu.DeplasmanGol,
+                                   kosucu.Devre, macGercekSure);
+            }
+        }
+
         void BitisGoster()
         {
             if (bitisGosterildi) return;
             bitisGosterildi = true;
+            telemetri?.Faz(macNo, "mac_sonu", kosucu.Tick);
+            telemetri?.MacBitti(macNo, kosucu.EvGol, kosucu.DeplasmanGol, macGercekSure,
+                                kosucu.KritikAnSayisi, koprusu.MotoraIletilen,
+                                busRedSayaci, kosucu.MotorRedSayaci, true);
             bitisKatman.style.display = DisplayStyle.Flex;
             // "(beklenen 8-12)" DİYE YAZMIYORUZ: 8-12 bir ORTALAMA (K1, 200 maç). Tek maçta
             // 24 maçlık ölçümde 4 ile 17 arası görüldü ve ikisi de sağlıklı. Bandı tek maçın
@@ -201,7 +296,16 @@ namespace TheBadge.Match
             // GİRMEZ; `MatchState`e dokunmaz, determinizmi etkilemez.
             long saat = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
+            double evOnce = kosucu.Olasilik.Ev;
+            // DURAKLAMA PENCERESİ: müdahale duraklama sırasında mı geldi, yoksa an geçip
+            // gitti mi? `kritik_an` ile bu alan birlikte okunduğunda turun çekirdek sorusu
+            // ("duraklamaların kaçında oyuncu bir şey yaptı") tek sorguyla cevaplanır.
+            bool duraklamada = duraklamaKalan > 0f;
+
             CommandOutcome o = koprusu.TaktikGonder(mentalite, tempo, pres, hat, macTick, saat);
+
+            telemetri?.Mudahale(macNo, macTick, mentalite, tempo, pres, hat,
+                                o.Ok, o.Ok ? null : o.Reason.ToString(), duraklamada, evOnce);
 
             if (!o.Ok)
             {
@@ -231,6 +335,7 @@ namespace TheBadge.Match
         void Ciz()
         {
             MotorRedKontrol();
+            TelemetriUyarisiTazele();
 
             int sn = (int)(kosucu.Tick / (uint)MatchEngine.TicksPerSecond);
             skorEt.text = $"EV  {kosucu.EvGol} - {kosucu.DeplasmanGol}  DEP";
@@ -274,6 +379,17 @@ namespace TheBadge.Match
 
             SahaCiz();
             SpikerCiz();
+        }
+
+        /// <summary>Telemetri bozulunca BANT DIŞI uyarıyı gösterir. Her karede bakılır çünkü
+        /// bozulma oturumun ORTASINDA da olabilir; bir kez kurulup bırakılan bir kontrol o
+        /// senaryoyu kaçırırdı.</summary>
+        void TelemetriUyarisiTazele()
+        {
+            bool bozuk = telemetri != null && !telemetri.Calisiyor;
+            telemetriUyariKutu.style.display = bozuk ? DisplayStyle.Flex : DisplayStyle.None;
+            if (bozuk && telemetriUyariEt.text.Length == 0)
+                telemetriUyariEt.text = "⚠ TELEMETRİ YAZILAMIYOR — TUR ÖLÇÜLEMEZ\n" + telemetri.HataMesaji;
         }
 
         void SahaCiz()
@@ -422,6 +538,21 @@ namespace TheBadge.Match
             kok.style.paddingLeft = 8; kok.style.paddingRight = 8;
             kok.style.paddingTop = 8; kok.style.paddingBottom = 8;
 
+            // ---- TELEMETRİ UYARI ŞERİDİ (TASK-003 Kural 3): BANT DIŞI bildirim.
+            // Hatayı telemetri dosyasına yazmak aynı bozuk yazıcıyı kullanmak olurdu ve dosya
+            // yalnızca EKSİK görünürdü — ölçümün başarısız olduğuna dair iz kalmazdı. Gözlemci
+            // odada olduğu için en hızlı sinyal EKRANDIR. Kalıcı iz `PlayerPrefs` + yanına
+            // yazılmaya ÇALIŞILAN `telemetry_error.txt` (bkz. `MacTelemetri.Kur`).
+            // Şerit kalıcıdır: süreyle kaybolmaz, oturum boşa gitmeden fark edilsin.
+            // ŞERİT HER ZAMAN KURULUR, GİZLİ BAŞLAR. Önce yalnız kurulum anında yaratılıyordu;
+            // oysa yazma OTURUM ORTASINDA da bozulabiliyor (disk dolar) ve o senaryoda uyarı
+            // hiç belirmezdi (inceleme bulgusu, codex P1). Görünürlüğü `Ciz()` her karede
+            // tazeler; şerit kalıcıdır, süreyle kaybolmaz.
+            telemetriUyariKutu = Kutu(kok, new Color(0.55f, 0.10f, 0.10f));
+            telemetriUyariEt = Yazi(telemetriUyariKutu, "", 12, Color.white);
+            telemetriUyariEt.style.whiteSpace = WhiteSpace.Normal;
+            telemetriUyariKutu.style.display = DisplayStyle.None;
+
             // ---- üst: skor + saat
             var ust = Kutu(kok, Panel);
             skorEt = Yazi(ust, "", 30, Metin); skorEt.style.unityTextAlign = TextAnchor.MiddleCenter;
@@ -535,11 +666,18 @@ namespace TheBadge.Match
             alt.Add(hizSatir);
             sayaclarEt = Yazi(alt, "", 10, Sonuk);
             sayaclarEt.style.whiteSpace = WhiteSpace.Normal;
-            HizSec(Hiz.Bir);
+            HizSec(Hiz.Bir, kullaniciEylemi: false);
         }
 
-        void HizSec(Hiz h)
+        /// <summary>`kullaniciEylemi=false` YALNIZ otomatik sıfırlama içindir (maç başlangıcı).
+        /// Sıkılma metriği (< 3/maç) hız değişimlerini sayıyor; `MacBaslat`ın 1x'e dönüşünü
+        /// kullanıcı eylemi gibi yazmak her maça SAHTE bir sıkılma sinyali ekliyordu —
+        /// commit'lenen örnekte `match_start match=1`in hemen ardından `speed_set hiz=Bir
+        /// tick=0` görünüyordu (inceleme bulgusu, codex P1).</summary>
+        void HizSec(Hiz h, bool kullaniciEylemi = true)
         {
+            if (kullaniciEylemi && hiz != h && kosucu != null)
+                telemetri?.HizDegisti(macNo, h.ToString(), kosucu.Tick);
             hiz = h;
             for (int i = 0; i < hizDugme.Length; i++)
                 hizDugme[i].style.backgroundColor = (int)h == i
