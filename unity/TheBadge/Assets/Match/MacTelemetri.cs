@@ -39,7 +39,7 @@ namespace TheBadge.Match
         /// uyarı odadaki gözlemci içindir; bu bayrak SONRADAN bakan için.</summary>
         public const string HataBayragiAnahtari = "thebadge_telemetri_hatasi";
 
-        readonly TelemetryLog log;
+        TelemetryLog log;   // çalışma zamanı hatasında null'lanır → `Calisiyor` false olur
 
         /// <summary>Yazıcı kuruldu mu. `false` ise ekran BANT DIŞI uyarı gösterir — hatayı
         /// `session_end`e yazmak aynı bozuk yazıcıyı kullanmak olurdu ve dosya yalnızca EKSİK
@@ -83,6 +83,29 @@ namespace TheBadge.Match
             }
         }
 
+        /// <summary>TEK YAZMA NOKTASI. Kurulum başarılı olduktan SONRA da yazma patlayabilir
+        /// (disk dolar, birim çıkarılır) ve `Flush` istisnası olay çağrısından `Update`e kadar
+        /// çıkardı — Kural 3'ün ("yazma hatası oyunu düşürmez") doğrudan ihlali; üstelik tam da
+        /// brifin açıkça saydığı "oturum ortasında disk doldu" senaryosu (inceleme bulgusu,
+        /// codex P1). Artık ilk hatada yazıcı KAPANIR, durum `Calisiyor=false`'a geçer ve
+        /// bant dışı uyarı devreye girer — sessizce eksik dosya üretmek yerine.</summary>
+        void Gonder(TelemetryLog.EventBuilder b)
+        {
+            if (log == null) return;
+            try { b.Send(); }
+            catch (Exception e) { Bozuldu(e); }
+        }
+
+        void Bozuldu(Exception e)
+        {
+            HataMesaji = e.GetType().Name + ": " + e.Message;
+            try { log.Dispose(); } catch { }
+            log = null;                                   // `Calisiyor` artık false
+            PlayerPrefs.SetString(HataBayragiAnahtari, HataMesaji);
+            PlayerPrefs.Save();
+            Debug.LogWarning("[TASK-003] TELEMETRİ YAZMA HATASI (oturum ortası) — " + HataMesaji);
+        }
+
         // ------------------------------------------------------------------ OLAYLAR
         // Her metodun karşılığı TASK-003'ün "turun cevaplaması gereken soru" tablosundadır.
 
@@ -91,7 +114,7 @@ namespace TheBadge.Match
         public void MacBasladi(int macNo, ulong tohum)
         {
             if (log == null) return;
-            log.Event(OMacBasladi).Num("match", macNo).Str("seed", tohum.ToString()).Send();
+            Gonder(log.Event(OMacBasladi).Num("match", macNo).Str("seed", tohum.ToString()));
         }
 
         /// <summary>`tamamlandi=false` → oyuncu maçı bitirmeden yeni maça geçti/bıraktı.
@@ -100,20 +123,19 @@ namespace TheBadge.Match
                              int duraklama, int mudahale, int busRed, int motorRed, bool tamamlandi)
         {
             if (log == null) return;
-            log.Event(OMacBitti)
+            Gonder(log.Event(OMacBitti)
                .Num("match", macNo).Str("score", evGol + "-" + depGol)
                .Num("watch_real_sec", izlemeSn)
                .Num("duraklama", duraklama).Num("mudahale", mudahale)
                .Num("bus_red", busRed).Num("motor_red", motorRed)
-               .Num("tamamlandi", tamamlandi ? 1 : 0)
-               .Send();
+               .Num("tamamlandi", tamamlandi ? 1 : 0));
         }
 
         /// <summary>Kapı metriği 2 (sıkılma işareti): hız değişimi. "atla" bir SKIP sinyalidir.</summary>
         public void HizDegisti(int macNo, string hiz, uint tick)
         {
             if (log == null) return;
-            log.Event(OHiz).Num("match", macNo).Str("hiz", hiz).Num("tick", tick).Send();
+            Gonder(log.Event(OHiz).Num("match", macNo).Str("hiz", hiz).Num("tick", tick));
         }
 
         /// <summary>Duraklama ANI. `mudahale` ile birlikte okunduğunda turun EN KRİTİK oranını
@@ -122,8 +144,8 @@ namespace TheBadge.Match
         public void KritikAn(int macNo, int sira, double sicrama, uint tick, double ev)
         {
             if (log == null) return;
-            log.Event(OKritikAn).Num("match", macNo).Num("sira", sira)
-               .Num("sicrama", sicrama).Num("tick", tick).Num("ev", ev).Send();
+            Gonder(log.Event(OKritikAn).Num("match", macNo).Num("sira", sira)
+               .Num("sicrama", sicrama).Num("tick", tick).Num("ev", ev));
         }
 
         /// <summary>Müdahale GÖNDERİMİ. `duraklamada` alanı `kritik_an` ile eşleştirmeyi
@@ -133,12 +155,11 @@ namespace TheBadge.Match
                              bool kabul, string redSebebi, bool duraklamada, double evOnce)
         {
             if (log == null) return;
-            log.Event(OMudahale).Num("match", macNo).Num("tick", tick)
+            Gonder(log.Event(OMudahale).Num("match", macNo).Num("tick", tick)
                .Num("mentalite", mentalite).Num("tempo", tempo).Num("pres", pres).Num("hat", hat)
                .Num("kabul", kabul ? 1 : 0).Str("red", redSebebi ?? "")
                .Num("duraklamada", duraklamada ? 1 : 0)
-               .Num("ev_once", evOnce)
-               .Send();
+               .Num("ev_once", evOnce));
         }
 
         /// <summary>Şeridin HAREKETİ. `mudahale`den AYRI bir olay, çünkü gönderim anında
@@ -148,9 +169,9 @@ namespace TheBadge.Match
         public void TaktikUygulandi(int macNo, uint tick, double evOnce, double evSonra)
         {
             if (log == null) return;
-            log.Event(OTaktikUygulandi).Num("match", macNo).Num("tick", tick)
+            Gonder(log.Event(OTaktikUygulandi).Num("match", macNo).Num("tick", tick)
                .Num("ev_once", evOnce).Num("ev_sonra", evSonra)
-               .Num("fark", evSonra - evOnce).Send();
+               .Num("fark", evSonra - evOnce));
         }
 
         /// <summary>"NEREDE BIRAKTI" — düzenli aralıklarla düşen ilerleme satırı. Terk
@@ -159,23 +180,23 @@ namespace TheBadge.Match
         public void Ilerleme(int macNo, uint tick, int evGol, int depGol, byte devre, double izlemeSn)
         {
             if (log == null) return;
-            log.Event(OIlerleme).Num("match", macNo).Num("tick", tick)
+            Gonder(log.Event(OIlerleme).Num("match", macNo).Num("tick", tick)
                .Str("score", evGol + "-" + depGol).Num("devre", devre)
-               .Num("watch_real_sec", izlemeSn).Send();
+               .Num("watch_real_sec", izlemeSn));
         }
 
         /// <summary>Faz/ekran geçişi — OLDUĞU ANDA yazılır (devre arası, maç sonu ekranı...).</summary>
         public void Faz(int macNo, string ad, uint tick)
         {
             if (log == null) return;
-            log.Event(OFaz).Num("match", macNo).Str("ad", ad).Num("tick", tick).Send();
+            Gonder(log.Event(OFaz).Num("match", macNo).Str("ad", ad).Num("tick", tick));
         }
 
         /// <summary>TEMİZ ÇIKIŞ işareti — bağımlılık DEĞİL. Yokluğu terk demektir.</summary>
         public void SeansBitti(int toplamMac)
         {
             if (log == null) return;
-            log.Event(OSeansBitti).Num("mac_sayisi", toplamMac).Send();
+            Gonder(log.Event(OSeansBitti).Num("mac_sayisi", toplamMac));
         }
 
         public void Dispose() => log?.Dispose();

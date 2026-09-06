@@ -156,6 +156,38 @@ namespace TheBadge.Match.Tests
             Assert.AreEqual("1-1", (string)sonIlerleme["score"]);
         }
 
+        /// <summary>OTURUM ORTASINDA yazma bozulursa: oyun DÜŞMEZ, durum başarısıza geçer ve
+        /// bant dışı işaret düşer. Kurulum başarılı olduktan sonraki hata yolu bu — brifin
+        /// açıkça saydığı "disk doldu" senaryosu (inceleme bulgusu, codex P1).
+        ///
+        /// Disk dolmasını testte zorlayamayız; aynı kod yolunu (yazma istisna atıyor) yazıcıyı
+        /// kapatarak deterministik olarak üretiyoruz.</summary>
+        [Test]
+        public void OturumOrtasindaYazmaBozulursa_OyunDusmez_DurumBasarisizaGecer()
+        {
+            var t = MacTelemetri.Kur(dizin, "test-0.1", "harness");
+            Assert.IsTrue(t.Calisiyor, "kurulum başarısız — test geçersiz");
+            t.MacBasladi(0, 1UL);
+
+            t.Dispose();                       // yazıcı artık kullanılamaz
+            UnityEngine.PlayerPrefs.DeleteKey(MacTelemetri.HataBayragiAnahtari);
+
+            // Uyarı bekleniyor: `Bozuldu` Debug.LogWarning yazıyor.
+            UnityEngine.TestTools.LogAssert.ignoreFailingMessages = true;
+            Assert.DoesNotThrow(() => t.KritikAn(0, 1, 0.05, 100, 0.5),
+                "yazma hatası olay çağrısından dışarı sızdı — Update'i düşürürdü (Kural 3)");
+            UnityEngine.TestTools.LogAssert.ignoreFailingMessages = false;
+
+            Assert.IsFalse(t.Calisiyor, "yazıcı bozulduğu hâlde 'çalışıyor' göründü");
+            Assert.IsNotEmpty(t.HataMesaji ?? "", "hata mesajı yok — sessizce yutulmuş");
+            Assert.IsTrue(UnityEngine.PlayerPrefs.HasKey(MacTelemetri.HataBayragiAnahtari),
+                "oturum ortası hatada kalıcı bayrak bırakılmadı");
+
+            // Sonraki çağrılar da sessiz ve güvenli olmalı.
+            Assert.DoesNotThrow(() => { t.MacBitti(0, 0, 0, 1, 0, 0, 0, 0, false); t.SeansBitti(1); });
+            UnityEngine.PlayerPrefs.DeleteKey(MacTelemetri.HataBayragiAnahtari);
+        }
+
         [Test]
         public void Ayarlar_IlerlemeAraligiSifirKabulEdilmez()
         {
