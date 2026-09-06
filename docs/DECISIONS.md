@@ -3344,6 +3344,30 @@ edicilik sorunu) KENDİ ölçümümle yakalamıştım. Yani örüntü gerçek am
 Dört örnekli bir kural, kendi kanıt tabanını abartmış olurdu — ki bu tam olarak
 "yapıldığını hatırladığın şey, ölçülmüş şey değildir" kuralının yasakladığı şey.
 
+#### KESKİNLEŞTİRME (2026-09-06): zincir BELGEDE değil, KODDA biter
+
+Üçüncü örnek geldi ve kuralın açığını gösterdi. Codex (P2) `TelemetryLog.cs`nin
+`Game.Match`ten erişilemeyeceğini söyledi. Düzeltirken zinciri sürdüm — **ama yanlış yerde
+bitirdim:** `unity/UNITY_SETUP.md`nin asmdef haritasında `Game.Match | ... | TheBadge.Sim,
+Game.Services` satırını okudum ve "`Game.Match` onu referanslıyor" diye inceleme yanıtına yazdım.
+
+Harita **istek** yazıyordu, **gerçek** değil. Diskteki `Game.Match.asmdef` 5G-a'dan beri
+`TheBadge.Sim`, `TheBadge.CommandBus`, `TheBadge.World` referanslıyor — `Game.Services` orada
+hiç yok. PR #37 belgeyi gerçeğe çekip sapmayı açıkça yazdı. Yani düzeltmem loggerı,
+`Game.Match`in **yine erişemediği** başka bir derlemeye taşıyordu: bulgunun özü kapanmamıştı,
+yalnızca yeri değişmişti.
+
+**Kural şu maddeyle tamamlanır:** zincir, onu tarif eden BELGEDE değil, **derlemenin okuduğu
+dosyada** biter. asmdef, csproj, manifest, Build Settings — kanıt bunlardır. Bir mimari harita
+kanıt DEĞİLDİR; eskimiş olabilir ve bu projede eskimişti (haritanın kendi notu: *"FAZ 01'de
+yazılmış ve FAZ 04'ten ESKİYDİ"*). Belgeye dayanan her çarede, o belgenin tarif ettiği dosya
+AÇILIP doğrulanır.
+
+**Bedeli ölçüldü:** PR #36 bu yanlış gerekçeyle merge edildi ve `TelemetryLog.cs` bugün hâlâ
+`Assets/Greybox~/` içinde — Unity'nin içe aktarmadığı klasörde. Uyarısını kendim yazdığım
+sonuç gerçekleşti: **TASK-003 bugün yazılamaz.** TASK-002 adım 2 artık iki işi birlikte
+şart koşuyor (taşıma + `Game.Match.asmdef`e `"Game.Services"` eklenmesi).
+
 ### S2 UYGULANDI — maç sunum ekranı (TASK-002, 2026-09-06)
 
 `Assets/Match/` + `Game.Match` asmdef; UI Toolkit, portre, dikey saha, placeholder şekiller.

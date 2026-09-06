@@ -18,24 +18,42 @@ metriğinden biri buna bağlı ve geçen sefer TAM DA BU eksikti.
 
 ## Ama sanıldığından KÜÇÜK — yazıcı zaten var
 
-`unity/TheBadge/Assets/Greybox/Scripts/Sim/TelemetryLog.cs` — **88 satır, sıfır UnityEngine
-referansı**, jenerik `Event(tip).Str(...).Send()` kurucusu, her satırda flush (uygulama playtest
-ortasında kapansa da veri kalır). Ürettiği biçim repoda örnekli:
+`unity/TheBadge/Assets/Greybox~/Scripts/Sim/TelemetryLog.cs` — **88 satır, sıfır UnityEngine
+referansı** (`using` satırları yalnız `System`, `System.Globalization`, `System.IO`,
+`System.Text`), jenerik `Event(tip).Str(...).Send()` kurucusu, her satırda flush (uygulama
+playtest ortasında kapansa da veri kalır). Ürettiği biçim repoda örnekli:
 `docs/samples/telemetry_ornek_oturum.jsonl`.
+
+**Dikkat: yol `Greybox~`** — tilde'li klasör. Bu dosya bugün Unity'ye içe AKTARILMIYOR;
+aşağıdaki ön koşul bölümüne bak.
 
 **YENİDEN YAZMA.** Yapılacak iş yazıcı değil, **olay kümesi**.
 
-## ⚠️ SIRA TUZAĞI — arşivden ÖNCE çıkar
+## 🛑 ÖN KOŞUL — tuzak PATLADI, önce kurtarma yapılır
 
-`TelemetryLog.cs` `Assets/Greybox/Scripts/Sim/` altında. TASK-002'nin K3 adımı kalan greybox'ı
-`Assets/Greybox~/` yapıyor ve **Unity `~` ile biten klasörü içe aktarmaz.** Yani arşivi önce
-yaparsan, TASK-003'ün ihtiyaç duyduğu aracı arşivlemiş olursun.
+Bu bölüm önceden bir UYARIydı (*"arşivden önce çıkar"*). **Artık uyarı değil, olmuş bir olay.**
+`main @ 56ccb2b` durumu: TASK-002'nin arşiv adımı yapıldı, taşıma adımı yapılmadı. Sonuç:
+`TelemetryLog.cs` bugün `Assets/Greybox~/Scripts/Sim/` içinde ve **Unity `~` ile biten klasörü
+içe aktarmaz** — yani yazıcı derlenmiyor, `Game.Match` onu göremiyor.
 
-Bu, aynı şeklin **üçüncü örneği** (EngineDev/`SpriteFactory` ikincisiydi) — `docs/DECISIONS.md`'de
-kural olarak yazılı: *tehlikeyi adlandıran çare, zincirin sonuna kadar sürülmeden bitmez.*
+**TASK-003'e BAŞLAMADAN ÖNCE TASK-002 adım 2 uygulanır** (`docs/tasks/TASK-002-mac-sunum-ekrani.md`).
+İki iş birlikte yapılır, biri eksik kalırsa logger yine erişilemez:
 
-**Çözüm:** `TelemetryLog.cs`'i (+ `.meta`) EngineDev taşımasıyla AYNI turda çıkar. Namespace'i
-`TheBadge.Greybox.Sim`; derlemeyi etkilemediği için kalabilir, istenirse ayrı adımda düzeltilir.
+1. `TelemetryLog.cs` (+ `.meta`) → `Assets/Services/`, yanına minimal `Game.Services` asmdef
+   (logger saf C# olduğu için asmdef'in referansı YOK).
+2. **`Game.Match.asmdef`in `references` dizisine `"Game.Services"` eklenir.** Bu satır olmadan
+   `MacSunumEkrani` `TelemetryLog`u çağıramaz.
+
+Namespace'i `TheBadge.Greybox.Sim`; derlemeyi etkilemediği için kalabilir, istenirse ayrı adımda
+düzeltilir.
+
+**Kabul kriteri olarak:** bu iki iş bitmeden yazılan hiçbir telemetri kodu derlenmez — turdan
+önce Unity konsolunun temiz olduğu ve `MacSunumEkrani` içinden `TelemetryLog`a erişilebildiği
+gösterilir.
+
+Bu, aynı şeklin **üçüncü örneğiydi** (EngineDev/`SpriteFactory` ikincisiydi) ve önlenemedi —
+`docs/DECISIONS.md`'deki kural bu yüzden keskinleştirildi: *tehlikeyi adlandıran çare, zincirin
+sonuna kadar sürülmeden bitmez* + **zincir belgede değil, derlemenin okuduğu dosyada biter.**
 
 ## Scope
 
@@ -123,6 +141,8 @@ Greybox'ta bu ölçülmemişti; %40'ın nedenini bilmememizin bir sebebi de bu.
 
 ## Sıra
 
-TASK-002 ekranı → **TASK-003 telemetrisi** → mülakatlı tur. Telemetri turu bloklar, ekranı
-BLOKLAMAZ: ekran koşarken paralel yazılabilir. Ama **arşiv adımından ÖNCE** `TelemetryLog.cs`
-çıkarılmış olmalı.
+TASK-002 ekranı → **TASK-002 adım 2 kurtarması** → **TASK-003 telemetrisi** → mülakatlı tur.
+
+Telemetri turu bloklar, ekranı BLOKLAMAZ: ekran koşarken paralel yazılabilir. **Ama arşiv
+adımı ZATEN YAPILDI** — o yüzden "önce çıkar" seçeneği kalmadı; yukarıdaki ön koşul bölümündeki
+kurtarma (taşıma + `Game.Match` referansı) TASK-003'ün ilk işidir.
