@@ -76,6 +76,13 @@ yalnız sahne + bootstrap diyordum ve bu, önlemeye çalıştığım şeyi yapar
 Balance dosyasını **repo kökünden** okuyor (`Application.dataPath/../../../balance/sim.balance.json`),
 `Greybox/Resources/greybox.balance.json`dan DEĞİL — o dosya arşivle kalabilir.
 
+**UYGULAMA DURUMU (main @ `56ccb2b`, PR #37 sonrası kontrol edildi):**
+Adım 1 ve 3 YAPILDI — `Assets/EngineDev/` sahne + bootstrap + `SpriteFactory` ile duruyor,
+kalan greybox `Assets/Greybox~/` olarak arşivlendi. **Adım 2 YAPILMADI:** `TelemetryLog.cs`
+bugün hâlâ `Assets/Greybox~/Scripts/Sim/TelemetryLog.cs` içinde, yani Unity'nin içe AKTARMADIĞI
+klasörde. Tam da uyarılan sonuç gerçekleşti: **TASK-003 bugün yazılamaz.** Aşağıdaki adım 2
+(taşıma + `Game.Match` referansı) turdan önce yapılmalı.
+
 Sıra:
 1. **İlk ÜÇ dosya** (sahne + bootstrap + `SpriteFactory`, `.meta`larıyla) `Assets/EngineDev/`
    altına taşınır, kendi asmdef'iyle, referans `TheBadge.Sim`. Namespace'ler `TheBadge.Greybox.*`
@@ -83,11 +90,25 @@ Sıra:
 2. **DÖRDÜNCÜ dosya `TelemetryLog.cs` EngineDev'e GİRMEZ** (inceleme bulgusu, Codex P2). Onu
    geliştirme aracı derlemesine koymak, üretim sunum derlemesinin (`Game.Match`) o araca bağımlı
    olması demekti — asmdef sınırları yüzünden başka türlü erişemezdi.
-   **Doğru yer zaten `unity/UNITY_SETUP.md`'nin haritasında yazılı:**
-   `Game.Services | Nakama istemcisi, save/load, **telemetri**`, ve `Game.Match` onu referanslıyor.
-   O yüzden `TelemetryLog.cs` `Assets/Services/` altına, minimal bir `Game.Services` asmdef'iyle
-   konur — logger saf C# olduğu için bu asmdef'in şimdilik REFERANSI YOK; haritadaki
-   `Game.Commands` / `TheBadge.World` bağları save/load ve Nakama geldiğinde (S3) eklenir.
+   Hedef yer `unity/UNITY_SETUP.md`'nin asmdef haritasında yazılı:
+   `Game.Services | Nakama istemcisi, save/load, **telemetri**`.
+
+   **⚠️ AMA HARİTA KODU TARİF ETMİYOR — ikinci tur bulgusu (PR #37 sonrası).** Harita
+   `Game.Match`i `Game.Services` üzerinden bağlıyordu; diskteki `Game.Match.asmdef` ise hiç
+   öyle demiyor — referansları `TheBadge.Sim`, `TheBadge.CommandBus`, `TheBadge.World`.
+   PR #37 belgeyi gerçeğe çekti ve sapmayı açıkça yazdı. Yani **"haritada yazıyor" tek başına
+   yetmez, referans ELLE eklenir.** İki iş BİRLİKTE yapılır; biri eksik kalırsa logger yine
+   erişilemez ve düzeltme hiçbir şey düzeltmemiş olur:
+
+   - `TelemetryLog.cs` (+ `.meta`) `Assets/Services/` altına taşınır, yanına minimal bir
+     `Game.Services` asmdef konur. Logger saf C# (`using` satırları yalnız `System`,
+     `System.Globalization`, `System.IO`, `System.Text` — doğrulandı), bu yüzden asmdef'in
+     şimdilik **referansı YOK**.
+   - **`Game.Match.asmdef`in `references` dizisine `"Game.Services"` EKLENİR.** Bu satır
+     olmadan `MacSunumEkrani` `TelemetryLog`u göremez ve TASK-003 yazılamaz.
+
+   Haritadaki `Game.Commands` / `TheBadge.World` bağları save/load ve Nakama geldiğinde (S3)
+   eklenir; `Game.Services`i şimdi tam kurmak TASK-002 kapsamı dışıdır.
 3. Kalan greybox `Assets/Greybox~/` olarak yeniden adlandırılır. Unity `~` ile biten klasörleri
    içe aktarmaz: **dosyalar git'te kalır, derlenmez, bakım yükü olmaz.**
 4. **Bilinen bedel (kabul edilmiş):** dört EditMode test dosyası (`FlowSimTests`,
