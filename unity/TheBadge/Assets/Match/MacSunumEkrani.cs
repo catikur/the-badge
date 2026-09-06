@@ -94,6 +94,13 @@ namespace TheBadge.Match
             duraklamaKatman.style.display = DisplayStyle.None;
             bitisKatman.style.display = DisplayStyle.None;
             bitisGosterildi = false;
+            // KOŞULLU YAZILAN ETİKETLER ELLE TEMİZLENİR. `Ciz()` her kare yazdığı etiketleri
+            // zaten tazeliyor; bu ikisi ise YALNIZ olay olunca yazılıyor, yani yeni maça
+            // önceki maçın satırı olarak taşınıyorlardı. `taktikEtkiEt` turun ölçtüğü
+            // "aynı tick" sinyalini taşıdığı için bu, yeni tohuma AİT SANILAN bir sayı
+            // gösterirdi — gözlem turunda yanlış veri (inceleme bulgusu, cursor).
+            taktikEtkiEt.text = "";
+            duraklamaEt.text = "";
             // HIZ 1x'E DÖNER. Maç ATLA'dayken bitirilip "bir maç daha" denince yeni maç da
             // anında bitiyordu — gözlem turunda "bir maç daha" sinyalini ölçmek imkânsız olurdu
             // (Play modunda görüldü).
@@ -133,8 +140,14 @@ namespace TheBadge.Match
             if (butce > 0)
             {
                 tickBirikimi -= butce;
-                if (kosucu.Ilerlet(butce))
+                if (kosucu.Ilerlet(butce) && ayarlar.duraklamaSaniye > 0f)
                 {
+                    // `> 0` ŞARTI ZORUNLU: süre 0 iken katman `Flex` yapılıyor ama aşağıdaki
+                    // geri sayım hiç çalışmadığı için bir daha KAPANMIYORDU — maç kalıcı bir
+                    // "KRİTİK AN" perdesinin arkasında akardı (inceleme bulgusu, codex).
+                    // 0 geçerli bir ayardır ve "duraklama yok" demektir: kritik anlar yine
+                    // SAYILIR (ritim raporu bozulmaz), yalnız sunum durmaz. Bu, turda
+                    // "duraklama gerçekten gerekli mi" sorusunu ölçmenin yolu.
                     duraklamaKalan = ayarlar.duraklamaSaniye;
                     duraklamaKatman.style.display = DisplayStyle.Flex;
                     duraklamaEt.text = $"KRİTİK AN  ·  sıçrama {kosucu.SonSicrama:0.000}\n"
