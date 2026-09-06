@@ -3297,7 +3297,9 @@ değiştiğinde emekli kod kırılır ve birinin onu düzeltmesi gerekir.
 **SIRA ÖNEMLİ — yoksa motor test sahnesi sessizce ölür.** `Assets/Greybox/` bugün hem emekli
 greybox'ı hem de hâlâ gereken `EngineDev.unity` + `EngineDevBootstrap.cs`'i barındırıyor:
 1. EngineDev kendi klasörüne taşınır (kendi asmdef'i, referans `TheBadge.Sim`). **Taşınacak
-   ÜÇ dosya var, iki değil** (inceleme bulgusu, Codex P1): sahne, `EngineDevBootstrap.cs` ve
+   DÖRT dosya var** — `TelemetryLog.cs` de arşivden çıkmalı, çünkü TASK-003 (playtest
+   telemetrisi) ona dayanıyor ve arşivde kalırsa tur koşulamaz. Bu, aynı şeklin ÜÇÜNCÜ örneği;
+   ilk iki örnek aşağıdaki kuralda. Geri kalanı için: **ÜÇ dosya var, iki değil** (inceleme bulgusu, Codex P1): sahne, `EngineDevBootstrap.cs` ve
    **`Scripts/View/SpriteFactory.cs`** — bootstrap onu çağırıyor (`using TheBadge.Greybox.View`).
    Geride kalırsa yeni asmdef çözemez ve sahne derlenmez; yani ilk yazdığım sıra, tam olarak
    önlemeye çalıştığı şeyi yapardı. Zincir orada bitiyor (doğrulandı: `SpriteFactory` yalnız

@@ -68,6 +68,7 @@ yalnız sahne + bootstrap diyordum ve bu, önlemeye çalıştığım şeyi yapar
 | --- | --- |
 | `Scenes/EngineDev.unity` (+ `.meta`) | motor test sahnesi |
 | `Scripts/EngineDev/EngineDevBootstrap.cs` (+ `.meta`) | sahnenin kurucusu |
+| `Scripts/Sim/TelemetryLog.cs` (+ `.meta`) | **TASK-003 buna ihtiyaç duyuyor** (playtest telemetrisi, 88 satır, UnityEngine'siz). Arşivde kalırsa tur koşulamaz. **AMA EngineDev'e GİTMEZ** — adım 2. |
 | `Scripts/View/SpriteFactory.cs` (+ `.meta`) | **bootstrap bunu ÇAĞIRIYOR** (`using TheBadge.Greybox.View`; `NewSprite`/`Circle`/`Solid`). Geride kalırsa yeni asmdef onu çözemez, konsol derleme hatası verir ve sahne koşmaz. |
 
 **Zincir burada BİTİYOR (doğrulandı):** `SpriteFactory` yalnız `UnityEngine` kullanıyor.
@@ -76,16 +77,24 @@ Balance dosyasını **repo kökünden** okuyor (`Application.dataPath/../../../b
 `Greybox/Resources/greybox.balance.json`dan DEĞİL — o dosya arşivle kalabilir.
 
 Sıra:
-1. Yukarıdaki üç dosya (+ `.meta`ları) **kendi klasörüne taşınır** (ör. `Assets/EngineDev/`,
-   kendi asmdef'iyle, referans `TheBadge.Sim`). Namespace'ler `TheBadge.Greybox.*` kalabilir —
-   derlemeyi etkilemez; istenirse ayrı bir adımda düzeltilir.
-2. Kalan greybox `Assets/Greybox~/` olarak yeniden adlandırılır. Unity `~` ile biten klasörleri
+1. **İlk ÜÇ dosya** (sahne + bootstrap + `SpriteFactory`, `.meta`larıyla) `Assets/EngineDev/`
+   altına taşınır, kendi asmdef'iyle, referans `TheBadge.Sim`. Namespace'ler `TheBadge.Greybox.*`
+   kalabilir — derlemeyi etkilemez; istenirse ayrı bir adımda düzeltilir.
+2. **DÖRDÜNCÜ dosya `TelemetryLog.cs` EngineDev'e GİRMEZ** (inceleme bulgusu, Codex P2). Onu
+   geliştirme aracı derlemesine koymak, üretim sunum derlemesinin (`Game.Match`) o araca bağımlı
+   olması demekti — asmdef sınırları yüzünden başka türlü erişemezdi.
+   **Doğru yer zaten `unity/UNITY_SETUP.md`'nin haritasında yazılı:**
+   `Game.Services | Nakama istemcisi, save/load, **telemetri**`, ve `Game.Match` onu referanslıyor.
+   O yüzden `TelemetryLog.cs` `Assets/Services/` altına, minimal bir `Game.Services` asmdef'iyle
+   konur — logger saf C# olduğu için bu asmdef'in şimdilik REFERANSI YOK; haritadaki
+   `Game.Commands` / `TheBadge.World` bağları save/load ve Nakama geldiğinde (S3) eklenir.
+3. Kalan greybox `Assets/Greybox~/` olarak yeniden adlandırılır. Unity `~` ile biten klasörleri
    içe aktarmaz: **dosyalar git'te kalır, derlenmez, bakım yükü olmaz.**
-3. **Bilinen bedel (kabul edilmiş):** dört EditMode test dosyası (`FlowSimTests`,
+4. **Bilinen bedel (kabul edilmiş):** dört EditMode test dosyası (`FlowSimTests`,
    `ModelMatchTests`, `EconomyAndBusTests`, `SahneSozlesmesiTests`) koşmayı bırakır. Hepsi
    greybox'ın KENDİ koduna bakıyor (emekli `MatchModel`, `GreyboxCommandBus`, `TycoonEconomy`) —
    paylaşılan çekirdeği ölçen tek satır yok. Bu bir kapı gevşetmesi değil, ölçtüğü şey emekli.
-4. Neden bakım yükü: `Game.Greybox` asmdef'i `TheBadge.Sim`e referans veriyor. Arşivlenmezse
+5. Neden bakım yükü: `Game.Greybox` asmdef'i `TheBadge.Sim`e referans veriyor. Arşivlenmezse
    çekirdek API'si her değiştiğinde emekli kod kırılır ve birinin onu düzeltmesi gerekir.
 
 ## Context to read first
@@ -206,7 +215,11 @@ artı/eksileriyle sun, karar iste) — ama o, bu listeye ait değil.
 
 ## Sonraki adım (bu brifin DIŞINDA)
 
-Ekran koşar hâle gelince **mülakatlı gözlem turu**: 3-5 kişi, kişi başı ≥15 dk serbest oynama,
+Önce **`docs/tasks/TASK-003-playtest-telemetrisi.md`** — turun kapı metriklerinden biri
+("sıkılma işareti < 3/maç") telemetrisiz ÖLÇÜLEMEZ ve geçen turda tam da bu eksikti.
+Telemetri ekranı bloklamaz, TURU bloklar.
+
+Sonra **mülakatlı gözlem turu**: 3-5 kişi, kişi başı ≥15 dk serbest oynama,
 yönlendirme yok. `docs/PLAYTEST_3G.md` biçimi kullanılır ama **mini mülakat tablosu ve telemetri
 BU SEFER DOLDURULUR** — geçen turda doldurulmadığı için kopuş nedeni bilinmiyor ve bütün 5G-a
 o eksiği kapatmak için var.
