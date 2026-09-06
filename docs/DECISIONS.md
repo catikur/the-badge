@@ -3514,6 +3514,60 @@ oturumdu ve ilk koşuda kapıyı düşürdü. CI tek platformda (ubuntu) koşuyo
 "her platformda" iddiasını ölçmüyor, tek platformda ölçüyor.** Kapının kendisi doğru yazılmış;
 koşturulduğu yer iddiasından dar.
 
+### S2/T3 UYGULANDI — playtest telemetrisi + arşiv kurtarması (TASK-003, 2026-09-06)
+
+**ÖNCE KURTARMA — tuzak üçüncü kez patlamıştı, bu kez derlemede kapatıldı.** TASK-002'nin arşiv
+adımı `TelemetryLog.cs`i `Assets/Greybox~/` içinde bırakmıştı; Unity `~` klasörünü içe aktarmadığı
+için yazıcı derlenmiyordu. İKİ İŞ BİRLİKTE yapıldı (biri eksik kalsa düzeltme hiçbir şey
+düzeltmezdi): dosya `.meta`sıyla `Assets/Services/`e taşındı + minimal `Game.Services` asmdef
+kondu, VE `Game.Match.asmdef`in `references` dizisine `"Game.Services"` eklendi.
+**Belgeye değil derlemeye soruldu:** `CompilationPipeline` çıktısı
+`Game.Match refs=[TheBadge.Sim, TheBadge.CommandBus, TheBadge.World, Game.Services]` diyor ve
+`Game.Services.dll` üretiliyor.
+
+**YAZICI YENİDEN YAZILMADI** (Kural 2): 88 satırlık `TelemetryLog` olduğu gibi kullanılıyor.
+Yeni olan `MacTelemetri` — olay adları ve alanları TEK DOSYADA (Kural 4); ekran olay adı bilmez.
+
+**OLAY KÜMESİ SORULARDAN TÜRETİLDİ, greybox'tan kopyalanmadı.** En kritik çift `kritik_an` +
+`mudahale`: duraklamaların kaçında oyuncu bir şey yaptı, kaçında geçti. Greybox'ta bu ölçülmemişti
+ve %40'ın nedenini bilmememizin sebeplerinden biri buydu. `mudahale` satırında `duraklamada`
+alanı var, yani oran tek sorguyla okunuyor.
+
+**`taktik_uygulandi` AYRI BİR OLAY, bilerek.** Şeridin "önce/sonra" değeri gönderim anında
+HENÜZ YOKTUR — motor komutu ME 14.2'nin güvenli anında uygular. İkisini tek satıra sıkıştırmak
+ölçülmemiş bir sayıyı ölçülmüş gibi yazmak olurdu.
+
+**TERK TERMİNAL OLAYA BAĞLANMADI.** `session_end` yazılır ama yalnız TEMİZ ÇIKIŞ işaretidir;
+yokluğu terk demektir. Konum `ilerleme` satırlarından okunur (varsayılan 5 maç dakikası,
+[KALİBRE] adayı). **Ölçüldü:** uygulama koşarken dosyada 16 satır vardı, `session_end` ve
+`match_end` YOKTU, son `ilerleme` tick 15000 / 53,4 sn diyordu — yani terk gerçekten
+çıkarsanabiliyor. Temiz çıkışta `session_end` eklendi.
+
+**TELEMETRİ HATASI BANT DIŞI BİLDİRİLİYOR** (Kural 3). Hatayı `session_end`e yazmak aynı bozuk
+yazıcıyı kullanmak olurdu; dosya yalnızca EKSİK görünürdü. Bunun yerine: ekranın tepesinde
+kalıcı kırmızı şerit (gözlemci odada, en hızlı sinyal) + `PlayerPrefs` bayrağı + yanına
+yazılmaya ÇALIŞILAN `telemetry_error.txt`. **Ölçüldü:** yazılamayan bir dizine yönlendirildi,
+şerit `display=Flex` ile göründü, bayrak düştü ve **maç koşmaya devam etti** (07:02) — telemetri
+oynanışı düşürmüyor.
+
+**Örnek oturum `docs/samples/playtest_ornek_oturum.jsonl`** (geçen turda bu YAPILMAMIŞ ve rapor
+gücü kaybolmuştu): 40 satır, hepsinin geçerli JSON olduğu bağımsız doğrulandı, on olay tipinin
+onu da var. `match_start: 2` / `match_end: 1` — yani örnekte hem "bir maç daha" sinyali (kapı
+metriği 1) hem de yarıda bırakılmış bir maç var.
+
+**Unity EditMode 22/22 yeşil** (17 + 5 telemetri kapısı). Kapılardan biri her satırı `BasitJson`
+ile ayrıştırıp şemayı doğruluyor, biri terk çıkarımını, biri yazılamayan dizinde oyunun
+düşmediğini ölçüyor.
+
+**Kapsam dışı bırakılanlar (brife uygun):** analytics sağlayıcı entegrasyonu YOK (D-E kararı
+açık; SDK bağlamak ya kararı gasp eder ya atılacak kod üretir), FTUE hunisi YOK, sunucuya
+gönderim YOK — dosya cihazda kalır.
+
+**AÇIK UÇ:** `mudahale.duraklamada` alanının `1` olduğu yol canlı olarak DENENMEDİ — duraklama
+penceresi 1,6 sn ve otomasyonla o pencereye tıklamak güvenilir değil. Alan birim testinde
+kapsanıyor ve canlı yolu tek satır (`duraklamaKalan > 0f`); gözlem turunun ilk oturumunda
+gerçek bir insan tıklamasıyla doğrulanmalı.
+
 ## Bekleyen kararlar
 
 - **🔴 P0 — platformlar arası determinizm (2026-09-06).** Bulgu yukarıda; burada karar

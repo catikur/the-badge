@@ -244,6 +244,8 @@ MonoBehaviour:
     kadranMin: -2
     kadranMax: 2
     bantDisiTestDegeri: 5
+    telemetriIlerlemeDakika: 5
+    telemetriDiziniGecersizKil: 
   tohum: 20260906
   userId: 42
 --- !u!114 &2114313216
