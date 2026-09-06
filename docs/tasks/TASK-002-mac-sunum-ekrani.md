@@ -78,12 +78,19 @@ yalnız sahne + bootstrap diyordum ve bu, önlemeye çalıştığım şeyi yapar
 Balance dosyasını **repo kökünden** okuyor (`Application.dataPath/../../../balance/sim.balance.json`),
 `Greybox/Resources/greybox.balance.json`dan DEĞİL — o dosya arşivle kalabilir.
 
-**UYGULAMA DURUMU (main @ `56ccb2b`, PR #37 sonrası kontrol edildi):**
-Adım 1 ve 3 YAPILDI — `Assets/EngineDev/` sahne + bootstrap + `SpriteFactory` ile duruyor,
-kalan greybox `Assets/Greybox~/` olarak arşivlendi. **Adım 2 YAPILMADI:** `TelemetryLog.cs`
-bugün hâlâ `Assets/Greybox~/Scripts/Sim/TelemetryLog.cs` içinde, yani Unity'nin içe AKTARMADIĞI
-klasörde. Tam da uyarılan sonuç gerçekleşti: **TASK-003 bugün yazılamaz.** Aşağıdaki adım 2
-(taşıma + `Game.Match` referansı) turdan önce yapılmalı.
+**UYGULAMA DURUMU — ÜÇ ADIM DA TAMAM.**
+Adım 1 ve 3 daha önce yapılmıştı (`Assets/EngineDev/` sahne + bootstrap + `SpriteFactory`;
+kalan greybox `Assets/Greybox~/`). **Adım 2 bir süre EKSİK kaldı** — `TelemetryLog.cs`
+arşivde, yani Unity'nin içe aktarmadığı klasörde kalmıştı ve TASK-003 yazılamıyordu.
+
+Artık kapandı: logger `Assets/Services/` altında (GUID korunarak), yanında referanssız bir
+`Game.Services` asmdef'i var ve **`Game.Match.asmdef` ile test aynası `"Game.Services"`i
+referanslıyor.** İkisi birlikte yapılmasaydı taşıma hiçbir şey çözmezdi.
+
+**Bir daha sessizce bozulmasın diye kapıya bağlandı:** `S2TelemetriErisimi`
+(`shared/TheBadge.Sim.Checks`) yazıcının içe aktarılan klasörde olduğunu, `.meta`ların tam
+olduğunu, asmdef'in var olduğunu, logger'ın saf C# kaldığını ve referansın yerinde durduğunu
+Unity açmadan ölçüyor. Dört bozma senaryosunun dördünde de kırmızıya dönüyor.
 
 Sıra:
 1. **İlk ÜÇ dosya** (sahne + bootstrap + `SpriteFactory`, `.meta`larıyla) `Assets/EngineDev/`
