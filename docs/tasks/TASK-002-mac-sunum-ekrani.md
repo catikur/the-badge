@@ -68,6 +68,7 @@ yalnız sahne + bootstrap diyordum ve bu, önlemeye çalıştığım şeyi yapar
 | --- | --- |
 | `Scenes/EngineDev.unity` (+ `.meta`) | motor test sahnesi |
 | `Scripts/EngineDev/EngineDevBootstrap.cs` (+ `.meta`) | sahnenin kurucusu |
+| `Scripts/Sim/TelemetryLog.cs` (+ `.meta`) | **TASK-003 buna ihtiyaç duyuyor** (playtest telemetrisi, 88 satır, UnityEngine'siz). Arşivde kalırsa tur koşulamaz. |
 | `Scripts/View/SpriteFactory.cs` (+ `.meta`) | **bootstrap bunu ÇAĞIRIYOR** (`using TheBadge.Greybox.View`; `NewSprite`/`Circle`/`Solid`). Geride kalırsa yeni asmdef onu çözemez, konsol derleme hatası verir ve sahne koşmaz. |
 
 **Zincir burada BİTİYOR (doğrulandı):** `SpriteFactory` yalnız `UnityEngine` kullanıyor.
@@ -206,7 +207,11 @@ artı/eksileriyle sun, karar iste) — ama o, bu listeye ait değil.
 
 ## Sonraki adım (bu brifin DIŞINDA)
 
-Ekran koşar hâle gelince **mülakatlı gözlem turu**: 3-5 kişi, kişi başı ≥15 dk serbest oynama,
+Önce **`docs/tasks/TASK-003-playtest-telemetrisi.md`** — turun kapı metriklerinden biri
+("sıkılma işareti < 3/maç") telemetrisiz ÖLÇÜLEMEZ ve geçen turda tam da bu eksikti.
+Telemetri ekranı bloklamaz, TURU bloklar.
+
+Sonra **mülakatlı gözlem turu**: 3-5 kişi, kişi başı ≥15 dk serbest oynama,
 yönlendirme yok. `docs/PLAYTEST_3G.md` biçimi kullanılır ama **mini mülakat tablosu ve telemetri
 BU SEFER DOLDURULUR** — geçen turda doldurulmadığı için kopuş nedeni bilinmiyor ve bütün 5G-a
 o eksiği kapatmak için var.
