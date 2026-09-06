@@ -3342,7 +3342,170 @@ edicilik sorunu) KENDİ ölçümümle yakalamıştım. Yani örüntü gerçek am
 Dört örnekli bir kural, kendi kanıt tabanını abartmış olurdu — ki bu tam olarak
 "yapıldığını hatırladığın şey, ölçülmüş şey değildir" kuralının yasakladığı şey.
 
+### S2 UYGULANDI — maç sunum ekranı (TASK-002, 2026-09-06)
+
+`Assets/Match/` + `Game.Match` asmdef; UI Toolkit, portre, dikey saha, placeholder şekiller.
+Greybox K3 sırasına göre arşivlendi: EngineDev'in ÜÇ dosyası (`EngineDev.unity`,
+`EngineDevBootstrap.cs`, `SpriteFactory.cs`) `.meta`larıyla `Assets/EngineDev/`e taşındı ve
+kendi asmdef'ini aldı; kalan greybox `Assets/Greybox~/` oldu.
+
+**ADIM 0 KAPANDI — üç paket Unity'de GERÇEKTEN derleniyor.** Boş konsolla geçilmedi: derleme
+önbelleği atılarak (`RequestScriptCompilation(CleanBuildCache)`) her şey sıfırdan derlendi,
+konsol 0 kayıt verdi ve üç DLL `Library/ScriptAssemblies/`te YÜKLÜ doğrulandı
+(`World → Sim + CommandBus` referans zinciri ayakta). Brifin saydığı üç muhtemel sebebin
+(CS0579, C# sürümü, asmdef zinciri) hiçbiri gerçekleşmedi. **S1'in yapısal kapısı yanılmıyordu.**
+
+**Ölçülenler (Unity EditMode, 15 kapı yeşil):**
+- Duraklama ritmi 24 maçta **ortalama 11,04 · aralık 4-17 · boş maç %0**. Tek maçta 17 görülüp
+  "bant dışı" sanıldı; 24 maça bakınca SAVRULMA olduğu çıktı. Ortalamanın K1'in 9,9'undan
+  yüksek olması beklenen: placeholder kadrolar birbirine denk, denk maç daha çok sallanır.
+- Kadans bağımsızlığı Unity tarafında BAĞIMSIZ olarak yeniden ölçüldü: 1 sn → 10,75 ·
+  3 sn → 10,75 · 10 sn → 10,63 · 30 sn → 10,13. K1'in iddiası tutuyor.
+- Şerit taktiğe **AYNI TICK** cevap veriyor: tick 5442'de `G %41,0 → %47,3` (ekranda yazılı).
+  Ölçüm kareden değil, tek `Tick` çağrısının İKİ YANINDAN alınıyor.
+
+**🔴 KABUL ÖLÇÜTÜNDE ÇELİŞKİ BULUNDU — motorun geç reddi bu ekranın kapsamında ERİŞİLEMEZ.**
+Brif "bant dışı bir delta ile ikisi de (bus reddi + motor geç reddi) elle denenip raporlanır"
+diyor. `MatchEngine.ApplyCommand`da `TacticChangeCmd`in TEK geç red koşulu bant dışılıktır
+(MatchEngine.cs:2890) — ve bus onu Kapı 2'de zaten yakalıyor (`ParamOutOfBand`), yani komut
+motora HİÇ ULAŞMIYOR. İki kapı AYNI yüklemi denetliyor ve bus önce davranıyor. Bu bir kusur
+değil, CB'nin "istemci ön-doğrular" mimarisinin doğru sonucu; ama tek bir deltayla iki yolu
+birden denemek YAPISAL OLARAK mümkün değil. Motorun geç reddine ulaşan yollar başka
+aksiyonlara ait (`match.substitution` hak/uygulama anı, `match.motivation_talk` 10 dk bekleme,
+`InstructionCmd`) ve üçü de brifin kapsamı dışında. Bugün yapılan: bus reddi SEBEBİYLE
+gösteriliyor (`BUS REDDİ — ParamOutOfBand · mentalite`), motor geç reddi SAYAÇ olarak ekranda
+duruyor ve `Kural2_BusReddiMotoraUlasmaz_SebebiVar` kapısı ikisinin karışmadığını ölçüyor.
+Bekleyen kararlara yazıldı.
+
+**Ekran ayarları `MacSunumAyarlari`de toplandı, [KALİBRE] ADAYI olarak işaretli** — balance
+dosyasına konmadı: `sim.balance.json` config_hash kapsamında ve sezon içinde donuk, kare hızı
+oraya girerse replay kimliği ekran ayarıyla kirlenir. Kritik an eşiği KOPYALANMADI, balance'tan
+okunuyor. `1x = 150 tick/sn` GAME_THESIS'in "maç 5-8 dk" Session Shape'inden türetildi
+(≈57.000 tick / 150 ≈ 6,3 dk), seçilmedi.
+
+**Kabul edilen borçlar:** (1) placeholder kadro üretimi `Game.EngineDev` ile `Game.Match`te
+kopya — iki asmdef birbirine referans veremez ve fixture `TheBadge.Sim`e konamaz; S3 gerçek
+kadroyu getirince ikisi de düşer. (2) `command.bands.json` için küçük bir JSON okuyucu yazıldı
+(`BasitJson`): `JsonUtility` harita desteklemiyor, bantları koda gömmek Kural 4 ihlali olurdu,
+Newtonsoft yalnız `com.unity.ai.assistant` üzerinden geçici olarak projede.
+
+**PLAY MODU DOĞRULAMASI (headless test değil, ekranın kendisi):** maç 91:00'de `FullTime`a
+kadar koştu, bitiş ekranı geldi, "bir maç daha" yeni tohumla (20260907) temiz başlattı. Taktik
+müdahalesi, bant dışı red ve duraklama katmanı ekranda tek tek görüldü. Kayıt kareleri
+`docs/gorseller/TASK-002/`.
+
+**BUILD SETTINGS ARTIĞI — arşivlemenin bıraktığı iz (düzeltildi).** `EditorBuildSettings`
+hâlâ `Assets/Greybox/Scenes/Greybox.unity`yi gösteriyordu; sahne arşive gittiği için liste
+olmayan bir yolu işaret ediyordu ve konsola "referenced script (Unknown) is missing" düşüyordu.
+Yerine `Assets/Match/Scenes/MacSunum.unity` konuldu. **`EngineDev.unity` BUILD'E BİLEREK
+GİRMİYOR:** geliştirici sahnesidir ve balance'ı repo kökünden okur (`Application.dataPath/../../..`),
+yani bir build'de zaten çalışmaz. Bu, K3'ün "zinciri sonuna kadar sür" kuralının bir örneği daha:
+klasörü taşımak, ona İŞARET EDEN yapılandırmayı taşımıyor.
+
+**BRİFTEN İKİ BİLİNÇLİ SAPMA (kapsam genişletmesi değil, gerekçeli).**
+1. **Bitiş ekranına "BİR MAÇ DAHA" düğmesi.** Brifin madde listesinde yok. Gerekçe: turun
+   ÖLÇTÜĞÜ sinyal "bir maç daha"dır ve maç ≈6 dk iken kişi başı ≥15 dk serbest oynama için
+   her maç arası Play modunu elle yeniden başlatmak turu bozardı. Ölçüm aracının kendisi
+   ölçülecek şeyi engelliyorsa araç yanlıştır.
+2. **Spiker akışına görünürlük filtresi.** Ham olay akışı pas ağırlıklı; filtresiz altı satırın
+   altısı da "pas tamam" / "faz değişti" oluyordu (Play modu ekran görüntüsünde görüldü).
+   Filtre YALNIZ görünürlüktür: motorun olay kaydına dokunmaz, `EventCount` değişmez.
+
+**BİTİŞ EKRANI METNİ DÜZELTİLDİ — kendi ölçümüm ekrandaki cümleyi çürüttü.** Ekran önce
+"duraklama: 17 (beklenen 8-12)" yazıyordu. 8-12 bir ORTALAMA; tek maçta 4-17 sağlıklı.
+O cümle gözlem turundaki kişiye NORMAL bir maçı "bozuk" diye okuturdu — yani sunumu değil,
+ekranın kendi yanlış beyanını ölçerdik. Metin "(ortalama 8-12; tek maçta 4-17 normal)" oldu.
+
+**🔴 `Sim.Checks` BU OTURUMDA KOŞMADI — makinede .NET SDK yok.** PATH, `/usr/local/share/dotnet`,
+Homebrew, mise/asdf tarandı: yok (`~/.dotnet` yalnız Temmuz'dan kalma telemetri önbelleği).
+**Unity'nin getirdiği `dotnet` bu işi GÖREMEZ:** `Scripting/NetCoreRuntime` runtime-only (SDK
+klasörü yok) ve .NET 6; `Sim.Checks` `net8.0` hedefliyor. Bu oturumun teslimi `shared/`,
+`server/` ve `balance/` altına HİÇ dokunmadı (doğrulandı: 0 değişiklik), yani kapının hükmü
+yapısal olarak main'dekiyle aynı — ama bu bir ÇIKARIM, koşulmuş bir kapı değil. Kapı
+koşulmadan commit edilmedi.
+
+### 🔴🔴 P0 BULGU: `main` macOS arm64'te KIRMIZI — platformlar arası determinizm tutmuyor (2026-09-06)
+
+TASK-002 kapanırken `Sim.Checks` ilk kez bu makinede koştu ve **179 PASS / 1 FAIL** verdi:
+
+```
+[FAIL] M17GoldenReplay: 4/50 replay bit-eşit DEĞİL — ilk sapma #4:
+       cfg   0x15170DC2ECA53097 / 0x15170DC2ECA53097     (AYNI)
+       state 0x49A5BE4C5BFB6626 / 0x1B712016B8998E17     (FARKLI)
+       skor  1-0 / 1-0    tick 55200 / 55200             (AYNI)
+       iz    0x79E0159FFAF5982D / 0x79E0159FFAF5982D     (AYNI)
+```
+
+**BU TASK-002'NİN İŞİ DEĞİL — ÖLÇÜLDÜ, ÇIKARILMADI.** `origin/main` (e3345db) temiz bir
+worktree'ye alınıp aynı kapı koşuldu: **birebir aynı hata, aynı hash'ler.** Yani sapma bu
+oturumun teslimiyle ilgisiz; TASK-002 `shared/`, `server/`, `balance/` altına hiç dokunmadı.
+
+**KIRILGAN DEĞİL, DETERMİNİSTİK:** iki ayrı koşuda bit düzeyinde aynı hata. Yani "bazen
+tutuyor" değil, "bu platformda hep başka bir sonuç veriyor".
+
+**PLATFORM AYRIMI KESİN:**
+- CI `ubuntu-latest` (Linux x64, .NET 8) — main'in son koşusu (e3345db) **yeşil**.
+- Bu makine macOS arm64, .NET 8.0.424 — aynı commit **kırmızı**.
+- Golden set repoda saklı bir dosya (`shared/TheBadge.Sim.Checks/goldens/replay_set_v1.json`),
+  başka bir platformda üretilmiş. Yani kapı "kaydedildiği platformdan farklı sonuç çıkıyor"
+  diyor ve haklı.
+
+**NEDEN P0:** CLAUDE.md değişmez #2 aynen şöyle: *"Aynı girdi + aynı seed = bit düzeyinde aynı
+sonuç, HER PLATFORMDA."* Değişmez #3 de bunun üstüne kurulu — `TheBadge.Sim` hem Unity'de hem
+sunucuda AYNI kaynaktan derleniyor. İstemci **iOS arm64**, sunucu **Linux x64**. Bugünkü bulgu
+tam olarak şunu söylüyor: aynı maç, aynı tohum, iki tarafta FARKLI oynanabilir. Replay,
+Panorama, sunucu-otoriter uzlaştırma ve "canlıyı kaçırmak ceza değildir" vaadinin hepsi bu
+eşitliğe yaslanıyor.
+
+**BİRİNCİ ŞÜPHELİ (grep'le daraltıldı, ölçülmedi):** çekirdek `Math.Sin/Cos`u KENDİ YORUMUNDA
+yasaklamış ve `TrigLut` yazmış; `Math.Pow` için de tablo var (`EffectiveAttributes`) ve
+gerekçesi orada yazılı: *"Math.Pow platformlar arası bit garantisi vermez"*. Ama `MatchEngine`
+sıcak yolda hâlâ DOĞRUDAN çağırıyor:
+- `MatchEngine.cs:1029` — `Math.Exp(-bal.gk.logisticSlope * marj)`, kaleci kurtarış olasılığı
+- `MatchEngine.cs:914` — `Math.Tan(sigmaRad)`, şut sapma sigması
+- `Lod2Resolver.cs:143` — `Math.Exp(-lambda)`, Poisson ters-CDF (dosyanın kendi yorumu zaten
+  *"`Math.Exp` platformlar arasında son bit'te..."* diye başlıyor)
+
+`Math.Sqrt` şüpheli DEĞİL: IEEE-754 doğru yuvarlanmayı zorunlu kılar, platformlar arası
+bit-eşittir. `Exp`/`Tan` ise libm uygulamasına bağlıdır. Semptom buna uyuyor: 4/50 maçta sapma,
+ve saptığında önce `state` ayrışıyor, skor henüz dönmüyor (kurtarış olasılığındaki son bit
+farkı ancak bazı maçlarda eşiği geçiyor).
+
+**YAPILMADI, BİLEREK:** düzeltme `shared/` işidir, TASK-002'nin kapsamı dışındadır ve ölçüm
+ister (hangi çağrı sapmayı üretiyor — üçünü tek tek LUT/sabit-nokta ile değiştirip 50 replay'i
+yeniden koşmak). Kapsam dışı bir dosyaya "herhalde budur" diye dokunmak, bu projenin tekrar
+eden dersinin tam tersi olurdu.
+
+**AYRICA BİR SÜREÇ BULGUSU:** bu, `Sim.Checks`in ilk kez Linux dışı bir makinede koştuğu
+oturumdu ve ilk koşuda kapıyı düşürdü. CI tek platformda (ubuntu) koşuyor — yani **kapı
+"her platformda" iddiasını ölçmüyor, tek platformda ölçüyor.** Kapının kendisi doğru yazılmış;
+koşturulduğu yer iddiasından dar.
+
 ## Bekleyen kararlar
+
+- **🔴 P0 — platformlar arası determinizm (2026-09-06).** Bulgu yukarıda; burada karar
+  bekleyen şey ÖNCELİK ve YÖNTEM. Seçenekler: **(a)** hemen bir motor dilimi aç, üç çağrıyı
+  (`Math.Exp` ×2, `Math.Tan`) sabit-nokta/LUT'a çevir ve 50 replay'i iki platformda karşılaştır
+  — artısı değişmez #2'yi gerçekten geri getirir, eksisi 5G'yi durdurur. **(b)** CI'a bir
+  macOS arm64 iş ekle, kapıyı ÖNCE iki platformda ölçülür hale getir, düzeltmeyi ölçüme göre
+  planla — artısı "hangi çağrı" sorusunu tahminle değil ölçümle kapatır ve ucuzdur, eksisi
+  düzeltmeyi geciktirir. **(c)** 5G-a gözlem turunu bitir, sonra aç — artısı fun kapısı zaten
+  tek makinede koşuyor ve platform eşitliği o turu etkilemiyor, eksisi borç büyür.
+  **Önerim (b) hemen + (a) 5G-a turundan sonra:** ölçüm olmadan hangi çağrının suçlu olduğunu
+  bilmiyoruz ve bu projenin kendi kuralı tam olarak bunu yasaklıyor. **Not:** bu bulgu 5G-a
+  gözlem turunu ENGELLEMEZ (tur tek cihazda koşuyor), ama 5G-b'nin cihaz/sunucu ayağından
+  ÖNCE kapanmalı.
+
+- **Motorun GEÇ REDDİ maç sunum ekranında erişilemez (TASK-002, 2026-09-06).** Kabul ölçütü
+  "bant dışı bir delta ile İKİSİ de elle denenip raporlanır" diyor; yapısal olarak mümkün değil
+  (gerekçe yukarıda, S2 kaydında). Seçenekler: **(a)** ölçütü düzelt — bus reddi elle denenir,
+  motor geç reddi bu ekranda "sayaç olarak GÖRÜNÜR ama tetiklenemez" diye kayda geçer; artısı
+  dürüst, eksisi ölçütün bir yarısı bu dilimde hiç denenmemiş kalır. **(b)** kapsama
+  `match.substitution` ekle — geç red gerçekten tetiklenir (kabul anında hak biter ya da ölü
+  topta oyuncu kırmızı görmüştür), artısı iki yolun da canlı denenmesi, eksisi brifin kapsamını
+  genişletmek ve değişiklik hakkı/kulübe UI'ı gerektirmesi. **(c)** ekrana yalnız test amaçlı
+  bir "motora doğrudan bant dışı komut at" kaçamağı koy — REDDEDİLİR, Tek Kapı'yı delerdi.
+  **Önerim (a) şimdi + (b) S3'te**, çünkü değişiklik/kulübe zaten maç günü döngüsüyle geliyor.
 
 - **İnceleme eğrisinin bir dakikalık gecikmesi (5G S2, 2026-09-05).** CANLI yol `AnlikOlasilik`
   ile kapandı; geriye maç sonu inceleme eğrisi kalıyor: `SampleCurves` tick döngüsünde

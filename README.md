@@ -5,6 +5,14 @@ Ultimate Soccer Manager 98 modern remake. Unity 6 (mobil) + .NET 8 C# simülasyo
 **Anayasa:** `CLAUDE.md` her Claude Code oturumunda otomatik okunur. Bağlayıcı spesifikasyonlar `docs/` altındadır.
 
 ## Hızlı Başlangıç
+
+**Önkoşul: .NET 8 SDK.** Unity kendi `dotnet`ini getirir ama O KAPIYI KOŞAMAZ —
+`Unity.app/Contents/Resources/Scripting/NetCoreRuntime` yalnız çalışma zamanıdır (SDK klasörü
+yok) ve .NET 6'dır; `Sim.Checks` `net8.0` hedefliyor. Kurulu değilse:
+```bash
+curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 8.0   # ~/.dotnet altına, sudo yok
+```
+
 ```bash
 dotnet run --project shared/TheBadge.Sim.Checks -c Release   # determinizm kapısı (yeşil olmalı)
 ```
