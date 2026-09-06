@@ -33,10 +33,18 @@
 7. **Ekran kaydı (DoD-G):** 30-60 sn — bir maçın başı, kazanma şeridi, bir kritik an duraklaması,
    bir taktik müdahalesi (şerit AYNI TICK oynamalı), maç sonu + "BİR MAÇ DAHA".
    Örnek kareler: `docs/gorseller/TASK-002/`.
-8. **⚠️ Telemetri: HENÜZ YOK.** Greybox'ın `TelemetryLog`u arşivle birlikte gitti ve maç sunum
-   ekranı telemetri YAZMIYOR. `docs/PLAYTEST_3G.md`'nin "Telemetri özeti" tablosu (izleme sn/maç,
-   skip/maç, 2x, müdahale/maç) bugün DOLDURULAMAZ — geçen tur da tam burada eksik kalmıştı.
-   Gözlem turundan ÖNCE kapatılması gereken iş budur; format `docs/samples/telemetry_ornek_oturum.jsonl`.
+8. **⚠️ Telemetri: YAZICI HAZIR, EKRAN HENÜZ YAZMIYOR.** İkisini karıştırma:
+   - **Yazıcı erişilebilir.** `TelemetryLog` bir süre arşivde (`Assets/Greybox~/`) kalmıştı;
+     çıkarıldı. Bugün `Assets/Services/TelemetryLog.cs`, derlemesi `Game.Services` ve
+     `Game.Match` onu referanslıyor. `S2TelemetriErisimi` kapısı bunu her koşuda ölçüyor —
+     **kurtarmayı tekrar yapma.**
+   - **Eksik olan olay kümesi.** Maç sunum ekranı henüz hiçbir olay yazmıyor, yani
+     `docs/PLAYTEST_3G.md`'nin "Telemetri özeti" tablosu (izleme sn/maç, skip/maç, 2x,
+     müdahale/maç) bugün DOLDURULAMAZ — geçen tur da tam burada eksik kalmıştı.
+
+   Gözlem turundan ÖNCE kapatılması gereken iş budur ve brifi hazır: `docs/tasks/TASK-003-playtest-telemetrisi.md`.
+   Format: `docs/samples/telemetry_ornek_oturum.jsonl`. Namespace taşımada korundu, yani ekranda
+   `using TheBadge.Greybox.Sim;` gerekir.
 9. **Save sıfırlama:** gerekmiyor — bu ekran kalıcı durum yazmıyor (maç dışı dünya S3'ün işi).
    Yeni maç için ekrandaki "BİR MAÇ DAHA" yeter; her maç yeni tohum alır.
 

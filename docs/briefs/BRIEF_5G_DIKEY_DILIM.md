@@ -63,7 +63,7 @@ Bu tablo bugün ölçüldü (kapanış brifinin kuralı: hafızadan yazılan say
 | **Unity mimarisi** | Tek `Game.Greybox` asmdef (+ test asmdef'i), 28 C# dosyası, 4 EditMode test dosyası. Greybox **emekli** ilan edildi. | `unity/UNITY_SETUP.md`'nin 5 modüllü asmdef haritası "FAZ 01'de kurulacak" diyor ve kurulmadı. Borcu bu dilim ödüyor. |
 | **FTUE** | Yok. GDD 9.2 senaryosu yazılı, kod yok. | 4G.7 ilk 5 dakikayı zorunlu tutuyor. |
 | **Monetizasyon** | Yok — StoreKit/IAP hiçbir yerde yok | 4G.7: "monetizasyon anı gerçek (sandbox IAP)". |
-| **Analytics/telemetri** | Yalnız greybox-yerel `TelemetryLog.cs`; GDD 9.5'in FTUE hunisi yok | 4G.7 analytics event'lerini zorunlu tutuyor; huni D1'in öncü göstergesi. |
+| **Analytics/telemetri** | Yalnız yerel JSONL yazıcısı (`Assets/Services/TelemetryLog.cs`, `Game.Services`); sağlayıcı YOK, GDD 9.5'in FTUE hunisi yok | 4G.7 analytics event'lerini zorunlu tutuyor; huni D1'in öncü göstergesi. |
 | **Art direction** | Yok. D1'de araç seçili (Scenario + Midjourney), stil rehberi yok. | 4G.5: **stil rehberi olmadan seri AI asset üretimi YASAK.** "Final kalite" bir stil kararı ister. |
 | **Nakama bağlaması** | Dikiş var (`IKomutTasima`), taşıma yok — kapanış brifi bölüm 4'te borç | 5G'yi bloklamaz (aşağıda gerekçesi), ama "online" iddiası edilemez. |
 

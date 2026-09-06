@@ -8540,9 +8540,24 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                 if (satir == null)
                     s2thata += "UNITY_SETUP.md'de '| Game.Match ' satiri bulunamadi (tablo yeniden adlandirilmis?); ";
                 else
-                    foreach (var r in refs)
-                        if (satir.IndexOf(r, StringComparison.Ordinal) < 0)
-                            s2thata += $"UNITY_SETUP.md haritasi ESKIMIS: Game.Match satiri '{r}' referansini YAZMIYOR; ";
+                {
+                    // CIFT YONLU karsilastirma (inceleme bulgusu, Codex P2). Ilk yazimda yalnizca
+                    // "asmdef'teki her referans tabloda var mi" diye baktim; asmdef'ten bir referans
+                    // SILINIRSE o deger refs'te olmadigi icin tabloda kalan olu satir hic
+                    // denetlenmiyordu — kapi "harita asmdef ile ayni seyi soyluyor" derken YANLIS
+                    // soyluyor olurdu. S3'te kopru Game.Services'e tasininca tam bu olacakti.
+                    var belgeRefs = satir.Split('|')[3]
+                        .Replace("*", "").Replace("`", "")
+                        .Split(',')
+                        .Select(x => x.Trim())
+                        .Where(x => x.Length > 0)
+                        .ToList();
+                    var a = refs.OrderBy(x => x, StringComparer.Ordinal).ToList();
+                    var b = belgeRefs.OrderBy(x => x, StringComparer.Ordinal).ToList();
+                    if (!a.SequenceEqual(b, StringComparer.Ordinal))
+                        s2thata += $"UNITY_SETUP.md haritasi asmdef ile UYUSMUYOR: asmdef [{string.Join(",", a)}] " +
+                                   $"vs tablo [{string.Join(",", b)}]; ";
+                }
             }
         }
     }
@@ -8550,7 +8565,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     if (s2thata.Length > 0) failures += Fail("S2TelemetriErisimi", s2thata);
     else Pass("S2TelemetriErisimi(TelemetryLog ice aktarilan klasorde + .meta tam + Game.Services asmdef'i + " +
               "logger saf C# + Game.Match ve test aynasi Game.Services'i referansliyor + " +
-              "UNITY_SETUP.md haritasi asmdef ile ayni seyi soyluyor)");
+              "UNITY_SETUP.md haritasi asmdef ile BIREBIR ayni (cift yonlu))");
 }
 
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");

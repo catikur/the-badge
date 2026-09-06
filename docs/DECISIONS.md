@@ -3304,6 +3304,12 @@ greybox'ı hem de hâlâ gereken `EngineDev.unity` + `EngineDevBootstrap.cs`'i b
    Geride kalırsa yeni asmdef çözemez ve sahne derlenmez; yani ilk yazdığım sıra, tam olarak
    önlemeye çalıştığı şeyi yapardı. Zincir orada bitiyor (doğrulandı: `SpriteFactory` yalnız
    `UnityEngine` kullanıyor; bootstrap balance'ı REPO KÖKÜNDEN okuyor, `Greybox/Resources`tan değil).
+
+   > **→ UYGULANDI (2026-09-06).** Dört dosya da çıktı. Sahne + bootstrap + `SpriteFactory`
+   > `Assets/EngineDev/`e; `TelemetryLog.cs` ise EngineDev'e DEĞİL, `Assets/Services/` altına
+   > (`Game.Services` asmdef'i + `Game.Match` referansı — geliştirme aracı derlemesine koymak
+   > üretim ekranını o araca bağımlı kılardı). Zincir artık `S2TelemetriErisimi` kapısıyla
+   > ölçülüyor; bu kayıt tarihsel, canlı talimat değil.
 2. Kalan greybox `Assets/Greybox~/` olur — Unity `~` ile biten klasörü içe aktarmaz.
 3. **Kabul edilen bedel:** dört EditMode test dosyası koşmayı bırakır (`FlowSimTests`,
    `ModelMatchTests`, `EconomyAndBusTests`, `SahneSozlesmesiTests`). Hepsi greybox'ın KENDİ
