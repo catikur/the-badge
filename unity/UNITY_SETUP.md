@@ -85,9 +85,9 @@ Unity üç yerel paketi `manifest.json` üzerinden `shared/` altından alır; he
 | asmdef | İçerik | Referanslar |
 | --- | --- | --- |
 | Game.Commands | Command Bus istemci ucu, katalog önbelleği | **TheBadge.CommandBus**, TheBadge.Sim |
-| Game.Services | Nakama istemcisi, save/load, telemetri | Game.Commands, **TheBadge.World** |
+| Game.Services | Nakama istemcisi, save/load, telemetri — **KISMEN KURULDU**: bugün yalnız `TelemetryLog` | *(hedef: Game.Commands, **TheBadge.World**)* — bugün **referansı YOK** |
 | Game.UI | UI Toolkit ekranları, Rive köprüleri | Game.Services |
-| Game.Match | Maç sunum katmanı — **5G-a'da KURULDU** | TheBadge.Sim, **TheBadge.CommandBus**, **TheBadge.World** |
+| Game.Match | Maç sunum katmanı — **5G-a'da KURULDU** | TheBadge.Sim, **TheBadge.CommandBus**, **TheBadge.World**, **Game.Services** |
 | Game.EngineDev | Motor test sahnesi (build dışı) | TheBadge.Sim |
 | Tests.EditMode / Tests.PlayMode | Unity testleri | ilgili modüller |
 
@@ -97,8 +97,17 @@ Unity üç yerel paketi `manifest.json` üzerinden `shared/` altından alır; he
 > FAZ 00.5'te bilinçli sapma tek `Game.Greybox` asmdef'iydi; greybox **emekli** (Fun Gate kapandı,
 > `docs/GREYBOX_3G_RAPOR.md`), beş modüllü harita 5G Dikey Dilim'de kuruluyor.
 >
-> **`Game.Match` 5G-a'da kuruldu ve haritadan SAPTI:** harita onu `Game.Services` üzerinden
-> bağlıyordu, ama `Game.Services` (Nakama/save/telemetri) henüz yok ve TASK-002 kapsamı dışında.
-> Ekran bugün paketlere DOĞRUDAN bağlanıyor. `Game.Services` geldiğinde köprü oraya taşınır.
+> **`Game.Match` 5G-a'da kuruldu ve bir süre haritadan SAPTI:** harita onu `Game.Services`
+> üzerinden bağlıyordu, ama `Game.Services` o sırada YOKTU; ekran paketlere doğrudan bağlandı.
+> Bu sapma **kısmen kapandı:** telemetri yazıcısı (`Assets/Services/TelemetryLog.cs`) için
+> `Game.Services` asmdef'i kuruldu ve `Game.Match` ile test aynası onu referanslıyor.
+> Ekranın paketlere doğrudan bağlanması ise **devam ediyor** — Nakama/save-load S3'e kalınca
+> `Game.Services`in kendi referansları (`Game.Commands`, `TheBadge.World`) da eklenir ve köprü
+> oraya taşınır.
+>
+> ⚠️ **Bu tablo bir HARİTADIR, kanıt değildir.** Bir kere zaten eskimişti ve o eskimiş satıra
+> dayanarak yanlış bir düzeltme yapıldı (`docs/DECISIONS.md`: *zincir belgede değil, derlemenin
+> okuduğu dosyada biter*). Referansı doğrulaman gerekiyorsa `.asmdef` dosyasını aç. Telemetri
+> zinciri ayrıca `S2TelemetriErisimi` kapısıyla her Checks koşusunda ölçülüyor.
 
 Kural: sunum katmanı sim durumunu OKUR, asla doğrudan yazmaz — durum değişikliği yalnız Command Bus (Tek Kapı).

@@ -8527,12 +8527,30 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                     foreach (var r in rl.EnumerateArray()) refs.Add(r.GetString());
             if (!refs.Contains("Game.Services"))
                 s2thata += $"{etiket} 'Game.Services'i REFERANSLAMIYOR — TelemetryLog erisilemez; ";
+
+            // 6) HARITA SURUKLENMESI: UNITY_SETUP.md'nin asmdef tablosu asmdef ile ayni seyi
+            //    soylemeli. Bu tablo iki kez bayatladi ve bir keresinde ona dayanarak YANLIS bir
+            //    duzeltme yapildi (DECISIONS: "zincir belgede degil, derlemenin okudugu dosyada
+            //    biter"). Belge kanit degildir ama YANLIS da olmamali.
+            if (etiket == "Game.Match")
+            {
+                string rehber = FindRepoFile("unity/UNITY_SETUP.md");
+                string satir = System.IO.File.ReadAllLines(rehber)
+                    .FirstOrDefault(l => l.StartsWith("| Game.Match ", StringComparison.Ordinal));
+                if (satir == null)
+                    s2thata += "UNITY_SETUP.md'de '| Game.Match ' satiri bulunamadi (tablo yeniden adlandirilmis?); ";
+                else
+                    foreach (var r in refs)
+                        if (satir.IndexOf(r, StringComparison.Ordinal) < 0)
+                            s2thata += $"UNITY_SETUP.md haritasi ESKIMIS: Game.Match satiri '{r}' referansini YAZMIYOR; ";
+            }
         }
     }
 
     if (s2thata.Length > 0) failures += Fail("S2TelemetriErisimi", s2thata);
     else Pass("S2TelemetriErisimi(TelemetryLog ice aktarilan klasorde + .meta tam + Game.Services asmdef'i + " +
-              "logger saf C# + Game.Match ve test aynasi Game.Services'i referansliyor)");
+              "logger saf C# + Game.Match ve test aynasi Game.Services'i referansliyor + " +
+              "UNITY_SETUP.md haritasi asmdef ile ayni seyi soyluyor)");
 }
 
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");
