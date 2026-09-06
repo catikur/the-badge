@@ -8485,9 +8485,25 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         // 1) Yazici ICE AKTARILAN bir klasorde olmali. '~' ile biten klasoru Unity hic gormez.
         if (!System.IO.File.Exists(logger))
             s2thata += "TelemetryLog.cs Assets/Services/ altinda YOK; ";
+        // Unity, ADI '~' ile biten KLASORU ice aktarmaz. Ilk yazimda mutlak yolda '~' ariyordum;
+        // repo '~' iceren bir dizinin altina cekilirse (or. /work/the-badge~review) bu kapi
+        // gecerli bir checkout'u arsivde sanip zorunlu suiti kirmiziya cevirirdi
+        // (inceleme bulgusu, Codex P2 — hata once tekrar uretildi, sonra duzeltildi).
+        // Bu yuzden yalniz Assets'e GORE goreli yolun KLASOR SEGMENTLERINE bakilir.
         foreach (var f in System.IO.Directory.GetFiles(assets, "TelemetryLog.cs", System.IO.SearchOption.AllDirectories))
-            if (f.IndexOf("~", StringComparison.Ordinal) >= 0)
-                s2thata += "TelemetryLog.cs hala '~' klasorunde (Unity ice AKTARMAZ); ";
+        {
+            string goreli = f.Substring(assets.Length).TrimStart(
+                System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
+            var segmentler = goreli.Split(
+                System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
+            // Son segment dosya adi; yalniz klasor segmentlerine bakilir.
+            for (int i = 0; i < segmentler.Length - 1; i++)
+                if (segmentler[i].EndsWith("~", StringComparison.Ordinal))
+                {
+                    s2thata += $"TelemetryLog.cs hala '~' klasorunde (Unity ice AKTARMAZ): {goreli}; ";
+                    break;
+                }
+        }
 
         // 2) Her .cs ve klasor icin .meta sart — eksik .meta Unity'de GUID kaymasi demek.
         foreach (var gerekli in new[] { logger, System.IO.Path.Combine(servis, "Game.Services.asmdef") })
