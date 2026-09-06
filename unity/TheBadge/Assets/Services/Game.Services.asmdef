@@ -1,12 +1,7 @@
 {
-    "name": "Game.Match",
-    "rootNamespace": "TheBadge.Match",
-    "references": [
-        "TheBadge.Sim",
-        "TheBadge.CommandBus",
-        "TheBadge.World",
-        "Game.Services"
-    ],
+    "name": "Game.Services",
+    "rootNamespace": "TheBadge.Services",
+    "references": [],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

@@ -74,6 +74,18 @@ namespace TheBadge.Match
         /// `ParamOutOfBand` reddini kullanıcıya SEBEBİYLE göstermek için (Kural 2).</summary>
         public int bantDisiTestDegeri = 5;
 
+        /// <summary>[KALİBRE adayı] Telemetrinin "nerede bıraktı" çözünürlüğü: kaç MAÇ
+        /// dakikasında bir `ilerleme` satırı düşsün. Terk terminal bir olaya bağlanamadığı için
+        /// (uygulama öldürülünce `session_end` yazılmaz) konum son yazılan satırdan okunur —
+        /// bu sayı o okumanın hassasiyetidir. 5 dk → maç başına ~18 satır.</summary>
+        public int telemetriIlerlemeDakika = 5;
+
+        /// <summary>TEST KAPISI, normalde BOŞ. Doluysa telemetri bu dizine yazılır.
+        /// TASK-003'ün kabul ölçütü "yazılamayan bir dizine yönlendirip denenir ve uyarının
+        /// çıktığı raporlanır" diyor; o senaryoyu elle koşturmanın yolu budur. Boş bırakılırsa
+        /// `Application.persistentDataPath/telemetry` kullanılır.</summary>
+        public string telemetriDiziniGecersizKil = "";
+
         /// <summary>Doğrulama — sessiz bozuk ayar yok (projenin tekrar eden dersi).</summary>
         public void Dogrula()
         {
@@ -96,6 +108,8 @@ namespace TheBadge.Match
             if (kadranMin > kadranMax) throw new ArgumentException("MacSunumAyarlari: kadranMin ≤ kadranMax olmalı.");
             if (bantDisiTestDegeri >= kadranMin && bantDisiTestDegeri <= kadranMax)
                 throw new ArgumentException("MacSunumAyarlari: bantDisiTestDegeri BANDIN DIŞINDA olmalı, yoksa red yolu denenmiş olmaz.");
+            if (telemetriIlerlemeDakika <= 0) throw new ArgumentException(
+                "MacSunumAyarlari: telemetriIlerlemeDakika > 0 olmalı — 0/negatif 'nerede bıraktı' okumasını kör eder.");
         }
     }
 }
