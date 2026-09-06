@@ -57,9 +57,11 @@ doğrula — 179 kapı yeşil kalmalı.
 
 ### Greybox arşivi (K3) — ÖNCE EngineDev'i ÇIKAR
 
-`Assets/Greybox/` bugün hem emekli greybox'ı hem de **hâlâ gereken motor test sahnesini**
-(`Scenes/EngineDev.unity` + `Scripts/EngineDev/EngineDevBootstrap.cs`) barındırıyor. Klasörü
-olduğu gibi arşivlemek motor test sahnesini de götürür.
+*(Yazıldığı andaki durum; arşiv o zamandan beri yapıldı — aşağıdaki UYGULAMA DURUMU bölümüne bak.)*
+
+Arşivden önce `Assets/Greybox/` hem emekli greybox'ı hem de **hâlâ gereken motor test sahnesini**
+(`Scenes/EngineDev.unity` + `Scripts/EngineDev/EngineDevBootstrap.cs`) barındırıyordu. Klasörü
+olduğu gibi arşivlemek motor test sahnesini de götürürdü.
 
 **TAŞINACAK TAM LİSTE** (zincir sonuna kadar sürüldü — inceleme bulgusu, Codex P1: ilk yazımda
 yalnız sahne + bootstrap diyordum ve bu, önlemeye çalıştığım şeyi yapardı):
