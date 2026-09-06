@@ -22,7 +22,14 @@
    determinizm, duraklama ritmi). Ritim testleri ~30 sn sürer — 24 maç koşuyorlar.
    Greybox'ın dört EditMode dosyası artık KOŞMUYOR; kabul edilmiş bedeldir (K3), ölçtükleri
    kod emekli.
-6. **Cihaz build'i (iPhone):** File → Build Settings → iOS → Build; Xcode projesini imzala, cihaza yükle. Orientation Portrait olarak ayarlı.
+6. **⚠️ Cihaz build'i: 5G-a'DA YOK.** Bu adım greybox'tan kalmıştı ve bugün ÇALIŞMAZ — deneme.
+   Sebebi bir eksik değil, bilinçli bir kapsam sınırı: ekran `balance/`i REPO KÖKÜNDEN okuyor
+   (`Application.dataPath/../../../balance/`) ve kurulu bir iOS uygulamasının üstünde repo
+   yoktur; `MacSunumEkrani.OnEnable()` → `BalansKaynagi.Yukle()` dosyayı bulamayıp
+   `FileNotFoundException` atar ve sahne arayüzü kurmadan düşer.
+   TASK-002'nin DoD-G maddesi 4 zaten *"hedef cihazda değil, editörde yeter"* diyor; balance'ı
+   oynatıcı-güvenli bir yere paketlemek (`StreamingAssets`/`Resources`) **5G-b / S6'nın işi**
+   ve cihaz performans ölçümüyle birlikte gelir. Gözlem turu **editörde** koşulur.
 7. **Ekran kaydı (DoD-G):** 30-60 sn — bir maçın başı, kazanma şeridi, bir kritik an duraklaması,
    bir taktik müdahalesi (şerit AYNI TICK oynamalı), maç sonu + "BİR MAÇ DAHA".
    Örnek kareler: `docs/gorseller/TASK-002/`.
@@ -46,6 +53,10 @@ Sorun giderme:
   Ekranın tüm ayarlanabilir sayıları `MacSunumAyarlari`de, `[KALİBRE]` ADAYI olarak.
 - `Assets/EngineDev/` → motor test sahnesi (`EngineDev.unity`). Geliştirici aracıdır, BUILD'E
   GİRMEZ: balance'ı repo kökünden okur, bir build'de zaten çalışmaz.
+- **BORÇ — maç sunumu da bugün EDİTÖR-ONLY.** `BalansKaynagi` üç balance dosyasını repo
+  kökünden okuyor, yani `MacSunum` sahnesi de bir oynatıcı build'inde açılmaz (yukarıda
+  adım 6). 5G-a bunu bilerek kapsam dışı bıraktı (DoD-G 4); 5G-b / S6 balance'ı paketleyip
+  bu bağı kesmeli.
 - `Assets/Greybox~/` → **arşiv.** Unity içe aktarmaz, derlenmez, bakım yükü yoktur. Silinmedi;
   git'te duruyor (K3 kararı).
 - Sahne neredeyse boş: `MacSunum` objesi arayüzü runtime'da UI Toolkit ile kurar (K2 kararı;

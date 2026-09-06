@@ -3388,6 +3388,13 @@ kopya — iki asmdef birbirine referans veremez ve fixture `TheBadge.Sim`e konam
 kadroyu getirince ikisi de düşer. (2) `command.bands.json` için küçük bir JSON okuyucu yazıldı
 (`BasitJson`): `JsonUtility` harita desteklemiyor, bantları koda gömmek Kural 4 ihlali olurdu,
 Newtonsoft yalnız `com.unity.ai.assistant` üzerinden geçici olarak projede.
+(3) **EKRAN EDİTÖR-ONLY** (PR #37 inceleme bulgusu, codex P1): `BalansKaynagi` üç balance
+dosyasını REPO KÖKÜNDEN okuyor, kurulu bir uygulamanın üstünde repo yoktur — `OnEnable`
+`FileNotFoundException` atar ve sahne arayüzü kurmadan düşer. Bu bir kusur değil, DoD-G
+madde 4'ün ("hedef cihazda değil, editörde yeter") sonucu; ama YAZILI DEĞİLDİ ve runbook
+hâlâ iPhone build'i tarif ediyordu. Balance'ı oynatıcı-güvenli bir yere paketlemek
+(`StreamingAssets`/`Resources`) **5G-b / S6'ya** düşer ve cihaz performans ölçümüyle
+birlikte yapılmalı. **Gözlem turu editörde koşulur.**
 
 **PLAY MODU DOĞRULAMASI (headless test değil, ekranın kendisi):** maç 91:00'de `FullTime`a
 kadar koştu, bitiş ekranı geldi, "bir maç daha" yeni tohumla (20260907) temiz başlattı. Taktik
