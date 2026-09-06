@@ -250,11 +250,11 @@ artı/eksileriyle sun, karar iste) — ama o, bu listeye ait değil.
 
 ## Sonraki adım (bu brifin DIŞINDA)
 
-Önce **`docs/tasks/TASK-003-playtest-telemetrisi.md`** — turun kapı metriklerinden biri
-("sıkılma işareti < 3/maç") telemetrisiz ÖLÇÜLEMEZ ve geçen turda tam da bu eksikti.
-Telemetri ekranı bloklamaz, TURU bloklar.
+~~Önce `docs/tasks/TASK-003-playtest-telemetrisi.md`~~ → **YAPILDI (PR #39).** Turun kapı
+metriklerinden biri ("sıkılma işareti < 3/maç") telemetrisiz ölçülemiyordu ve geçen turda tam
+da bu eksikti; artık `MacTelemetri` yazıyor.
 
-Sonra **mülakatlı gözlem turu**: 3-5 kişi, kişi başı ≥15 dk serbest oynama,
+Sıradaki iş doğrudan **mülakatlı gözlem turu**: 3-5 kişi, kişi başı ≥15 dk serbest oynama,
 yönlendirme yok. `docs/PLAYTEST_3G.md` biçimi kullanılır ama **mini mülakat tablosu ve telemetri
 BU SEFER DOLDURULUR** — geçen turda doldurulmadığı için kopuş nedeni bilinmiyor ve bütün 5G-a
 o eksiği kapatmak için var.

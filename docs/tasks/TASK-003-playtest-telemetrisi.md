@@ -153,9 +153,12 @@ Greybox'ta bu ölçülmemişti; %40'ın nedenini bilmememizin bir sebebi de bu.
 
 ## Sıra
 
-TASK-002 ekranı → ~~TASK-002 adım 2 kurtarması~~ **(yapıldı)** → **TASK-003 telemetrisi** →
-mülakatlı tur.
+~~TASK-002 ekranı~~ → ~~TASK-002 adım 2 kurtarması~~ → ~~TASK-003 telemetrisi~~ **(üçü de yapıldı)**
+→ **MÜLAKATLI TUR ← ŞU AN BURADAYIZ**
 
-Telemetri turu bloklar, ekranı BLOKLAMAZ: ekran koşarken paralel yazılabilir. Yazıcının
-erişilebilirliği artık bir ön koşul değil, **kapıya bağlı bir gerçek** (`S2TelemetriErisimi`) —
-TASK-003 doğrudan olay kümesiyle başlayabilir.
+Yazılacak kod kalmadı. Telemetri turu bloklardı, artık bloklamıyor: yazıcı erişilebilir
+(`S2TelemetriErisimi` ölçüyor), olay kümesi `MacTelemetri`de kurulu, örnek çıktı
+`docs/samples/playtest_ornek_oturum.jsonl`'de.
+
+**Kalan iş ölçüm aracı değil, ÖLÇÜMÜN KENDİSİ:** oyuncuları bul, turu koş, mülakat tablosunu
+ve telemetri özetini `docs/PLAYTEST_3G.md`'ye doldur.
