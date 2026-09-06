@@ -14,7 +14,7 @@ namespace TheBadge.Match.Tests
     /// motorla arasındaki SÖZLEŞMEYİ ölçer: durumu okur mu yoksa yazar mı, komut Tek Kapı'dan
     /// mı geçiyor, iki red yolu birbirine karışıyor mu, aynı tohum aynı maçı mı veriyor.
     ///
-    /// Çekirdeği ölçen 180 kapı `shared/TheBadge.Sim.Checks`tedir ve buraya kopyalanmaz —
+    /// Çekirdeği ölçen kapılar `shared/TheBadge.Sim.Checks`tedir ve buraya kopyalanmaz —
     /// burada ölçülen şey UNITY TARAFININ dikişi.</summary>
     public sealed class SunumSozlesmesiTests
     {

@@ -140,7 +140,7 @@ Greybox'ta bu ölçülmemişti; %40'ın nedenini bilmememizin bir sebebi de bu.
 - **Telemetri yazamazsa ekranda görünüyor:** yazılamayan bir dizine yönlendirip denenir ve
   uyarının çıktığı raporlanır (bant dışı bildirim, kural 3).
 - Oturum kimliği dosya adında ve her satırda; PII yok.
-- `dotnet run --project shared/TheBadge.Sim.Checks -c Release` yeşil (180 kapı; bu iş çekirdeğe
+- `dotnet run --project shared/TheBadge.Sim.Checks -c Release` yeşil (181 kapı; bu iş çekirdeğe
   dokunmamalı — dokunduysa sebebini yaz).
 
 ## Verification required (DoD-G)

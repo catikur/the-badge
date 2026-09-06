@@ -21,7 +21,7 @@ playtest koşulmaz.*
 **→ ARTIK KANITLANDI (PR #39).** Bu brif yazıldığında değildi — S1'i yazan ortamda Unity yok ve
 `S1UnityPaketSiniri` yalnız yapısal koşulları ölçer. Yerel oturum derleyiciye sordu:
 `CompilationPipeline` çıktısı `Game.Match refs=[TheBadge.Sim, TheBadge.CommandBus,
-TheBadge.World, Game.Services]` veriyor ve `Game.Services.dll` üretiliyor; **EditMode 22/22
+TheBadge.World, Game.Services]` veriyor ve `Game.Services.dll` üretiliyor; **EditMode 23/23
 yeşil.** Üç paket Unity'de gerçekten çözülüyor ve derleniyor.
 
 Yine de projeyi ilk kez açıyorsan konsolu bir kez kontrol et (yerel Unity sürümü/önbellek farkı).
@@ -36,7 +36,7 @@ Patlarsa muhtemel sebepler ve ilk bakılacak yerler:
 
 **Bu adım DoD-G'nin ilk maddesidir ve raporlanmadan ilerlenmez.** Sorun çıkarsa düzeltmeyi
 `shared/` tarafında yap ve `dotnet run --project shared/TheBadge.Sim.Checks -c Release` ile
-doğrula — 179 kapı yeşil kalmalı.
+doğrula — 181 kapı yeşil kalmalı.
 
 ## Scope
 
@@ -238,7 +238,7 @@ artı/eksileriyle sun, karar iste) — ama o, bu listeye ait değil.
 - **Bus reddi sebebiyle gösteriliyor** (`CommandOutcome.Detail`); motor geç reddi en az
   sayaç olarak görünüyor. Bant dışı bir delta ile ikisi de elle denenip raporlanır.
 - Aynı seed + aynı müdahaleler = aynı skor (elle doğrula, raporla).
-- `dotnet run --project shared/TheBadge.Sim.Checks -c Release` yeşil (179 kapı).
+- `dotnet run --project shared/TheBadge.Sim.Checks -c Release` yeşil (181 kapı).
 
 ## Verification required (DoD-G)
 

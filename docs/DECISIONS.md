@@ -3314,7 +3314,7 @@ greybox'ı hem de hâlâ gereken `EngineDev.unity` + `EngineDevBootstrap.cs`'i b
 3. **Kabul edilen bedel:** dört EditMode test dosyası koşmayı bırakır (`FlowSimTests`,
    `ModelMatchTests`, `EconomyAndBusTests`, `SahneSozlesmesiTests`). Hepsi greybox'ın KENDİ
    koduna bakıyor; paylaşılan çekirdeği ölçen tek satır yok. **Bu bir kapı gevşetmesi değil** —
-   ölçtüğü şey emekli. (Çekirdeği ölçen 180 kapı `Sim.Checks`te ve dokunulmuyor.)
+   ölçtüğü şey emekli. (Çekirdeği ölçen kapılar `Sim.Checks`te ve dokunulmuyor.)
 
 TASK-002 bu sırayı adım adım yazıyor.
 ### 📐 KURAL: tehlikeyi ADLANDIRAN çare, zincirin SONUNA kadar sürülmeden bitmez (2026-09-05)
@@ -3561,7 +3561,7 @@ gücü kaybolmuştu): 40 satır, hepsinin geçerli JSON olduğu bağımsız doğ
 onu da var. `match_start: 2` / `match_end: 1` — yani örnekte hem "bir maç daha" sinyali (kapı
 metriği 1) hem de yarıda bırakılmış bir maç var.
 
-**Unity EditMode 22/22 yeşil** (17 + 5 telemetri kapısı). Kapılardan biri her satırı `BasitJson`
+**Unity EditMode 23/23 yeşil** (17 + 6 telemetri kapısı; altıncısı `798e0f9` ile geldi — oturum ortası yazma bozulması). Kapılardan biri her satırı `BasitJson`
 ile ayrıştırıp şemayı doğruluyor, biri terk çıkarımını, biri yazılamayan dizinde oyunun
 düşmediğini ölçüyor.
 
