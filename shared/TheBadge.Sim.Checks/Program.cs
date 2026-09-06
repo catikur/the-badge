@@ -8464,5 +8464,76 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
               $"asmdef/csproj grafigi birebir + netstandard2.1/C#9 + src disi .cs yok + {s1kaynak} kaynakta UnityEngine izi yok)");
 }
 
+// --- S2TelemetriErisimi: Assets tarafinda telemetri yazicisi Game.Match'ten ERISILEBILIR mi? ---
+// Bu kapi, ayni zincirin UC KEZ kirilmasindan sonra yazildi (DECISIONS: "zincir belgede degil,
+// derlemenin okudugu dosyada biter"). asmdef sinirlari Unity disinda gorunmez oldugu icin
+// TelemetryLog'un Greybox~ arsivine geri dusmesi ya da Game.Match referansinin unutulmasi
+// SESSIZCE olur — konsol hatasini ancak Unity acan gorur. Burasi onu derleme oncesi yakalar.
+{
+    // Kok, S1 ile AYNI yoldan bulunur (elle '..' saymak kirilgan).
+    string unityKok = System.IO.Path.GetFullPath(System.IO.Path.Combine(
+        System.IO.Path.GetDirectoryName(FindRepoFile("unity/TheBadge/Packages/manifest.json")), ".."));
+    string assets = System.IO.Path.Combine(unityKok, "Assets");
+    string s2thata = "";
+
+    if (!System.IO.Directory.Exists(assets)) s2thata += "Assets klasoru bulunamadi; ";
+    else
+    {
+        string servis = System.IO.Path.Combine(assets, "Services");
+        string logger = System.IO.Path.Combine(servis, "TelemetryLog.cs");
+
+        // 1) Yazici ICE AKTARILAN bir klasorde olmali. '~' ile biten klasoru Unity hic gormez.
+        if (!System.IO.File.Exists(logger))
+            s2thata += "TelemetryLog.cs Assets/Services/ altinda YOK; ";
+        foreach (var f in System.IO.Directory.GetFiles(assets, "TelemetryLog.cs", System.IO.SearchOption.AllDirectories))
+            if (f.IndexOf("~", StringComparison.Ordinal) >= 0)
+                s2thata += "TelemetryLog.cs hala '~' klasorunde (Unity ice AKTARMAZ); ";
+
+        // 2) Her .cs ve klasor icin .meta sart — eksik .meta Unity'de GUID kaymasi demek.
+        foreach (var gerekli in new[] { logger, System.IO.Path.Combine(servis, "Game.Services.asmdef") })
+            if (System.IO.File.Exists(gerekli) && !System.IO.File.Exists(gerekli + ".meta"))
+                s2thata += $"{System.IO.Path.GetFileName(gerekli)}.meta YOK; ";
+        if (System.IO.Directory.Exists(servis) && !System.IO.File.Exists(servis + ".meta"))
+            s2thata += "Services.meta (klasor) YOK; ";
+
+        // 3) Game.Services asmdef: var mi, adi dogru mu, Services/ altindaki her .cs onun kapsaminda mi
+        string gsYolu = System.IO.Path.Combine(servis, "Game.Services.asmdef");
+        if (!System.IO.File.Exists(gsYolu)) s2thata += "Game.Services.asmdef YOK — .cs Assembly-CSharp'a duser ve asmdef'li derlemeler onu REFERANSLAYAMAZ; ";
+        else using (var d = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(gsYolu)))
+            if (d.RootElement.GetProperty("name").GetString() != "Game.Services")
+                s2thata += "Game.Services.asmdef adi 'Game.Services' degil; ";
+
+        // 4) Logger saf C# olmali — referanssiz asmdef ancak o zaman dogru.
+        if (System.IO.File.Exists(logger))
+        {
+            string metin = System.IO.File.ReadAllText(logger);
+            if (metin.IndexOf("UnityEngine", StringComparison.Ordinal) >= 0 ||
+                metin.IndexOf("UnityEditor", StringComparison.Ordinal) >= 0)
+                s2thata += "TelemetryLog.cs UnityEngine/UnityEditor'e dokunuyor (asmdef referanssiz olamaz); ";
+        }
+
+        // 5) ASIL KAPI: Game.Match ve test aynasi Game.Services'i referansliyor mu?
+        //    Unity'de asmdef referanslari GECISLI DEGIL; bu satir yoksa ekran loggeri goremez.
+        foreach (var (yol, etiket) in new[]
+        {
+            (System.IO.Path.Combine(assets, "Match", "Game.Match.asmdef"), "Game.Match"),
+            (System.IO.Path.Combine(assets, "Match", "Tests", "EditMode", "Game.Match.EditModeTests.asmdef"), "Game.Match.EditModeTests"),
+        })
+        {
+            if (!System.IO.File.Exists(yol)) { s2thata += $"{etiket}.asmdef YOK; "; continue; }
+            var refs = new List<string>();
+            using (var d = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(yol)))
+                if (d.RootElement.TryGetProperty("references", out var rl))
+                    foreach (var r in rl.EnumerateArray()) refs.Add(r.GetString());
+            if (!refs.Contains("Game.Services"))
+                s2thata += $"{etiket} 'Game.Services'i REFERANSLAMIYOR — TelemetryLog erisilemez; ";
+        }
+    }
+
+    if (s2thata.Length > 0) failures += Fail("S2TelemetriErisimi", s2thata);
+    else Pass("S2TelemetriErisimi(TelemetryLog ice aktarilan klasorde + .meta tam + Game.Services asmdef'i + " +
+              "logger saf C# + Game.Match ve test aynasi Game.Services'i referansliyor)");
+}
+
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");
 return failures == 0 ? 0 : 1;
