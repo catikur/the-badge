@@ -81,7 +81,16 @@ namespace TheBadge.Match
             if (hizCarpani2x <= 1) throw new ArgumentException("MacSunumAyarlari: hizCarpani2x > 1 olmalı.");
             if (atlaTickTavani <= 0) throw new ArgumentException("MacSunumAyarlari: atlaTickTavani > 0 olmalı.");
             if (kritikAnOrneklemeTick <= 0) throw new ArgumentException("MacSunumAyarlari: kritikAnOrneklemeTick > 0 olmalı.");
+            // 0 SERBEST: "duraklama yok" demektir ve geçerli bir kalibrasyon (kritik anlar yine
+            // sayılır, yalnız sunum durmaz). Ekran bu durumda vurgu katmanını hiç AÇMAZ.
             if (duraklamaSaniye < 0) throw new ArgumentException("MacSunumAyarlari: duraklamaSaniye ≥ 0 olmalı.");
+            // 0 YASAK — ve bu, `duraklamaSaniye`den bilerek FARKLI: red mesajı 0 saniye
+            // görünürse komut reddedilir ama kullanıcı sebebini HİÇ göremez, yani red sessizce
+            // yutulmuş olur. CB 11.1 ve TASK-002 Kural 2 bunu açıkça yasaklıyor; bir kalibrasyon
+            // değeri anayasa kuralını kapatabiliyorsa o değer serbest değildir
+            // (inceleme bulgusu, codex).
+            if (redMesajiSaniye <= 0) throw new ArgumentException(
+                "MacSunumAyarlari: redMesajiSaniye > 0 olmalı — 0/negatif değer reddi sessizce yutar (CB 11.1).");
             if (spikerSatirSayisi <= 0) throw new ArgumentException("MacSunumAyarlari: spikerSatirSayisi > 0 olmalı.");
             if (seritAnimasyonSaniye < 0) throw new ArgumentException("MacSunumAyarlari: seritAnimasyonSaniye ≥ 0 olmalı.");
             if (kadranMin > kadranMax) throw new ArgumentException("MacSunumAyarlari: kadranMin ≤ kadranMax olmalı.");

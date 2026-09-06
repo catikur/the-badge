@@ -81,5 +81,29 @@ namespace TheBadge.Match.Tests
             a.bantDisiTestDegeri = 1;
             Assert.Throws<ArgumentException>(() => a.Dogrula());
         }
+
+        [Test]
+        public void Ayarlar_RedSuresiSifirKabulEdilmez()
+        {
+            // Red mesajı 0 saniye görünürse komut reddedilir ama kullanıcı sebebini HİÇ göremez
+            // — yani red SESSİZCE YUTULUR. CB 11.1 ve Kural 2 bunu yasaklıyor, dolayısıyla bu
+            // kalibrasyon değeri sıfır olamaz (inceleme bulgusu, codex).
+            foreach (float v in new[] { 0f, -1f })
+            {
+                var a = new MacSunumAyarlari { redMesajiSaniye = v };
+                Assert.Throws<ArgumentException>(() => a.Dogrula(), $"redMesajiSaniye={v} kabul edildi");
+            }
+        }
+
+        [Test]
+        public void Ayarlar_DuraklamaSifiriKabulEder()
+        {
+            // BİLEREK ASİMETRİK: `duraklamaSaniye = 0` GEÇERLİdir ve "duraklama yok" demektir —
+            // kritik anlar yine sayılır, yalnız sunum durmaz; turda "duraklama gerçekten gerekli
+            // mi" sorusunu ölçmenin yolu bu. Ekran o durumda vurgu katmanını hiç AÇMAZ
+            // (açıp kapatmayınca maç kalıcı bir perde arkasında kalıyordu).
+            var a = new MacSunumAyarlari { duraklamaSaniye = 0f };
+            Assert.DoesNotThrow(() => a.Dogrula());
+        }
     }
 }
