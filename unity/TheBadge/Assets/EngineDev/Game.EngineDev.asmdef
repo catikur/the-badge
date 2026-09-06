@@ -1,0 +1,16 @@
+{
+    "name": "Game.EngineDev",
+    "rootNamespace": "TheBadge.Greybox",
+    "references": [
+        "TheBadge.Sim"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -6,6 +6,8 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Greybox/Scenes/Greybox.unity
-    guid: 299631f711998b0765d91ad8d70aefd2
-  m_configObjects: {}
+    path: Assets/Match/Scenes/MacSunum.unity
+    guid: a60d4b551a7eb4e2a9b66640b1ad3037
+  m_configObjects:
+    com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
+  m_UseUCBPForAssetBundles: 0
