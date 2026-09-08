@@ -8464,5 +8464,180 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
               $"asmdef/csproj grafigi birebir + netstandard2.1/C#9 + src disi .cs yok + {s1kaynak} kaynakta UnityEngine izi yok)");
 }
 
+// --- S2TelemetriErisimi: Assets tarafinda telemetri yazicisi Game.Match'ten ERISILEBILIR mi? ---
+// Bu kapi, ayni zincirin UC KEZ kirilmasindan sonra yazildi (DECISIONS: "zincir belgede degil,
+// derlemenin okudugu dosyada biter"). asmdef sinirlari Unity disinda gorunmez oldugu icin
+// TelemetryLog'un Greybox~ arsivine geri dusmesi ya da Game.Match referansinin unutulmasi
+// SESSIZCE olur — konsol hatasini ancak Unity acan gorur. Burasi onu derleme oncesi yakalar.
+{
+    // Kok, S1 ile AYNI yoldan bulunur (elle '..' saymak kirilgan).
+    string unityKok = System.IO.Path.GetFullPath(System.IO.Path.Combine(
+        System.IO.Path.GetDirectoryName(FindRepoFile("unity/TheBadge/Packages/manifest.json")), ".."));
+    string assets = System.IO.Path.Combine(unityKok, "Assets");
+    string s2thata = "";
+
+    if (!System.IO.Directory.Exists(assets)) s2thata += "Assets klasoru bulunamadi; ";
+    else
+    {
+        string servis = System.IO.Path.Combine(assets, "Services");
+        string logger = System.IO.Path.Combine(servis, "TelemetryLog.cs");
+
+        // 1) Yazici ICE AKTARILAN bir klasorde olmali. '~' ile biten klasoru Unity hic gormez.
+        if (!System.IO.File.Exists(logger))
+            s2thata += "TelemetryLog.cs Assets/Services/ altinda YOK; ";
+        // Unity, ADI '~' ile biten KLASORU ice aktarmaz. Ilk yazimda mutlak yolda '~' ariyordum;
+        // repo '~' iceren bir dizinin altina cekilirse (or. /work/the-badge~review) bu kapi
+        // gecerli bir checkout'u arsivde sanip zorunlu suiti kirmiziya cevirirdi
+        // (inceleme bulgusu, Codex P2 — hata once tekrar uretildi, sonra duzeltildi).
+        // Bu yuzden yalniz Assets'e GORE goreli yolun KLASOR SEGMENTLERINE bakilir.
+        foreach (var f in System.IO.Directory.GetFiles(assets, "TelemetryLog.cs", System.IO.SearchOption.AllDirectories))
+        {
+            string goreli = f.Substring(assets.Length).TrimStart(
+                System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
+            var segmentler = goreli.Split(
+                System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
+            // Son segment dosya adi; yalniz klasor segmentlerine bakilir.
+            for (int i = 0; i < segmentler.Length - 1; i++)
+                if (segmentler[i].EndsWith("~", StringComparison.Ordinal))
+                {
+                    s2thata += $"TelemetryLog.cs hala '~' klasorunde (Unity ice AKTARMAZ): {goreli}; ";
+                    break;
+                }
+        }
+
+        // 2) Her .cs ve klasor icin .meta sart — eksik .meta Unity'de GUID kaymasi demek.
+        foreach (var gerekli in new[] { logger, System.IO.Path.Combine(servis, "Game.Services.asmdef") })
+            if (System.IO.File.Exists(gerekli) && !System.IO.File.Exists(gerekli + ".meta"))
+                s2thata += $"{System.IO.Path.GetFileName(gerekli)}.meta YOK; ";
+        if (System.IO.Directory.Exists(servis) && !System.IO.File.Exists(servis + ".meta"))
+            s2thata += "Services.meta (klasor) YOK; ";
+
+        // 3) Game.Services asmdef: var mi, adi dogru mu, PLATFORM/DEFINE kapsami tuketicilerini
+        //    karsiliyor mu.
+        //    Yalniz ADA bakmak yetmez (inceleme bulgusu, Codex P2): asmdef'e
+        //    includePlatforms:["Editor"], bir excludePlatforms girdisi ya da SAGLANMAYAN bir
+        //    defineConstraints eklenirse Unity o hedef icin Game.Services'i URETMEZ; her
+        //    platformda derlenen Game.Match onu cozemez ve TelemetryLog yine erisilemez olur —
+        //    yani kapinin YAKALADIGINI IDDIA ETTIGI hatanin ta kendisi, kapi yesilken.
+        string gsYolu = System.IO.Path.Combine(servis, "Game.Services.asmdef");
+        var gsInc = new List<string>(); var gsExc = new List<string>(); var gsDef = new List<string>();
+        if (!System.IO.File.Exists(gsYolu)) s2thata += "Game.Services.asmdef YOK — .cs Assembly-CSharp'a duser ve asmdef'li derlemeler onu REFERANSLAYAMAZ; ";
+        else using (var d = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(gsYolu)))
+        {
+            var k = d.RootElement;
+            if (k.GetProperty("name").GetString() != "Game.Services")
+                s2thata += "Game.Services.asmdef adi 'Game.Services' degil; ";
+            void Topla(string alan, List<string> hedef)
+            {
+                if (k.TryGetProperty(alan, out var dizi))
+                    foreach (var x in dizi.EnumerateArray()) hedef.Add(x.GetString());
+            }
+            Topla("includePlatforms", gsInc);
+            Topla("excludePlatforms", gsExc);
+            Topla("defineConstraints", gsDef);
+        }
+
+        // 4) Logger saf C# olmali — referanssiz asmdef ancak o zaman dogru.
+        if (System.IO.File.Exists(logger))
+        {
+            string metin = System.IO.File.ReadAllText(logger);
+            if (metin.IndexOf("UnityEngine", StringComparison.Ordinal) >= 0 ||
+                metin.IndexOf("UnityEditor", StringComparison.Ordinal) >= 0)
+                s2thata += "TelemetryLog.cs UnityEngine/UnityEditor'e dokunuyor (asmdef referanssiz olamaz); ";
+        }
+
+        // 5) ASIL KAPI: Game.Match ve test aynasi Game.Services'i referansliyor mu?
+        //    Unity'de asmdef referanslari GECISLI DEGIL; bu satir yoksa ekran loggeri goremez.
+        foreach (var (yol, etiket) in new[]
+        {
+            (System.IO.Path.Combine(assets, "Match", "Game.Match.asmdef"), "Game.Match"),
+            (System.IO.Path.Combine(assets, "Match", "Tests", "EditMode", "Game.Match.EditModeTests.asmdef"), "Game.Match.EditModeTests"),
+        })
+        {
+            if (!System.IO.File.Exists(yol)) { s2thata += $"{etiket}.asmdef YOK; "; continue; }
+            var refs = new List<string>();
+            using (var d = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(yol)))
+                if (d.RootElement.TryGetProperty("references", out var rl))
+                    foreach (var r in rl.EnumerateArray()) refs.Add(r.GetString());
+            if (!refs.Contains("Game.Services"))
+                s2thata += $"{etiket} 'Game.Services'i REFERANSLAMIYOR — TelemetryLog erisilemez; ";
+
+            // Saglayici, tuketicinin YASADIGI HER YERDE var olmali.
+            var tInc = new List<string>(); var tExc = new List<string>(); var tDef = new List<string>();
+            using (var d = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(yol)))
+            {
+                var k = d.RootElement;
+                void Topla2(string alan, List<string> hedef)
+                {
+                    if (k.TryGetProperty(alan, out var dizi))
+                        foreach (var x in dizi.EnumerateArray()) hedef.Add(x.GetString());
+                }
+                Topla2("includePlatforms", tInc);
+                Topla2("excludePlatforms", tExc);
+                Topla2("defineConstraints", tDef);
+            }
+            // includePlatforms bos = TUM platformlar. Saglayici daraltilmissa, tuketicinin
+            // platformlarini kapsamak zorunda.
+            if (gsInc.Count > 0)
+            {
+                if (tInc.Count == 0)
+                    s2thata += $"Game.Services includePlatforms=[{string.Join(",", gsInc)}] ile daraltilmis ama " +
+                               $"{etiket} TUM platformlarda derleniyor — daraltilan hedeflerde TelemetryLog erisilemez; ";
+                else
+                    foreach (var pl in tInc)
+                        if (!gsInc.Contains(pl))
+                            s2thata += $"Game.Services '{pl}' platformunda YOK ama {etiket} orada derleniyor; ";
+            }
+            // Saglayicinin disladigi bir platformda tuketici yasiyorsa kirilir.
+            foreach (var pl in gsExc)
+                if ((tInc.Count == 0 || tInc.Contains(pl)) && !tExc.Contains(pl))
+                    s2thata += $"Game.Services '{pl}' platformunu DISLIYOR ama {etiket} orada derleniyor; ";
+            // Saglayicida olup tuketicide OLMAYAN bir define kisiti: kisit saglanmazsa saglayici
+            // dusuyor, tuketici derlenmeye devam ediyor ve referans cozulmuyor.
+            foreach (var dc in gsDef)
+                if (!tDef.Contains(dc))
+                    s2thata += $"Game.Services defineConstraints '{dc}' tasiyor, {etiket} tasimiyor — " +
+                               $"kisit saglanmazsa saglayici duser ve referans cozulmez; ";
+
+            // 6) HARITA SURUKLENMESI: UNITY_SETUP.md'nin asmdef tablosu asmdef ile ayni seyi
+            //    soylemeli. Bu tablo iki kez bayatladi ve bir keresinde ona dayanarak YANLIS bir
+            //    duzeltme yapildi (DECISIONS: "zincir belgede degil, derlemenin okudugu dosyada
+            //    biter"). Belge kanit degildir ama YANLIS da olmamali.
+            if (etiket == "Game.Match")
+            {
+                string rehber = FindRepoFile("unity/UNITY_SETUP.md");
+                string satir = System.IO.File.ReadAllLines(rehber)
+                    .FirstOrDefault(l => l.StartsWith("| Game.Match ", StringComparison.Ordinal));
+                if (satir == null)
+                    s2thata += "UNITY_SETUP.md'de '| Game.Match ' satiri bulunamadi (tablo yeniden adlandirilmis?); ";
+                else
+                {
+                    // CIFT YONLU karsilastirma (inceleme bulgusu, Codex P2). Ilk yazimda yalnizca
+                    // "asmdef'teki her referans tabloda var mi" diye baktim; asmdef'ten bir referans
+                    // SILINIRSE o deger refs'te olmadigi icin tabloda kalan olu satir hic
+                    // denetlenmiyordu — kapi "harita asmdef ile ayni seyi soyluyor" derken YANLIS
+                    // soyluyor olurdu. S3'te kopru Game.Services'e tasininca tam bu olacakti.
+                    var belgeRefs = satir.Split('|')[3]
+                        .Replace("*", "").Replace("`", "")
+                        .Split(',')
+                        .Select(x => x.Trim())
+                        .Where(x => x.Length > 0)
+                        .ToList();
+                    var a = refs.OrderBy(x => x, StringComparer.Ordinal).ToList();
+                    var b = belgeRefs.OrderBy(x => x, StringComparer.Ordinal).ToList();
+                    if (!a.SequenceEqual(b, StringComparer.Ordinal))
+                        s2thata += $"UNITY_SETUP.md haritasi asmdef ile UYUSMUYOR: asmdef [{string.Join(",", a)}] " +
+                                   $"vs tablo [{string.Join(",", b)}]; ";
+                }
+            }
+        }
+    }
+
+    if (s2thata.Length > 0) failures += Fail("S2TelemetriErisimi", s2thata);
+    else Pass("S2TelemetriErisimi(TelemetryLog ice aktarilan klasorde + .meta tam + Game.Services asmdef'i + " +
+              "logger saf C# + Game.Match ve test aynasi Game.Services'i referansliyor + " +
+              "UNITY_SETUP.md haritasi asmdef ile BIREBIR ayni (cift yonlu) + platform/define kapsami tuketicileri karsiliyor)");
+}
+
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");
 return failures == 0 ? 0 : 1;

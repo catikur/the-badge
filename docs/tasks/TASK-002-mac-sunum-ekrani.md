@@ -16,11 +16,16 @@ playtest koşulmaz.*
 ## Önkoşul — ÖNCE BUNU DOĞRULA (Adım 0)
 
 `main` üç paylaşılan paketi Unity paketi olarak bağladı (ADR-002): `com.thebadge.sim`,
-`com.thebadge.commandbus`, `com.thebadge.world`. **Bunların Unity'de gerçekten derlendiği
-HENÜZ KANITLANMADI** — S1'i yazan ortamda Unity yok, kapı yalnız yapısal koşulları ölçüyor
-(`S1UnityPaketSiniri`).
+`com.thebadge.commandbus`, `com.thebadge.world`.
 
-Projeyi aç ve konsolu kontrol et. Beklenen: hata/uyarı yok, üç paket Packages altında görünüyor.
+**→ ARTIK KANITLANDI (PR #39).** Bu brif yazıldığında değildi — S1'i yazan ortamda Unity yok ve
+`S1UnityPaketSiniri` yalnız yapısal koşulları ölçer. Yerel oturum derleyiciye sordu:
+`CompilationPipeline` çıktısı `Game.Match refs=[TheBadge.Sim, TheBadge.CommandBus,
+TheBadge.World, Game.Services]` veriyor ve `Game.Services.dll` üretiliyor; **EditMode 23/23
+yeşil.** Üç paket Unity'de gerçekten çözülüyor ve derleniyor.
+
+Yine de projeyi ilk kez açıyorsan konsolu bir kez kontrol et (yerel Unity sürümü/önbellek farkı).
+Beklenen: hata/uyarı yok, üç paket Packages altında görünüyor.
 Patlarsa muhtemel sebepler ve ilk bakılacak yerler:
 - **CS0579 yinelenen öznitelik** → paket klasöründe `obj/`/`bin/` kalmış. Üç pakette
   `Directory.Build.props` çıktıyı repo kökündeki `artifacts/`e yönlendiriyor; o dosyalar
@@ -31,7 +36,7 @@ Patlarsa muhtemel sebepler ve ilk bakılacak yerler:
 
 **Bu adım DoD-G'nin ilk maddesidir ve raporlanmadan ilerlenmez.** Sorun çıkarsa düzeltmeyi
 `shared/` tarafında yap ve `dotnet run --project shared/TheBadge.Sim.Checks -c Release` ile
-doğrula — 179 kapı yeşil kalmalı.
+doğrula — 181 kapı yeşil kalmalı.
 
 ## Scope
 
@@ -78,12 +83,19 @@ yalnız sahne + bootstrap diyordum ve bu, önlemeye çalıştığım şeyi yapar
 Balance dosyasını **repo kökünden** okuyor (`Application.dataPath/../../../balance/sim.balance.json`),
 `Greybox/Resources/greybox.balance.json`dan DEĞİL — o dosya arşivle kalabilir.
 
-**UYGULAMA DURUMU (main @ `56ccb2b`, PR #37 sonrası kontrol edildi):**
-Adım 1 ve 3 YAPILDI — `Assets/EngineDev/` sahne + bootstrap + `SpriteFactory` ile duruyor,
-kalan greybox `Assets/Greybox~/` olarak arşivlendi. **Adım 2 YAPILMADI:** `TelemetryLog.cs`
-bugün hâlâ `Assets/Greybox~/Scripts/Sim/TelemetryLog.cs` içinde, yani Unity'nin içe AKTARMADIĞI
-klasörde. Tam da uyarılan sonuç gerçekleşti: **TASK-003 bugün yazılamaz.** Aşağıdaki adım 2
-(taşıma + `Game.Match` referansı) turdan önce yapılmalı.
+**UYGULAMA DURUMU — ÜÇ ADIM DA TAMAM.**
+Adım 1 ve 3 daha önce yapılmıştı (`Assets/EngineDev/` sahne + bootstrap + `SpriteFactory`;
+kalan greybox `Assets/Greybox~/`). **Adım 2 bir süre EKSİK kaldı** — `TelemetryLog.cs`
+arşivde, yani Unity'nin içe aktarmadığı klasörde kalmıştı ve TASK-003 yazılamıyordu.
+
+Artık kapandı: logger `Assets/Services/` altında (GUID korunarak), yanında referanssız bir
+`Game.Services` asmdef'i var ve **`Game.Match.asmdef` ile test aynası `"Game.Services"`i
+referanslıyor.** İkisi birlikte yapılmasaydı taşıma hiçbir şey çözmezdi.
+
+**Bir daha sessizce bozulmasın diye kapıya bağlandı:** `S2TelemetriErisimi`
+(`shared/TheBadge.Sim.Checks`) yazıcının içe aktarılan klasörde olduğunu, `.meta`ların tam
+olduğunu, asmdef'in var olduğunu, logger'ın saf C# kaldığını ve referansın yerinde durduğunu
+Unity açmadan ölçüyor. Dört bozma senaryosunun dördünde de kırmızıya dönüyor.
 
 Sıra:
 1. **İlk ÜÇ dosya** (sahne + bootstrap + `SpriteFactory`, `.meta`larıyla) `Assets/EngineDev/`
@@ -226,7 +238,7 @@ artı/eksileriyle sun, karar iste) — ama o, bu listeye ait değil.
 - **Bus reddi sebebiyle gösteriliyor** (`CommandOutcome.Detail`); motor geç reddi en az
   sayaç olarak görünüyor. Bant dışı bir delta ile ikisi de elle denenip raporlanır.
 - Aynı seed + aynı müdahaleler = aynı skor (elle doğrula, raporla).
-- `dotnet run --project shared/TheBadge.Sim.Checks -c Release` yeşil (179 kapı).
+- `dotnet run --project shared/TheBadge.Sim.Checks -c Release` yeşil (181 kapı).
 
 ## Verification required (DoD-G)
 
@@ -238,11 +250,11 @@ artı/eksileriyle sun, karar iste) — ama o, bu listeye ait değil.
 
 ## Sonraki adım (bu brifin DIŞINDA)
 
-Önce **`docs/tasks/TASK-003-playtest-telemetrisi.md`** — turun kapı metriklerinden biri
-("sıkılma işareti < 3/maç") telemetrisiz ÖLÇÜLEMEZ ve geçen turda tam da bu eksikti.
-Telemetri ekranı bloklamaz, TURU bloklar.
+~~Önce `docs/tasks/TASK-003-playtest-telemetrisi.md`~~ → **YAPILDI (PR #39).** Turun kapı
+metriklerinden biri ("sıkılma işareti < 3/maç") telemetrisiz ölçülemiyordu ve geçen turda tam
+da bu eksikti; artık `MacTelemetri` yazıyor.
 
-Sonra **mülakatlı gözlem turu**: 3-5 kişi, kişi başı ≥15 dk serbest oynama,
+Sıradaki iş doğrudan **mülakatlı gözlem turu**: 3-5 kişi, kişi başı ≥15 dk serbest oynama,
 yönlendirme yok. `docs/PLAYTEST_3G.md` biçimi kullanılır ama **mini mülakat tablosu ve telemetri
 BU SEFER DOLDURULUR** — geçen turda doldurulmadığı için kopuş nedeni bilinmiyor ve bütün 5G-a
 o eksiği kapatmak için var.

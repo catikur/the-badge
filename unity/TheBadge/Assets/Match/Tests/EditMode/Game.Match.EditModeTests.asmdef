@@ -6,6 +6,7 @@
         "TheBadge.Sim",
         "TheBadge.CommandBus",
         "TheBadge.World",
+        "Game.Services",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

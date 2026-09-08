@@ -3,6 +3,16 @@
 > TASK-002'nin turunu koşulabilir kılar. Bağlayıcı üst belge:
 > `docs/briefs/BRIEF_5G_DIKEY_DILIM.md`; tur tanımı `docs/PLAYTEST_3G.md`.
 
+> ## ✅ UYGULANDI — PR #39 (2026-09-06)
+>
+> Bu brif **koşuldu**; aşağısı artık yapılacak iş değil, uygulanan tasarımın gerekçesi.
+> Kod: `Assets/Match/MacTelemetri.cs` (olay adları tek dosyada) + `MacSunumEkrani` çağrıları;
+> yazıcı `Assets/Services/TelemetryLog.cs` yeniden yazılmadan kullanıldı. Bant dışı hata
+> uyarısı ekranda (`TelemetriUyarisiTazele`). Örnek çıktı:
+> `docs/samples/playtest_ornek_oturum.jsonl`. Karar kaydı: `docs/DECISIONS.md` → *S2/T3 UYGULANDI*.
+>
+> **Sıradaki iş kod değil, TURU KOŞMAK.**
+
 ## Objective
 
 Mülakatlı gözlem turunun ölçebilmesi için **yerel bir JSONL olay logu**. Tur kapısının iki
@@ -18,38 +28,40 @@ metriğinden biri buna bağlı ve geçen sefer TAM DA BU eksikti.
 
 ## Ama sanıldığından KÜÇÜK — yazıcı zaten var
 
-`unity/TheBadge/Assets/Greybox~/Scripts/Sim/TelemetryLog.cs` — **88 satır, sıfır UnityEngine
-referansı** (`using` satırları yalnız `System`, `System.Globalization`, `System.IO`,
-`System.Text`), jenerik `Event(tip).Str(...).Send()` kurucusu, her satırda flush (uygulama
-playtest ortasında kapansa da veri kalır). Ürettiği biçim repoda örnekli:
-`docs/samples/telemetry_ornek_oturum.jsonl`.
+`unity/TheBadge/Assets/Services/TelemetryLog.cs` — **88 satır, sıfır UnityEngine referansı**
+(`using` satırları yalnız `System`, `System.Globalization`, `System.IO`, `System.Text`;
+tek başına netstandard2.1/C# 9 derlenip doğrulandı), jenerik `Event(tip).Str(...).Send()`
+kurucusu, her satırda flush (uygulama playtest ortasında kapansa da veri kalır). Ürettiği biçim
+repoda örnekli: `docs/samples/telemetry_ornek_oturum.jsonl`.
 
-**Dikkat: yol `Greybox~`** — tilde'li klasör. Bu dosya bugün Unity'ye içe AKTARILMIYOR;
-aşağıdaki ön koşul bölümüne bak.
+Derlemesi `Game.Services`; namespace hâlâ `TheBadge.Greybox.Sim` (taşımada korundu), yani
+ekranda `using TheBadge.Greybox.Sim;` gerekir.
 
 **YENİDEN YAZMA.** Yapılacak iş yazıcı değil, **olay kümesi**.
 
-## 🛑 ÖN KOŞUL — tuzak PATLADI, önce kurtarma yapılır
+## ✅ ÖN KOŞUL KAPANDI — yazıcı artık erişilebilir
 
-Bu bölüm önceden bir UYARIydı (*"arşivden önce çıkar"*). **Artık uyarı değil, olmuş bir olay.**
-`main @ 56ccb2b` durumu: TASK-002'nin arşiv adımı yapıldı, taşıma adımı yapılmadı. Sonuç:
-`TelemetryLog.cs` bugün `Assets/Greybox~/Scripts/Sim/` içinde ve **Unity `~` ile biten klasörü
-içe aktarmaz** — yani yazıcı derlenmiyor, `Game.Match` onu göremiyor.
+Bu bölüm önce bir UYARIydı (*"arşivden önce çıkar"*), sonra olmuş bir olaydı: arşiv yapılmış,
+taşıma yapılmamıştı; `TelemetryLog.cs` Unity'nin içe aktarmadığı `Assets/Greybox~/` içinde
+kalmıştı ve TASK-003 yazılamıyordu.
 
-**TASK-003'e BAŞLAMADAN ÖNCE TASK-002 adım 2 uygulanır** (`docs/tasks/TASK-002-mac-sunum-ekrani.md`).
-İki iş birlikte yapılır, biri eksik kalırsa logger yine erişilemez:
+**Kurtarma uygulandı.** Bugünkü durum:
 
-1. `TelemetryLog.cs` (+ `.meta`) → `Assets/Services/`, yanına minimal `Game.Services` asmdef
-   (logger saf C# olduğu için asmdef'in referansı YOK).
-2. **`Game.Match.asmdef`in `references` dizisine `"Game.Services"` eklenir.** Bu satır olmadan
-   `MacSunumEkrani` `TelemetryLog`u çağıramaz.
+1. `TelemetryLog.cs` (+ `.meta`, GUID korunarak) `Assets/Services/` altında; yanında minimal
+   bir `Game.Services` asmdef'i — logger saf C# olduğu için **referansı YOK**.
+2. **`Game.Match.asmdef` ve `Game.Match.EditModeTests.asmdef` `"Game.Services"`i referanslıyor.**
+   Unity'de asmdef referansları geçişli değildir; bu satır olmadan `MacSunumEkrani` loggerı
+   çağıramazdı.
 
-Namespace'i `TheBadge.Greybox.Sim`; derlemeyi etkilemediği için kalabilir, istenirse ayrı adımda
-düzeltilir.
+Namespace hâlâ `TheBadge.Greybox.Sim` — derlemeyi etkilemiyor, istenirse ayrı adımda düzeltilir.
+Yani ekranda `using TheBadge.Greybox.Sim;` gerekecek.
 
-**Kabul kriteri olarak:** bu iki iş bitmeden yazılan hiçbir telemetri kodu derlenmez — turdan
-önce Unity konsolunun temiz olduğu ve `MacSunumEkrani` içinden `TelemetryLog`a erişilebildiği
-gösterilir.
+**Kapıya bağlandı:** `S2TelemetriErisimi` bu kurulumu her koşuda doğruluyor (yazıcı içe
+aktarılan klasörde mi, `.meta`lar tam mı, asmdef var mı, logger saf C# mi, referans yerinde mi).
+Yani bu ön koşul bir daha sessizce bozulamaz.
+
+**Turdan önce yine de gösterilir:** Unity konsolu temiz ve `MacSunumEkrani` içinden
+`TelemetryLog`a gerçekten erişiliyor — kapı dosya düzenini ölçer, editörün derlediğini değil.
 
 Bu, aynı şeklin **üçüncü örneğiydi** (EngineDev/`SpriteFactory` ikincisiydi) ve önlenemedi —
 `docs/DECISIONS.md`'deki kural bu yüzden keskinleştirildi: *tehlikeyi adlandıran çare, zincirin
@@ -128,7 +140,7 @@ Greybox'ta bu ölçülmemişti; %40'ın nedenini bilmememizin bir sebebi de bu.
 - **Telemetri yazamazsa ekranda görünüyor:** yazılamayan bir dizine yönlendirip denenir ve
   uyarının çıktığı raporlanır (bant dışı bildirim, kural 3).
 - Oturum kimliği dosya adında ve her satırda; PII yok.
-- `dotnet run --project shared/TheBadge.Sim.Checks -c Release` yeşil (180 kapı; bu iş çekirdeğe
+- `dotnet run --project shared/TheBadge.Sim.Checks -c Release` yeşil (181 kapı; bu iş çekirdeğe
   dokunmamalı — dokunduysa sebebini yaz).
 
 ## Verification required (DoD-G)
@@ -141,8 +153,12 @@ Greybox'ta bu ölçülmemişti; %40'ın nedenini bilmememizin bir sebebi de bu.
 
 ## Sıra
 
-TASK-002 ekranı → **TASK-002 adım 2 kurtarması** → **TASK-003 telemetrisi** → mülakatlı tur.
+~~TASK-002 ekranı~~ → ~~TASK-002 adım 2 kurtarması~~ → ~~TASK-003 telemetrisi~~ **(üçü de yapıldı)**
+→ **MÜLAKATLI TUR ← ŞU AN BURADAYIZ**
 
-Telemetri turu bloklar, ekranı BLOKLAMAZ: ekran koşarken paralel yazılabilir. **Ama arşiv
-adımı ZATEN YAPILDI** — o yüzden "önce çıkar" seçeneği kalmadı; yukarıdaki ön koşul bölümündeki
-kurtarma (taşıma + `Game.Match` referansı) TASK-003'ün ilk işidir.
+Yazılacak kod kalmadı. Telemetri turu bloklardı, artık bloklamıyor: yazıcı erişilebilir
+(`S2TelemetriErisimi` ölçüyor), olay kümesi `MacTelemetri`de kurulu, örnek çıktı
+`docs/samples/playtest_ornek_oturum.jsonl`'de.
+
+**Kalan iş ölçüm aracı değil, ÖLÇÜMÜN KENDİSİ:** oyuncuları bul, turu koş, mülakat tablosunu
+ve telemetri özetini `docs/PLAYTEST_3G.md`'ye doldur.
