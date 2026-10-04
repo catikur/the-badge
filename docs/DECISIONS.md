@@ -3626,6 +3626,16 @@ dilimidir.**
 - **Dişler ölçüldü** (Linux'ta, kopyada): referansta gerçek sapma → kırıldı; referansa borç
   yazılması → kırıldı; tabloda yinelenen/bant dışı indeks → kırıldı; karar fonksiyonundan ratchet
   dalı sökülünce → meta-kapı kırıldı.
+- **Çıktı pininin dişleri de ölçüldü** (Linux'ta, izole kopyada; Linux borçlu platform rolünde:
+  referans `osx-arm64`, golden #4 ve #20 bozuldu). Veride: `null` → kırıldı ve iki kaydı
+  yapıştırılabilir bastı; basılan kayıtlar aynen yapıştırılınca → BORÇLU geçti; **Codex senaryosu**
+  (#4 hâlâ sapıyor, küme {4,20} aynı, ama çıktısı pinden farklı) → *"bilinen sapmanın ÇIKTISI
+  DEĞİŞTİ: #4 pinli→ölçülen (stateHash …, skor 2-0→1-0)"* ile kırıldı — eski kapı burada
+  GEÇERDİ; #20 düzelince → hem tablo (*"golden'la AYNI"*) hem hüküm (*"borç AZALDI"*) kırıldı;
+  pinli `configHash` golden'dan farklı → *"BAYAT"*; gerçek düzende eski biçim (`sapanIndeksler`)
+  → Linux'ta tablo kırıldı, replay'in kendisi geçti. Kodda: hükümden "çıktı değişti" dalı
+  sökülünce `M17PlatformBorcKarari`; okuyucudan "0x + 16 hex" doğrulaması ve tutarlılıktan BAYAT
+  dalı sökülünce `M17PlatformBorcOkuma` kırıldı — her diş yalnız kendi hedef kapısını kırdı.
 
 **ÖLÇÜLDÜ (2026-10-04).** Yerel kayıt yalnız "4/50, ilk sapma #4" diyordu; indeks KÜMESİ
 bilinmiyordu. Borç girdisi bu yüzden `null` başladı ve CI'ın ilk macOS koşusu kasten kırmızı döndü:
