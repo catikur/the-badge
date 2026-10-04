@@ -3,8 +3,8 @@
   "referansPlatform": "linux-x64",
   "borc": {
     "osx-arm64": {
-      "sapanIndeksler": null,
-      "kaynak": "Yerel macOS arm64 (.NET 8.0.424): 4/50, ilk sapma #4. Indeks kumesi CI'in ilk macos-15 kosusunda olculur."
+      "sapanIndeksler": [4, 20, 48, 49],
+      "kaynak": "OLCULDU 2026-10-04 — CI macos-15 (macOS 15.7.9, arm64), is 111504871228: 4/50 [#4,#20,#48,#49], ilk sapma #4 state 0x49A5BE4C5BFB6626/0x1B712016B8998E17. Atilla'nin yerel macOS arm64 olcumuyle (.NET 8.0.424, 2026-09-06) AYNI hash'ler — sapma makineye degil platforma (libm) bagli ve deterministik."
     }
   }
 }

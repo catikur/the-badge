@@ -3600,9 +3600,24 @@ dilimidir.**
   yazılması → kırıldı; tabloda yinelenen/bant dışı indeks → kırıldı; karar fonksiyonundan ratchet
   dalı sökülünce → meta-kapı kırıldı.
 
-**İLK ÖLÇÜM BEKLENİYOR.** Yerel macOS kaydı yalnız "4/50, ilk sapma #4" diyordu; indeks
-KÜMESİ bilinmiyor. Borç girdisi bu yüzden `null` (ölçülmemiş) başlar: CI'ın ilk macOS koşusu
-kümeyi basıp KIRMIZI döner, küme oradan okunup tabloya yazılır. Tahmin değil ölçüm.
+**ÖLÇÜLDÜ (2026-10-04).** Yerel kayıt yalnız "4/50, ilk sapma #4" diyordu; indeks KÜMESİ
+bilinmiyordu. Borç girdisi bu yüzden `null` başladı ve CI'ın ilk macOS koşusu kasten kırmızı döndü:
+
+```
+[osx-arm64] 4/50 — ölçüm [#4, #20, #48, #49]
+ilk sapma #4: state 0x49A5BE4C5BFB6626 / 0x1B712016B8998E17 · skor 1-0/1-0 · tick 55200
+```
+
+Küme tabloya yazıldı. **Asıl bulgu hash'lerde:** CI (macOS 15.7.9, `macos-15`) Atilla'nın
+yerel ölçümüyle (2026-09-06) **bit bit aynı** state hash'lerini üretti. Yani sapma makineye ya
+da kuruluma değil **platforma (libm) bağlı ve deterministik** — "bazen tutuyor" değil, "bu
+platformda hep başka sonuç". (a) dilimi için iyi haber: hedef sabit, ölçüm tekrarlanabilir.
+
+**Not — araç zinciri:** CI işi `dotnet 10.0.400` SDK'sıyla derledi (runner'da önceden kurulu;
+repoda `global.json` yok, en yeni SDK seçiliyor). Uygulama `net8.0` olduğu için .NET 8
+çalışma zamanında koşar ve sonuç Atilla'nın .NET 8.0.424 SDK'sıyla aynı çıktı — bu ölçümü
+etkilemedi. Ama determinizm iddiası taşıyan bir kapıda araç zincirinin sabitlenmesi (bir
+`global.json` ile 8.0.x) ayrı bir karar olarak önerilir.
 
 **SINIRI (abartmamak için):** bu iş .NET'i macOS arm64'te ölçer. Gerçek istemci **Unity IL2CPP /
 iOS arm64** — farklı çalışma zamanı, farklı libm. CI işi o platformun VEKİLİDİR, kendisi değil.
