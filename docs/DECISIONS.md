@@ -3574,20 +3574,108 @@ penceresi 1,6 sn ve otomasyonla o pencereye tıklamak güvenilir değil. Alan bi
 kapsanıyor ve canlı yolu tek satır (`duraklamaKalan > 0f`); gözlem turunun ilk oturumunda
 gerçek bir insan tıklamasıyla doğrulanmalı.
 
+### P0 KARARI (2026-10-04, Atilla): **(b) hemen + (a) 5G-a turundan sonra** — tur bitti, (a) sıradaki motor dilimi
+
+Bulgu yukarıda (2026-09-06). Karar önerildiği gibi: **önce ölç, sonra düzelt.** Atilla aynı gün
+5G-a mülakatlı gözlem turunun **tamamlandığını** bildirdi (sonuçlar henüz `docs/PLAYTEST_*`
+kaydına işlenmedi — bkz. aşağıdaki kayıt). Yani (a)'nın tetiği düştü: **P0 (a) sıradaki motor
+dilimidir.**
+
+**(b) UYGULANDI — kapı artık iki platformda ölçüyor:**
+- `.github/workflows/ci-platform.yml` — aynı `Sim.Checks` **macOS arm64**'te (`macos-15`) koşar.
+  `shared/**`, `balance/**` değişince tetiklenir (determinizm sim koduna bağlı); repo açık olduğu
+  için macOS dakikası ücretsizdir. Mimari adımı `arm64` değilse iş düşer — borç tablosu arm64
+  için ölçülür, sessizce x64'te koşup "geçti" demesin.
+- `M17GoldenReplay` **platforma duyarlı** oldu, ama gevşemedi:
+  - referans platform (`linux-x64`, golden set orada üretilir) → **eskisi gibi katı**
+  - tabloda olmayan platform → **katı** (ölçülmemiş platform borç sayılamaz)
+  - borçlu platform → bilinen sapan replay'ler `goldens/platform_debt.json`'da **İNDEKSLERİYLE**
+    tutulur. Sayıyla tutulsaydı "farklı 4 replay saptı" da geçerdi.
+  - **yeni** bir indeks saparsa kırılır (regresyon); **bilinen bir indeks düzelirse de** kırılır
+    (ratchet — liste daraltılsın, gevşeklik birikmesin); referansa borç yazılırsa kırılır.
+- Ortam değişkeniyle "platform taklidi" kancası **bilerek yok**: öyle bir kanca referans platformda
+  borç satın almanın yolu olurdu. Karar mantığı saf bir fonksiyon (`PlatformBorcHukmu`) ve
+  `M17PlatformBorcKarari` onu **12 fikstürle** sınar — en önemlisi "aynı SAYI, farklı küme".
+- **Dişler ölçüldü** (Linux'ta, kopyada): referansta gerçek sapma → kırıldı; referansa borç
+  yazılması → kırıldı; tabloda yinelenen/bant dışı indeks → kırıldı; karar fonksiyonundan ratchet
+  dalı sökülünce → meta-kapı kırıldı.
+
+**İLK ÖLÇÜM BEKLENİYOR.** Yerel macOS kaydı yalnız "4/50, ilk sapma #4" diyordu; indeks
+KÜMESİ bilinmiyor. Borç girdisi bu yüzden `null` (ölçülmemiş) başlar: CI'ın ilk macOS koşusu
+kümeyi basıp KIRMIZI döner, küme oradan okunup tabloya yazılır. Tahmin değil ölçüm.
+
+**SINIRI (abartmamak için):** bu iş .NET'i macOS arm64'te ölçer. Gerçek istemci **Unity IL2CPP /
+iOS arm64** — farklı çalışma zamanı, farklı libm. CI işi o platformun VEKİLİDİR, kendisi değil.
+İstemci eşitliğinin asıl kanıtı, aynı replay setinin Unity'de (EditMode) koşturulmasıdır; bu P0
+(a) diliminin kabul ölçütüne girer.
+
+**(a) İÇİN EK — envanterde görülmeyen bir sınıf (2026-10-04, `main` taranarak):** kaydın üç
+sıcak-yol çağrısı (`MatchEngine.cs` `Tan`/`Exp`, `Lod2Resolver.cs` `Exp`) durumu etkileyen sıcak
+yol için **eksiksiz**. Ama çare "LUT'a çevir" olacaksa şunu bilmek gerekir: **mevcut LUT'ların
+kendisi** her platformda çalışma anında yeniden hesaplanıyor ve sim durumunu besliyor —
+`EffectiveAttributes.Build` (`Math.Pow`, kondisyon + drenaj tabloları) ve `TrigLut` (`Math.Sin`).
+`Math.Round(x * 65536)` yuvarlaması riski küçültür ama kaldırmaz: bir değer .5 sınırına bir ulp
+yakın düşerse iki platform farklı tamsayı üretir. **(a)'nın tasarım şartı:** tablolar ya sabit
+VERİ olarak repoya gömülür ya da başlangıçta hash'leri bilinen bir değere karşı doğrulanır;
+aksi hâlde çare hastalığı taşır.
+Sunum çağrıları (`RecordXg` `Atan2`/`Log`/`Exp`, `WinProb`, `LiveWinProb`) replay sonucunu
+bozmaz, ama istemci ile sunucu **farklı xG / highlight / kazanma ihtimali gösterebilir.** Bunun
+kabul edilebilir olup olmadığı (sunucu-otoriter gösterim mi, yerel hesap mı) (a) diliminde
+ayrıca karara bağlanmalı.
+
+### LOD 2 ÖZET LOGU — sahipsiz düzeltme portlandı, iki kapı sertleşti (2026-10-04)
+
+`cursor/lod2-summary-issues-6794` (66837a7, 19 Ağustos) için **hiç PR açılmamıştı**; üç hata
+`main`'de bir buçuk ay durdu. Bugünkü `main`'e temiz uygulanmıyordu (aradaki 142 commit), elle
+portlandı:
+1. **Çökme:** boş özette (0-0 kartsız — LOD 2'de olağan) `GetSummaryEvent(0)` → `summary[-1]`.
+   Gizliydi, çünkü özeti bugün yalnız Checks okuyor; hikaye katmanı okumaya başladığı gün patlardı.
+2. **Kırmızı kart özete yazılmıyordu** — ME 16.1 LOD 2 özeti için *"şut zinciri + kartlar"* der.
+3. **Gol `AuxData`'sı rakibin NİHAİ sayısını taşıyordu;** LOD 0 sözleşmesi gol ANINDAKİ skor.
+
+**PORTTA YAKALANANLAR:**
+- Cursor commit'i `team * 20` taraf ayrımını kullanıyordu. Olduğu gibi uygulansaydı **K10
+  düzeltmesini geri alırdı** (`team * SummaryCapacity`). Çakışmanın sebebi buydu; K10 korundu.
+- **K9'un tek "kasıtlı paylaşım" bildirimi kaldırıldı.** Sarı kart toplamı ile taraf başına değerler
+  aynı `Yuvarla` çağrılarını iki yerden okuyordu ve bildirim SATIR NUMARASINA bağlıydı — 2026-09-04'te
+  ve bu portta satırlar kayınca iki kez düştü. Kart sayıları artık BİR KEZ çekilip sonuca ve özete
+  aynı değişkenden veriliyor: paylaşım yapısal olarak kalktı, K9 daha SIKI (izin verilen paylaşım 0).
+- **K10'un 1. kontrolü SAYIDAN ÖZELLİĞE çevrildi.** İfadenin "tam 2 kez" geçmesini istiyordu;
+  kırmızı kart üçüncü meşru çağrı yerini doğurunca spec'in istediği özelliği yapısal olarak engelledi.
+  Kapının 2. maddesinin kendi yorumu aynı hatayı zaten adlandırıyordu: *"sayı değil ÖZELLİK"*. Yeni
+  hâli: özet logdaki HER RNG çağrısı tarafları tam olarak `team * SummaryCapacity + idx` ile ayırır.
+  **Gevşetme değil** — dişlerle gösterildi (aşağıda).
+
+**KAPILAR (18h)** Cursor'ınkilerden iki noktada sıkı: kartta "en az bir kırmızı" değil özet ↔ sonuç
+**tam eşitlik**; golde "≥2 gol" değil **iki takımın da gol attığı maç** — eski hata yalnız orada
+görünür, 2-0'larla dolu bir örneklem eski kodu da geçirirdi. 18d determinizm kapısı `AuxData`'yı
+da karşılaştırıyor.
+
+**DİŞLER (izole kopyada, her biri bozup geri alındı):**
+- boş özet koruması sökülünce → `M15Lod2BosOzet` kırıldı (`IndexOutOfRangeException` yakalandı,
+  süit ÇÖKMEDİ)
+- kırmızı kart yazılmayınca → `M15Lod2KartOzeti`: *"özet 0 kırmızı ≠ sonuç 2"*
+- eski nihai-skor kodlaması geri gelince → `M15Lod2GolSkoru`: bir maçın dizisi *"1-2 → 2-1 → 2-2"*
+  çıkıyor, gerçekte *"1-0 → 1-1 → 2-1"*
+- `team * 20` yazılınca → `K10OzetAyrimi`: *"[7200 + team * 20 + idx] … KOPMUS"*
+- sırası değişmiş yazım (`idx + team * SummaryCapacity`) → `K10OzetAyrimi`: *"[7100 + idx + team *
+  SummaryCapacity] … KOPMUS"* — yani yeni hâl eskisinin yakaladığını yakalıyor, üstelik sayıya bağlı değil
+
+**Determinizm:** özet logu state hash'e ve golden'lara girmiyor; `M17GoldenReplay` 50/50 aynı.
+**Kart `AuxData`'sı bilinçli olarak dokunulmadı:** LOD 0'da kırmızı 1 = direkt, 2 = ikinci sarı;
+LOD 2 tablosu türü ayırt etmez, `1` yazılır — koda "yaklaşımdır, ölçüm değil" notu düşüldü.
+
+### 5G-a GÖZLEM TURU KOŞULDU (2026-10-04, Atilla bildirdi) — sonuçlar repoya İŞLENMEDİ
+
+Atilla 5G-a mülakatlı gözlem turunun tamamlandığını bildirdi. Mülakat tablosu, telemetri özeti
+ve kapı metrikleri (`"bir maç daha"` oranı, sıkılma işareti/maç) **henüz repoda değil.** Kapı
+kararı — 5G-a'nın geçip geçmediği ve 5G-b'nin açılıp açılmayacağı — **veriyle verilir**, bu kayıt
+o kararı vermez. Sonuçlar gelince `docs/PLAYTEST_3G.md` biçiminde yeni bir tur kaydına işlenir
+(Anayasa 9: sohbette kalan karar yok hükmündedir).
+
 ## Bekleyen kararlar
 
-- **🔴 P0 — platformlar arası determinizm (2026-09-06).** Bulgu yukarıda; burada karar
-  bekleyen şey ÖNCELİK ve YÖNTEM. Seçenekler: **(a)** hemen bir motor dilimi aç, üç çağrıyı
-  (`Math.Exp` ×2, `Math.Tan`) sabit-nokta/LUT'a çevir ve 50 replay'i iki platformda karşılaştır
-  — artısı değişmez #2'yi gerçekten geri getirir, eksisi 5G'yi durdurur. **(b)** CI'a bir
-  macOS arm64 iş ekle, kapıyı ÖNCE iki platformda ölçülür hale getir, düzeltmeyi ölçüme göre
-  planla — artısı "hangi çağrı" sorusunu tahminle değil ölçümle kapatır ve ucuzdur, eksisi
-  düzeltmeyi geciktirir. **(c)** 5G-a gözlem turunu bitir, sonra aç — artısı fun kapısı zaten
-  tek makinede koşuyor ve platform eşitliği o turu etkilemiyor, eksisi borç büyür.
-  **Önerim (b) hemen + (a) 5G-a turundan sonra:** ölçüm olmadan hangi çağrının suçlu olduğunu
-  bilmiyoruz ve bu projenin kendi kuralı tam olarak bunu yasaklıyor. **Not:** bu bulgu 5G-a
-  gözlem turunu ENGELLEMEZ (tur tek cihazda koşuyor), ama 5G-b'nin cihaz/sunucu ayağından
-  ÖNCE kapanmalı.
+- ~~**🔴 P0 — platformlar arası determinizm (2026-09-06).**~~ → **KARAR VERİLDİ (2026-10-04, Atilla): (b) hemen + (a) 5G-a turundan sonra.** (b) uygulandı; tur bitti, (a) sıradaki motor dilimi. Bkz. yukarıdaki *P0 KARARI* kaydı.
 
 - **Motorun GEÇ REDDİ maç sunum ekranında erişilemez (TASK-002, 2026-09-06).** Kabul ölçütü
   "bant dışı bir delta ile İKİSİ de elle denenip raporlanır" diyor; yapısal olarak mümkün değil
