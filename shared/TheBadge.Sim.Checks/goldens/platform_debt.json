@@ -1,0 +1,10 @@
+{
+  "aciklama": "M17 golden replay seti icin PLATFORM BORCU. Golden set referans platformda uretilir; baska bir platformda bilinen sapan replay'ler burada OLCULMUS indeksleriyle tutulur. Bu bir tolerans DEGIL, korumali borctur: yeni bir indeks saparsa kapi kirilir (regresyon), bilinen bir indeks duzelirse de kirilir (ratchet: liste daraltilmali). sapanIndeksler null = henuz olculmedi; o platformda kapi olcumu basip kirilir. Hedef her platformda bos liste; P0 (a) motor dilimi borcu kapatir. Kaynak: docs/DECISIONS.md, P0 platformlar arasi determinizm (bulgu 2026-09-06, karar 2026-10-04).",
+  "referansPlatform": "linux-x64",
+  "borc": {
+    "osx-arm64": {
+      "sapanIndeksler": null,
+      "kaynak": "Yerel macOS arm64 (.NET 8.0.424): 4/50, ilk sapma #4. Indeks kumesi CI'in ilk macos-15 kosusunda olculur."
+    }
+  }
+}
