@@ -3640,6 +3640,25 @@ yerel ölçümüyle (2026-09-06) **bit bit aynı** state hash'lerini üretti. Ya
 da kuruluma değil **platforma (libm) bağlı ve deterministik** — "bazen tutuyor" değil, "bu
 platformda hep başka sonuç". (a) dilimi için iyi haber: hedef sabit, ölçüm tekrarlanabilir.
 
+**KAYITLAR ÖLÇÜLDÜ — P0'ın ağırlığı değişti (2026-10-04).** Borç çıktıyı pinlemeye geçince
+(yukarıda, Codex P2) girdi yine `null` başladı; macOS işi (`105be46`, iş 111517217152) kasten
+kırılıp dört kaydı kendi biçiminde bastı, tabloya aynen yazıldı. Alan alan fark, "ilk sapma"
+satırının gizlediğini gösterdi:
+
+| Replay | Linux (golden) | macOS arm64 |
+| --- | --- | --- |
+| #4 | 1-0 · 2 değişiklik | 1-0 · **1 değişiklik** |
+| #20 | **0-3** · 55200 tick · 1 değişiklik | **1-1** · 55800 tick · 2 değişiklik |
+| #48 | **0-0** · 1 değişiklik | **0-1** · 2 değişiklik |
+| #49 | **1-0** | **3-0** |
+
+Bugüne kadarki kayıt yalnız #4'ü gösteriyordu (skor aynı, yalnız durum farklı) ve sapma "hash
+düzeyinde" sanılabilirdi. Değil: **4 sapmanın 3'ünde MAÇ SONUCU farklı** (50 replay'de 3, %6),
+dördüncüde teknik direktörün oyuncu değişikliği kararı farklı. Yani istemci simi yerelde koşup
+sunucu sonucunu yeniden oynatırsa, bu vekil platformda maçların yaklaşık %6'sı resmi sonuçtan
+**farklı bir skorla** oynanır. P0 (a)'nın "sıradaki motor dilimi" olması bu yüzden kozmetik bir
+öncelik değil: simin sonucu istemcide gösteren her özellikten (maç izleme, replay) önce kapanmalı.
+
 **Not — araç zinciri:** CI işi `dotnet 10.0.400` SDK'sıyla derledi (runner'da önceden kurulu;
 repoda `global.json` yok, en yeni SDK seçiliyor). Uygulama `net8.0` olduğu için .NET 8
 çalışma zamanında koşar ve sonuç Atilla'nın .NET 8.0.424 SDK'sıyla aynı çıktı — bu ölçümü
