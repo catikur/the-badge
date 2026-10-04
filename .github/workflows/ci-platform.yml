@@ -2,8 +2,9 @@ name: platform-esitligi
 # DECISIONS P0 — platformlar arasi determinizm (bulgu 2026-09-06, karar 2026-10-04).
 # CLAUDE.md degismez #2 "ayni girdi + ayni seed = HER PLATFORMDA bit-ayni" der; sim-ci yalniz
 # ubuntu'da kostugu icin bu iddia OLCULMUYORDU. Bu is ayni Checks'i macOS arm64'te kosar.
-# Bilinen sapmalar shared/TheBadge.Sim.Checks/goldens/platform_debt.json'da korumali borctur:
-# yeni sapma da, sessizce duzelen sapma da kapiyi kirar. Hedef bos liste — P0 (a) motor dilimi.
+# Bilinen sapmalar shared/TheBadge.Sim.Checks/goldens/platform_debt.json'da bu platformun OLCULMUS
+# KAYITLARIYLA korumali borctur: yeni sapma da, bilinen sapmanin ciktisinin degismesi de, sessizce
+# duzelen sapma da kapiyi kirar. Hedef bos liste — P0 (a) motor dilimi.
 #
 # Not: bu is .NET'i macOS arm64'te olcer. Gercek istemci Unity IL2CPP / iOS arm64'tur — farkli bir
 # calisma zamani ve libm. Bu is o platformun VEKILIDIR, kendisi degil; iddiasi bundan genis degil.

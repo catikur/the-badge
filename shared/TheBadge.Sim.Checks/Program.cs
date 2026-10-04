@@ -221,27 +221,84 @@ static (ulong cfgHash, ulong stateHash, int gh, int ga, uint ticks, ulong trace,
             r.TotalTicks, q.AppliedTraceHash, q.AppliedCount, (uint)e.RejectedCommands, (uint)e.SubsMade);
 }
 
+// REPLAY KAYDI — bit-eşitlikte denetlenen 8 alanın KANONİK yazımı. Golden kaydı, ölçülen çıktı ve
+// platform borcundaki pinli kayıt AYNI fonksiyondan geçer: "borç, golden'dan az alan denetliyor"
+// sürüklenmesi yapısal olarak imkânsız. Eşitlik = bu yazımın eşitliği.
+static string ReplayKaydi(ulong cfg, ulong st, string skor, uint tick, ulong iz, uint uyg, uint red, uint sub) =>
+    $"configHash 0x{cfg:X16} · stateHash 0x{st:X16} · skor {skor} · tick {tick} · komutIz 0x{iz:X16} · " +
+    $"uygulanan {uyg} · reddedilen {red} · degisiklik {sub}";
+
+// Kaydın JSON yazımı: golden set satırı (gen-replays) ve borç ölçümü AYNI biçimde basılır.
+static string ReplayKaydiJson(int idx, ulong cfg, ulong st, int gh, int ga, uint tick, ulong iz, uint uyg, uint red, uint sub) =>
+    $"{{ \"idx\": {idx}, \"configHash\": \"0x{cfg:X16}\", \"stateHash\": \"0x{st:X16}\", \"skor\": \"{gh}-{ga}\", " +
+    $"\"tick\": {tick}, \"komutIz\": \"0x{iz:X16}\", \"uygulanan\": {uyg}, \"reddedilen\": {red}, \"degisiklik\": {sub} }}";
+
+// JSON kaydı → (idx, kanonik kayıt). Golden set ve borç tablosu AYNI okuyucudan geçer. Hash alanı
+// tam "0x" + 16 hex olmalı: öneki unutulmuş bir değerde Substring(2) ilk iki haneyi SESSİZCE yutardı.
+static (int idx, string kayit) ReplayKaydiOku(System.Text.Json.JsonElement k)
+{
+    ulong H(string ad)
+    {
+        string s = k.GetProperty(ad).GetString();
+        if (s == null || s.Length != 18 || !s.StartsWith("0x", StringComparison.Ordinal))
+            throw new FormatException($"{ad} '0x' + 16 hex olmalı: '{s}'");
+        return Convert.ToUInt64(s.Substring(2), 16);
+    }
+    return (k.GetProperty("idx").GetInt32(),
+            ReplayKaydi(H("configHash"), H("stateHash"), k.GetProperty("skor").GetString(), k.GetProperty("tick").GetUInt32(),
+                        H("komutIz"), k.GetProperty("uygulanan").GetUInt32(), k.GetProperty("reddedilen").GetUInt32(),
+                        k.GetProperty("degisiklik").GetUInt32()));
+}
+
+// Kanonik kayıttan tek alan ("configHash 0x…") — konumla değil ADIYLA.
+static string KayitAlani(string kayit, string ad) =>
+    kayit.Split(" · ").FirstOrDefault(a => a.StartsWith(ad + " ", StringComparison.Ordinal)) ?? "";
+
+// İki kanonik kaydın farkı, alan alan: "(stateHash 0xA→0xB, skor 1-2→2-1)".
+static string AlanFarki(string once, string sonra)
+{
+    var a = once.Split(" · ");
+    var b = sonra.Split(" · ");
+    if (a.Length != b.Length) return $"({once} → {sonra})";
+    var fark = new List<string>();
+    for (int i = 0; i < a.Length; i++)
+    {
+        if (a[i] == b[i]) continue;
+        int bosluk = a[i].IndexOf(' ');
+        string ad = bosluk > 0 ? a[i].Substring(0, bosluk + 1) : "";
+        fark.Add(ad.Length > 0 && b[i].StartsWith(ad, StringComparison.Ordinal)
+            ? $"{a[i]}→{b[i].Substring(ad.Length)}" : $"{a[i]}→{b[i]}");
+    }
+    return fark.Count == 0 ? "(fark yok)" : "(" + string.Join(", ", fark) + ")";
+}
+
 // ============== M17 PLATFORM BORCU (DECISIONS P0: bulgu 2026-09-06, karar 2026-10-04) ==============
 // CLAUDE.md değişmez #2 "her platformda bit-aynı" der; sim-ci yalnız ubuntu'da koştuğu için bu iddia
 // ÖLÇÜLMÜYORDU. Golden set referans platformda (linux-x64) üretilir. Başka bir platformda BİLİNEN
-// sapan replay'ler goldens/platform_debt.json'da ÖLÇÜLMÜŞ İNDEKSLERİYLE tutulur — sayıyla değil:
-// sayı tutulsaydı "farklı 4 replay saptı" da geçerdi.
+// sapan replay'ler goldens/platform_debt.json'da O PLATFORMUN ÖLÇÜLMÜŞ KAYITLARIYLA tutulur:
+//   - sayıyla değil — sayı tutulsaydı "farklı 4 replay saptı" da geçerdi
+//   - yalnız indeksle de değil (inceleme bulgusu, Codex P2) — indeks kümesi ÇIKTIYI pinlemez: zaten
+//     sapan #4'ün macOS skoru/durumu/komut izi değişse de #4 "hâlâ sapıyor" diye geçerdi. Borç, o
+//     platformun golden kaydıdır; çıktısı değişen borç kırar.
 // Bu bir tolerans DEĞİL, korumalı borçtur:
 //   - referans ya da tabloda OLMAYAN platform → katı (tek sapma kırar)
 //   - borç ölçülmemiş (null)                 → kırılır ve ölçümü basar
 //   - YENİ bir indeks saptı                  → kırılır (regresyon)
+//   - bilinen indeksin ÇIKTISI değişti       → kırılır (platforma özgü yeni etki ya da kısmi düzeltme)
 //   - bilinen bir indeks DÜZELDİ             → kırılır (ratchet: liste daraltılsın, gevşeklik birikmesin)
 // Ortam değişkeniyle "platform taklidi" kancası BİLEREK YOK: öyle bir kanca referans platformda
 // borç satın almanın yolu olurdu. Mantık saf olduğu için fikstürle sınanır (M17PlatformBorcKarari).
+// olculen: sapan indeks → o koşunun kanonik kaydı (ReplayKaydi). borc[platform]: null ya da indeks → pinli kayıt.
 static (bool gecti, string mesaj) PlatformBorcHukmu(
-    string platform, int[] olculen, string referans, IReadOnlyDictionary<string, int[]> borc, int n)
+    string platform, IReadOnlyDictionary<int, string> olculen, string referans,
+    IReadOnlyDictionary<string, Dictionary<int, string>> borc, int n)
 {
     static string Liste(IEnumerable<int> a)
     {
         var d = a.ToArray();
         return d.Length == 0 ? "[]" : "[" + string.Join(",", d.Select(i => "#" + i)) + "]";
     }
-    var s = olculen.Distinct().OrderBy(i => i).ToArray();
+    var s = olculen.Keys.OrderBy(i => i).ToArray();
 
     if (borc.ContainsKey(referans))
         return (false, $"referans platform ({referans}) borç TAŞIYAMAZ — golden set orada üretilir");
@@ -257,17 +314,27 @@ static (bool gecti, string mesaj) PlatformBorcHukmu(
 
     if (bilinen == null)
         return (false, $"'{platform}' borcu ÖLÇÜLMEMİŞ — bu koşunun ölçümü {s.Length}/{n} {Liste(s)}; " +
-                       "goldens/platform_debt.json'a sapanIndeksler olarak yaz");
+                       "aşağıdaki kayıtları goldens/platform_debt.json'a sapanKayitlar olarak yaz");
 
-    var b = bilinen.Distinct().OrderBy(i => i).ToArray();
+    var b = bilinen.Keys.OrderBy(i => i).ToArray();
     var yeni = s.Except(b).ToArray();
     var duzelen = b.Except(s).ToArray();
+    var degisen = s.Intersect(b).Where(i => olculen[i] != bilinen[i]).ToArray();
+    // Bulguların HEPSİ tek mesajda: ilkinde durmak, düzeltip yeniden koşunca ikincisini öğrenmek demekti.
+    var bulgu = new List<string>();
     if (yeni.Length > 0)
-        return (false, $"YENİ sapma {Liste(yeni)} — regresyon (bilinen borç {Liste(b)})");
+        bulgu.Add($"YENİ sapma {Liste(yeni)} — regresyon");
+    if (degisen.Length > 0)
+        bulgu.Add("bilinen sapmanın ÇIKTISI DEĞİŞTİ: " +
+                  string.Join("; ", degisen.Select(i => $"#{i} pinli→ölçülen {AlanFarki(bilinen[i], olculen[i])}")) +
+                  " — platforma özgü yeni etki ya da kısmi düzeltme: nedenini bul, sonra kayıtları yeniden ölç");
     if (duzelen.Length > 0)
-        return (false, $"borç AZALDI: {Liste(duzelen)} artık bit-eşit — platform_debt.json'u {Liste(s)} olarak " +
-                       "DARALT (ratchet; gevşek liste sessiz tolerans olurdu)");
-    return (true, $"bilinen borç {s.Length}/{n} {Liste(s)} — hedef 0 (P0 (a) motor dilimi kapatır)");
+        bulgu.Add($"borç AZALDI: {Liste(duzelen)} artık bit-eşit — platform_debt.json'dan ÇIKAR " +
+                  "(ratchet; gevşek liste sessiz tolerans olurdu)");
+    if (bulgu.Count > 0)
+        return (false, string.Join(" · ", bulgu) + $" (bilinen borç {Liste(b)})");
+    return (true, $"bilinen borç {s.Length}/{n} {Liste(s)}, çıktıları pinli kayıtlarla bit-eşit — " +
+                  "hedef 0 (P0 (a) motor dilimi kapatır)");
 }
 
 // Platform kimliği: işletim sistemi + SÜREÇ mimarisi. OS mimarisi değil — Rosetta altında x64
@@ -282,32 +349,73 @@ static string PlatformKimligi()
     return os + "-" + arch;
 }
 
-// Borç tablosu okuyucusu. Dosya YOKSA borç da yok: her platform katı (en sıkı varsayılan).
-static (string referans, Dictionary<string, int[]> borc, string hata) BorcTablosuOku(string yol, int n)
+// Borç tablosu çözücüsü — saf, fikstürle sınanır (M17PlatformBorcOkuma). Kayıtlar golden setle AYNI
+// okuyucudan (ReplayKaydiOku) geçer. Eski biçim (yalnız indeks) REDDEDİLİR: sessizce "indeks kümesi
+// yeter" diye okunsaydı Codex P2'nin kapattığı açık geri gelirdi.
+static (string referans, Dictionary<string, Dictionary<int, string>> borc, string hata) BorcTablosuCoz(string json, int n)
 {
-    var borc = new Dictionary<string, int[]>(StringComparer.Ordinal);
-    if (!System.IO.File.Exists(yol)) return ("linux-x64", borc, "");
-    using var d = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(yol));
+    var borc = new Dictionary<string, Dictionary<int, string>>(StringComparer.Ordinal);
+    using var d = System.Text.Json.JsonDocument.Parse(json);
     var k = d.RootElement;
     if (!k.TryGetProperty("referansPlatform", out var rp) || rp.ValueKind != System.Text.Json.JsonValueKind.String)
         return ("linux-x64", borc, "referansPlatform alanı yok");
     string hata = "";
     if (k.TryGetProperty("borc", out var bo))
-        foreach (var g in bo.EnumerateObject())
+        foreach (var p in bo.EnumerateObject())
         {
-            if (!g.Value.TryGetProperty("sapanIndeksler", out var si)) { hata += $"{g.Name}: sapanIndeksler alanı yok; "; continue; }
-            if (si.ValueKind == System.Text.Json.JsonValueKind.Null) { borc[g.Name] = null; continue; }
-            var liste = new List<int>();
-            foreach (var x in si.EnumerateArray())
+            if (p.Value.TryGetProperty("sapanIndeksler", out _))
+            { hata += $"{p.Name}: sapanIndeksler ESKİ biçim — indeks kümesi çıktıyı pinlemez, sapanKayitlar yaz; "; continue; }
+            if (!p.Value.TryGetProperty("sapanKayitlar", out var sk)) { hata += $"{p.Name}: sapanKayitlar alanı yok; "; continue; }
+            if (sk.ValueKind == System.Text.Json.JsonValueKind.Null) { borc[p.Name] = null; continue; }
+            if (sk.ValueKind != System.Text.Json.JsonValueKind.Array)
+            { hata += $"{p.Name}: sapanKayitlar dizi ya da null olmalı; "; continue; }
+            var kayitlar = new Dictionary<int, string>();
+            foreach (var x in sk.EnumerateArray())
             {
-                int v = x.GetInt32();
-                if (v < 0 || v >= n) hata += $"{g.Name}: indeks #{v} 0..{n - 1} dışında; ";
-                if (liste.Contains(v)) hata += $"{g.Name}: indeks #{v} yinelenmiş; ";
-                liste.Add(v);
+                int idx; string kayit;
+                try { (idx, kayit) = ReplayKaydiOku(x); }
+                catch (Exception e) when (e is KeyNotFoundException || e is InvalidOperationException || e is FormatException)
+                { hata += $"{p.Name}: bozuk kayıt ({e.GetType().Name}: {e.Message}) {x.GetRawText()}; "; continue; }
+                if (idx < 0 || idx >= n) hata += $"{p.Name}: indeks #{idx} 0..{n - 1} dışında; ";
+                else if (kayitlar.ContainsKey(idx)) hata += $"{p.Name}: indeks #{idx} yinelenmiş; ";
+                else kayitlar[idx] = kayit;
             }
-            borc[g.Name] = liste.ToArray();
+            borc[p.Name] = kayitlar;
         }
     return (rp.GetString(), borc, hata);
+}
+
+// Dosya YOKSA borç da yok: her platform katı (en sıkı varsayılan).
+static (string referans, Dictionary<string, Dictionary<int, string>> borc, string hata) BorcTablosuOku(string yol, int n) =>
+    System.IO.File.Exists(yol)
+        ? BorcTablosuCoz(System.IO.File.ReadAllText(yol), n)
+        : ("linux-x64", new Dictionary<string, Dictionary<int, string>>(StringComparer.Ordinal), "");
+
+// Borç tablosu golden setle TUTARLI mı — referans platformda (Linux CI) da denetlenir, macOS beklenmez:
+//  - pinli kaydın configHash'i golden'ınkiyle AYNI olmalı (config_hash platformdan bağımsızdır). Değilse
+//    kayıt ESKİ bir sete ait: golden yeniden üretilmiş demektir — o platformun sapanKayitlar'ı null
+//    yapılır ve orada yeniden ölçülür (CI ölçümü basar). Bayat borç sessizce taşınmaz.
+//  - pinli kayıt golden kaydıyla AYNI olamaz: aynıysa sapma değildir, borç listesinde yeri yok.
+static string BorcTutarliligi(IReadOnlyDictionary<string, Dictionary<int, string>> borc, string[] golden)
+{
+    string hata = "";
+    foreach (var p in borc.Keys.OrderBy(x => x, StringComparer.Ordinal))
+    {
+        var kayitlar = borc[p];
+        if (kayitlar == null) continue;
+        foreach (int idx in kayitlar.Keys.OrderBy(i => i))
+        {
+            string gold = idx >= 0 && idx < golden.Length ? golden[idx] : null;
+            if (gold == null) { hata += $"{p}: #{idx} golden sette yok; "; continue; }
+            string pinCfg = KayitAlani(kayitlar[idx], "configHash"), goldCfg = KayitAlani(gold, "configHash");
+            if (pinCfg != goldCfg)
+                hata += $"{p}: #{idx} BAYAT — pinli {pinCfg} ≠ golden {goldCfg} (golden set yeniden üretilmiş): " +
+                        $"{p} sapanKayitlar'ını null yap, {p}'de yeniden ölç; ";
+            else if (kayitlar[idx] == gold)
+                hata += $"{p}: #{idx} pinli kayıt golden'la AYNI — sapma değil, listeden çıkar; ";
+        }
+    }
+    return hata;
 }
 
 const int ReplaySetN = 50;   // ME 17.4: "50 arşiv golden replay"
@@ -398,16 +506,9 @@ if (args.Length > 0 && args[0] == "gen-replays")
     for (int i = 0; i < ReplaySetN; i++)
     {
         var g = RunReplay(i, balHash, gBandsHash, gBal);
-        sb.Append("    { \"idx\": ").Append(i)
-          .Append(", \"configHash\": \"0x").Append(g.cfgHash.ToString("X16"))
-          .Append("\", \"stateHash\": \"0x").Append(g.stateHash.ToString("X16"))
-          .Append("\", \"skor\": \"").Append(g.gh).Append('-').Append(g.ga)
-          .Append("\", \"tick\": ").Append(g.ticks)
-          .Append(", \"komutIz\": \"0x").Append(g.trace.ToString("X16"))
-          .Append("\", \"uygulanan\": ").Append(g.applied)
-          .Append(", \"reddedilen\": ").Append(g.red)
-          .Append(", \"degisiklik\": ").Append(g.subs)
-          .Append(" }").Append(i == ReplaySetN - 1 ? "\n" : ",\n");
+        sb.Append("    ")
+          .Append(ReplayKaydiJson(i, g.cfgHash, g.stateHash, g.gh, g.ga, g.ticks, g.trace, g.applied, g.red, g.subs))
+          .Append(i == ReplaySetN - 1 ? "\n" : ",\n");
     }
     sb.Append("  ]\n}\n");
     string outPath = System.IO.Path.Combine(
@@ -2669,7 +2770,11 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             Pass($"M17ReplaySetiGuncel(balanceHash 0x{balHashR:X16} · bandsHash 0x{bandsHashR:X16})");
             var kayitlar = kok.GetProperty("replayler");
             int sapan = 0; string ilkSapma = "";
-            var sapanIdx = new List<int>();   // platform borcu indeksle tutulur, sayıyla değil
+            // Platform borcu sapan replay'leri indeksle VE çıktıyla tutar — sayıyla değil, yalnız
+            // indeksle de değil (Codex P2): indeks → bu koşunun kanonik kaydı.
+            var sapanKayit = new Dictionary<int, string>();
+            var sapanJson = new List<string>();          // ölçüm basımı: platform_debt.json'a yapıştırılır
+            var goldenKayit = new string[ReplaySetN];   // borç tablosunun golden tutarlılığı için
             // İNDEKS KAPSAMI (inceleme bulgusu, Codex): döngü yalnız DOSYADAKİ kayıtları
             // doğruluyordu — kırpılmış ya da yinelenen indeksli bir set "50 replay geçti"
             // diye raporlanabilirdi. 0..49'un TAMAMI ve TEKİL olduğu ayrıca denetlenir.
@@ -2677,29 +2782,20 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             int yinelenen = 0, bandDisi = 0;
             foreach (var kayit in kayitlar.EnumerateArray())
             {
-                int idx = kayit.GetProperty("idx").GetInt32();
+                var (idx, bek) = ReplayKaydiOku(kayit);
                 if (idx < 0 || idx >= ReplaySetN) { bandDisi++; continue; }
                 if (gorulen[idx]) yinelenen++;
                 gorulen[idx] = true;
+                goldenKayit[idx] = bek;
                 var g = RunReplay(idx, balHashR, bandsHashR, simBal);
-                ulong bekCfg = Convert.ToUInt64(kayit.GetProperty("configHash").GetString().Substring(2), 16);
-                ulong bekSt = Convert.ToUInt64(kayit.GetProperty("stateHash").GetString().Substring(2), 16);
-                ulong bekIz = Convert.ToUInt64(kayit.GetProperty("komutIz").GetString().Substring(2), 16);
-                string bekSkor = kayit.GetProperty("skor").GetString();
-                uint bekTick = kayit.GetProperty("tick").GetUInt32();
-                uint bekUyg = kayit.GetProperty("uygulanan").GetUInt32();
-                uint bekRed = kayit.GetProperty("reddedilen").GetUInt32();
-                uint bekSub = kayit.GetProperty("degisiklik").GetUInt32();
-                bool esit = g.cfgHash == bekCfg && g.stateHash == bekSt && g.trace == bekIz
-                            && $"{g.gh}-{g.ga}" == bekSkor && g.ticks == bekTick
-                            && g.applied == bekUyg && g.red == bekRed && g.subs == bekSub;
-                if (!esit)
+                string olc = ReplayKaydi(g.cfgHash, g.stateHash, $"{g.gh}-{g.ga}", g.ticks, g.trace, g.applied, g.red, g.subs);
+                if (olc != bek)
                 {
                     sapan++;
-                    sapanIdx.Add(idx);
-                    if (ilkSapma.Length == 0)
-                        ilkSapma = $"#{idx}: cfg 0x{g.cfgHash:X16}/0x{bekCfg:X16} · state 0x{g.stateHash:X16}/0x{bekSt:X16} · " +
-                                   $"skor {g.gh}-{g.ga}/{bekSkor} · tick {g.ticks}/{bekTick} · iz 0x{g.trace:X16}/0x{bekIz:X16}";
+                    sapanKayit[idx] = olc;
+                    sapanJson.Add(ReplayKaydiJson(idx, g.cfgHash, g.stateHash, g.gh, g.ga, g.ticks, g.trace,
+                                                  g.applied, g.red, g.subs));
+                    if (ilkSapma.Length == 0) ilkSapma = $"#{idx} golden→ölçülen {AlanFarki(bek, olc)}";
                 }
             }
             int eksik = 0;
@@ -2708,19 +2804,31 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                 failures += Fail("M17ReplaySetiKapsami",
                     $"0..{ReplaySetN - 1} indeks kapsamı bozuk: eksik {eksik} · yinelenen {yinelenen} · bant dışı {bandDisi}");
             else Pass($"M17ReplaySetiKapsami(0..{ReplaySetN - 1} tam ve tekil)");
-            // PLATFORM BORCU (DECISIONS P0): referansta katı; ölçülmüş platformda bilinen indeks
-            // kümesi korumalı borçtur — yeni sapma da, sessizce düzelen sapma da kırar.
+            // PLATFORM BORCU (DECISIONS P0): referansta katı; ölçülmüş platformda bilinen sapmalar
+            // pinli kayıtlarıyla korumalı borçtur — yeni sapma da, çıktısı değişen sapma da, sessizce
+            // düzelen sapma da kırar.
             string plat = PlatformKimligi();
             string borcYolu = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(setPath), "platform_debt.json");
             var (borcRef, borcTab, borcHata) = BorcTablosuOku(borcYolu, ReplaySetN);
+            if (borcHata.Length == 0) borcHata = BorcTutarliligi(borcTab, goldenKayit);
             if (borcHata.Length > 0)
                 failures += Fail("M17PlatformBorcTablosu", borcHata);
             else
-                Pass($"M17PlatformBorcTablosu(referans {borcRef} · {borcTab.Count} borçlu platform · indeksler 0..{ReplaySetN - 1} içinde ve tekil)");
-            var (borcGecti, borcMesaj) = PlatformBorcHukmu(plat, sapanIdx.ToArray(), borcRef, borcTab, ReplaySetN);
+            {
+                int pinliKayit = borcTab.Values.Where(v => v != null).Sum(v => v.Count);
+                int olculmemisPlat = borcTab.Values.Count(v => v == null);
+                Pass($"M17PlatformBorcTablosu(referans {borcRef} · {borcTab.Count} borçlu platform · {pinliKayit} pinli kayıt" +
+                     (olculmemisPlat > 0 ? $" · {olculmemisPlat} platform ÖLÇÜLMEMİŞ" : "") +
+                     $" · indeksler 0..{ReplaySetN - 1} içinde ve tekil · golden setle tutarlı: configHash aynı, çıktı farklı)");
+            }
+            var (borcGecti, borcMesaj) = PlatformBorcHukmu(plat, sapanKayit, borcRef, borcTab, ReplaySetN);
             if (!borcGecti)
                 failures += Fail("M17GoldenReplay", $"[{plat}] {sapan}/{ReplaySetN} replay bit-eşit DEĞİL — {borcMesaj}" +
-                                                    (ilkSapma.Length > 0 ? $" — ilk sapma {ilkSapma}" : ""));
+                                                    (ilkSapma.Length > 0 ? $" — ilk sapma {ilkSapma}" : "") +
+                                                    (sapanJson.Count > 0
+                                                        ? $"\n  bu koşunun ölçümü (platform_debt.json → \"{plat}\".sapanKayitlar):\n    " +
+                                                          string.Join(",\n    ", sapanJson)
+                                                        : ""));
             else if (sapan > 0)
                 Pass($"M17GoldenReplay([{plat}] BORÇLU — {borcMesaj})");
             else Pass($"M17GoldenReplay([{plat}] {ReplaySetN} replay bit-eşit: config_hash + durum + skor + süre + komut izi + değişiklik)");
@@ -8841,25 +8949,35 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
 
 // --- M17PlatformBorcKarari: borç hükmünün DİŞLERİ, fikstürle (macOS gerekmez) ---
 // Kapı macOS'ta koşmadan da sınanabilsin diye karar mantığı saf; burada her dal tek tek zorlanır.
-// En önemli vaka "aynı SAYI, farklı küme": borç sayıyla tutulsaydı geçerdi, indeksle tutulduğu için kırılır.
+// En önemli iki vaka: "aynı SAYI, farklı küme" (borç sayıyla tutulsaydı geçerdi) ve "bilinen indeksin
+// ÇIKTISI değişti" (borç yalnız indeksle tutulsaydı geçerdi — Codex P2). Kayıtlar burada kısa etiket.
 {
-    var tab = new Dictionary<string, int[]>(StringComparer.Ordinal) { ["osx-arm64"] = new[] { 4, 17, 23, 41 } };
-    var olcmemis = new Dictionary<string, int[]>(StringComparer.Ordinal) { ["osx-arm64"] = null };
-    var refBorclu = new Dictionary<string, int[]>(StringComparer.Ordinal) { ["linux-x64"] = new[] { 1 } };
-    var vakalar = new (string ad, string plat, int[] olc, Dictionary<string, int[]> t, bool beklenen)[]
+    Dictionary<int, string> Pinle(params (int idx, string kayit)[] a)
     {
-        ("referans temiz",                       "linux-x64", new int[0],                   tab,       true),
-        ("referans tek sapma",                   "linux-x64", new[] { 3 },                  tab,       false),
-        ("ölçülmemiş platform temiz",            "win-x64",   new int[0],                   tab,       true),
-        ("ölçülmemiş platform sapma",            "win-x64",   new[] { 3 },                  tab,       false),
-        ("borçlu: bilinen küme aynen",           "osx-arm64", new[] { 4, 17, 23, 41 },      tab,       true),
-        ("borçlu: sıra bağımsız",                "osx-arm64", new[] { 41, 4, 23, 17 },      tab,       true),
-        ("borçlu: YENİ indeks (regresyon)",      "osx-arm64", new[] { 4, 17, 23, 41, 9 },   tab,       false),
-        ("borçlu: aynı SAYI farklı küme",        "osx-arm64", new[] { 4, 17, 23, 9 },       tab,       false),
-        ("borçlu: bir indeks düzeldi (ratchet)", "osx-arm64", new[] { 4, 17, 23 },          tab,       false),
-        ("borçlu: hepsi düzeldi (ratchet)",      "osx-arm64", new int[0],                   tab,       false),
-        ("borç ölçülmemiş (null)",               "osx-arm64", new[] { 4 },                  olcmemis,  false),
-        ("referansa borç yazılmış",              "linux-x64", new int[0],                   refBorclu, false),
+        var d = new Dictionary<int, string>();
+        foreach (var (idx, kayit) in a) d[idx] = kayit;
+        return d;
+    }
+    var tab = new Dictionary<string, Dictionary<int, string>>(StringComparer.Ordinal)
+        { ["osx-arm64"] = Pinle((4, "A"), (17, "B"), (23, "C"), (41, "D")) };
+    var olcmemis = new Dictionary<string, Dictionary<int, string>>(StringComparer.Ordinal) { ["osx-arm64"] = null };
+    var refBorclu = new Dictionary<string, Dictionary<int, string>>(StringComparer.Ordinal) { ["linux-x64"] = Pinle((1, "A")) };
+    var vakalar = new (string ad, string plat, Dictionary<int, string> olc, Dictionary<string, Dictionary<int, string>> t, bool beklenen)[]
+    {
+        ("referans temiz",                          "linux-x64", Pinle(),                                               tab,       true),
+        ("referans tek sapma",                      "linux-x64", Pinle((3, "X")),                                       tab,       false),
+        ("ölçülmemiş platform temiz",               "win-x64",   Pinle(),                                               tab,       true),
+        ("ölçülmemiş platform sapma",               "win-x64",   Pinle((3, "X")),                                       tab,       false),
+        ("borçlu: bilinen kayıtlar aynen",          "osx-arm64", Pinle((4, "A"), (17, "B"), (23, "C"), (41, "D")),      tab,       true),
+        ("borçlu: ekleme sırası bağımsız",          "osx-arm64", Pinle((41, "D"), (4, "A"), (23, "C"), (17, "B")),      tab,       true),
+        ("borçlu: YENİ indeks (regresyon)",         "osx-arm64", Pinle((4, "A"), (17, "B"), (23, "C"), (41, "D"), (9, "X")), tab, false),
+        ("borçlu: aynı SAYI farklı küme",           "osx-arm64", Pinle((4, "A"), (17, "B"), (23, "C"), (9, "D")),       tab,       false),
+        ("borçlu: bilinen indeksin ÇIKTISI değişti", "osx-arm64", Pinle((4, "A2"), (17, "B"), (23, "C"), (41, "D")),    tab,       false),
+        ("borçlu: iki kayıt yer değiştirdi",        "osx-arm64", Pinle((4, "B"), (17, "A"), (23, "C"), (41, "D")),      tab,       false),
+        ("borçlu: bir indeks düzeldi (ratchet)",    "osx-arm64", Pinle((4, "A"), (17, "B"), (23, "C")),                 tab,       false),
+        ("borçlu: hepsi düzeldi (ratchet)",         "osx-arm64", Pinle(),                                               tab,       false),
+        ("borç ölçülmemiş (null)",                  "osx-arm64", Pinle((4, "A")),                                       olcmemis,  false),
+        ("referansa borç yazılmış",                 "linux-x64", Pinle(),                                               refBorclu, false),
     };
     string yanlis = "";
     foreach (var v in vakalar)
@@ -8869,8 +8987,75 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
             yanlis += $"'{v.ad}' beklenen {(v.beklenen ? "geçer" : "kırılır")} ama {(g ? "geçti" : "kırıldı")}; ";
     }
     if (yanlis.Length > 0) failures += Fail("M17PlatformBorcKarari", yanlis);
-    else Pass($"M17PlatformBorcKarari({vakalar.Length} fikstür: referans katı · ölçülmemiş platform katı · bilinen küme geçer · " +
-              "yeni indeks ve aynı-sayı-farklı-küme kırar · düzelen indeks kırar (ratchet) · null kırar · referans borç taşıyamaz)");
+    else Pass($"M17PlatformBorcKarari({vakalar.Length} fikstür: referans katı · ölçülmemiş platform katı · bilinen kayıtlar geçer · " +
+              "yeni indeks ve aynı-sayı-farklı-küme kırar · bilinen indeksin çıktısı değişince ve kayıtlar yer değiştirince kırar · " +
+              "düzelen indeks kırar (ratchet) · null kırar · referans borç taşıyamaz)");
+}
+
+// --- M17PlatformBorcOkuma: tablo okuyucusunun ve golden tutarlılığının DİŞLERİ ---
+// Yazıcı (ReplayKaydiJson) ile okuyucu (ReplayKaydiOku) aynı biçimi konuşmalı; bozuk, eski biçimli ya
+// da bayat bir tablo sessizce "borç yok" ya da "her şey pinli" diye okunmamalı. Bir fikstürün değişikliği
+// tutmazsa (Replace eşleşmezse) tablo geçerli kalır ve "hata beklenirdi" diye bu kapı KIRILIR — fikstür
+// bozulması sessiz geçmez.
+{
+    string kayitJson = ReplayKaydiJson(4, 0x1UL, 0x2UL, 1, 0, 5400, 0x3UL, 3, 0, 1);
+    string kayitKanonik = ReplayKaydi(0x1UL, 0x2UL, "1-0", 5400, 0x3UL, 3, 0, 1);
+    string Tablo(string govde) => "{ \"referansPlatform\": \"linux-x64\", \"borc\": { \"osx-arm64\": " + govde + " } }";
+    var okuma = new (string ad, string json, bool hataBeklenir)[]
+    {
+        ("geçerli kayıt",                 Tablo("{ \"sapanKayitlar\": [" + kayitJson + "] }"), false),
+        ("ölçülmemiş (null)",             Tablo("{ \"sapanKayitlar\": null }"), false),
+        ("eski biçim: yalnız indeks",     Tablo("{ \"sapanIndeksler\": [4] }"), true),
+        ("sapanKayitlar alanı yok",       Tablo("{ \"kaynak\": \"x\" }"), true),
+        ("yinelenen indeks",              Tablo("{ \"sapanKayitlar\": [" + kayitJson + ", " + kayitJson + "] }"), true),
+        ("indeks bant dışı",              Tablo("{ \"sapanKayitlar\": [" + kayitJson.Replace("\"idx\": 4,", "\"idx\": 50,") + "] }"), true),
+        ("0x öneki yok (sessiz yutma)",   Tablo("{ \"sapanKayitlar\": [" +
+                                                kayitJson.Replace("\"0x0000000000000002\"", "\"0000000000000002\"") + "] }"), true),
+        ("alan eksik (tick)",             Tablo("{ \"sapanKayitlar\": [" + kayitJson.Replace("\"tick\": 5400, ", "") + "] }"), true),
+    };
+    string yanlisO = "";
+    foreach (var v in okuma)
+    {
+        var (_, _, h) = BorcTablosuCoz(v.json, ReplaySetN);
+        if ((h.Length > 0) != v.hataBeklenir)
+            yanlisO += $"'{v.ad}' beklenen {(v.hataBeklenir ? "hata" : "temiz")} ama {(h.Length > 0 ? "hata: " + h : "temiz")}; ";
+    }
+    // Gidiş-dönüş: yazılan kayıt AYNEN okunmalı — yazıcı ile okuyucu aynı biçimi konuşuyor.
+    var (_, gidis, _) = BorcTablosuCoz(okuma[0].json, ReplaySetN);
+    if (!gidis.TryGetValue("osx-arm64", out var gidisKayit) || gidisKayit == null
+        || !gidisKayit.TryGetValue(4, out var okunan) || okunan != kayitKanonik)
+        yanlisO += "yazıcı→okuyucu gidiş-dönüşü kaydı BOZDU; ";
+    // null "ölçülmemiş" okunmalı — boş liste DEĞİL (boş liste "borç yok" demektir, kapı geçerdi).
+    var (_, bos, _) = BorcTablosuCoz(okuma[1].json, ReplaySetN);
+    if (!bos.TryGetValue("osx-arm64", out var bosKayit) || bosKayit != null)
+        yanlisO += "null 'ölçülmemiş' okunmadı; ";
+
+    // Golden tutarlılığı: pinli kayıt #4 = kayitKanonik; golden #4 değiştirilerek üç durum.
+    string[] GoldenSet(string dort)
+    {
+        var a = new string[ReplaySetN];
+        for (int i = 0; i < a.Length; i++) a[i] = ReplayKaydi((ulong)(100 + i), 0UL, "0-0", 1, 0UL, 0, 0, 0);
+        a[4] = dort;
+        return a;
+    }
+    var pinliTab = new Dictionary<string, Dictionary<int, string>>(StringComparer.Ordinal)
+        { ["osx-arm64"] = new Dictionary<int, string> { [4] = kayitKanonik } };
+    var tutarlilik = new (string ad, string[] golden, bool hataBeklenir)[]
+    {
+        ("tutarlı: aynı configHash, farklı çıktı",     GoldenSet(ReplayKaydi(0x1UL, 0x9UL, "1-0", 5400, 0x3UL, 3, 0, 1)), false),
+        ("BAYAT: configHash farklı (set yeniden üretilmiş)", GoldenSet(ReplayKaydi(0x7UL, 0x2UL, "1-0", 5400, 0x3UL, 3, 0, 1)), true),
+        ("pinli kayıt golden'la aynı (sapma değil)",   GoldenSet(kayitKanonik), true),
+    };
+    foreach (var v in tutarlilik)
+    {
+        string h = BorcTutarliligi(pinliTab, v.golden);
+        if ((h.Length > 0) != v.hataBeklenir)
+            yanlisO += $"'{v.ad}' beklenen {(v.hataBeklenir ? "hata" : "temiz")} ama {(h.Length > 0 ? "hata: " + h : "temiz")}; ";
+    }
+    if (yanlisO.Length > 0) failures += Fail("M17PlatformBorcOkuma", yanlisO);
+    else Pass($"M17PlatformBorcOkuma({okuma.Length} okuma fikstürü + gidiş-dönüş + {tutarlilik.Length} tutarlılık fikstürü: " +
+              "eski biçim · eksik alan · yinelenen/bant dışı indeks · öneksiz hash reddedilir · null = ölçülmemiş · " +
+              "bayat kayıt ve golden'la aynı kayıt kırar)");
 }
 
 Console.WriteLine(failures == 0 ? "== TUM KONTROLLER YESIL ==" : $"== {failures} HATA ==");

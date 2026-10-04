@@ -3596,13 +3596,33 @@ dilimidir.**
 - `M17GoldenReplay` **platforma duyarlı** oldu, ama gevşemedi:
   - referans platform (`linux-x64`, golden set orada üretilir) → **eskisi gibi katı**
   - tabloda olmayan platform → **katı** (ölçülmemiş platform borç sayılamaz)
-  - borçlu platform → bilinen sapan replay'ler `goldens/platform_debt.json`'da **İNDEKSLERİYLE**
-    tutulur. Sayıyla tutulsaydı "farklı 4 replay saptı" da geçerdi.
-  - **yeni** bir indeks saparsa kırılır (regresyon); **bilinen bir indeks düzelirse de** kırılır
-    (ratchet — liste daraltılsın, gevşeklik birikmesin); referansa borç yazılırsa kırılır.
+  - borçlu platform → bilinen sapan replay'ler `goldens/platform_debt.json`'da **o platformun
+    ÖLÇÜLMÜŞ KAYITLARIYLA** tutulur — golden set satırıyla aynı biçim, aynı 8 alan. Sayıyla
+    tutulsaydı "farklı 4 replay saptı" da geçerdi. **Yalnız indeksle de tutulmaz** (inceleme
+    bulgusu, Codex P2): ilk sürüm indeks kümesini pinliyordu, çıktıyı değil — zaten sapan #4'ün
+    macOS skoru/durumu/komut izi değişse #4 "hâlâ sapıyor" diye geçerdi; yani borçlu dört replay'in
+    çıktıları sessizce kayabilirdi. Borç artık o platformun golden kaydıdır.
+  - **yeni** bir indeks saparsa kırılır (regresyon); **bilinen indeksin çıktısı değişirse** kırılır
+    (platforma özgü yeni etki ya da kısmi düzeltme — mesaj alan alan farkı basar); **bilinen bir
+    indeks düzelirse de** kırılır (ratchet — liste daraltılsın, gevşeklik birikmesin); referansa
+    borç yazılırsa kırılır.
+  - **Tablo golden setle tutarlı olmalı — bu Linux'ta da denetlenir**, macOS beklenmez: pinli
+    kaydın `configHash`'i golden'ınkiyle aynı olmalı (config_hash platformdan bağımsızdır); değilse
+    golden set yeniden üretilmiştir ve kayıt **bayattır**. Pinli kayıt golden'la aynı olamaz (aynıysa
+    sapma değildir). Eski biçim (`sapanIndeksler`) reddedilir.
+  - **Bedeli — golden yeniden üretilince iş akışı:** balance/bant değişikliği seti yeniden ürettirir;
+    borç kayıtları bayatlar ve Linux kapısı da kırılır. Akış: borçlu platformun `sapanKayitlar`'ı
+    `null` yapılır → push → macOS işi kasten kırılıp kayıtları **yapıştırılabilir biçimde** basar →
+    tabloya yazılır → push. Yani bir ek CI turu. P0 (a) borcu kapatınca liste boşalır ve bu bedel
+    de biter. Ayrıca runner imajında libm değişirse pinli çıktılar değişebilir ve kapı kırılır — bu
+    istenen davranıştır: P0'ın ölçtüğü risk tam olarak budur.
 - Ortam değişkeniyle "platform taklidi" kancası **bilerek yok**: öyle bir kanca referans platformda
   borç satın almanın yolu olurdu. Karar mantığı saf bir fonksiyon (`PlatformBorcHukmu`) ve
-  `M17PlatformBorcKarari` onu **12 fikstürle** sınar — en önemlisi "aynı SAYI, farklı küme".
+  `M17PlatformBorcKarari` onu **14 fikstürle** sınar — en önemlileri "aynı SAYI, farklı küme" ve
+  "bilinen indeksin ÇIKTISI değişti". Tablo okuyucusu ve tutarlılık denetimi de saf;
+  `M17PlatformBorcOkuma` onları 8 okuma + gidiş-dönüş + 3 tutarlılık fikstürüyle sınar. Golden set
+  ve borç kaydı **tek yazıcıdan ve tek okuyucudan** geçer (`ReplayKaydiJson` / `ReplayKaydiOku`) —
+  yeniden düzenlenen üretici seti bayt bayt aynı üretti.
 - **Dişler ölçüldü** (Linux'ta, kopyada): referansta gerçek sapma → kırıldı; referansa borç
   yazılması → kırıldı; tabloda yinelenen/bant dışı indeks → kırıldı; karar fonksiyonundan ratchet
   dalı sökülünce → meta-kapı kırıldı.

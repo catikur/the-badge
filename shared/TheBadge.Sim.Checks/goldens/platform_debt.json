@@ -1,10 +1,10 @@
 {
-  "aciklama": "M17 golden replay seti icin PLATFORM BORCU. Golden set referans platformda uretilir; baska bir platformda bilinen sapan replay'ler burada OLCULMUS indeksleriyle tutulur. Bu bir tolerans DEGIL, korumali borctur: yeni bir indeks saparsa kapi kirilir (regresyon), bilinen bir indeks duzelirse de kirilir (ratchet: liste daraltilmali). sapanIndeksler null = henuz olculmedi; o platformda kapi olcumu basip kirilir. Hedef her platformda bos liste; P0 (a) motor dilimi borcu kapatir. Kaynak: docs/DECISIONS.md, P0 platformlar arasi determinizm (bulgu 2026-09-06, karar 2026-10-04).",
+  "aciklama": "M17 golden replay seti icin PLATFORM BORCU. Golden set referans platformda uretilir; baska bir platformda bilinen sapan replay'ler burada O PLATFORMUN OLCULMUS KAYITLARIYLA tutulur (golden set satiriyla ayni bicim ve ayni 8 alan: configHash, stateHash, skor, tick, komutIz, uygulanan, reddedilen, degisiklik). Yalniz indeks tutmak yetmez: zaten sapan bir replay'in ciktisi degisse de 'hala sapiyor' diye gecerdi (inceleme bulgusu, Codex P2). Bu bir tolerans DEGIL, korumali borctur: yeni bir indeks saparsa kapi kirilir (regresyon), bilinen bir indeksin ciktisi degisirse kirilir, bilinen bir indeks duzelirse de kirilir (ratchet: liste daraltilmali). sapanKayitlar null = henuz olculmedi; o platformda kapi olcumu yapistirilabilir bicimde basip kirilir. Golden set yeniden uretilince (configHash degisir) kayitlar BAYATLAR ve referans platformda da kapi kirilir: o platformun sapanKayitlar'i null yapilir ve orada yeniden olculur. Hedef her platformda bos liste; P0 (a) motor dilimi borcu kapatir. Kaynak: docs/DECISIONS.md, P0 platformlar arasi determinizm (bulgu 2026-09-06, karar 2026-10-04).",
   "referansPlatform": "linux-x64",
   "borc": {
     "osx-arm64": {
-      "sapanIndeksler": [4, 20, 48, 49],
-      "kaynak": "OLCULDU 2026-10-04 — CI macos-15 (macOS 15.7.9, arm64), is 111504871228: 4/50 [#4,#20,#48,#49], ilk sapma #4 state 0x49A5BE4C5BFB6626/0x1B712016B8998E17. Atilla'nin yerel macOS arm64 olcumuyle (.NET 8.0.424, 2026-09-06) AYNI hash'ler — sapma makineye degil platforma (libm) bagli ve deterministik."
+      "sapanKayitlar": null,
+      "kaynak": "Indeks kumesi OLCULDU 2026-10-04 — CI macos-15 (macOS 15.7.9, arm64), is 111504871228: 4/50 [#4,#20,#48,#49], ilk sapma #4 state 0x49A5BE4C5BFB6626/0x1B712016B8998E17; Atilla'nin yerel macOS arm64 olcumuyle (.NET 8.0.424, 2026-09-06) AYNI hash'ler. Kayitlar (cikti pinleri) bir sonraki macOS CI kosusunda olculup buraya yazilacak."
     }
   }
 }
