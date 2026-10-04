@@ -3606,14 +3606,23 @@ dilimidir.**
     (platforma özgü yeni etki ya da kısmi düzeltme — mesaj alan alan farkı basar); **bilinen bir
     indeks düzelirse de** kırılır (ratchet — liste daraltılsın, gevşeklik birikmesin); referansa
     borç yazılırsa kırılır.
-  - **Tablo golden setle tutarlı olmalı — bu Linux'ta da denetlenir**, macOS beklenmez: pinli
-    kaydın `configHash`'i golden'ınkiyle aynı olmalı (config_hash platformdan bağımsızdır); değilse
-    golden set yeniden üretilmiştir ve kayıt **bayattır**. Pinli kayıt golden'la aynı olamaz (aynıysa
-    sapma değildir). Eski biçim (`sapanIndeksler`) reddedilir.
-  - **Bedeli — golden yeniden üretilince iş akışı:** balance/bant değişikliği seti yeniden ürettirir;
-    borç kayıtları bayatlar ve Linux kapısı da kırılır. Akış: borçlu platformun `sapanKayitlar`'ı
-    `null` yapılır → push → macOS işi kasten kırılıp kayıtları **yapıştırılabilir biçimde** basar →
-    tabloya yazılır → push. Yani bir ek CI turu. P0 (a) borcu kapatınca liste boşalır ve bu bedel
+  - **Tablo golden setle tutarlı olmalı — bu Linux'ta da denetlenir**, macOS beklenmez. Borç
+    girdisi, kayıtları hangi golden **üretimine** karşı ölçüldüyse onun özetini taşır (`goldenOzeti`:
+    50 kanonik kaydın sıralı özeti); özet güncel setinkiyle tutmuyorsa kayıtlar **bayattır**.
+    İlk sürüm tazeliği `configHash` eşitliğiyle denetliyordu ve bu **yetersizdi** (inceleme bulgusu,
+    Codex P2): `configHash` kurulumu bağlar (sürüm dizesi `m17-golden-v1` elle yazılı, balance,
+    bantlar, kadro, hava…) ama motor **kodunu** bağlamaz. Motor kodu değişip set yeniden üretilince
+    `configHash`'ler aynı kalır, kayıtlar değişir; eski platform kayıtları Linux'ta "güncel" sayılırdı.
+    **P0 (a) tam olarak böyle bir değişikliktir** — libm çağrılarını LUT'a çevirmek Linux golden'ını
+    da değiştirir, `configHash`'i değiştirmez. `configHash` artık yalnız kaydın **o replay'e** ait
+    olduğunu denetler (yanlış indekse yapıştırılmış kayıt). Pinli kayıt golden'la aynı olamaz (aynıysa
+    sapma değildir). Eski biçim (`sapanIndeksler`) ve özetsiz kayıt reddedilir. BAYAT mesajı güncel
+    özeti **bilerek basmaz**: yeni özetin tek meşru kaynağı, onu taze kayıtlarla birlikte basan
+    ölçümdür; aksi hâlde "özeti güncelle, kayıtları bırak" kısayolu bir kopyala-yapıştır olurdu.
+  - **Bedeli — golden yeniden üretilince iş akışı:** balance, bant ya da motor kodu değişikliği seti
+    yeniden ürettirir; borç kayıtları bayatlar ve Linux kapısı da kırılır. Akış: borçlu platformun
+    `sapanKayitlar`'ı `null` yapılır → push → macOS işi kasten kırılıp `goldenOzeti` ve kayıtları
+    **yapıştırılabilir biçimde** basar → tabloya yazılır → push. Yani bir ek CI turu. P0 (a) borcu kapatınca liste boşalır ve bu bedel
     de biter. Ayrıca runner imajında libm değişirse pinli çıktılar değişebilir ve kapı kırılır — bu
     istenen davranıştır: P0'ın ölçtüğü risk tam olarak budur.
 - Ortam değişkeniyle "platform taklidi" kancası **bilerek yok**: öyle bir kanca referans platformda
