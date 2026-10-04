@@ -3641,10 +3641,19 @@ dilimidir.**
   (#4 hâlâ sapıyor, küme {4,20} aynı, ama çıktısı pinden farklı) → *"bilinen sapmanın ÇIKTISI
   DEĞİŞTİ: #4 pinli→ölçülen (stateHash …, skor 2-0→1-0)"* ile kırıldı — eski kapı burada
   GEÇERDİ; #20 düzelince → hem tablo (*"golden'la AYNI"*) hem hüküm (*"borç AZALDI"*) kırıldı;
-  pinli `configHash` golden'dan farklı → *"BAYAT"*; gerçek düzende eski biçim (`sapanIndeksler`)
+  pinli `configHash` golden'dan farklı → kırıldı (o turda *"BAYAT"* olarak; üretim özeti gelince bu
+  vaka *"kurulumuna ait değil"* oldu, tazeliği artık özet denetliyor); gerçek düzende eski biçim (`sapanIndeksler`)
   → Linux'ta tablo kırıldı, replay'in kendisi geçti. Kodda: hükümden "çıktı değişti" dalı
   sökülünce `M17PlatformBorcKarari`; okuyucudan "0x + 16 hex" doğrulaması ve tutarlılıktan BAYAT
   dalı sökülünce `M17PlatformBorcOkuma` kırıldı — her diş yalnız kendi hedef kapısını kırdı.
+- **Üretim özetinin dişleri** (Codex P2 — `configHash` tazeliği kanıtlamıyordu). Gerçek veride,
+  izole kopyada: replay komut zaman çizelgesi bir tick kaydırılıp golden yeniden üretildi (motor
+  kodu değişikliğinin vekili) → **`configHash` 50/50 AYNI** kaldı, `stateHash` 24/50 ve `komutIz`
+  50/50 değişti; eski `configHash` denetimi bu tabloyu **tutarlı sayardı**. Yeni kapı: *"osx-arm64:
+  BAYAT — kayıtlar golden üretimi 0xAACB6076DCC67AAF için ölçülmüş, güncel üretim farklı"* ile
+  kırıldı, replay kapısı yeni setle geçti (tek hata). Kodda: özet karşılaştırması sökülünce ve
+  `Hex64` doğrulaması sökülünce `M17PlatformBorcOkuma` kendi fikstürlerinde kırıldı (eski üretimin
+  kaydı · özetsiz girdi; öneksiz kayıt hash'i · öneksiz özet).
 
 **ÖLÇÜLDÜ (2026-10-04).** Yerel kayıt yalnız "4/50, ilk sapma #4" diyordu; indeks KÜMESİ
 bilinmiyordu. Borç girdisi bu yüzden `null` başladı ve CI'ın ilk macOS koşusu kasten kırmızı döndü:
