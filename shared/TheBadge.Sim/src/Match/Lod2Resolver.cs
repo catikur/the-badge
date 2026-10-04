@@ -38,7 +38,11 @@ namespace TheBadge.Sim.Match
         readonly MatchEvent[] summary = new MatchEvent[SummaryCapacity];
         int summaryCount;
         public int SummaryCount => summaryCount;
-        public MatchEvent GetSummaryEvent(int i) => summary[i < 0 ? 0 : i >= summaryCount ? summaryCount - 1 : i];
+        /// <summary>Özet olay. Dizin dolu önek içinde kırpılır. Özet BOŞSA (0-0, kartsız — LOD 2'de
+        /// Poisson'un olağan sonucu) `default` döner: `Kind == EventType.None` açık bir "olay yok"
+        /// işaretidir. Eski hâl `summaryCount - 1` = -1 indisine düşüp IndexOutOfRange atıyordu.</summary>
+        public MatchEvent GetSummaryEvent(int i)
+            => summaryCount <= 0 ? default : summary[i < 0 ? 0 : i >= summaryCount ? summaryCount - 1 : i];
 
         public Lod2Resolver(SimBalance balance, Lod2Table lod2Table)
         {
@@ -62,6 +66,15 @@ namespace TheBadge.Sim.Match
             int golEv = PoissonDraw(Ara(table.gol, sEv, sDep), seed, 1);
             int golDep = PoissonDraw(Ara(table.gol, sDep, sEv), seed, 2);
 
+            // KART SAYILARI BİR KEZ ÇEKİLİR; sonuç (res) ve özet log AYNI değişkenden okur. Eskiden aynı
+            // `Yuvarla` çağrıları iki yerde tekrarlanıyordu ve tutarlılık "aynı çağrı iki kez aynı değeri
+            // verir" varsayımına dayanıyordu; K9 bunu SATIR NUMARASINA bağlı bir "kasıtlı paylaşım"
+            // bildirimiyle izliyordu ve bildirim iki kez (2026-09-04, 2026-10-04) satır kayınca düştü.
+            // Artık paylaşım yok, tutarlılık yapısal. `Yuvarla` saftır (tablo + sayaç tabanlı RNG) —
+            // değerler bit-aynıdır, yalnız çağrı sayısı yarıya iner.
+            int sariEv = Yuvarla(table.sari, sEv, sDep, seed, 7), sariDep = Yuvarla(table.sari, sDep, sEv, seed, 8);
+            int kirmiziEv = Yuvarla(table.kirmizi, sEv, sDep, seed, 9), kirmiziDep = Yuvarla(table.kirmizi, sDep, sEv, seed, 10);
+
             var res = new MatchResult
             {
                 HomeGoals = golEv,
@@ -72,8 +85,8 @@ namespace TheBadge.Sim.Match
                 Shots = Yuvarla(table.sut, sEv, sDep, seed, 3) + Yuvarla(table.sut, sDep, sEv, seed, 4),
                 Saves = 0,
                 Fouls = Yuvarla(table.faul, sEv, sDep, seed, 5) + Yuvarla(table.faul, sDep, sEv, seed, 6),
-                Yellows = Yuvarla(table.sari, sEv, sDep, seed, 7) + Yuvarla(table.sari, sDep, sEv, seed, 8),
-                Reds = Yuvarla(table.kirmizi, sEv, sDep, seed, 9) + Yuvarla(table.kirmizi, sDep, sEv, seed, 10),
+                Yellows = sariEv + sariDep,
+                Reds = kirmiziEv + kirmiziDep,
                 Corners = Yuvarla(table.korner, sEv, sDep, seed, 11) + Yuvarla(table.korner, sDep, sEv, seed, 12),
                 Penalties = 0,
                 XgHome = Ara(table.xg, sEv, sDep),
@@ -81,14 +94,32 @@ namespace TheBadge.Sim.Match
                 FinalChecksum = 0
             };
 
-            // ÖZET LOG (16.1): yalnız goller ve kartlar. Dakikalar CHAOS akışından çekilir —
+            // ÖZET LOG (16.1): "şut zinciri + KARTLAR". Dakikalar CHAOS akışından çekilir —
             // haber/hikaye katmanı "78'de kazandı" diyebilsin diye; sunum değeri buradadır.
-            for (int i = 0; i < golEv && summaryCount < SummaryCapacity; i++) OzetGol(seed, 0, i, i + 1, golDep);
-            for (int i = 0; i < golDep && summaryCount < SummaryCapacity; i++) OzetGol(seed, 1, i, golEv, i + 1);
-            int sariEv = Yuvarla(table.sari, sEv, sDep, seed, 7), sariDep = Yuvarla(table.sari, sDep, sEv, seed, 8);
+            // EKLEME SIRASI = kapasite önceliği: gol > kırmızı > sarı. Özet dolarsa (32) önce sarı düşer.
+            for (int i = 0; i < golEv && summaryCount < SummaryCapacity; i++) OzetGol(seed, 0, i);
+            for (int i = 0; i < golDep && summaryCount < SummaryCapacity; i++) OzetGol(seed, 1, i);
+            // KIRMIZI KART (16.1 "kartlar"): eskiden `res.Reds` sayılıyor ama özete hiç YAZILMIYORDU —
+            // hikaye katmanı "34'te kırmızı" diyemiyordu. Sayılar `res.Reds` ile AYNI
+            // değişkenlerden gelir; özet ile sonuç ayrışamaz (kapı: M15Lod2KartOzeti).
+            for (int i = 0; i < kirmiziEv && summaryCount < SummaryCapacity; i++) OzetKart(seed, 0, i, EventType.RedCard);
+            for (int i = 0; i < kirmiziDep && summaryCount < SummaryCapacity; i++) OzetKart(seed, 1, i, EventType.RedCard);
             for (int i = 0; i < sariEv && summaryCount < SummaryCapacity; i++) OzetKart(seed, 0, i, EventType.YellowCard);
             for (int i = 0; i < sariDep && summaryCount < SummaryCapacity; i++) OzetKart(seed, 1, i, EventType.YellowCard);
             SirralaOzet();
+            // GOL SKORU SIRALAMADAN SONRA yazılır: LOD 0 ile aynı kodlama (ev×1000 + dep×10) ve aynı
+            // anlam — GOL ANINDAKİ skor (MatchEngine gol emit'i: "skoru DEĞİŞTİKTEN sonra kaydedilir").
+            // Eski hâl her ev golüne rakibin NİHAİ gol sayısını yazıyordu: 2-2 biten maçta 10'daki ilk
+            // gol "1-2" görünüyordu ve LOD 0 çözücüsü (ev=aux/1000, dep=aux/10%100) imkânsız skor
+            // dizileri okuyordu. Sıralama kararlı (ekleme sıralaması) olduğundan aynı dakikadaki
+            // goller ekleme sırasını korur — skor dizisi deterministiktir.
+            int evSkor = 0, depSkor = 0;
+            for (int i = 0; i < summaryCount; i++)
+            {
+                if (summary[i].Type != (ushort)EventType.Goal) continue;
+                if (summary[i].TeamIdx == 0) evSkor++; else depSkor++;
+                summary[i].AuxData = evSkor * 1000 + depSkor * 10;
+            }
             return res;
         }
 
@@ -158,24 +189,36 @@ namespace TheBadge.Sim.Match
         /// birlikte arttığı ve döngü `summaryCount < SummaryCapacity` ile kapandığı için
         /// `idx ≤ SummaryCapacity-1` her zaman doğrudur. `idx`i 20'de kapatmak da garantiyi
         /// yapıya taşırdı ama 20. karttan sonrasını LOG'DAN DÜŞÜRÜRDÜ; bu çözüm veri kaybetmez.</summary>
-        void OzetGol(ulong seed, byte team, int idx, int evSkor, int depSkor)
+        void OzetGol(ulong seed, byte team, int idx)
         {
             uint dk = (uint)(Rng.Rand01(seed, Domain.Chaos, (uint)(7100 + team * SummaryCapacity + idx), 0, 20) * 90);
             summary[summaryCount++] = new MatchEvent
             {
                 Tick = dk * 600, Type = (ushort)EventType.Goal, ActorA = -1, ActorB = -1,
                 TeamIdx = team, X = 0, Y = 0,
-                AuxData = evSkor * 1000 + depSkor * 10, Xg = 0f, Flags = 0
+                AuxData = 0,   // gol anındaki skor SIRALAMADAN SONRA yazılır (Run içindeki not)
+                Xg = 0f, Flags = 0
             };
         }
 
         void OzetKart(ulong seed, byte team, int idx, EventType tip)
         {
-            uint dk = (uint)(Rng.Rand01(seed, Domain.Chaos, (uint)(7200 + team * SummaryCapacity + idx), 0, 21) * 90);
+            // Domain.Chaos: özet dakikaları sunum/hikaye rengidir, sonuca girmez (Run'daki not).
+            // KIRMIZI AYRI SALT (22) çeker: aynı entity aralığında sarının akışı (21) BİT-AYNI kalır ve
+            // iki kart türünün dakikaları korelasyonsuz olur. İki çağrı yeri de LİTERAL salt taşır —
+            // K9AdresCakismasi salt'ı kaynaktan metin olarak okur; değişken salt kapıya görünmezdi.
+            double u = tip == EventType.RedCard
+                ? Rng.Rand01(seed, Domain.Chaos, (uint)(7200 + team * SummaryCapacity + idx), 0, 22)
+                : Rng.Rand01(seed, Domain.Chaos, (uint)(7200 + team * SummaryCapacity + idx), 0, 21);
+            uint dk = (uint)(u * 90);
             summary[summaryCount++] = new MatchEvent
             {
                 Tick = dk * 600, Type = (ushort)tip, ActorA = -1, ActorB = -1,
-                TeamIdx = team, X = 0, Y = 0, AuxData = 1, Xg = 0f, Flags = 0
+                TeamIdx = team, X = 0, Y = 0,
+                // AuxData = 1: LOD 0 kodlamasında sarı için "ilk sarı", kırmızı için "direkt kırmızı"
+                // (ikinci sarıdan kırmızı = 2). LOD 2 tablosu kart TÜRÜNÜ ayırt etmez, yalnız toplam
+                // sayı verir; 1 her iki kartta da en yaygın türdür. Bu bir YAKLAŞIMDIR, ölçüm değil.
+                AuxData = 1, Xg = 0f, Flags = 0
             };
         }
 

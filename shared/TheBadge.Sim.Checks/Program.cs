@@ -1799,7 +1799,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         for (int i = 0; ayni && i < n1; i++)
         {
             var e = lod2.GetSummaryEvent(i);
-            if (e.Tick != ilk[i].Tick || e.Type != ilk[i].Type || e.TeamIdx != ilk[i].TeamIdx) ayni = false;
+            if (e.Tick != ilk[i].Tick || e.Type != ilk[i].Type || e.TeamIdx != ilk[i].TeamIdx
+                || e.AuxData != ilk[i].AuxData) ayni = false;   // AuxData: gol anındaki skor (18h)
         }
         if (!ayni) failures += Fail("M15Lod2Determinizmi", "aynı girdi farklı sonuç");
         else Pass($"M15Lod2Determinizmi(skor {r1.HomeGoals}-{r1.AwayGoals}, özet {n1} olay)");
@@ -1909,6 +1910,91 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         if (oran > 30.0)
             failures += Fail("M15GucTepkisi", $"×{oran:0.0} — bugünkü gerçeğin de üstünde");
         else Pass($"M15GucTepkisi(×{oran:0.0} — HEDEF ×2-3 civarı; M16 kalibrasyon borcu)");
+    }
+
+    // 18h) LOD 2 ÖZET LOG SÖZLEŞMESİ (ME 16.1 "şut zinciri + kartlar" · LOD 0 gol AuxData kodlaması).
+    // Kaynak: sahipsiz kalmış `cursor/lod2-summary-issues-6794` (66837a7) — PR'ı hiç açılmamıştı;
+    // bugünkü main'e elle portlandı (K10'un `team * SummaryCapacity` ayrımı korunarak). Üç hata:
+    //   (1) boş özette `summary[-1]` → IndexOutOfRange (0-0 kartsız maç LOD 2'de OLAĞAN sonuç)
+    //   (2) kırmızı kart `res.Reds`te sayılıyor ama özete HİÇ yazılmıyordu
+    //   (3) gol AuxData'sı rakibin NİHAİ gol sayısını taşıyordu (LOD 0: gol ANINDAKİ skor)
+    // Cursor'ın kapılarından iki noktada SIKI: kart sayısı "en az bir" değil TAM EŞİTLİK ister
+    // (tek yönlü kontrol bu turun dersiydi), ve gol kapısı "≥2 gol" değil "İKİ TAKIM DA gol attı"
+    // maçı ister — eski hata yalnız orada görünür (kronolojik ilk gole rakibin nihai sayısı
+    // yazılıyordu), 2-0'larla dolu bir örneklem eski kodu da geçirirdi.
+    {
+        // (1) Boş özet: taze çözücüde sayım 0 — eski kod burada istisna atardı; kapı ÇÖKMEZ, kırılır.
+        string bosHata = "";
+        try
+        {
+            var taze = new Lod2Resolver(simBal, lod2Tbl);
+            if (taze.SummaryCount != 0) bosHata += $"taze çözücü sayımı {taze.SummaryCount}; ";
+            foreach (int i in new[] { 0, -1, 99 })
+                if (taze.GetSummaryEvent(i).Kind != EventType.None) bosHata += $"GetSummaryEvent({i}) None değil; ";
+        }
+        catch (Exception ex) { bosHata += $"boş özet okuması istisna attı ({ex.GetType().Name}); "; }
+
+        // (2)+(3) Örneklem: eşit güç + güç farkı (kırmızı ızgarası yalnız farkta dolu).
+        int bosMac = 0, kesik = 0, kirmiziOlay = 0, sariOlay = 0, ikiTarafGol = 0, golMac = 0;
+        string kartHata = "", golHata = "";
+        var cfgler = new[]
+        {
+            CfgLod(0xB158, LodLevel.Lod2),
+            new MatchConfig
+            {
+                Seed = 0xB159, EngineVersion = "m15",
+                Home = BuildSheetSide(300, 7, home: true, offset: -18),
+                Away = BuildSheetSide(300, 7, home: false, idEntity: 8, offset: 18),
+                Referee = RefereeProfile.Default, Lod = LodLevel.Lod2
+            },
+        };
+        for (int k = 0; k < cfgler.Length; k++)
+            for (int n = 0; n < 80; n++)
+            {
+                ulong sd = 0xB158UL + (ulong)k * 0x1000UL + (ulong)n * 7919UL;
+                var r = lod2.Run(sd, cfgler[k]);
+                int nOzet = lod2.SummaryCount;
+                if (nOzet == 0)
+                {
+                    bosMac++;
+                    try { if (lod2.GetSummaryEvent(0).Kind != EventType.None) bosHata += $"boş maç (tohum {sd:X}) None dönmüyor; "; }
+                    catch (Exception ex) { bosHata += $"boş maç okuması istisna ({ex.GetType().Name}); "; }
+                }
+                int kir = 0, sar = 0, ev = 0, dep = 0;
+                for (int i = 0; i < nOzet; i++)
+                {
+                    var e = lod2.GetSummaryEvent(i);
+                    if (e.Kind == EventType.RedCard) kir++;
+                    else if (e.Kind == EventType.YellowCard) sar++;
+                    else if (e.Kind == EventType.Goal)
+                    {
+                        if (e.TeamIdx == 0) ev++; else dep++;
+                        int evS = e.AuxData / 1000, depS = (e.AuxData / 10) % 100;
+                        if ((evS != ev || depS != dep) && golHata.Length < 300)
+                            golHata += $"tohum {sd:X}: {ev + dep}. gol aux {evS}-{depS} ≠ o anki {ev}-{dep}; ";
+                    }
+                }
+                kirmiziOlay += kir; sariOlay += sar;
+                if (r.HomeGoals > 0 || r.AwayGoals > 0) golMac++;
+                if (r.HomeGoals > 0 && r.AwayGoals > 0) ikiTarafGol++;
+                if (nOzet >= Lod2Resolver.SummaryCapacity) { kesik++; continue; }   // kesilmişse eşitlik aranmaz
+                // TAM EŞİTLİK: özet ile sonuç aynı çağrılardan geliyor; ayrışırsa biri yanlış.
+                if (kir != r.Reds && kartHata.Length < 300) kartHata += $"tohum {sd:X}: özet {kir} kırmızı ≠ sonuç {r.Reds}; ";
+                if (sar != r.Yellows && kartHata.Length < 300) kartHata += $"tohum {sd:X}: özet {sar} sarı ≠ sonuç {r.Yellows}; ";
+                if ((ev != r.HomeGoals || dep != r.AwayGoals) && golHata.Length < 300)
+                    golHata += $"tohum {sd:X}: özet golleri {ev}-{dep} ≠ sonuç {r.HomeGoals}-{r.AwayGoals}; ";
+            }
+
+        if (bosHata.Length > 0) failures += Fail("M15Lod2BosOzet", bosHata);
+        else Pass($"M15Lod2BosOzet(taze çözücü 0/-1/99 → None · örneklemde {bosMac} boş maç)");
+
+        if (kirmiziOlay == 0) kartHata += "örneklemde HİÇ kırmızı olayı yok — kırmızı yolu sınanmadı; ";
+        if (kartHata.Length > 0) failures += Fail("M15Lod2KartOzeti", kartHata);
+        else Pass($"M15Lod2KartOzeti(özet ↔ sonuç TAM eşit · {kirmiziOlay} kırmızı · {sariOlay} sarı · {kesik} kesik maç hariç)");
+
+        if (ikiTarafGol == 0) golHata += "örneklemde iki takımın da gol attığı maç YOK — eski hata yalnız orada görünür; ";
+        if (golHata.Length > 0) failures += Fail("M15Lod2GolSkoru", golHata);
+        else Pass($"M15Lod2GolSkoru(her gol AuxData = gol ANINDAKİ skor · {golMac} gollü maç, {ikiTarafGol} iki taraflı)");
     }
 }
 
@@ -7524,18 +7610,12 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     };
 
     // KASITLI PAYLAŞIM — (dosya, satırA, satırB) ve gerekçesi.
-    var kasitliPaylasim = new (string Dosya, int A, int B, string Gerekce)[]
-    {
-        ("Lod2Resolver.cs", 75, 88,
-         "AYNI çekiliş bilerek iki kez okunur: satır 75 sarı kart TOPLAMINI, satır 88 aynı " +
-         "saltlarla taraf başına değerleri türetir. Farklı adres kullanmak ikisini AYRIŞTIRIRDI " +
-         "(toplam ≠ parçaların toplamı). " +
-         "NOT (5G S2, 2026-09-04): bu bildirim SATIR NUMARASINA bağlıdır ve kırılgandır — " +
-         "`TeamStrength` gövdesi `TeamRating`e devredilince satırlar 17 kaydı ve kapı düştü. " +
-         "Kapı haklıydı, paylaşım aynı paylaşım (salt 7/8, aynı yeniden türetme); yalnız adres " +
-         "eskimişti. Numarayı düşünmeden güncellemek, paylaşımın HÂLÂ aynı olup olmadığını " +
-         "denetlemeden geçmek olurdu."),
-    };
+    // Liste BOŞ (2026-10-04). Tek bildirim Lod2Resolver'daki sarı kart toplamı ↔ taraf başına değerdi
+    // (salt 7/8 iki çağrı yerinden okunuyordu) ve SATIR NUMARASINA bağlıydı: 2026-09-04'te ve
+    // 2026-10-04'te satırlar kayınca iki kez düştü. LOD 2 özet portunda kart sayıları BİR KEZ çekilip
+    // hem sonuca hem özete aynı değişkenden verildi — paylaşım kalmadı, bildirim gereksiz. Yeni bir
+    // kasıtlı paylaşım gerekirse gerekçesiyle buraya döner; ama önce paylaşımı YAPIYLA kaldırmak denenir.
+    var kasitliPaylasim = new (string Dosya, int A, int B, string Gerekce)[] { };
 
     // SALT SPAN TABLOSU — salt'ı bir DÖNGÜ DEĞİŞKENİNDEN gelen çağrılar `taban..taban+span-1`
     // aralığındaki TÜM saltları işgal eder. `gkKisaN` bir BALANCE değeridir: bir salt aralığının
@@ -7805,9 +7885,25 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
 
     // 1) AYRIM, `idx`i kapatan sabitin KENDİSİ olmalı — sayı olarak eşit olması yetmez, AYNI
     //    sembol olmalı ki biri değişince öteki de değişsin.
-    int semboluk = System.Text.RegularExpressions.Regex.Matches(lod, @"team \* SummaryCapacity \+ idx").Count;
-    if (semboluk != 2)
-        k10hata += $"taraf ayrimi `team * SummaryCapacity + idx` degil ({semboluk}/2 bulundu) - " +
+    //    ÖZELLİK olarak denetlenir, SAYI olarak değil (2026-10-04). İlk yazım ifadenin TAM 2 KEZ
+    //    geçmesini istiyordu — 2. maddenin kendi yorumunun adlandırdığı hatanın aynısı: tahmin edilen
+    //    bir sayıya bağlılık. LOD 2 özetine kırmızı kart eklenince (ME 16.1 "kartlar") üçüncü meşru
+    //    çağrı yeri doğdu ve sayı kapısı spec'in istediği özelliği yapısal olarak engelledi.
+    //    Doğru ifade: özet log'un HER RNG çağrısı (entity tabanı 7x00) tarafları TAM OLARAK
+    //    `team * SummaryCapacity + idx` ile ayırır. Sayıdan bağımsızdır ve eskisinden zayıf değildir:
+    //    `team * 20`, sayısal eşit `team * 32` ve sırası değişmiş yazım (`idx + team * ...`) da kırar.
+    var ozetCagrilari = System.Text.RegularExpressions.Regex.Matches(lod,
+        @"Rng\.\w+\(\s*seed\s*,\s*Domain\.\w+\s*,\s*\(uint\)\((7\d00)\s*\+\s*([^)]*?)\s*\)");
+    int semboluk = 0; string kopuk = "";
+    foreach (System.Text.RegularExpressions.Match oc in ozetCagrilari)
+    {
+        if (oc.Groups[2].Value == "team * SummaryCapacity + idx") semboluk++;
+        else kopuk += $"[{oc.Groups[1].Value} + {oc.Groups[2].Value}] ";
+    }
+    if (ozetCagrilari.Count == 0)
+        k10hata += "ozet log RNG cagrisi (entity 7x00) BULUNAMADI - kapi modeli koddan kopmus ";
+    if (kopuk.Length > 0)
+        k10hata += $"taraf ayrimi `team * SummaryCapacity + idx` olmayan ozet cagrisi: {kopuk.Trim()} - " +
                    "ayrim `idx`i kapatan sabitten KOPMUS ";
 
     // 2) `idx`i kapatan HER koşul `SummaryCapacity`ye karşı olmalı.
@@ -7831,7 +7927,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     if (!System.Text.RegularExpressions.Regex.IsMatch(lod, @"k < 15"))
         k10hata += "PoissonDraw ust siniri (k < 15) bulunamadi ";
 
-    Console.WriteLine($"[info] K10 ozet ayrimi: SummaryCapacity {kap} · sembolik ayrim {semboluk}/2 · " +
+    Console.WriteLine($"[info] K10 ozet ayrimi: SummaryCapacity {kap} · sembolik ayrim {semboluk}/{ozetCagrilari.Count} ozet cagrisi · " +
                       $"kapasiteye bagli karsilastirma {dongu} · sapan {sapan}");
     if (k10hata.Length > 0) failures += Fail("K10OzetAyrimi", k10hata);
     else Pass($"K10OzetAyrimi(taraf ayrimi = SummaryCapacity ({kap}) SEMBOLIK olarak · idx ayni sabitle " +
