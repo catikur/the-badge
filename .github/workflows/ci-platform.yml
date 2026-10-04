@@ -7,18 +7,24 @@ name: platform-esitligi
 #
 # Not: bu is .NET'i macOS arm64'te olcer. Gercek istemci Unity IL2CPP / iOS arm64'tur — farkli bir
 # calisma zamani ve libm. Bu is o platformun VEKILIDIR, kendisi degil; iddiasi bundan genis degil.
+#
+# TETIKLEME: izin listesi DEGIL, dislama listesi (inceleme bulgusu, Codex P2). Ilk yazim `paths:`
+# ile shared/** ve balance/**'u sayiyordu ve ILK GUNDEN eksikti: Sim.Checks server/TheBadge.Play'e
+# referans veriyor (server/** listede yoktu), kokteki nuget.config, evals/** ve unity/** de yoktu;
+# onerilen global.json eklenseydi o da gorulmeyecekti. Elle senkron tutulan bir izin listesi bu
+# projenin defalarca isirildigi suruklenme sinifidir ve YANLIS tarafa duser (gormedigini atlar).
+# Dislama listesi GUVENLI tarafa duser: yeni bir derleme girdisi eklenirse is kendiliginden KOSAR.
+# Disarida yalniz docs/** var: Checks hicbir docs/ dosyasini okumuyor (FindRepoFile taramasiyla
+# dogrulandi) ve bir belge platforma bagli sonuc uretemez. Bu listeyi genisletmeden once ayni
+# dogrulamayi yap.
 on:
   pull_request:
-    paths:
-      - 'shared/**'
-      - 'balance/**'
-      - '.github/workflows/ci-platform.yml'
+    paths-ignore:
+      - 'docs/**'
   push:
     branches: [main]
-    paths:
-      - 'shared/**'
-      - 'balance/**'
-      - '.github/workflows/ci-platform.yml'
+    paths-ignore:
+      - 'docs/**'
   workflow_dispatch: {}
 jobs:
   determinizm-osx-arm64:

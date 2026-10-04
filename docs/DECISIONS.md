@@ -3583,9 +3583,16 @@ dilimidir.**
 
 **(b) UYGULANDI — kapı artık iki platformda ölçüyor:**
 - `.github/workflows/ci-platform.yml` — aynı `Sim.Checks` **macOS arm64**'te (`macos-15`) koşar.
-  `shared/**`, `balance/**` değişince tetiklenir (determinizm sim koduna bağlı); repo açık olduğu
-  için macOS dakikası ücretsizdir. Mimari adımı `arm64` değilse iş düşer — borç tablosu arm64
-  için ölçülür, sessizce x64'te koşup "geçti" demesin.
+  `docs/**` dışında her değişiklikte tetiklenir; repo açık olduğu için macOS dakikası ücretsizdir.
+  Mimari adımı `arm64` değilse iş düşer — borç tablosu arm64 için ölçülür, sessizce x64'te koşup
+  "geçti" demesin.
+  **Tetikleme bir İZİN LİSTESİ değil, DIŞLAMA LİSTESİDİR** (inceleme bulgusu, Codex P2). İlk
+  yazım yalnız `shared/**` ve `balance/**`'u sayıyordu ve **ilk günden eksikti**: `Sim.Checks`
+  `server/TheBadge.Play`'e referans veriyor, kökte `nuget.config` var, süit `evals/**` ve `unity/**`
+  okuyor — hiçbiri listede değildi; önerilen `global.json` da görülmeyecekti. Elle senkron tutulan
+  izin listesi bu projenin tekrar tekrar ısırıldığı sürüklenme sınıfıdır ve YANLIŞ tarafa düşer
+  (görmediğini atlar). Dışlama listesi güvenli tarafa düşer: yeni bir girdi eklenirse iş koşar.
+  Dışarıda yalnız `docs/**` var — Checks hiçbir `docs/` dosyasını okumuyor (tarandı).
 - `M17GoldenReplay` **platforma duyarlı** oldu, ama gevşemedi:
   - referans platform (`linux-x64`, golden set orada üretilir) → **eskisi gibi katı**
   - tabloda olmayan platform → **katı** (ölçülmemiş platform borç sayılamaz)
