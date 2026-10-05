@@ -7,7 +7,7 @@
     { "idx": 1, "configHash": "0x0B0A418F042CCC0E", "stateHash": "0x417BCFF844A6FB9D", "skor": "1-0", "tick": 54600, "komutIz": "0x7A37ADBE369DE1E6", "uygulanan": 3, "reddedilen": 0, "degisiklik": 1 },
     { "idx": 2, "configHash": "0xB945EA03D2C955B1", "stateHash": "0x9D38C443EDDFB748", "skor": "1-0", "tick": 54600, "komutIz": "0x12F529FF0666B941", "uygulanan": 3, "reddedilen": 0, "degisiklik": 1 },
     { "idx": 3, "configHash": "0x846F083938D2E44D", "stateHash": "0xF1D82EF1B087AE75", "skor": "2-0", "tick": 55200, "komutIz": "0x07A8E597281B56E4", "uygulanan": 3, "reddedilen": 0, "degisiklik": 2 },
-    { "idx": 4, "configHash": "0x15170DC2ECA53097", "stateHash": "0x1B712016B8998E17", "skor": "1-0", "tick": 55200, "komutIz": "0x79E0159FFAF5982D", "uygulanan": 3, "reddedilen": 0, "degisiklik": 2 },
+    { "idx": 4, "configHash": "0x15170DC2ECA53097", "stateHash": "0x49A5BE4C5BFB6626", "skor": "1-0", "tick": 55200, "komutIz": "0x79E0159FFAF5982D", "uygulanan": 3, "reddedilen": 0, "degisiklik": 1 },
     { "idx": 5, "configHash": "0x592FD3ABE2E696A8", "stateHash": "0x099A7DB8ADCEE882", "skor": "0-3", "tick": 55800, "komutIz": "0x8BBFD54340591E1F", "uygulanan": 3, "reddedilen": 1, "degisiklik": 1 },
     { "idx": 6, "configHash": "0x425E40B4E243864F", "stateHash": "0xD4A6473E8BAD3CF5", "skor": "0-1", "tick": 54600, "komutIz": "0x9BC31BFB1511CD7D", "uygulanan": 3, "reddedilen": 0, "degisiklik": 1 },
     { "idx": 7, "configHash": "0xDCEE23B0EE68415D", "stateHash": "0xE1ADDDACF7701C14", "skor": "1-0", "tick": 54600, "komutIz": "0x1E15E6616B748CF3", "uygulanan": 3, "reddedilen": 0, "degisiklik": 1 },
@@ -23,7 +23,7 @@
     { "idx": 17, "configHash": "0x13E3633B7D74476D", "stateHash": "0xE7E07422D86E3A57", "skor": "0-1", "tick": 54600, "komutIz": "0xA9902B9B66BE49FA", "uygulanan": 3, "reddedilen": 0, "degisiklik": 1 },
     { "idx": 18, "configHash": "0x104B19A5B2F3CB2C", "stateHash": "0x03AD98574FE28CCF", "skor": "1-0", "tick": 54600, "komutIz": "0x957FB65FB54690EA", "uygulanan": 3, "reddedilen": 0, "degisiklik": 1 },
     { "idx": 19, "configHash": "0xF4EADBDBC5647405", "stateHash": "0xA5A8FC1C610C1F44", "skor": "2-0", "tick": 54600, "komutIz": "0x72C82F6BAC486918", "uygulanan": 3, "reddedilen": 0, "degisiklik": 1 },
-    { "idx": 20, "configHash": "0xA415990BB17883E1", "stateHash": "0x3FC54F61832EF9C8", "skor": "0-3", "tick": 55200, "komutIz": "0x5F661E9DFB11EA8C", "uygulanan": 3, "reddedilen": 0, "degisiklik": 1 },
+    { "idx": 20, "configHash": "0xA415990BB17883E1", "stateHash": "0x101FAF82E20B5285", "skor": "1-1", "tick": 55800, "komutIz": "0x5F661E9DFB11EA8C", "uygulanan": 3, "reddedilen": 0, "degisiklik": 2 },
     { "idx": 21, "configHash": "0x689FA5C916F0C733", "stateHash": "0x8A45F2900FEA6063", "skor": "1-3", "tick": 55200, "komutIz": "0xD47D95D6944F0852", "uygulanan": 3, "reddedilen": 0, "degisiklik": 1 },
     { "idx": 22, "configHash": "0xD70DDB44589E150D", "stateHash": "0xD4562396976CAD2F", "skor": "0-1", "tick": 54600, "komutIz": "0xB5E8B394B9920B32", "uygulanan": 3, "reddedilen": 0, "degisiklik": 1 },
     { "idx": 23, "configHash": "0x37787021039FA70B", "stateHash": "0xE59D70C792B6D8A8", "skor": "0-1", "tick": 55800, "komutIz": "0x0799F8CDB606377E", "uygulanan": 3, "reddedilen": 0, "degisiklik": 1 },
@@ -51,7 +51,7 @@
     { "idx": 45, "configHash": "0x4795C2D12596EDD9", "stateHash": "0x88A4FA3D8457E514", "skor": "0-4", "tick": 55200, "komutIz": "0x64016D3EFEF22156", "uygulanan": 3, "reddedilen": 0, "degisiklik": 1 },
     { "idx": 46, "configHash": "0x89600FE9EF513A40", "stateHash": "0x328C2C39F2B25CC8", "skor": "0-0", "tick": 54600, "komutIz": "0xDD9651090A705620", "uygulanan": 3, "reddedilen": 0, "degisiklik": 1 },
     { "idx": 47, "configHash": "0xCF3614214CCE472F", "stateHash": "0x6BD3DEA778E5E66A", "skor": "1-2", "tick": 55200, "komutIz": "0x12178EB1BF521F6E", "uygulanan": 3, "reddedilen": 0, "degisiklik": 2 },
-    { "idx": 48, "configHash": "0xE1ABCD8CEDBDE6DA", "stateHash": "0x689BC50B31317E65", "skor": "0-0", "tick": 54600, "komutIz": "0xC865828DDFBB3E8D", "uygulanan": 3, "reddedilen": 0, "degisiklik": 1 },
-    { "idx": 49, "configHash": "0xEAB07803572940ED", "stateHash": "0x2CCD5980F53AC48D", "skor": "1-0", "tick": 54600, "komutIz": "0xBC7775D8E6ECBC84", "uygulanan": 3, "reddedilen": 0, "degisiklik": 1 }
+    { "idx": 48, "configHash": "0xE1ABCD8CEDBDE6DA", "stateHash": "0x5B1FC5AF54247F3E", "skor": "0-1", "tick": 54600, "komutIz": "0xC865828DDFBB3E8D", "uygulanan": 3, "reddedilen": 0, "degisiklik": 2 },
+    { "idx": 49, "configHash": "0xEAB07803572940ED", "stateHash": "0xE9FF58BA2921E4FA", "skor": "3-0", "tick": 54600, "komutIz": "0xBC7775D8E6ECBC84", "uygulanan": 3, "reddedilen": 0, "degisiklik": 1 }
   ]
 }

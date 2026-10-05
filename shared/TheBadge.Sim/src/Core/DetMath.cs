@@ -54,6 +54,21 @@ namespace TheBadge.Sim.Core
             return v * Pow2(k);
         }
 
+        // ============================ Kayan → tamsayı ============================
+
+        /// <summary>Kayan → int32, platformdan BAĞIMSIZ: NaN → 0, aralık dışı → int sınırı (doyurma).
+        /// Ham <c>(int)</c> dönüşümü .NET 8'de x64'te NaN/aralık dışı için int.MinValue, arm64'te doyurulmuş
+        /// değer verir (.NET 9 doyurmada birleştirdi; IL2CPP'nin ürettiği C++'ta ise TANIMSIZ davranıştır).
+        /// P0'ın ölçtüğü macOS sapmasının KÖK NEDENİ budur: şut hızına sızan NaN (DECISIONS, P0 (a)).
+        /// Doyurma arm64'ün ve .NET 9'un semantiğidir — sonuç her platformda ve her çalışma zamanında aynı.</summary>
+        public static int ToInt32Sat(double v)
+        {
+            if (double.IsNaN(v)) return 0;
+            if (v >= 2147483647.0) return int.MaxValue;
+            if (v <= -2147483648.0) return int.MinValue;
+            return (int)v;
+        }
+
         // ============================ Exp / Log / Pow ============================
 
         /// <summary>e^x. Aralık indirgemesi x = k·ln2 + r (Cody–Waite), e^r derece-13 Taylor

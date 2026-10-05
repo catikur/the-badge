@@ -3111,6 +3111,33 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
                          "— DetMath bu platformda FARKLI bit üretiyor ya da pin bayat");
     else Pass($"P0DetMathBitPin([{PlatformKimligi()}] 7 fonksiyonun çıktı özeti pinle bit-eşit: {pinOzet.Trim()})");
 
+    // --- P0DonusumDoyurma --- P0'ın KÖK NEDENİ (2026-10-05): şut hızına sızan NaN, ham (int) dönüşümünde
+    // x64'te int.MinValue, arm64'te 0 oluyordu. Dönüşüm artık DetMath.ToInt32Sat'tan geçer (doyurma: arm64 ve
+    // .NET 9 semantiği). Bu fikstürler LINUX'ta kırılır: QuantizeMm ham dönüşüme geri dönerse x64 NaN için
+    // int.MinValue verir. (arm64 ham dönüşümde zaten 0 verdiği için orada bu fikstür tanık olamaz.)
+    {
+        var donusum = new (string ad, int olculen, int beklenen)[]
+        {
+            ("ToInt32Sat(NaN)",        TheBadge.Sim.Core.DetMath.ToInt32Sat(double.NaN), 0),
+            ("ToInt32Sat(+∞)",         TheBadge.Sim.Core.DetMath.ToInt32Sat(double.PositiveInfinity), int.MaxValue),
+            ("ToInt32Sat(−∞)",         TheBadge.Sim.Core.DetMath.ToInt32Sat(double.NegativeInfinity), int.MinValue),
+            ("ToInt32Sat(3e9)",        TheBadge.Sim.Core.DetMath.ToInt32Sat(3e9), int.MaxValue),
+            ("ToInt32Sat(−3e9)",       TheBadge.Sim.Core.DetMath.ToInt32Sat(-3e9), int.MinValue),
+            ("ToInt32Sat(1.9)",        TheBadge.Sim.Core.DetMath.ToInt32Sat(1.9), 1),
+            ("ToInt32Sat(−1.9)",       TheBadge.Sim.Core.DetMath.ToInt32Sat(-1.9), -1),
+            ("ToInt32Sat(2147483647.5)", TheBadge.Sim.Core.DetMath.ToInt32Sat(2147483647.5), int.MaxValue),
+            ("QuantizeMm(NaN)",        Units.QuantizeMm(double.NaN), 0),
+            ("QuantizeMm(−∞)",         Units.QuantizeMm(double.NegativeInfinity), int.MinValue),
+            ("QuantizeMm(1.25)",       Units.QuantizeMm(1.25), 1250),
+        };
+        string donusumHata = "";
+        foreach (var (ad, olc, bek) in donusum)
+            if (olc != bek) donusumHata += $"{ad} = {olc} ≠ {bek}; ";
+        if (donusumHata.Length > 0) failures += Fail("P0DonusumDoyurma", donusumHata +
+            "— kayan→tamsayı dönüşümü platforma bağlı (NaN: x64 int.MinValue / arm64 0)");
+        else Pass($"P0DonusumDoyurma({donusum.Length} fikstür: NaN→0 · ±∞ ve aralık dışı doyar · QuantizeMm doyuran yoldan)");
+    }
+
     // --- P0TrigLutOzeti --- ME 3.2'nin tablosu (DetMath.Sin ile üretilir) + AttributeLuts'un kuvvet tabloları
     const ulong TrigLutPin = 0x151EDD4A6B53DC23UL;   // linux-x64'te ölçüldü (2026-10-05)
     var tb = new byte[TrigLut.Size * 4];

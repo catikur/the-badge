@@ -4,7 +4,9 @@ namespace TheBadge.Sim.Core
     public static class Units
     {
         public const int MmPerMeter = 1000;
-        public static int QuantizeMm(double meters) => (int)System.Math.Round(meters * MmPerMeter);
+        /// <summary>Metre → mm (int). Dönüşüm DetMath.ToInt32Sat'tan geçer: ham <c>(int)</c> NaN'da x64'te
+        /// int.MinValue, arm64'te 0 veriyordu — P0'ın macOS sapmasının kök nedeni (DECISIONS, P0 (a)).</summary>
+        public static int QuantizeMm(double meters) => DetMath.ToInt32Sat(System.Math.Round(meters * MmPerMeter));
         public static double ToMeters(int mm) => mm / 1000.0;
     }
 }
