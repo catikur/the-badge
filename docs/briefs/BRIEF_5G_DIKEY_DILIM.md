@@ -116,7 +116,7 @@ Bu, kapıyı gevşetmek değil **sırasını düzeltmek**: pahalı yarı, ucuz y
 | # | Dilim | Neden burada | Faz |
 | --- | --- | --- | --- |
 | **S1** ✅ | **Paket köprüsü:** `TheBadge.World` + `TheBadge.CommandBus` Unity paketi olur; `UNITY_SETUP.md`'nin asmdef haritası güncellenir (FAZ 01 borcu) | Bunsuz Unity dünyayı GÖREMEZ. Her şeyin önkoşulu. | 5G-a |
-| **S2** | **Maç sunumu yeniden tasarımı** gerçek motor üstünde + **mülakatlı gözlem turu** | Fun borcunun ödenmesi; 5G-b'nin girdisi | 5G-a |
+| **S2** ✅ *(tur sonucu kayıt bekliyor)* | **Maç sunumu yeniden tasarımı** gerçek motor üstünde + **mülakatlı gözlem turu** | Fun borcunun ödenmesi; 5G-b'nin girdisi | 5G-a |
 | **S3** | **Maç günü döngüsü uçtan uca:** hafta hazırlığı (taktik + 1 tycoon aksiyonu + 1 konuşma) → maç → kapanış (röportaj + plan) | Dilimin TANIMI bu. Dünya-motor dikişi burada UI'dan geçer. | 5G-b |
 | **S4** | **FTUE ilk 5 dakika** (GDD 9.2 "Enkazı Devral" akışının başı) + progressive disclosure hafta 1 | 4G.7 zorunlu; persona P4'ün "≤3 dk ilk değer anı" MAJOR'ı burada karşılanır | 5G-b |
 | **S5** | **Monetizasyon anı** (sandbox IAP) + **telemetri/analytics** + FTUE hunisi | 4G.7 ikisini de zorunlu tutuyor; huni D1'in öncü göstergesi (GDD 9.5) | 5G-b |
@@ -162,12 +162,13 @@ Hiçbiri varsayımla kapatılmadı (CLAUDE.md: "Belirsizlikte varsayım üretme"
 | (b) Tek kapı: tam dilim şimdi | Daha hızlı görünür | Sunum yeniden tasarımının girdisi yok; art üretimi geri alınamaz; kapıda "fun yok" çıkarsa harcanan iş çöp |
 | (c) Fun borcunu tamamen 5G kapısına bırak | Kayıttaki 2. cümlenin harfi harfine okunuşu | 1. cümledeki "**öncesi**" kaydını yok sayar; borç kaydını sessizce siler |
 
-### D-B. "Tek maç günü" kapsamı tam olarak ne?
+### D-B. "Tek maç günü" kapsamı — ✅ **KAPANDI (2026-09-04, Atilla): canlı yol**
 
 Öneri: **canlı maç yolu** (replay/özet yolu 5G dışı), **1 tycoon aksiyonu** (bilet fiyatı — GDD 9.2
 FTUE'nun da ilk dokunuşu), **1 konuşma** (maç sonu röportaj), **1 taktik dokunuşu** (diziliş/tempo).
 Alternatif: replay yolunu da içeri almak (tezin "canlıyı kaçırmak ceza değildir" vaadi orada) —
-ama iki sunum yolunu birden final kaliteye çekmek dilimi ikiye katlar. **Karar Atilla'nın.**
+ama iki sunum yolunu birden final kaliteye çekmek dilimi ikiye katlar.
+→ **Karar (DECISIONS, 2026-09-04): canlı yol.** Replay/özet yolu 5G dışında kaldı.
 
 ### D-C. Unity paket sınırı — ✅ **KAPANDI (2026-09-04, Atilla): (a)** → `docs/adr/ADR-002-unity-paket-siniri.md`
 
@@ -270,9 +271,22 @@ diye raporlanmaz.
 
 ## 10. Açılış koşulu
 
-Bu brif bir plan önerisidir, kapı değil. **D-A ve D-C 2026-09-04'te kapandı** (DECISIONS +
-ADR-002) ve **S1 uygulandı**; sıradaki iş **S2** — maç sunumunun gerçek motor üstünde yeniden
-tasarımı ve mülakatlı gözlem turu. **D-B, D-D ve D-E hâlâ açık:** D-B (dilim kapsamı) S2 biterken,
-D-D (stil rehberi) ve D-E (analytics sağlayıcı — GDD↔anayasa çelişkisi) 5G-b başlamadan kapanmalı.
+Bu brif bir plan önerisidir, kapı değil.
+
+**DURUM (2026-10-04):**
+- **Kararlar:** D-A, D-B ve D-C kapandı (2026-09-04; DECISIONS + ADR-002). **D-D ve D-E hâlâ
+  açık** — ikisi de 5G-b başlamadan kapanmalı (D-E bir ADR gerektirir).
+- **S1 ✅** paket köprüsü. **S2 ✅** maç sunum ekranı (TASK-002) + playtest telemetrisi (TASK-003)
+  `main`'de; **mülakatlı gözlem turu koşuldu** (Atilla, 2026-10-04).
+- **5G-a kapı kararı VERİLMEDİ:** turun sonuçları (mülakat tablosu, telemetri özeti, kapı
+  metrikleri) henüz repoya işlenmedi. 5G-a'nın geçip geçmediği veriyle kararlaştırılır;
+  5G-b ondan önce açılmaz.
+- **P0 — platformlar arası determinizm:** karar verildi (2026-10-04): ölçüm CI'a girdi (macOS
+  arm64 işi + korumalı borç kapısı), düzeltme (**P0 (a)**) sıradaki motor dilimi. P0, 5G-b'nin
+  **cihaz/sunucu ayağından ÖNCE** kapanmalı: istemci iOS arm64, sunucu Linux x64 — eşitlik
+  kanıtlanmadan dikey dilimin "aynı maç her yerde aynı" iddiası kurulamaz.
+
+**SIRADAKİ İŞLER (sırayla):** (1) tur sonuçlarını kayda geçir → 5G-a kapı kararı · (2) P0 (a)
+motor dilimi · (3) D-D ve D-E kararları · (4) 5G-b açılışı (S3).
 Kararlar `docs/DECISIONS.md`'ye işlenir; sohbette kalan karar yok hükmündedir (Anayasa 9 +
 CLAUDE.md).
