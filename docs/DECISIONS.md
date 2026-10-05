@@ -3762,6 +3762,31 @@ kararı — 5G-a'nın geçip geçmediği ve 5G-b'nin açılıp açılmayacağı 
 o kararı vermez. Sonuçlar gelince `docs/PLAYTEST_3G.md` biçiminde yeni bir tur kaydına işlenir
 (Anayasa 9: sohbette kalan karar yok hükmündedir).
 
+### D-D ve D-E KARARLARI (2026-10-05, Atilla): **önerildiği gibi** → D-E için ADR-003
+
+Atilla: *"D-D ve D-E önerdiğin gibi."* Seçenekler ve artı/eksiler brifte
+(`docs/briefs/BRIEF_5G_DIKEY_DILIM.md`, D-D ve D-E).
+
+**D-D — stil rehberi: (a) "rehber 5G-b'nin ilk işi, asset üretimi SINIRLI"**, üç ekle:
+1. **Zamanlama:** rehber işi **5G-a kapısı GO olduktan sonra** başlar. Kapı NO-GO çıkarsa maç
+   sunumu yeniden tasarlanır ve rehbere harcanan emek boşa gider (4G.10'un 19. hatasının küçük
+   kardeşi).
+2. **Rehber kodda tek yerde yaşar:** UI Toolkit tema dosyası (USS değişkenleri: renk, tipografi,
+   boşluk) rehberin parçasıdır. Maç ekranı UI Toolkit'le yazıldı (K2 kararı); değerler ekranlara
+   dağılırsa rehber belge olarak kalır, kod olarak uygulanmaz.
+3. **Kapı kanıtı:** onaylı rehber + **o rehberle yapılmış TEK bir final kalite maç günü ekranı**.
+   "Final kalite" iddiası bu ekranla ölçülür; seri üretim (GDD FAZ 05) kapının arkasında kalır.
+
+**İş bölümü:** rehber taslağı Claude (palet, tipografi, ikon kuralları, AI asset prompt kuralları,
+USS değişkenleri); görsel yön ve onay Atilla. Onaysız seri AI asset üretimi yasağı (4G.5) sürer;
+asset üretimi yalnız bu maç gününün ihtiyacı kadardır.
+
+**D-E — analytics: TelemetryDeck, SDK'sız HTTP gönderici** (Game.Services, `MacTelemetri`nin aynı
+sözlüğü); MetricKit lansman sonrasına; GDD'deki Firebase satırı **sapma** olarak ADR-003'e yazıldı.
+Gerekçe, elenen seçenekler ve gönderici yazılırken bağlayıcı kurallar (PII yok, oynanışı
+etkilemez ama sessiz de yutmaz, sözlük tek yerde, uygulama kimliği koda gömülmez, çevrim dışı
+kuyruk): `docs/adr/ADR-003-analytics-saglayici.md`.
+
 ## Bekleyen kararlar
 
 - ~~**🔴 P0 — platformlar arası determinizm (2026-09-06).**~~ → **KARAR VERİLDİ (2026-10-04, Atilla): (b) hemen + (a) 5G-a turundan sonra.** (b) uygulandı; tur bitti, (a) sıradaki motor dilimi. Bkz. yukarıdaki *P0 KARARI* kaydı.
