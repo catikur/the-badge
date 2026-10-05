@@ -3,8 +3,10 @@ using System;
 namespace TheBadge.Sim.Core
 {
     /// <summary>Trigonometri LUT — ME Spec 3.2: sin/cos 4096 girişli Q16 tamsayı tablo;
-    /// Math.Sin/Cos sim mantığında YASAK (platform bit farkı). Tablo statik kuruluşta üretilip
-    /// Q16'ya kuantalanır (AttributeLuts ile aynı gerekçe); golden kapılar sapmayı yakalar.</summary>
+    /// Math.Sin/Cos sim mantığında YASAK (platform bit farkı). Tablo statik kuruluşta DetMath.Sin
+    /// ile üretilip Q16'ya kuantalanır (P0 (a)): eskiden Math.Sin'le üretiliyordu ve Q16 kuantası
+    /// farkı yalnız küçültüyordu. Tablonun özeti Sim.Checks'te pinli (P0TrigLutOzeti) — spec'in
+    /// "platform farkı riski sıfırlanır" iddiası her platformda ölçülür.</summary>
     public static class TrigLut
     {
         public const int Size = 4096;                 // tam tur; indeks = açı × Size / 2π
@@ -14,7 +16,7 @@ namespace TheBadge.Sim.Core
         {
             var t = new int[Size];
             for (int i = 0; i < Size; i++)
-                t[i] = (int)Math.Round(Math.Sin(2.0 * Math.PI * i / Size) * 65536.0);
+                t[i] = (int)Math.Round(DetMath.Sin(2.0 * Math.PI * i / Size) * 65536.0);
             return t;
         }
 

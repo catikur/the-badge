@@ -188,7 +188,7 @@ klasöründeki TÜM `.cs`'i derler ve `dotnet build`in ürettiği `obj/**/*.Asse
 kalıyordu. Tuzak `TheBadge.Sim` için de vardı; patlamamasının tek sebebi Unity'yi açanın o klasörde
 henüz `dotnet build` koşmamış olmasıydı. Çıktı `artifacts/`e yönlendirildi.
 
-### D-D. Art direction: stil rehberi ne zaman?
+### D-D. Art direction: stil rehberi ne zaman? — ✅ **KAPANDI (2026-10-05, Atilla): (a) + üç ek** (DECISIONS)
 
 4G.5 seri AI asset üretimini stil rehberi olmadan YASAKLIYOR. "Final kalite" bir stil kararı ister.
 
@@ -198,7 +198,7 @@ henüz `dotnet build` koşmamış olmasıydı. Çıktı `artifacts/`e yönlendir
 | (b) Placeholder ile devam, stil rehberi FAZ 05'te | Hızlı | "Final kalite" iddiası düşer → kapı kanıtı üretilemez |
 | (c) Tam stil rehberi + geniş asset seti | Sonraki fazlar hazır girer | 19. hata: fun sinyali gelmeden büyük asset harcaması |
 
-### D-E. Analytics sağlayıcı (ADR gerektirir)
+### D-E. Analytics sağlayıcı (ADR gerektirir) — ✅ **KAPANDI (2026-10-05, Atilla): TelemetryDeck, SDK'sız HTTP → ADR-003**
 
 GDD 9.5/17 **Firebase Analytics** diyor. Anayasa privacy tabanı **TelemetryDeck + MetricKit**
 diyor ve yeni bağımlılık = ADR. İkisi çelişiyor; bu dilim ilk gerçek event'leri yazacağı için
@@ -273,20 +273,29 @@ diye raporlanmaz.
 
 Bu brif bir plan önerisidir, kapı değil.
 
-**DURUM (2026-10-04):**
-- **Kararlar:** D-A, D-B ve D-C kapandı (2026-09-04; DECISIONS + ADR-002). **D-D ve D-E hâlâ
-  açık** — ikisi de 5G-b başlamadan kapanmalı (D-E bir ADR gerektirir).
+**DURUM (2026-10-05):**
+- **Kararlar:** D-A, D-B ve D-C kapandı (2026-09-04; DECISIONS + ADR-002). **D-D ve D-E de
+  kapandı** (2026-10-05; DECISIONS + ADR-003): stil rehberi 5G-a GO'dan sonra 5G-b'nin ilk işi;
+  analytics TelemetryDeck, SDK'sız HTTP gönderici.
 - **S1 ✅** paket köprüsü. **S2 ✅** maç sunum ekranı (TASK-002) + playtest telemetrisi (TASK-003)
   `main`'de; **mülakatlı gözlem turu koşuldu** (Atilla, 2026-10-04).
 - **5G-a kapı kararı VERİLMEDİ:** turun sonuçları (mülakat tablosu, telemetri özeti, kapı
   metrikleri) henüz repoya işlenmedi. 5G-a'nın geçip geçmediği veriyle kararlaştırılır;
   5G-b ondan önce açılmaz.
-- **P0 — platformlar arası determinizm:** karar verildi (2026-10-04): ölçüm CI'a girdi (macOS
-  arm64 işi + korumalı borç kapısı), düzeltme (**P0 (a)**) sıradaki motor dilimi. P0, 5G-b'nin
-  **cihaz/sunucu ayağından ÖNCE** kapanmalı: istemci iOS arm64, sunucu Linux x64 — eşitlik
-  kanıtlanmadan dikey dilimin "aynı maç her yerde aynı" iddiası kurulamaz.
+- **P0 — platformlar arası determinizm:** karar verildi (2026-10-04). **P0 (a)'nın .NET ayağı
+  KAPANDI (2026-10-05):** kök neden libm değil, şut hızına sızan NaN'ın platforma bağlı tamsayı
+  dönüşümüydü; düzeltildi, macOS arm64 KATI koşuda 50/50 bit-eşit, borç tablosu boş (DECISIONS,
+  *P0 (a) UYGULANDI*). **Açık kalan:** replay setinin Unity'de koşması (Editor'de Mono, cihazda
+  IL2CPP/iOS) — ikinci aşama; yeni paylaşılan paket + ADR ister, ayrı karar. P0, 5G-b'nin
+  **cihaz/sunucu ayağından ÖNCE** kapanmalı: istemci iOS arm64 (IL2CPP), sunucu Linux x64 —
+  eşitlik IL2CPP'de kanıtlanmadan dikey dilimin "aynı maç her yerde aynı" iddiası kurulamaz.
+- **Yeni bekleyen karar — şut modeli** (P0 teşhisinden çıktı): kale çizgisi üstünden şut, dar
+  açıda aşırı hızlı top ve maç başına ~0,45 "hayalet isabetli şut" (isabetli, kurtarış yok, gol
+  yok, aut). Ölçüm, seçenekler ve önerim DECISIONS'ta (*Şut modeli*).
 
-**SIRADAKİ İŞLER (sırayla):** (1) tur sonuçlarını kayda geçir → 5G-a kapı kararı · (2) P0 (a)
-motor dilimi · (3) D-D ve D-E kararları · (4) 5G-b açılışı (S3).
+**SIRADAKİ İŞLER:** (1) tur sonuçlarını kayda geçir → 5G-a kapı kararı (veri Atilla'da) · (2) ~~P0 (a)
+.NET ayağı~~ (kapandı); P0 ikinci aşaması (Unity replay testi) ve şut modeli dilimi — ikisi de
+karar bekliyor · ~~(3) D-D ve D-E kararları~~ (kapandı) · (4) 5G-a GO ise 5G-b açılışı: stil
+rehberi (D-D) + S3.
 Kararlar `docs/DECISIONS.md`'ye işlenir; sohbette kalan karar yok hükmündedir (Anayasa 9 +
 CLAUDE.md).

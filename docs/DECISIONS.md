@@ -3509,6 +3509,8 @@ sıcak yolda hâlâ DOĞRUDAN çağırıyor:
 bit-eşittir. `Exp`/`Tan` ise libm uygulamasına bağlıdır. Semptom buna uyuyor: 4/50 maçta sapma,
 ve saptığında önce `state` ayrışıyor, skor henüz dönmüyor (kurtarış olasılığındaki son bit
 farkı ancak bazı maçlarda eşiği geçiyor).
+*(2026-10-05: bu HİPOTEZ ölçümle ÇÜRÜDÜ. libm çağrıları kaldırılınca sapma aynen sürdü; kök neden
+şut hızına sızan NaN'ın platforma bağlı tamsayı dönüşümüydü — bkz. "P0 (a) UYGULANDI" kaydı.)*
 
 **YAPILMADI, BİLEREK:** düzeltme `shared/` işidir, TASK-002'nin kapsamı dışındadır ve ölçüm
 ister (hangi çağrı sapmayı üretiyor — üçünü tek tek LUT/sabit-nokta ile değiştirip 50 replay'i
@@ -3665,8 +3667,9 @@ ilk sapma #4: state 0x49A5BE4C5BFB6626 / 0x1B712016B8998E17 · skor 1-0/1-0 · t
 
 Küme tabloya yazıldı. **Asıl bulgu hash'lerde:** CI (macOS 15.7.9, `macos-15`) Atilla'nın
 yerel ölçümüyle (2026-09-06) **bit bit aynı** state hash'lerini üretti. Yani sapma makineye ya
-da kuruluma değil **platforma (libm) bağlı ve deterministik** — "bazen tutuyor" değil, "bu
-platformda hep başka sonuç". (a) dilimi için iyi haber: hedef sabit, ölçüm tekrarlanabilir.
+da kuruluma değil **platforma bağlı ve deterministik** — "bazen tutuyor" değil, "bu
+platformda hep başka sonuç". *(Düzeltme, 2026-10-05: burada "(libm)" yazıyordu ve o bir hipotezdi,
+ölçülmüş bir şey değildi. Ölçüm çürüttü: neden libm değil, NaN dönüşümü — bkz. "P0 (a) UYGULANDI".)* (a) dilimi için iyi haber: hedef sabit, ölçüm tekrarlanabilir.
 
 **KAYITLAR ÖLÇÜLDÜ — P0'ın ağırlığı değişti (2026-10-04).** Borç çıktıyı pinlemeye geçince
 (yukarıda, Codex P2) girdi yine `null` başladı; macOS işi (`105be46`, iş 111517217152) kasten
@@ -3754,6 +3757,76 @@ da karşılaştırıyor.
 **Kart `AuxData`'sı bilinçli olarak dokunulmadı:** LOD 0'da kırmızı 1 = direkt, 2 = ikinci sarı;
 LOD 2 tablosu türü ayırt etmez, `1` yazılır — koda "yaklaşımdır, ölçüm değil" notu düşüldü.
 
+### P0 (a) UYGULANDI — kök neden libm DEĞİL, şut hızına sızan NaN'ın dönüşümü (2026-10-05)
+
+Atilla: *"P0 (a)'ya başla."* İş planlandığı gibi başladı (libm'i kaldır) ve ölçüm planı çürüttü.
+Kayıt sırayla:
+
+**1. libm kaldırıldı — `DetMath` (planlanan iş, ME 3.2).** `shared/TheBadge.Sim/src/Core/DetMath.cs`:
+Exp, Log, Pow, Sin, Cos, Tan, Atan, Atan2 — yalnız IEEE'nin doğru yuvarlanan temel işlemleri ve tam
+işlemler, fdlibm/musl katsayıları, sabitler bitten. Tanım dışı girdi fırlatır. 9 çağrı yeri taşındı
+(şut sapması `Tan`, kaleci lojistiği `Exp`, xG `Atan2/Log/Exp`, `WinProb`, `LiveWinProb`, LOD 2
+Poisson, `AttributeLuts` `Pow`, `TrigLut` `Sin`). Dört kapı: `P0LibmYasagi` (yorum ve dizgileri
+ayıklayan tarayıcı), `P0DetMathDogruluk` (ulp sınırları tasarımdan; Pow için `2 + 3·|y·ln x|` —
+ilk yazımdaki sabit 32 ulp yanlış modeldi), `P0DetMathBitPin` (7 fonksiyonun çıktı özeti pinli),
+`P0TrigLutOzeti`. Linux'ta golden 50/50 değişmedi; `TrigLut` ve drenaj tabloları bit bit aynı.
+
+**2. macOS'un katı koşusu hipotezi çürüttü (`fbf672a`).** Borç girdisi çıkarılınca macOS **aynı 4
+replay'de, aynı kayıtlarla** saptı. Oysa `P0DetMathBitPin` ve `P0TrigLutOzeti` macOS'ta GEÇTİ:
+DetMath iki platformda bit-eşit (bu, arm64 JIT'inin çarpma-toplamayı birleştirmediğini de
+gösteriyor — Horner zincirleri yoksa ayrışırdı). Yani **libm bu sapmaların nedeni değildi.** Önceki
+kayıtlardaki "(libm)" atfı bir hipotezdi; yerlerinde düzeltme notuyla işaretlendi.
+
+**3. Teşhis — kanıtla.** Repo dışı bir kopyada simdeki **83 kayan→tamsayı dönüşümü** derleyicinin
+anlam modeliyle (Roslyn, SDK'nın kendi kopyası) bir yardımcıya sarıldı: NaN / aralık dışı girdiyi
+kaydeder, istenirse arm64'ün DOYURAN semantiğini taklit eder. Sonuç: tam süitte riskli dönüşüm
+yapan **tek yer `Units.QuantizeMm`** (310 kez **NaN**). arm64 semantiği Linux'ta taklit edilince
+Linux, macOS'un dört kaydını **birebir** üretti — neden kanıtlandı. Çağrı yeri izi: `ExecuteShot`,
+`st.Ball.Vx/Vy = QuantizeMm(vx/vy)`; ilk örnekte vx = NaN, vy = −∞.
+
+**Kaynak:** şutçu kale çizgisinin TAM üstündeyse (`ClampX` oyuncuyu çizgiye yaslayabilir)
+`planeDx = 0` → `tPlane = 0` → `vx = 0/0 = NaN`, `vy = ±∞`. .NET 8'de ham `(int)` dönüşümü NaN için
+**x64'te int.MinValue (−2147 km/sn'lik top!), arm64'te 0** verir (.NET 9 doyurmada birleştirdi;
+IL2CPP'nin ürettiği C++'ta bu dönüşüm TANIMSIZ davranıştır). Sıklık: tam süitte 150 şut, golden
+setin 4/50 maçı.
+
+**4. Düzeltme (determinizm).** `DetMath.ToInt32Sat`: NaN → 0, aralık dışı doyar (arm64 ve .NET 9
+semantiği); `QuantizeMm` onu kullanır. Golden yeniden üretildi: **değişen TAM 4 replay (#4, #20,
+#48, #49) ve yeni kayıtları macOS kayıtlarıyla birebir aynı**, kalan 46 değişmedi. Yeni kapı
+`P0DonusumDoyurma` (11 fikstür). Checks 192/192.
+
+**5. macOS (katı, `3727ebc`): ✅ GEÇTİ.** `[PASS] M17GoldenReplay([osx-arm64] 50 replay bit-eşit:
+config_hash + durum + skor + süre + komut izi + değişiklik)`; `M17PlatformBorcTablosu` 0 borçlu
+platform; `P0DetMathBitPin`, `P0TrigLutOzeti`, `P0DonusumDoyurma` macOS'ta geçti; tüm kontroller
+yeşil. Linux yerel 192/192. **P0'ın .NET'te ölçülen sapması KAPANDI**, borç tablosu boş.
+
+**DetMath neden kaldı:** bu sapmanın nedeni değildi, ama libm gerçek bir risk olmaya devam ediyor —
+iOS'un, Android'in ve IL2CPP'nin C çalışma zamanının libm'i başka; artık simde yok ve bu kapılarla
+korunuyor. Aynı koşu riskin canlı tanığını da verdi: `P0DetMathDogruluk`'ta `Tan`'ın `Math.Tan`'a
+uzaklığı Linux'ta en çok 2 ulp, macOS'ta 3 ulp. DetMath iki platformda pinle bit-eşit olduğuna göre
+fark kıyas tarafında: glibc'nin ve Apple'ın `tan`'ı aynı ızgaranın en az bir girdisinde farklı
+sonuç veriyor. Dürüst ifade: P0 (a) "libm'i kaldırdı" diye kapanmadı; **kök neden bulunup
+düzeltildiği için** kapanıyor.
+
+**Oynanış hatası ayrı ve AÇIK:** determinizm düzeldi ama kale çizgisinin üstünden şut hâlâ saçma
+(top yana ~2147 km/sn'de gider, taç olur). Ölçüldü; şut modelindeki daha geniş bir tutarsızlığın
+uç noktası çıktı. Seçenekler ve önerim: Bekleyen kararlar, *Şut modeli*.
+
+**Dişler:** P0LibmYasagi — gerçek çağrı yakalandı (dosya:satır), yalnız yorumda/dizgide YANLIŞ ALARM
+YOK, `using static System.Math` yakalandı · P0DetMathBitPin — Exp katsayısını TEK ulp kaydırmak
+yalnız Exp ve Pow pinlerini kırdı, doğruluk geçti (ilk denemedeki son-katsayı dişi hiçbir biti
+değiştirmedi; diş zayıftı, kapı değil) · P0DetMathDogruluk — bozuk sin katsayısı kırdı (golden'lar
+da: 29/50) · P0TrigLutOzeti — yuvarlama yerine kesme kırdı (tüm golden'lar da) · P0DonusumDoyurma —
+`QuantizeMm` ham dönüşüme dönünce Linux'ta hem bu kapı (`QuantizeMm(NaN) = −2147483648`) hem
+`M17GoldenReplay` (tam o 4 replay) kırıldı.
+
+**Kapsam dışı (bildirilir):** `World/Transfer/Valuation.cs`'de bir `Math.Pow` var (transfer
+değerlemesi). P0 sime yönelikti; sunucu otoriter, istemci ön-doğrulaması sınırda farklı bir kuruş
+görebilir. Ayrı karar.
+
+**SINIRI:** bu, .NET'in macOS arm64'teki ölçümü. Unity (Editor'de Mono, cihazda IL2CPP/iOS) ikinci
+aşama: replay setini Unity'de koşturmak yeni bir paylaşılan paket (ADR) ister; ayrıca karara sunulur.
+
 ### 5G-a GÖZLEM TURU KOŞULDU (2026-10-04, Atilla bildirdi) — sonuçlar repoya İŞLENMEDİ
 
 Atilla 5G-a mülakatlı gözlem turunun tamamlandığını bildirdi. Mülakat tablosu, telemetri özeti
@@ -3762,9 +3835,84 @@ kararı — 5G-a'nın geçip geçmediği ve 5G-b'nin açılıp açılmayacağı 
 o kararı vermez. Sonuçlar gelince `docs/PLAYTEST_3G.md` biçiminde yeni bir tur kaydına işlenir
 (Anayasa 9: sohbette kalan karar yok hükmündedir).
 
+### D-D ve D-E KARARLARI (2026-10-05, Atilla): **önerildiği gibi** → D-E için ADR-003
+
+Atilla: *"D-D ve D-E önerdiğin gibi."* Seçenekler ve artı/eksiler brifte
+(`docs/briefs/BRIEF_5G_DIKEY_DILIM.md`, D-D ve D-E).
+
+**D-D — stil rehberi: (a) "rehber 5G-b'nin ilk işi, asset üretimi SINIRLI"**, üç ekle:
+1. **Zamanlama:** rehber işi **5G-a kapısı GO olduktan sonra** başlar. Kapı NO-GO çıkarsa maç
+   sunumu yeniden tasarlanır ve rehbere harcanan emek boşa gider (4G.10'un 19. hatasının küçük
+   kardeşi).
+2. **Rehber kodda tek yerde yaşar:** UI Toolkit tema dosyası (USS değişkenleri: renk, tipografi,
+   boşluk) rehberin parçasıdır. Maç ekranı UI Toolkit'le yazıldı (K2 kararı); değerler ekranlara
+   dağılırsa rehber belge olarak kalır, kod olarak uygulanmaz.
+3. **Kapı kanıtı:** onaylı rehber + **o rehberle yapılmış TEK bir final kalite maç günü ekranı**.
+   "Final kalite" iddiası bu ekranla ölçülür; seri üretim (GDD FAZ 05) kapının arkasında kalır.
+
+**İş bölümü:** rehber taslağı Claude (palet, tipografi, ikon kuralları, AI asset prompt kuralları,
+USS değişkenleri); görsel yön ve onay Atilla. Onaysız seri AI asset üretimi yasağı (4G.5) sürer;
+asset üretimi yalnız bu maç gününün ihtiyacı kadardır.
+
+**D-E — analytics: TelemetryDeck, SDK'sız HTTP gönderici** (Game.Services, `MacTelemetri`nin aynı
+sözlüğü); MetricKit lansman sonrasına; GDD'deki Firebase satırı **sapma** olarak ADR-003'e yazıldı.
+Gerekçe, elenen seçenekler ve gönderici yazılırken bağlayıcı kurallar (PII yok, oynanışı
+etkilemez ama sessiz de yutmaz, sözlük tek yerde, uygulama kimliği koda gömülmez, çevrim dışı
+kuyruk): `docs/adr/ADR-003-analytics-saglayici.md`.
+
 ## Bekleyen kararlar
 
-- ~~**🔴 P0 — platformlar arası determinizm (2026-09-06).**~~ → **KARAR VERİLDİ (2026-10-04, Atilla): (b) hemen + (a) 5G-a turundan sonra.** (b) uygulandı; tur bitti, (a) sıradaki motor dilimi. Bkz. yukarıdaki *P0 KARARI* kaydı.
+- ~~**🔴 P0 — platformlar arası determinizm (2026-09-06).**~~ → **KARAR VERİLDİ (2026-10-04, Atilla): (b) hemen + (a) 5G-a turundan sonra.** (b) uygulandı; tur bitti, (a) sıradaki motor dilimi. Bkz. yukarıdaki *P0 KARARI* kaydı. **(a) UYGULANDI (2026-10-05)** — kök neden NaN dönüşümüydü; bkz. *P0 (a) UYGULANDI* kaydı.
+
+- **🟠 Şut modeli: kale düzlemine varış süresi yalnız `|dx|`'ten (P0 (a) teşhisinden, 2026-10-05).**
+  `ExecuteShot` topun kale düzlemine varış süresini `tPlane = |dx| / sutHizi` alıyor ve hız
+  vektörünü bu süreye göre kuruyor. Yani topun gerçek hızı `sutHizi × k`, burada
+  `k = 1/cos(şut açısı)`. P0'ın NaN'ı bunun uç noktasıydı (`dx = 0` → `k = ∞`). **Ölçüm** repo
+  dışı bir kopyada yapıldı: `ExecuteShot`'a sayaçlar kondu, M16-E'nin lig dağılımıyla 2000 maç
+  koşuldu (gol 2,20 · şut 21,5 — kapıyla aynı evren). Üç ayrı hata çıktı:
+  1. **Tam çizgi üstü (`dx = 0`):** 1000 maçta 72 şut. Determinizm artık sağlam (P0 (a)), ama sonuç
+     saçma: top yana ~2147 km/sn'de gider ve çizgi dibinden **taç** olur. Kurtarılamayan isabetli
+     şut da bu yola girer.
+  2. **Dar açıda top aşırı hızlı:** blok yemeyen şutların %11,9'u nominal hızın 2-5 katında,
+     %3,0'ü 5 katı ve üstünde gidiyor. Kalecinin süresi `|dx|`'ten hesaplandığı için bu şutlar
+     neredeyse kurtarılamıyor. Kurtarılamayan isabetli şut payı k < 1,1'de %5,9, k ≥ 5'te %33.
+  3. **Karar ile adım çelişiyor:** "kurtarılamadı, direkler arasında" kararı analitik. Top ise
+     10 Hz adımlarla ilerliyor ve çizgiyi geçtiği adımda yana `vy × 0,1 sn` kadar taşıyor.
+     Kurtarılamayan isabetli şutun gole dönme oranı k < 1,1'de %93,5, k 2-5'te %37, k ≥ 5'te %6,
+     `dx < 0,5 m`'de %0. Sonuç maç başına **~0,45 "hayalet isabetli şut"**: `ShotOnTarget`
+     yayımlanır, kurtarış yok, gol yok, top auta çıkar (kod yolu: çoğu kale vuruşu, çizgi
+     dibinden olanlar taç). Hayaletlerin dörtte üçü k ≥ 2 şutlardan geliyor. Şut uçuşundan gelen
+     gol 0,71/maç iken kurtarılamayan isabetli şut 1,16/maç.
+
+  İkinci ve üçüncü hata birbirini kısmen götürüyor: aşırı hızlı şut kurtarılamıyor ama çoğu
+  zaten gol olmuyor. **Bugünkü gol kalibrasyonu bu iki hatayla BİRLİKTE oturtuldu;** biri tek
+  başına düzeltilirse gol sayısı oynar (yalnız 3. düzelirse kurtarılamayan 1,16/maç'ın tamamı gole
+  döner). 5G-a gözlem notlarında "isabetli şut, sonra aut" tuhaflığı geçiyorsa kaynağı budur.
+  Seçenekler:
+  - **(a) Asgari koruma.** Kale düzlemine `sutMinDuzlemMesafeM`'den (yeni [KALİBRE]) yakın şutçu
+    şut adayı üretmez; `ExecuteShot` da (kafa yolu dahil) aynı korumayla döner. Artı: küçük ve
+    kalibrasyonu oynatmaz; 1 m eşikte 1000 maçta 228 şut düşer, bunlardan gelen gerçek gol 1000
+    maçta 1. Eksi: yalnız 1. hatayı kapatır; hayalet isabetli şut (0,45/maç) kalır ve 5G
+    sunumunun olay akışında görünür.
+  - **(b) Karar açıyı görsün.** Şut vekiline bir açı terimi ya da kapısı eklenir (rasyonel:
+    `|dx|/dGoal`, atan yok) [KALİBRE]. Artı: şut seçimi gerçekçileşir ve kötü şutlar kaynağında
+    azalır; k ≥ 2 kapısı maç başına ~2 şutu başka aksiyona çevirir. Eksi: kalan açılarda 2. ve
+    3. hata sürer (k 1,5-2'de de hayalet var); şut hacmi oynadığı için yeniden kalibrasyon gerekir.
+  - **(c) Fiziği tutarlı yap.** Top şut vektörü boyunca sabit hızla gider
+    (`tPlane = |vektör| / sutHizi`). Flight=1 topun çizgi geçişi analitik kararla tutarlı çözülür
+    (adım içi kesişim). `dx = 0` yön olarak hâlâ dejenere olduğu için (a)'nın koruması da gerekir.
+    Artı: üç hatanın kökünü kapatır; olay akışı ile skor tutarlı olur. Eksi: her açılı şutun
+    kaleci süresi değişir; tüm golden'lar, M16-E bantları ve LOD 2 tablosu yeniden ölçülür.
+    Yeniden kalibrasyonsuz birinci derece tahmin: kurtarılamayan isabetli şut 1,16'dan
+    0,80/maç'a iner. Hayaletler gerçek gole dönünce şut golü 0,71'den ~0,75-0,80/maç'a çıkar.
+    Yani iki hatanın birlikte düzelmesi gol bandını büyük ölçüde korur. Bu bir tahmindir;
+    uygulamadan sonra M16-E ile ölçülür.
+
+  **Önerim: (c) ve (a)'nın koruması, tek motor diliminde,** öncesi/sonrası M16-E ölçümüyle. Ayrı
+  ayrı yapılırsa golden seti iki kez yeniden üretilir. (b) bundan bağımsız bir gerçekçilik
+  terimidir; 5G-a turunda dar açı şutu göze batarsa eklenir. Aciliyet: determinizm sorunu YOK,
+  P0 (a) onu kapattı; bu bir oynanış ve olay akışı tutarlılığı hatası. Dilim açılırsa bu ölçüm
+  kalıcı bir kapıya dönüşür (hayalet isabetli şut = 0, çizgi üstünden şut = 0).
 
 - **Motorun GEÇ REDDİ maç sunum ekranında erişilemez (TASK-002, 2026-09-06).** Kabul ölçütü
   "bant dışı bir delta ile İKİSİ de elle denenip raporlanır" diyor; yapısal olarak mümkün değil
