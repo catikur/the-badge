@@ -3885,8 +3885,10 @@ kuyruk): `docs/adr/ADR-003-analytics-saglayici.md`.
      gol 0,71/maç iken kurtarılamayan isabetli şut 1,16/maç.
 
   İkinci ve üçüncü hata birbirini kısmen götürüyor: aşırı hızlı şut kurtarılamıyor ama çoğu
-  zaten gol olmuyor. **Gol bandının bugün tutması iki hatanın üst üste binmesinden.** 5G-a gözlem notlarında
-  "isabetli şut, sonra aut" tuhaflığı geçiyorsa kaynağı budur. Seçenekler:
+  zaten gol olmuyor. **Bugünkü gol kalibrasyonu bu iki hatayla BİRLİKTE oturtuldu;** biri tek
+  başına düzeltilirse gol sayısı oynar (yalnız 3. düzelirse kurtarılamayan 1,16/maç'ın tamamı gole
+  döner). 5G-a gözlem notlarında "isabetli şut, sonra aut" tuhaflığı geçiyorsa kaynağı budur.
+  Seçenekler:
   - **(a) Asgari koruma.** Kale düzlemine `sutMinDuzlemMesafeM`'den (yeni [KALİBRE]) yakın şutçu
     şut adayı üretmez; `ExecuteShot` da (kafa yolu dahil) aynı korumayla döner. Artı: küçük ve
     kalibrasyonu oynatmaz; 1 m eşikte 1000 maçta 228 şut düşer, bunlardan gelen gerçek gol 1000
