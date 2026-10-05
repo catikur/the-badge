@@ -2902,6 +2902,247 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     }
 }
 
+// 23b) P0 (a) — DETERMİNİSTİK MATEMATİK (ME 3.2; DECISIONS P0: karar 2026-10-04, başlangıç 2026-10-05)
+// Simin transandantal fonksiyonları libm yerine DetMath'ten gelir; M17'nin platform borcunu bu kapatır.
+//   P0LibmYasagi      — Sim kaynağında libm / MathF / intrinsics çağrısı YOK (yorum ve dizgiler ayıklanır)
+//   P0DetMathDogruluk — DetMath, System.Math'e göre birkaç ulp içinde: yanlış katsayı/formül yakalanır
+//   P0DetMathBitPin   — DetMath çıktılarının özeti PİNLİ. Asıl tanığı macOS CI'dır: Linux'ta pini üreten
+//                       kod orada da aynı biti vermeli — libm'den bağımsızlığın doğrudan kanıtı
+//   P0TrigLutOzeti    — ME 3.2'nin 4096 girişli Q16 tablosunun özeti pinli + Math.Sin'e ±1 sadakat;
+//                       AttributeLuts'un kuvvet tabloları da Math.Pow'a ±1 sadık
+{
+    // Kod metni: yorumlar, dizgiler ve karakter sabitleri BOŞLUKLA değiştirilir (satır sonları korunur).
+    // Düz regex yetmezdi: "// Math.Exp kullanılmaz" diyen bir yorum yanlış alarm verir, bir dizgideki
+    // "//" ise ardından gelen KODU yutardı.
+    static string KodMetni(string s)
+    {
+        var o = new System.Text.StringBuilder(s.Length);
+        int i = 0;
+        while (i < s.Length)
+        {
+            char c = s[i], n = i + 1 < s.Length ? s[i + 1] : '\0';
+            if (c == '/' && n == '/')
+            {
+                while (i < s.Length && s[i] != '\n') { o.Append(' '); i++; }
+                continue;
+            }
+            if (c == '/' && n == '*')
+            {
+                o.Append("  "); i += 2;
+                while (i < s.Length && !(s[i] == '*' && i + 1 < s.Length && s[i + 1] == '/'))
+                { o.Append(s[i] == '\n' ? '\n' : ' '); i++; }
+                if (i < s.Length) { o.Append("  "); i += 2; }
+                continue;
+            }
+            bool verbatim = (c == '@' && n == '"') || (c == '$' && n == '@') || (c == '@' && n == '$');
+            if (verbatim || c == '"' || (c == '$' && n == '"'))
+            {
+                while (i < s.Length && s[i] != '"') { o.Append(' '); i++; }   // önek(ler)
+                o.Append(' '); i++;                                            // açılış tırnağı
+                while (i < s.Length)
+                {
+                    if (verbatim && s[i] == '"')
+                    {
+                        if (i + 1 < s.Length && s[i + 1] == '"') { o.Append("  "); i += 2; continue; }
+                        o.Append(' '); i++; break;
+                    }
+                    if (!verbatim && s[i] == '\\') { o.Append("  "); i += 2; continue; }
+                    if (!verbatim && s[i] == '"') { o.Append(' '); i++; break; }
+                    o.Append(s[i] == '\n' ? '\n' : ' '); i++;
+                }
+                continue;
+            }
+            if (c == '\'')
+            {
+                o.Append(' '); i++;
+                while (i < s.Length)
+                {
+                    if (s[i] == '\\') { o.Append("  "); i += 2; continue; }
+                    if (s[i] == '\'') { o.Append(' '); i++; break; }
+                    o.Append(' '); i++;
+                }
+                continue;
+            }
+            o.Append(c); i++;
+        }
+        return o.ToString();
+    }
+
+    // --- P0LibmYasagi ---
+    string simSrc = System.IO.Path.GetDirectoryName(System.IO.Path.GetDirectoryName(
+        FindRepoFile("shared/TheBadge.Sim/src/Core/DetMath.cs")));
+    // Transandantal + FMA (platform intrinsics yasağı, CLAUDE.md) + MathF + intrinsics ad alanı + `using
+    // static System.Math` ve takma ad (ikisi de çıplak `Exp(` yazdırarak yasağı dolanırdı).
+    var libmDeseni = new System.Text.RegularExpressions.Regex(
+        @"\b(?:System\s*\.\s*)?Math\s*\.\s*(?:Sin|Cos|Tan|Asin|Acos|Atan|Atan2|Sinh|Cosh|Tanh|Asinh|Acosh|Atanh" +
+        @"|Exp|Log|Log10|Log2|Pow|Cbrt|FusedMultiplyAdd|IEEERemainder)\s*\(" +
+        @"|\bMathF\s*\.|System\s*\.\s*Runtime\s*\.\s*Intrinsics" +
+        @"|using\s+static\s+System\s*\.\s*Math\b|=\s*System\s*\.\s*Math\s*;");
+    string libmHata = ""; int libmTaranan = 0;
+    foreach (var f in System.IO.Directory.GetFiles(simSrc, "*.cs", System.IO.SearchOption.AllDirectories)
+                 .OrderBy(x => x, StringComparer.Ordinal))
+    {
+        libmTaranan++;
+        string kod = KodMetni(System.IO.File.ReadAllText(f));
+        foreach (System.Text.RegularExpressions.Match m in libmDeseni.Matches(kod))
+        {
+            int satir = 1;
+            for (int k = 0; k < m.Index; k++) if (kod[k] == '\n') satir++;
+            libmHata += $"{System.IO.Path.GetRelativePath(simSrc, f)}:{satir} '{m.Value.Trim()}'; ";
+        }
+    }
+    if (libmTaranan == 0) libmHata = "Sim kaynağı bulunamadı — kapı hiçbir şey taramadı; ";
+    if (libmHata.Length > 0)
+        failures += Fail("P0LibmYasagi", libmHata + "— transandantal fonksiyonlar DetMath'ten gelmeli (ME 3.2)");
+    else Pass($"P0LibmYasagi({libmTaranan} Sim dosyası · libm/MathF/intrinsics çağrısı yok · yorum ve dizgiler ayıklandı)");
+
+    // --- Ölçüm ızgarası: girdiler libm'siz ve TAM üretilir (Rng: tamsayı işlem + 2^-53 ölçeği) ---
+    const ulong IzgaraTohum = 0x50A0DE7A0A7EUL;
+    const uint IzgaraN = 4096;
+    double U(uint akis, uint i) => Rng.Rand01(IzgaraTohum, Domain.Chaos, i, 0, akis);
+    static double Iki(int k) => BitConverter.Int64BitsToDouble((long)(k + 1023) << 52);   // 2^k, TAM
+
+    var expX = new List<double> { 0.0, -0.0, 1.0, -1.0, 1e-300, -1e-300, 0.34657359027997264,
+                                  -0.34657359027997264, 700.0, -700.0, -708.4, -740.0, 709.7, -745.0 };
+    for (uint i = 0; i < IzgaraN; i++) expX.Add(-50.0 + 100.0 * U(1, i));
+    var logX = new List<double> { 1.0, 2.0, 0.5, 1.4142135623730951, 1.4142135623730954, 1.4142135623730949,
+                                  1e-310, double.Epsilon, 1e300, double.MaxValue, 0.9999999999999999,
+                                  1.0000000000000002 };
+    for (uint i = 0; i < IzgaraN; i++) logX.Add((1.0 + U(2, i)) * Iki((int)(U(3, i) * 40.0) - 20));
+    var powXY = new List<(double x, double y)> { (0.0, 2.2), (1.0, 7.0), (0.5, 0.0), (0.25, 0.5),
+                                                  (1e-300, 0.1), (0.999, 3.3) };
+    for (uint i = 0; i < IzgaraN; i++) powXY.Add((U(4, i), 0.1 + 3.9 * U(5, i)));
+    var trigX = new List<double> { 0.0, -0.0, Math.PI / 4, Math.PI / 2, Math.PI, 1e5, -1e5, 1e-10 };
+    for (uint i = 0; i < IzgaraN; i++) trigX.Add(-8.0 * Math.PI + 16.0 * Math.PI * U(6, i));
+    var tanX = new List<double> { 0.0, Math.PI / 4, -Math.PI / 4, 1.5, 1e-10 };
+    for (uint i = 0; i < IzgaraN; i++) tanX.Add(-1.5 + 3.0 * U(7, i));
+    var atanYX = new List<(double y, double x)> { (0.0, 1.0), (0.0, -1.0), (-0.0, -1.0), (1.0, 0.0), (-1.0, 0.0),
+                                                   (0.0, 0.0), (0.0, -0.0), (1e-300, 1.0), (1.0, 1e-300),
+                                                   (-3.0, -4.0) };
+    for (uint i = 0; i < IzgaraN; i++) atanYX.Add((-60.0 + 120.0 * U(8, i), -60.0 + 120.0 * U(9, i)));
+
+    static long UlpFarki(double a, double b)
+    {
+        if (a == b) return 0;                                   // +0 == −0 dahil
+        if (double.IsNaN(a) || double.IsNaN(b)) return long.MaxValue;
+        long ia = BitConverter.DoubleToInt64Bits(a), ib = BitConverter.DoubleToInt64Bits(b);
+        if (ia < 0) ia = long.MinValue - ia;                    // işaret-büyüklük → sıralı tamsayı
+        if (ib < 0) ib = long.MinValue - ib;
+        return Math.Abs(ia - ib);
+    }
+    static ulong BitOzeti(List<double> v)
+    {
+        var b = new byte[v.Count * 8];
+        for (int i = 0; i < v.Count; i++)
+            System.Buffers.Binary.BinaryPrimitives.WriteInt64LittleEndian(b.AsSpan(i * 8),
+                BitConverter.DoubleToInt64Bits(v[i]));
+        return TheBadge.Sim.Core.XxHash64.Hash(b);
+    }
+
+    // Her fonksiyon: DetMath çıktıları, System.Math referansı, girdi başına ulp sınırı, sıfır yakınında
+    // mutlak tolerans. Sınırlar TASARIMDAN türetilir (ölçüme uydurulmadı): fonksiyonun kendi hatası +
+    // referans libm'in ≤1 ulp'i. Pow = Exp(y·Log x): Log'un ≤2 ulp göreli hatası ve çarpımın yuvarlaması
+    // üssü |y·ln x| ölçeğinde kaydırır, Exp bunu göreli hataya çevirir → sınır 2 + 3·|y·ln x| ulp.
+    // (İlk yazımda sabit 32 vardı; (1e-300, 0.1)'de |y·ln x| = 69 ve 35 ulp ölçüldü — sabit sınır
+    // yanlış modeldi, hata girdiyle ölçeklenir.)
+    static Func<int, long> Sabit(long n) => _ => n;
+    var olcum = new (string ad, List<double> det, List<double> refm, Func<int, long> ulpSiniri, string sinirYazi, double mutlakTol)[]
+    {
+        ("Exp",   expX.Select(x => TheBadge.Sim.Core.DetMath.Exp(x)).ToList(), expX.Select(x => Math.Exp(x)).ToList(),
+                  Sabit(2), "2", 0.0),
+        ("Log",   logX.Select(x => TheBadge.Sim.Core.DetMath.Log(x)).ToList(), logX.Select(x => Math.Log(x)).ToList(),
+                  Sabit(3), "3", 0.0),
+        ("Pow",   powXY.Select(p => TheBadge.Sim.Core.DetMath.Pow(p.x, p.y)).ToList(),
+                  powXY.Select(p => Math.Pow(p.x, p.y)).ToList(),
+                  i => { var p = powXY[i]; double z = p.x > 0.0 && p.x != 1.0 && p.y != 0.0 ? Math.Abs(p.y * Math.Log(p.x)) : 0.0;
+                         return 2 + (long)Math.Ceiling(3.0 * z); }, "2+3|y·ln x|", 0.0),
+        ("Sin",   trigX.Select(x => TheBadge.Sim.Core.DetMath.Sin(x)).ToList(), trigX.Select(x => Math.Sin(x)).ToList(),
+                  Sabit(2), "2", 1e-16),
+        ("Cos",   trigX.Select(x => TheBadge.Sim.Core.DetMath.Cos(x)).ToList(), trigX.Select(x => Math.Cos(x)).ToList(),
+                  Sabit(2), "2", 1e-16),
+        ("Tan",   tanX.Select(x => TheBadge.Sim.Core.DetMath.Tan(x)).ToList(), tanX.Select(x => Math.Tan(x)).ToList(),
+                  Sabit(4), "4", 1e-16),
+        ("Atan2", atanYX.Select(p => TheBadge.Sim.Core.DetMath.Atan2(p.y, p.x)).ToList(),
+                  atanYX.Select(p => Math.Atan2(p.y, p.x)).ToList(),
+                  Sabit(2), "2", 0.0),
+    };
+
+    // --- P0DetMathDogruluk ---
+    string dogrulukHata = "", dogrulukOzet = "";
+    foreach (var (ad, det, refm, sinir, sinirYazi, tol) in olcum)
+    {
+        long maks = 0; int kotu = -1; long asim = 0; int asimIdx = -1;
+        for (int i = 0; i < det.Count; i++)
+        {
+            long u = UlpFarki(det[i], refm[i]);
+            if (tol > 0 && Math.Abs(det[i] - refm[i]) <= tol) u = 0;
+            if (u > maks) { maks = u; kotu = i; }
+            long s = sinir(i);
+            if (u > s && u - s > asim) { asim = u - s; asimIdx = i; }
+        }
+        dogrulukOzet += $"{ad} {maks} (≤{sinirYazi}) ";
+        if (asimIdx >= 0)
+            dogrulukHata += $"{ad}: örnek #{asimIdx} {UlpFarki(det[asimIdx], refm[asimIdx])} ulp > sınır {sinir(asimIdx)} " +
+                            $"(DetMath {det[asimIdx]:R} · Math {refm[asimIdx]:R}); ";
+    }
+    if (dogrulukHata.Length > 0) failures += Fail("P0DetMathDogruluk", dogrulukHata);
+    else Pass($"P0DetMathDogruluk({olcum[0].det.Count} Exp + {olcum[1].det.Count} Log + {olcum[2].det.Count} Pow + " +
+              $"{olcum[3].det.Count} Sin/Cos + {olcum[5].det.Count} Tan + {olcum[6].det.Count} Atan2 girdi · maks ulp: {dogrulukOzet.Trim()})");
+
+    // --- P0DetMathBitPin --- Linux'ta üretildi; macOS CI aynı biti vermeli. Bir pin kırılırsa DetMath
+    // platforma bağlı bir işlem içeriyor demektir (ör. JIT'in birleştirdiği çarpma-toplama) — pini
+    // güncellemek DEĞİL, nedeni bulmak gerekir. Pin yalnız DetMath'in KENDİSİ bilerek değişince güncellenir.
+    var bitPin = new Dictionary<string, ulong>(StringComparer.Ordinal)
+    {
+        // linux-x64'te ölçüldü (2026-10-05); macOS arm64 CI'ı aynı biti üretmeli
+        ["Exp"] = 0x3392CD200C6E5906UL, ["Log"] = 0xA00F621B927BE80FUL, ["Pow"] = 0x1C2F53C261730C9EUL,
+        ["Sin"] = 0x910641454B06C9D2UL, ["Cos"] = 0x0F625A9C9967E60CUL, ["Tan"] = 0xFE7030AA07848E9AUL,
+        ["Atan2"] = 0xA005FC21A9BDA698UL,
+    };
+    string pinHata = "", pinOzet = "";
+    foreach (var (ad, det, _, _, _, _) in olcum)
+    {
+        ulong oz = BitOzeti(det);
+        pinOzet += $"{ad} 0x{oz:X16} ";
+        if (oz != bitPin[ad]) pinHata += $"{ad}: ölçülen 0x{oz:X16} ≠ pinli 0x{bitPin[ad]:X16}; ";
+    }
+    if (pinHata.Length > 0)
+        failures += Fail("P0DetMathBitPin", $"[{PlatformKimligi()}] " + pinHata +
+                         "— DetMath bu platformda FARKLI bit üretiyor ya da pin bayat");
+    else Pass($"P0DetMathBitPin([{PlatformKimligi()}] 7 fonksiyonun çıktı özeti pinle bit-eşit: {pinOzet.Trim()})");
+
+    // --- P0TrigLutOzeti --- ME 3.2'nin tablosu (DetMath.Sin ile üretilir) + AttributeLuts'un kuvvet tabloları
+    const ulong TrigLutPin = 0x151EDD4A6B53DC23UL;   // linux-x64'te ölçüldü (2026-10-05)
+    var tb = new byte[TrigLut.Size * 4];
+    int trigSadakat = 0;
+    for (int i = 0; i < TrigLut.Size; i++)
+    {
+        int v = TrigLut.SinQ16(i);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(tb.AsSpan(i * 4), v);
+        int refv = (int)Math.Round(Math.Sin(2.0 * Math.PI * i / TrigLut.Size) * 65536.0);
+        if (Math.Abs(v - refv) > 1) trigSadakat++;
+    }
+    ulong trigOzet = TheBadge.Sim.Core.XxHash64.Hash(tb);
+    var p0Luts = AttributeLuts.Build(simBal);
+    var p0At = simBal.attribute;
+    int lutSadakat = 0;
+    for (int i = 0; i <= 100; i++)
+    {
+        int kond = p0Luts.KondQ16((ushort)(i * 10));
+        int kondRef = (int)Math.Round((p0At.kondisyonTaban + p0At.kondisyonKuvvet * Math.Pow(i / 100.0, p0At.kondisyonUs)) * 65536.0);
+        if (Math.Abs(kond - kondRef) > 1) lutSadakat++;
+        int dr = p0Luts.DrenajQ16(i / 100.0);
+        if (Math.Abs(dr - (int)Math.Round(Math.Pow(i / 100.0, 2.2) * 65536.0)) > 1) lutSadakat++;
+    }
+    string lutHata = "";
+    if (trigOzet != TrigLutPin) lutHata += $"TrigLut özeti 0x{trigOzet:X16} ≠ pinli 0x{TrigLutPin:X16}; ";
+    if (trigSadakat > 0) lutHata += $"TrigLut {trigSadakat}/{TrigLut.Size} girişte Math.Sin'den ±1'den fazla uzak; ";
+    if (lutSadakat > 0) lutHata += $"AttributeLuts {lutSadakat} girişte Math.Pow'dan ±1'den fazla uzak; ";
+    if (lutHata.Length > 0) failures += Fail("P0TrigLutOzeti", $"[{PlatformKimligi()}] " + lutHata);
+    else Pass($"P0TrigLutOzeti([{PlatformKimligi()}] 4096 girişli Q16 tablo özeti 0x{trigOzet:X16} pinle eşit · " +
+              "Math.Sin'e ±1 · kondisyon/drenaj tabloları Math.Pow'a ±1)");
+}
+
 // 24) FAZ 04 K1 — COMMAND BUS ÇEKİRDEĞİ (CB Spec 3-6, 8)
 // Tek Kapı'nın hub ucu. Katalog + 4 kapılı doğrulama + rate limit + idempotency.
 {

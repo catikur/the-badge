@@ -1,5 +1,6 @@
 using System;
 using TheBadge.Sim.Config;
+using TheBadge.Sim.Core;
 using TheBadge.Sim.Determinism;
 
 namespace TheBadge.Sim.Match
@@ -164,14 +165,15 @@ namespace TheBadge.Sim.Match
             return Rng.Rand01(seed, Domain.Chaos, 7000, 0, salt) < kesir ? taban + 1 : taban;
         }
 
-        /// <summary>Poisson ters-CDF örneklemesi. `Math.Exp` platformlar arasında son bit'te
-        /// oynayabilir → birikimli olasılık Q16'ya kuantalanır (motorun `pSave` çözümüyle aynı
-        /// gerekçe, ME 3.2). Üst sınır 15: futbolda gol sayısı bu bandın dışına çıkmaz.</summary>
+        /// <summary>Poisson ters-CDF örneklemesi. e^−λ DetMath'ten (P0 (a)): libm'in platform payı YOK.
+        /// Birikimli olasılığın Q16 kuantası eskiden bu payı örtmek içindi; tek başına yetmiyordu
+        /// (sınıra düşen değer taraf değiştirir), modelin parçası olarak korunuyor (ME 3.2).
+        /// Üst sınır 15: futbolda gol sayısı bu bandın dışına çıkmaz.</summary>
         int PoissonDraw(double lambda, ulong seed, uint salt)
         {
             if (lambda <= 0) return 0;
             double u = Rng.Rand01(seed, Domain.Chaos, 7000, 0, salt);
-            double p = Math.Exp(-lambda), cum = Kuanta(p);
+            double p = DetMath.Exp(-lambda), cum = Kuanta(p);
             int k = 0;
             while (u > cum && k < 15) { k++; p *= lambda / k; cum = Kuanta(cum + p); }
             return k;

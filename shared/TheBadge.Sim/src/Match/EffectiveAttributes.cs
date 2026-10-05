@@ -1,12 +1,15 @@
 using System;
 using TheBadge.Sim.Config;
+using TheBadge.Sim.Core;
 
 namespace TheBadge.Sim.Match
 {
     /// <summary>
     /// Efektif nitelik çarpan tabloları — ME Spec 6.2'nin DETERMİNİSTİK hali.
-    /// Math.Pow platformlar arası bit garantisi vermez (ME 3.2'nin sin/cos LUT gerekçesiyle aynı);
-    /// bu yüzden çarpanlar balance YÜKLENİRKEN bir kez hesaplanır ve Q16 sabit noktaya KUANTALANIR:
+    /// Math.Pow platformlar arası bit garantisi vermez (ME 3.2'nin sin/cos LUT gerekçesiyle aynı):
+    /// kuvvet DetMath.Pow'dan gelir (P0 (a) — tablo her platformda AYNI biti üretir; eskiden yalnız
+    /// Q16 kuantasına güveniliyordu, bir yuvarlama sınırına düşen giriş yine taraf değiştirirdi).
+    /// Çarpanlar balance YÜKLENİRKEN bir kez hesaplanır ve Q16 sabit noktaya KUANTALANIR:
     /// tick yolunda yalnız tamsayı LUT + IEEE-kesin küçük çarpımlar kalır. Enerji 10'luk adımlarla
     /// indekslenir (101 giriş; çözünürlük ~0.003 — A_eff zaten tamsayıya yuvarlanır).
     /// </summary>
@@ -19,8 +22,8 @@ namespace TheBadge.Sim.Match
         AttributeLuts(int[] kond, int[] moral, int[] drenaj)
         { kondQ16 = kond; moralQ16 = moral; drenajQ16 = drenaj; }
 
-        /// <summary>Stamina drenaj eğrisi (ME 12.1: (v/v_max)^2,2) — Math.Pow sıcak yolda YASAK
-        /// (platform bit farkı), tablo kuruluşta bir kez üretilip Q16'ya kuantalanır.</summary>
+        /// <summary>Stamina drenaj eğrisi (ME 12.1: (v/v_max)^2,2) — kuvvet sıcak yolda YOK, tablo
+        /// kuruluşta DetMath.Pow ile bir kez üretilip Q16'ya kuantalanır.</summary>
         public int DrenajQ16(double vRatio)
         {
             int i = (int)(vRatio * 100.0 + 0.5);
@@ -36,7 +39,7 @@ namespace TheBadge.Sim.Match
             for (int i = 0; i <= 100; i++)
             {
                 double e01 = i / 100.0; // energy/1000 (10'luk adım)
-                double m = a.kondisyonTaban + a.kondisyonKuvvet * Math.Pow(e01, a.kondisyonUs);
+                double m = a.kondisyonTaban + a.kondisyonKuvvet * DetMath.Pow(e01, a.kondisyonUs);
                 kond[i] = (int)Math.Round(m * 65536.0);
             }
             var moral = new int[21];
@@ -44,7 +47,7 @@ namespace TheBadge.Sim.Match
                 moral[m10 + 10] = (int)Math.Round((1.0 + m10 * a.moralCarpanPerMomentum) * 65536.0);
             var drenaj = new int[101];
             for (int i = 0; i <= 100; i++)
-                drenaj[i] = (int)Math.Round(Math.Pow(i / 100.0, 2.2) * 65536.0);
+                drenaj[i] = (int)Math.Round(DetMath.Pow(i / 100.0, 2.2) * 65536.0);
             return new AttributeLuts(kond, moral, drenaj);
         }
 

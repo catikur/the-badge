@@ -1,5 +1,6 @@
 using System;
 using TheBadge.Sim.Config;
+using TheBadge.Sim.Core;
 
 namespace TheBadge.Sim.Match
 {
@@ -32,10 +33,10 @@ namespace TheBadge.Sim.Match
     /// MARJİNAL olarak kalibredir ve tamamen işe yaramazdır. Bu yüzden kapı ayrıca kaç vuruşunda
     /// (bilginin YALNIZ güçten geldiği an) Brier BECERİ payını ölçer; güce kör model orada 0 verir.
     ///
-    /// SUNUM YÜZEYİDİR, SİMÜLASYON GİRDİSİ DEĞİL: bu sınıf durumu OKUR, asla yazmaz. `Math.Exp`
-    /// kullanır (platformlar arası bit-eşitliği garanti değildir) — bu yüzden sonucu `MatchState`e
-    /// ve `StateHash`e ASLA girmez, yalnız `MatchSummaryPacket`e yazılır. Replay kimliği
-    /// (ME 3.3 dörtlüsü) bu dosyadan etkilenmez.</summary>
+    /// SUNUM YÜZEYİDİR, SİMÜLASYON GİRDİSİ DEĞİL: bu sınıf durumu OKUR, asla yazmaz; sonucu
+    /// `MatchState`e ve `StateHash`e ASLA girmez, yalnız `MatchSummaryPacket`e yazılır. Replay
+    /// kimliği (ME 3.3 dörtlüsü) bu dosyadan etkilenmez. Üstel DetMath'ten (P0 (a)): istemci ile
+    /// sunucu aynı şeridi göstermeli — eskiden `Math.Exp` platforma göre son bitte oynuyordu.</summary>
     public static class LiveWinProb
     {
         public struct Sonuc
@@ -61,8 +62,8 @@ namespace TheBadge.Sim.Match
             double tEv = TaktikUssu(c.taktik, in evTaktik, in depTaktik);
             double tDep = TaktikUssu(c.taktik, in depTaktik, in evTaktik);
 
-            double lamEv = c.lambdaTaban * Math.Exp(c.gucKatsayisi * fark + tEv) * f;
-            double lamDep = c.lambdaTaban * Math.Exp(-c.gucKatsayisi * fark + tDep) * f;
+            double lamEv = c.lambdaTaban * DetMath.Exp(c.gucKatsayisi * fark + tEv) * f;
+            double lamDep = c.lambdaTaban * DetMath.Exp(-c.gucKatsayisi * fark + tDep) * f;
 
             int n = c.maxEkGol;
             // Poisson pmf'leri yinelemeli: p[k] = p[k-1] × λ/k (faktöriyel taşması yok)
@@ -110,7 +111,7 @@ namespace TheBadge.Sim.Match
 
         static void Doldur(Span<double> p, double lam, int n)
         {
-            p[0] = Math.Exp(-lam);
+            p[0] = DetMath.Exp(-lam);
             for (int k = 1; k <= n; k++) p[k] = p[k - 1] * lam / k;
         }
     }

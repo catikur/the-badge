@@ -911,7 +911,7 @@ namespace TheBadge.Sim.Match
                               * (1.0 + baski) * Math.PI / 180.0 * (1.0 - fin / 125.0)
                               * (1.0 + presSayisi * bal.shotExec.presSigmaKisiBasi * pres01Sav)
                               * chaosAim;   // enjeksiyon 3 (ME 13.2)
-            double sigmaPlaneM = dGoal * Math.Tan(sigmaRad);
+            double sigmaPlaneM = dGoal * DetMath.Tan(sigmaRad);   // P0 (a): libm değil (ME 3.2)
             // Nişan noktası — ME 6.4 "şut isabeti" kompozitinin YERLEŞİM tarafı (M16-G): şutçu
             // kalecinin BOŞ BIRAKTIĞI tarafa nişan alır; tarafı doğru seçme olasılığı şut
             // kompozitiyle ölçeklenir (düşük yetenek rastgele seçer, kalecinin üstüne nişan
@@ -1025,8 +1025,10 @@ namespace TheBadge.Sim.Match
                 if (dGoal < bal.gk.yakinMesafeM)
                     marj += (1.0 - dGoal / bal.gk.yakinMesafeM)
                             * (Eff(gk, attrs[gk].OneOnOne) / 100.0) * bal.gk.yakinKapatmaKatsayi;
-                // Lojistik P_save Q16'ya kuantalanır (exp platform payı — LUT gerekçesiyle aynı)
-                double pSave = 1.0 / (1.0 + Math.Exp(-bal.gk.logisticSlope * marj));
+                // Lojistik P_save — DetMath.Exp (P0 (a)): libm'in platform payı artık YOK. Q16
+                // kuantası tek başına bunu çözmüyordu (sınıra düşen değer taraf değiştirir); modelin
+                // parçası olarak korunuyor.
+                double pSave = 1.0 / (1.0 + DetMath.Exp(-bal.gk.logisticSlope * marj));
                 if (pSave < bal.gk.saveClampMin) pSave = bal.gk.saveClampMin;
                 if (pSave > bal.gk.saveClampMax) pSave = bal.gk.saveClampMax;
                 pSave = (int)(pSave * 65536.0) / 65536.0;
@@ -1319,19 +1321,20 @@ namespace TheBadge.Sim.Match
             return n;
         }
 
-        /// <summary>xG KAYIT gerçeği — ME 15.2 birebir (ln/atan burada serbest: sonuca girmez).</summary>
+        /// <summary>xG KAYIT gerçeği — ME 15.2 birebir. Sonuca girmez, ama istemci ile sunucu AYNI xG'yi
+        /// göstermeli: ln/atan/exp de DetMath'ten (P0 (a)) — sim içinde libm istisnası yok.</summary>
         double RecordXg(ref MatchState st, int i, double dGoal, bool header = false)
         {
             ref var a = ref st.Agents[i];
             int gx = a.TeamIdx == 0 ? PitchHalfXmm : -PitchHalfXmm;
             double p1x = (gx - a.X) / 1000.0, p1y = (GoalHalfWidthMm - a.Y) / 1000.0;
             double p2y = (-GoalHalfWidthMm - a.Y) / 1000.0;
-            double ang = Math.Abs(Math.Atan2(p1y, Math.Abs(p1x)) - Math.Atan2(p2y, Math.Abs(p1x)));
+            double ang = Math.Abs(DetMath.Atan2(p1y, Math.Abs(p1x)) - DetMath.Atan2(p2y, Math.Abs(p1x)));
             int pres = Math.Min(3, NearOpponents(ref st, a.X, a.Y, a.TeamIdx, 1200));
             var g = bal.shot.xg;
-            double z = g.b0 + g.bLnDist * Math.Log(Math.Max(1.0, dGoal) / 10.0) + g.bAngle * ang
+            double z = g.b0 + g.bLnDist * DetMath.Log(Math.Max(1.0, dGoal) / 10.0) + g.bAngle * ang
                        + g.bPres * pres + (header ? g.bHeader : 0.0);
-            double xg = 1.0 / (1.0 + Math.Exp(-z));
+            double xg = 1.0 / (1.0 + DetMath.Exp(-z));
             if (a.TeamIdx == 0) XgHome += xg; else XgAway += xg;
             // Şut kalitesi teşhisi (ME 15.4 maç sonu paketinin çekirdeği; hash'e GİRMEZ):
             // "kaç metreden ve ne kadar baskı altında şut çıkıyor" kalibrasyonun asıl sorusu.
@@ -2199,8 +2202,8 @@ namespace TheBadge.Sim.Match
             var hw = bal.highlight.winprob;
             double kalan = 90.0 - dakika;
             if (kalan < hw.minKalanDk) kalan = hw.minKalanDk;
-            double z = hw.k * golFarki / Math.Sqrt(kalan / 90.0);
-            return 1.0 / (1.0 + Math.Exp(-z));
+            double z = hw.k * golFarki / Math.Sqrt(kalan / 90.0);   // Sqrt IEEE'de doğru yuvarlanır: TAM
+            return 1.0 / (1.0 + DetMath.Exp(-z));
         }
 
         // ---------------------------------------------------------------- highlight (ME 15.3)
