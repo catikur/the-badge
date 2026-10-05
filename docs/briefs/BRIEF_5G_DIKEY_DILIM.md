@@ -282,14 +282,20 @@ Bu brif bir plan önerisidir, kapı değil.
 - **5G-a kapı kararı VERİLMEDİ:** turun sonuçları (mülakat tablosu, telemetri özeti, kapı
   metrikleri) henüz repoya işlenmedi. 5G-a'nın geçip geçmediği veriyle kararlaştırılır;
   5G-b ondan önce açılmaz.
-- **P0 — platformlar arası determinizm:** karar verildi (2026-10-04): ölçüm CI'a girdi (macOS
-  arm64 işi + korumalı borç kapısı), düzeltme (**P0 (a)**) **başladı (2026-10-05, Atilla: "P0 (a)'ya
-  başla")**, tur verisiyle paralel. P0, 5G-b'nin
-  **cihaz/sunucu ayağından ÖNCE** kapanmalı: istemci iOS arm64, sunucu Linux x64 — eşitlik
-  kanıtlanmadan dikey dilimin "aynı maç her yerde aynı" iddiası kurulamaz.
+- **P0 — platformlar arası determinizm:** karar verildi (2026-10-04). **P0 (a)'nın .NET ayağı
+  KAPANDI (2026-10-05):** kök neden libm değil, şut hızına sızan NaN'ın platforma bağlı tamsayı
+  dönüşümüydü; düzeltildi, macOS arm64 KATI koşuda 50/50 bit-eşit, borç tablosu boş (DECISIONS,
+  *P0 (a) UYGULANDI*). **Açık kalan:** replay setinin Unity'de koşması (Editor'de Mono, cihazda
+  IL2CPP/iOS) — ikinci aşama; yeni paylaşılan paket + ADR ister, ayrı karar. P0, 5G-b'nin
+  **cihaz/sunucu ayağından ÖNCE** kapanmalı: istemci iOS arm64 (IL2CPP), sunucu Linux x64 —
+  eşitlik IL2CPP'de kanıtlanmadan dikey dilimin "aynı maç her yerde aynı" iddiası kurulamaz.
+- **Yeni bekleyen karar — şut modeli** (P0 teşhisinden çıktı): kale çizgisi üstünden şut, dar
+  açıda aşırı hızlı top ve maç başına ~0,45 "hayalet isabetli şut" (isabetli, kurtarış yok, gol
+  yok, aut). Ölçüm, seçenekler ve önerim DECISIONS'ta (*Şut modeli*).
 
-**SIRADAKİ İŞLER:** (1) tur sonuçlarını kayda geçir → 5G-a kapı kararı (veri Atilla'da) · (2) P0 (a)
-motor dilimi (sürüyor) · ~~(3) D-D ve D-E kararları~~ (kapandı) · (4) 5G-a GO ise 5G-b açılışı:
-stil rehberi (D-D) + S3.
+**SIRADAKİ İŞLER:** (1) tur sonuçlarını kayda geçir → 5G-a kapı kararı (veri Atilla'da) · (2) ~~P0 (a)
+.NET ayağı~~ (kapandı); P0 ikinci aşaması (Unity replay testi) ve şut modeli dilimi — ikisi de
+karar bekliyor · ~~(3) D-D ve D-E kararları~~ (kapandı) · (4) 5G-a GO ise 5G-b açılışı: stil
+rehberi (D-D) + S3.
 Kararlar `docs/DECISIONS.md`'ye işlenir; sohbette kalan karar yok hükmündedir (Anayasa 9 +
 CLAUDE.md).
