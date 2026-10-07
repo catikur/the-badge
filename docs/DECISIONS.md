@@ -3989,6 +3989,10 @@ gösteriyor · **okuyucu dişleri:** öneksiz hash, tekrarlı indeks, ondalık s
 kayıtlı set — 5/5 reddedildi. `S1UnityPaketSiniri` artık dört paketi ölçüyor.
 **Taşımanın kanıtı:** `-- gen-replays` yeniden koşuldu ve `replay_set_v1.json` bir bayt bile
 değişmedi; M0-M6 durum pinleri, P0 pinleri ve golden 50/50 aynı kaldı.
+**macOS arm64 (.NET, CI, `ab63c5e`):** aynı sonda orada da GEÇTİ — balance baytları ve değerleri,
+yeni `IzgaraPin` dahil bütün P0 pinleri, 50/50 replay; iki okuyucu, döküm dişi ve 5/5 okuyucu
+dişi de. `IzgaraPin` artık iki mimaride ölçülmüş bir pin. Bu, Unity'nin çalışma zamanlarının
+kanıtı DEĞİL (aşağıda *SINIRI*); paketin kendisinin arm64'te doğru olduğunun kanıtı.
 
 **3. Unity yapıştırıcısı — ince; mantığın tamamı pakette:**
 - **EditMode testi** `DeterminizmTests.EditorSunucuylaBitEsit` (`Game.Match.EditModeTests`):
