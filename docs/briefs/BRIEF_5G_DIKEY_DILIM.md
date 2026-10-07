@@ -286,7 +286,9 @@ Bu brif bir plan önerisidir, kapı değil.
   KAPANDI (2026-10-05):** kök neden libm değil, şut hızına sızan NaN'ın platforma bağlı tamsayı
   dönüşümüydü; düzeltildi, macOS arm64 KATI koşuda 50/50 bit-eşit, borç tablosu boş (DECISIONS,
   *P0 (a) UYGULANDI*). **Açık kalan:** replay setinin Unity'de koşması (Editor'de Mono, cihazda
-  IL2CPP/iOS) — ikinci aşama; yeni paylaşılan paket + ADR ister, ayrı karar. P0, 5G-b'nin
+  IL2CPP/iOS) — ikinci aşama; yeni paylaşılan paket + ADR ister. Seçenekler DECISIONS'ta
+  (*P0 ikinci aşaması*, 2026-10-07); önerim (b): EditMode + macOS IL2CPP sondası şimdi, iOS
+  cihaz 5G-b ile. P0, 5G-b'nin
   **cihaz/sunucu ayağından ÖNCE** kapanmalı: istemci iOS arm64 (IL2CPP), sunucu Linux x64 —
   eşitlik IL2CPP'de kanıtlanmadan dikey dilimin "aynı maç her yerde aynı" iddiası kurulamaz.
 - **Şut modeli (c) UYGULANDI** (karar 2026-10-05, Atilla; P0 teşhisinden çıktı): şut hızı vektör
@@ -296,7 +298,7 @@ Bu brif bir plan önerisidir, kapı değil.
 
 **SIRADAKİ İŞLER:** (1) tur sonuçlarını kayda geçir → 5G-a kapı kararı (veri Atilla'da) · (2) ~~P0 (a)
 .NET ayağı~~ (kapandı) · ~~şut modeli (c)~~ (uygulandı) · P0 ikinci aşaması (Unity replay testi)
-karar bekliyor · ~~(3) D-D ve D-E kararları~~ (kapandı) · (4) 5G-a GO ise 5G-b açılışı: stil
+karar bekliyor (seçenekler hazır) · ~~(3) D-D ve D-E kararları~~ (kapandı) · (4) 5G-a GO ise 5G-b açılışı: stil
 rehberi (D-D) + S3.
 Kararlar `docs/DECISIONS.md`'ye işlenir; sohbette kalan karar yok hükmündedir (Anayasa 9 +
 CLAUDE.md).
