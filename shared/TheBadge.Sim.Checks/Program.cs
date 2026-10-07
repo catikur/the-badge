@@ -851,7 +851,7 @@ if (runA.finalHash != runB.finalHash || runA.at600 != runB.at600)
 else Pass("MatchSkeletonDeterminism");
 
 // 7b) Golden: durum hash'i sabitlendi — alan/sıra değişikliği bilinçli golden güncellemesi ister
-const ulong MATCH_GOLDEN = 0x1A872CD9CB06B721UL; // K9 adres ayrımıyla yeniden sabitlendi (2026-08-30 — bilinçli)
+const ulong MATCH_GOLDEN = 0xCFAB99337358A035UL; // şut modeli (c) ile yeniden sabitlendi (2026-10-05 — bilinçli; DECISIONS)
 if (MATCH_GOLDEN != 0 && runA.finalHash != MATCH_GOLDEN)
     failures += Fail("MatchSkeletonGolden", $"0x{runA.finalHash:X} != 0x{MATCH_GOLDEN:X}");
 else Pass("MatchSkeletonGolden");
@@ -1053,7 +1053,7 @@ Console.WriteLine($"[info] M2 durum hash: 0x{mA2.h:X}");
 if (mA2.h != mB2.h) failures += Fail("M2Determinism", $"0x{mA2.h:X} != 0x{mB2.h:X}");
 else Pass("M2Determinism");
 
-const ulong M2_GOLDEN = 0x5498E875C7247D5DUL; // K12 hakem/şut kalibrasyonuyla yeniden sabitlendi (2026-09-01 — bilinçli)
+const ulong M2_GOLDEN = 0xBE40CBB8C1935515UL; // şut modeli (c) ile yeniden sabitlendi (2026-10-05 — bilinçli; DECISIONS)
 if (M2_GOLDEN != 0 && mA2.h != M2_GOLDEN) failures += Fail("M2Golden", $"0x{mA2.h:X}");
 else Pass("M2Golden");
 
@@ -1094,17 +1094,29 @@ if (Math.Abs(golT - m3.xg) > Math.Max(4.0, m3.xg * 1.2))
     failures += Fail("M3XgConsistency", $"gol {golT} vs ΣxG {m3.xg:0.00}");
 else Pass($"M3XgConsistency({m3.xg:0.00})");
 // Kaleci İŞARET testi: deplasman GK Reflexes/Agility tavana → ev golü ARTMAMALI.
-// TEK maçta bakmak tohum şansını ölçüyordu (gol sayısı banda inince 1→2 farkı gürültü);
-// 6 tohumda TOPLAM karşılaştırılır — aynı özellik, daha güvenilir ölçüm.
+// TEK maçta bakmak tohum şansını ölçüyordu (gol sayısı banda inince 1→2 farkı gürültü); 6 tohum
+// da yetmedi: özellik GEÇERLİYKEN (600 tohumda iyi kaleci −%6,7 eski / −%8,7 yeni şut modeli)
+// 6'lık pencerelerin %26-28'i "iyi kaleci daha çok yedi" diyordu — kapı yazı-turaydı ve şut
+// modeli (c) diliminde kırmızıya döndü. Aynı özellik, aynı ölçüt; 300 EŞLİ tohum (aynı tohum iki
+// kez: normal ve iyi kaleci), yanlış alarm ~%0,2 (Atilla, 2026-10-07; DECISIONS şut modeli (c)).
 {
-    int golNormal = 0, golBoost = 0;
-    for (ulong k = 0; k < 6; k++)
+    const int NGk = 300;
+    int golNormal = 0, golBoost = 0, dahaAz = 0, dahaCok = 0;
+    var kilitGk = new object();
+    System.Threading.Tasks.Parallel.For(0, NGk, k =>
     {
-        golNormal += RunM2(0xC0AC11UL + k * 4133, ticks: 54000).gh;
-        golBoost += RunM2(0xC0AC11UL + k * 4133, ticks: 54000, gkBoost: 60).gh;
-    }
-    if (golBoost > golNormal) failures += Fail("M3GkMatters", $"iyi GK'ya rağmen ev golü {golNormal}→{golBoost} (6 tohum)");
-    else Pass($"M3GkMatters({golNormal}→{golBoost}, 6 tohum)");
+        ulong sdGk = 0xC0AC11UL + (ulong)k * 4133;
+        int gN = RunM2(sdGk, ticks: 54000).gh;
+        int gB = RunM2(sdGk, ticks: 54000, gkBoost: 60).gh;
+        lock (kilitGk)
+        {
+            golNormal += gN; golBoost += gB;
+            if (gB < gN) dahaAz++; else if (gB > gN) dahaCok++;
+        }
+    });
+    string ozetGk = $"ev golü {golNormal}→{golBoost} ({NGk} eşli tohum · maç maç iyi kaleciyle daha az {dahaAz}, daha çok {dahaCok})";
+    if (golBoost > golNormal) failures += Fail("M3GkMatters", $"iyi GK'ya rağmen {ozetGk}");
+    else Pass($"M3GkMatters({ozetGk})");
 }
 
 // 11) FAZ 03 M4 — Duran toplar + hakem/kart + maç saati (ME 10, 11.2, 3.4; BRIEF M4)
@@ -1138,7 +1150,7 @@ if (f1.hash != f2.hash || f1.res.TotalTicks != f2.res.TotalTicks)
     failures += Fail("M4Determinism", $"0x{f1.hash:X} != 0x{f2.hash:X}");
 else Pass("M4Determinism");
 
-const ulong M4_GOLDEN = 0x1CEF744588036154UL; // K12 hakem/şut kalibrasyonuyla yeniden sabitlendi (2026-09-01 — bilinçli)
+const ulong M4_GOLDEN = 0xF7CD828D2935E632UL; // şut modeli (c) ile yeniden sabitlendi (2026-10-05 — bilinçli; DECISIONS)
 if (M4_GOLDEN != 0 && f1.hash != M4_GOLDEN) failures += Fail("M4Golden", $"0x{f1.hash:X}");
 else Pass("M4Golden");
 
@@ -1434,7 +1446,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     Console.WriteLine($"[info] M6 komutlu maç hash: 0x{hA:X}");
     if (hA != hB) failures += Fail("M6Determinism", $"0x{hA:X} != 0x{hB:X}");
     else Pass("M6Determinism");
-    const ulong M6_GOLDEN = 0x839E56552410874EUL; // K12 hakem/şut kalibrasyonuyla yeniden sabitlendi (2026-09-01 — bilinçli)
+    const ulong M6_GOLDEN = 0x5AD65D10E50A2C75UL; // şut modeli (c) ile yeniden sabitlendi (2026-10-05 — bilinçli; DECISIONS)
     if (M6_GOLDEN != 0 && hA != M6_GOLDEN) failures += Fail("M6Golden", $"0x{hA:X}");
     else Pass("M6Golden");
 }
@@ -2333,6 +2345,9 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     // K13-C: doğrudan kırmızı sayacı + ŞİDDET TAVANI. Bedava ölçüm — bu döngü zaten 500 maç
     // koşuyor ve `FoulCommitted` olayının aux'u şiddeti ×1000 taşıyor (ME 15.1).
     double dogrudanKi = 0, enYuksekSiddet = 0;
+    // Şut modeli (c) sayaçları — aynı 500 maç, bedava ölçüm (kapı aşağıda: SutModeliTutarliligi)
+    long hayaletSm = 0, tutulanGolSm = 0, tutusCizgideSm = 0, korumaSm = 0, hizOlcSm = 0, sutGoluSm = 0;
+    double kesisimMaxSm = 0, hizSapmaMaxSm = 0;
     var kilit16e = new object();
     System.Threading.Tasks.Parallel.For(0, NE, n =>
     {
@@ -2361,6 +2376,10 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         {
             if (macEnYuksek > enYuksekSiddet) enYuksekSiddet = macEnYuksek;
             dogrudanKi += e.RedsDirect;
+            hayaletSm += e.HayaletIsabetli; tutulanGolSm += e.TutulanSutGol; tutusCizgideSm += e.TutusCizgide;
+            korumaSm += e.SutKorumaDonusu; hizOlcSm += e.SutHizOlcumu; sutGoluSm += e.GoalsFromShot;
+            if (e.SutGolKesisimMaxYmm > kesisimMaxSm) kesisimMaxSm = e.SutGolKesisimMaxYmm;
+            if (e.SutHizSapmaMaxMmS > hizSapmaMaxSm) hizSapmaMaxSm = e.SutHizSapmaMaxMmS;
             g += r.HomeGoals + r.AwayGoals; sh += r.Shots; isb += e.ShotsOnTarget; ko += r.Corners;
             fa += r.Fouls; sa += r.Yellows; ki += r.Reds; pe += r.Penalties; of += e.Offsides;
             inj += e.Injuries; pa += e.PassAttempts; pc += e.PassCompletions; xg += r.XgHome + r.XgAway;
@@ -2380,6 +2399,36 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
               && inj / NE is >= 0.28 and <= 0.68 && pasP is >= 76 and <= 88 && xgSap <= 10;
     if (!ok16e) failures += Fail("M16ECalibGenis", "yukarıdaki [info] satırı bant dışı değer içeriyor (kırmızı hariç)");
     else Pass("M16ECalibGenis(11 metrik, CI-geniş bant; kırmızı ayrı borç kapısında; dar bantlar calib10k 10000 ile)");
+
+    // 22b) ŞUT MODELİ (c) — karar ↔ fizik tutarlılığı (DECISIONS 2026-10-05, Atilla: "(c)'ye başla").
+    // Eski model topun kale düzlemine varış süresini yalnız |dx|'ten alıyordu; ölçüm (2000 maç) üç
+    // hata buldu ve hepsi olay akışında görünüyordu. Bu kapı her birinin sıfır olduğunu ölçer:
+    //  (1) HAYALET İSABETLİ ŞUT — karara bağlı şut (Flight=1: isabetli, kurtarılamadı) gol olmadan
+    //      oyundan çıkmamalı ya da durmamalı. Eski modelde ~0,45/maç (ShotOnTarget → kurtarış yok →
+    //      gol yok → aut).
+    //  (2) ŞUT GOLÜ DİREKLERİN ARASINDAN GEÇER — karar "direkler arası" dedi; topun çizgiyi adım
+    //      İÇİNDE geçtiği nokta (önceki/sonraki konum kesişimi) da orada olmalı. Top şutçudan başka
+    //      bir yerden çıkınca dik şutta bu nokta 26 m'ye kadar kayıyordu.
+    //  (3) ŞUT HIZI VEKTÖR BOYUNCA sutHizi'dir — eski modelde sutHizi/cos(açı). Sınır türetilmiştir:
+    //      Vx ve Vy ayrı ayrı mm/sn'ye yuvarlanır, hız hatası en çok √(0,5² + 0,5²) mm/sn.
+    //  (4) TUTULAN ŞUT GOLE DÖNMEZ — "Kurtarış → Gol": tutuş kontrolü tick başında, çizgi kontrolü
+    //      sonunda koştuğu için kaleciye giden top yanından geçip çizgiyi geçebiliyordu (0,07-0,16/maç).
+    // Kale düzleminin üstünden şut korumasının (sutMinDuzlemMesafeM) dişi (1)'dir: koruma kalkınca
+    // düzlemdeki şut çizgi boyunca gider ve hayalete döner.
+    {
+        double hizSiniri = Math.Sqrt(0.5 * 0.5 + 0.5 * 0.5);
+        bool okSm = hayaletSm == 0 && tutulanGolSm == 0 && sutGoluSm > 0
+                    && kesisimMaxSm <= MatchEngine.GoalHalfWidthMm
+                    && hizOlcSm > 0 && hizSapmaMaxSm <= hizSiniri
+                    && simBal.shotExec.sutMinDuzlemMesafeM > 0;
+        string ozetSm = $"{NE} maç · hayalet isabetli {hayaletSm} · tutulan şuttan gol {tutulanGolSm} · " +
+                        $"şut golü {sutGoluSm}, çizgiyi geçtiği en dış |y| {kesisimMaxSm:0} mm (direk {MatchEngine.GoalHalfWidthMm}) · " +
+                        $"şut hızı sapması en çok {hizSapmaMaxSm:0.00} mm/sn (sınır {hizSiniri:0.00}, {hizOlcSm} ölçüm) · " +
+                        $"bilgi: kaleci çizgide aldı {tutusCizgideSm} · kafa yolu koruması {korumaSm} · " +
+                        $"koruma {simBal.shotExec.sutMinDuzlemMesafeM:0.00} m";
+        if (!okSm) failures += Fail("SutModeliTutarliligi", ozetSm);
+        else Pass($"SutModeliTutarliligi({ozetSm})");
+    }
 
     // ---- 5G S2: CANLI KAZANMA OLASILIĞI KALİBRASYONU ----
     // NE ÖLÇER: (1) model "%X" dediğinde o sonuç gerçekten %X sıklıkta mı oluyor (kalibrasyon),

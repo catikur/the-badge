@@ -3860,11 +3860,106 @@ Gerekçe, elenen seçenekler ve gönderici yazılırken bağlayıcı kurallar (P
 etkilemez ama sessiz de yutmaz, sözlük tek yerde, uygulama kimliği koda gömülmez, çevrim dışı
 kuyruk): `docs/adr/ADR-003-analytics-saglayici.md`.
 
+### ŞUT MODELİ (c) UYGULANDI (2026-10-05/06) — şut kararı ile top fiziği artık aynı şeyi söylüyor
+
+Atilla: *"42'yi merge et, şut modelinde önerdiğin gibi (c)'ye başla."* Plan: (c) + (a)'nın koruması,
+tek motor diliminde, öncesi/sonrası ölçümüyle (Bekleyen kararlar, *Şut modeli*). Dayanak: ME 9.2
+(`t_plane` = topun kale düzlemine varış süresi; "kaçırdı → gol / kurtarış → tut") · ME 3.3 (balance
+şeması config_hash içinde) · ME 17.2 (bantlar, gol ≈ xG ±%8) · ME 17.4 (yeni golden set). Spec ile
+çelişki YOK; tersine, hayalet isabetli şut 9.2'nin "kaçırdı → gol" hükmünü ihlal ediyordu.
+
+**Uygulananlar (`MatchEngine.cs`):**
+1. **Şut hızı vektör boyunca** — `tPlane = |şut vektörü| / sutHizi`; top nişan noktasına `sutHizi`
+   ile gider (eskiden `sutHizi/cos(açı)`, dar açıda katlarca).
+2. **Karara bağlı şut çizgide gol** — Flight=1 (isabetli + kurtarılamadı) çizgiyi geçince gol;
+   10 Hz adımın yana taşması artık "aut" sayılmıyor.
+3. **Top şutçudan çıkar** *(uygulamada bulundu)* — geometri şutçunun konumundan hesaplanıyordu, top
+   ise başka yerdeydi: taşıyıcıya bir tick gecikmeyle yapışık (karar adım 3, yapıştırma adım 4) ve
+   kafa vuruşunda ortanın noktasında. Dik şutta küçük kayma çizgide metrelerce eder: ilk ölçümde
+   bir şut golü çizgiyi kaleden **26 m** uzakta geçti. Şimdi en dış geçiş 3540 mm (direk 3660).
+4. **Tutulan şut gole dönmez** *(uygulamada bulundu)* — tutuş kontrolü tick başında, çizgi kontrolü
+   sonunda koştuğu için kaleciye uçan top yanından geçip çizgiyi geçebiliyor ve **GOL** sayılıyordu:
+   olay akışında "Kurtarış → Gol". Karar geçerli kılındı: çizgiyi geçen Flight=2 topu kaleci alır.
+   Düzeltme olmadan yeni modelde 28 m/sn'de maç başına 0,16 (diş T5).
+5. **Koruma** — `shotExec.sutMinDuzlemMesafeM` = **0,25 m** [KALİBRE, yeni]: kale düzlemine bundan
+   yakın şutçu şut adayı üretmez; `ExecuteShot` (kafa yolu dahil) aynı korumayla döner. Neden
+   0,25: düzlemin üstünde yön dejenere (top çizgi boyunca gider) ve çizgiye bu kadar yakın
+   şutların çoğu kenardan, dip çizgiden geliyor. Bilinen sınır: korumanın içinde kale ağzının
+   ÖNÜNDEN şut da kalıyor — 2000 maçta 21 şut, 12'si tam çizginin üstünde.
+6. **Hasar sınırı** — Flight=1 topu çizgiye varmadan durursa serbest topa döner ve hayalet sayılır
+   (kimsenin alamadığı top oyunu kilitlerdi; ölçümde hiç olmadı).
+
+**Ölçümde çıkan ikinci yüz: "hayalet gol".** Eski modelde kayık yoldan çıkan bazı İSABETSİZ şutlar
+kaleye giriyordu (serbest top golü sayılıyordu). Son dokunuşu şut olan serbest gol 0,327 →
+0,161/maç; kalanın 0,067'si "Kurtarış → Gol"dü (madde 4). Yani eski gol seviyesi iki ters hatanın
+toplamıydı: hayalet isabetli şut (gol eksiği) + hayalet gol (gol fazlası).
+
+**Kalibrasyon — `shotExec.sutHiziMS` 24 → 28 m/sn** *(Atilla onayladı, 2026-10-07)*. Düzeltmeler
+gol−xG'yi ME 17.2'nin dışına itti (M16-E: gol 2,15, xG sapma %13,4; M5 gol 1,93). Kol olarak şut
+hızı seçildi, çünkü eski model tam bu değeri şişiriyordu: açılı şutun etkin hızı `sutHizi/cos`
+idi, 24 o şişirmeyle oturtulmuştu. Tarama (6000 maç, M16-E dağılımı):
+
+| `sutHiziMS` | gol/maç | şut golü | gol−xG |
+| --- | --- | --- | --- |
+| eski model, 24 | 2,178 | 0,687 | −%9,3 |
+| yeni model, 26 | 2,201 | 0,893 | −%8,0 |
+| yeni model, 27 | 2,196 | 0,940 | −%8,4 |
+| yeni model, 28 | 2,297 | 0,983 | −%4,1 |
+
+28 seçildi: ME 17.2'nin gol ≈ xG ±%8 şartını payla sağlayan tek değer. 26-27 gol seviyesini
+korur ama M16-E'nin 500 maçlık örneklemi 2,2 alt sınırına yazı-tura kalır. 28 m/sn ≈ 101 km/sa,
+gerçekçi bir şut hızı. Gol +0,12/maç (ME 17.2'nin 10k hedef bandı 2,4-3,0'a doğru).
+
+**Öncesi / sonrası** (6000 maç, M16-E dağılımı; "önce" eski motor 24 m/sn, "sonra" yeni motor 28 m/sn):
+
+| metrik | önce | sonra |
+| --- | --- | --- |
+| gol / şut / isabetli | 2,178 / 21,55 / 6,17 | 2,297 / 21,59 / 6,12 |
+| kurtarış / blok / direk | 4,77 / 7,81 / 0,333 | 4,90 / 7,86 / 0,340 |
+| korner / kale vuruşu / taç | 7,41 / 9,87 / 19,21 | 7,44 / 9,21 / 18,99 |
+| gol − xG | −%9,3 | −%4,1 |
+| şut golü / serbest top golü | 0,687 / 1,256 | 0,983 / 1,080 |
+| hayalet isabetli şut | ~0,45/maç (2000 maç) | **0** |
+| şut hızı | %15'i ≥ 2× nominal | hepsi `sutHizi` (sapma ≤ 0,70 mm/sn) |
+
+Kapıların bilgi satırları (önce → sonra): M16-E 500 gol 2,29 → 2,39, xG sapma %5,8 → %0,7 ·
+M4 200 gol 2,22 → 2,24 · M5 gol 2,19 → 2,08 (bant ≥ 2,0) · M16 eşit güç G/B/M %28/37/35 →
+%35/35/30 · M16-F %83/12/6 → %87/8/6 · M15 güç tepkisi ×2,5 → ×2,5, kompozisyon %7 → %9 ·
+K11 gol 3,21 → 3,20 · S2 kalibrasyon sapması 0,042 → 0,084 (sınır 0,10) · M14 H>eşik 0,84 → 0,59.
+LOD 2 uyumu (`M15Lod2Uyum`) geçiyor; tablo yeniden üretilmedi.
+
+**Kalıcı kapı — `SutModeliTutarliligi`** (M16-E'nin 500 maçına bedava eklendi): hayalet isabetli
+şut 0 · tutulan şuttan gol 0 · şut golünde topun çizgiyi geçtiği yer direklerin arasında · şut
+hızı `sutHizi` (sınır türetilmiş: Vx ve Vy ayrı ayrı yuvarlanır, √(0,5²+0,5²) mm/sn).
+**Dişler** (her düzeltme tek tek geri alındı, kapının KENDİ 500 maçında): T1 eski hız →
+hız sapması 1,3 milyon mm/sn · T2 eski gol kontrolü → 58 hayalet · T3 top şutçudan çıkmıyor →
+çizgi geçişi 22,6 m · T4 koruma yok → 3 hayalet · T5 tutuş düzeltmesi yok → tutulan şuttan
+80 gol. Beşi de kırdı.
+
+**Pinler ve golden:** M0/M2/M4/M6 durum hash'leri yeniden sabitlendi (bilinçli motor değişikliği);
+50 golden replay yeniden üretildi (balance hash değişti; borç tablosu boş, macOS katı ölçer).
+
+**Atilla'nın kararları (2026-10-07, üçü de önerildiği gibi):**
+- **(K1) `M3GkMatters` → 300 eşli tohum.** 6 tohumluk işaret testi yazı-turaydı: 600 tohumda
+  özellik GEÇERLİ (iyi kaleci eski motorda −%6,7, yenide −%8,7 gol yediriyor) ama 6'lık ayrık
+  pencerelerin %28'i (eski) ve %26'sı (yeni) "iyi kaleci daha çok yedi" diyordu; eskiden şans
+  eseri geçiyordu, bu dilimde kırmızıya döndü. Aynı özellik, aynı ölçüt (iyi kalecide toplam gol
+  ≤ normal); 300 eşli tohum, paralel, yanlış alarm ~%0,2. Sonuç: ev golü 287 → 266 (maç maç iyi
+  kaleciyle daha az 46, daha çok 29). Kapının bedeli 600 tam maç.
+- **(K2) `sutHiziMS` = 28** (yukarıdaki tarama).
+- **(K3) `-- fit-winprob` yeniden oturtması UYGULANDI** — `canliOlasilik`: lambdaTaban 1,0048 →
+  1,022 · gucKatsayisi 0,04433 → 0,04678 · taktik katsayıları yeni motora; taktik kaybı 0,144 →
+  0,101. S2 kalibrasyon sapması değişmedi (0,084, sınır 0,10): en kötü kova beraberlik %40-50
+  (tahmin %44,5, gerçek %52,9). Bu, katsayıların kapatamadığı yapısal bir eksik: modelin
+  beraberlik olasılığı yüksek bölgede düşük kalıyor. Bekleyen kararlara izleme maddesi yazıldı.
+
+Checks 193/193 (192 + `SutModeliTutarliligi`).
+
 ## Bekleyen kararlar
 
 - ~~**🔴 P0 — platformlar arası determinizm (2026-09-06).**~~ → **KARAR VERİLDİ (2026-10-04, Atilla): (b) hemen + (a) 5G-a turundan sonra.** (b) uygulandı; tur bitti, (a) sıradaki motor dilimi. Bkz. yukarıdaki *P0 KARARI* kaydı. **(a) UYGULANDI (2026-10-05)** — kök neden NaN dönüşümüydü; bkz. *P0 (a) UYGULANDI* kaydı.
 
-- **🟠 Şut modeli: kale düzlemine varış süresi yalnız `|dx|`'ten (P0 (a) teşhisinden, 2026-10-05).**
+- ~~**🟠 Şut modeli: kale düzlemine varış süresi yalnız `|dx|`'ten (P0 (a) teşhisinden, 2026-10-05).**~~ → **KARAR VERİLDİ (2026-10-05, Atilla): (c) + (a)'nın koruması, önerildiği gibi.** UYGULANDI — bkz. *ŞUT MODELİ (c) UYGULANDI* kaydı. Aşağıdaki seçenek menüsü kararın alındığı andaki bilgi durumu olarak kalıyor:
   `ExecuteShot` topun kale düzlemine varış süresini `tPlane = |dx| / sutHizi` alıyor ve hız
   vektörünü bu süreye göre kuruyor. Yani topun gerçek hızı `sutHizi × k`, burada
   `k = 1/cos(şut açısı)`. P0'ın NaN'ı bunun uç noktasıydı (`dx = 0` → `k = ∞`). **Ölçüm** repo
@@ -3913,6 +4008,14 @@ kuyruk): `docs/adr/ADR-003-analytics-saglayici.md`.
   terimidir; 5G-a turunda dar açı şutu göze batarsa eklenir. Aciliyet: determinizm sorunu YOK,
   P0 (a) onu kapattı; bu bir oynanış ve olay akışı tutarlılığı hatası. Dilim açılırsa bu ölçüm
   kalıcı bir kapıya dönüşür (hayalet isabetli şut = 0, çizgi üstünden şut = 0).
+
+- **S2 canlı olasılığı yüksek beraberlik bölgesinde beraberliği küçümsüyor (şut modeli (c)
+  diliminden, 2026-10-07).** `S2WinProbKalibrasyon` geçiyor ama sapma 0,042 → 0,084'e çıktı (sınır
+  0,10); en kötü kova beraberlik %40-50: tahmin %44,5, gerçek %52,9. Yeniden oturtma (`-- fit-winprob`)
+  sapmayı DEĞİŞTİRMEDİ, yani sorun katsayıda değil model biçiminde. Seçenekler o gün netleşir:
+  beraberlik olasılığına ayrı bir terim (ör. skor eşitken zamanla artan) ya da kova sınırının
+  gerekçeli gözden geçirilmesi. Bugün kapı kırmızı değil; bir sonraki motor değişikliğinde 0,10'u
+  aşarsa bu madde öne çıkar. 5G canlı şeridini doğrudan etkiler.
 
 - **Motorun GEÇ REDDİ maç sunum ekranında erişilemez (TASK-002, 2026-09-06).** Kabul ölçütü
   "bant dışı bir delta ile İKİSİ de elle denenip raporlanır" diyor; yapısal olarak mümkün değil

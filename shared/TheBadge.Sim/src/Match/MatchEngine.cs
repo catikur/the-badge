@@ -96,6 +96,14 @@ namespace TheBadge.Sim.Match
         public int Aerials, AerialsContested;  // hava topu olayı / ikili mücadeleli olan (teşhis)
         public int Crosses;           // açık oyunda atılan orta sayısı (ME 6.4)
         public int GoalsFromShot, GoalsFromLoose; // gol kaynağı teşhisi (hash dışı)
+        // Şut modeli (c) teşhisi — hash dışı; kapı: SutModeliTutarliligi (DECISIONS 2026-10-05)
+        public int HayaletIsabetli;          // karara bağlı şut (Flight=1) gol olmadan oyundan çıktı ya da durdu
+        public double SutGolKesisimMaxYmm;   // Flight=1 gollerinde topun çizgiyi geçtiği |y| (mm), direk içinde olmalı
+        public double SutHizSapmaMaxMmS;     // şut vektörüyle çıkan topun hızının sutHizi'den en büyük sapması (mm/sn)
+        public int SutHizOlcumu;             // o ölçümün örneklem sayısı
+        public int SutKorumaDonusu;          // ExecuteShot korumasının geri çevirdiği şut (kafa yolu)
+        public int TutusCizgide;             // tutulan şut (Flight=2) kaleciye ulaşmadan çizgiyi geçti → kaleci aldı
+        public int TutulanSutGol;            // tutulan şut (Flight=2) gol oldu — tutarsızlık, 0 olmalı
         public int PassLostDead;      // pas oyun durarak bitti (taç/aut/duran top/ofsayt)
         public double PassLostRecvDistM; // kayıpta HEDEF oyuncunun topa uzaklığı toplamı (m) — teşhis
         public double ShotDistSumM;   // şut mesafesi toplamı (m) — kalibrasyon teşhisi, hash dışı
@@ -594,7 +602,9 @@ namespace TheBadge.Sim.Match
                 int gx = a.TeamIdx == 0 ? PitchHalfXmm : -PitchHalfXmm;
                 double dxG = (gx - a.X) / 1000.0, dyG = (0 - a.Y) / 1000.0;
                 double dGoal = Math.Sqrt(dxG * dxG + dyG * dyG);
-                if (dGoal <= bal.shotExec.sutMaxMesafeM)
+                // Şut modeli (c) koruması: kale düzleminin üstündeki şutçu şut adayı üretmez
+                // (yön dejenere — ExecuteShot'taki gerekçe). ClampX oyuncuyu çizgiye yaslayabilir.
+                if (dGoal <= bal.shotExec.sutMaxMesafeM && Math.Abs(dxG) >= bal.shotExec.sutMinDuzlemMesafeM)
                 {
                     // Mesafe tehdidi: RASYONEL çekirdek 1/(1+(d/d0)²). Doğrusal "closeness" biçimi
                     // 14 m'nin ötesini tümüyle eliyordu → ortalama şut mesafesi 10 m (gerçek ~17 m)
@@ -887,6 +897,16 @@ namespace TheBadge.Sim.Match
             double dxM = (gx - a.X) / 1000.0, dyM = (0 - a.Y) / 1000.0;
             double dGoal = Math.Sqrt(dxM * dxM + dyM * dyM);
             if (dGoal < 1.0) return;
+            // Şut modeli (c) koruması: kale düzleminin üstünde şut yönü dejeneredir — top çizgi
+            // boyunca gider, düzlemi hiç geçmez (eski modelde 0/0 → NaN, P0'ın kök nedeni). Karar
+            // tarafı aynı koşulla aday üretmez; bu satır kafa yolunun (orta → hava topu) güvencesi.
+            if (Math.Abs(dxM) < bal.shotExec.sutMinDuzlemMesafeM) { SutKorumaDonusu++; return; }
+            // Top şutçunun ayağından/başından çıkar — şut modeli (c). Nişan, kaleci ve xG şutçunun
+            // konumundan hesaplanıyor; top ise taşıyıcıya bir tick gecikmeyle yapışık (karar adım
+            // 3'te, yapıştırma adım 4'te) ve kafa vuruşunda ortanın konumunda (hava topu
+            // yarıçapı içinde). Top başka yerden çıkınca dik şutta yol kayıyor ve çizgiyi
+            // direklerin çok dışından geçiyordu (teşhis: kesişim 26 m).
+            st.Ball.X = a.X; st.Ball.Y = a.Y;
 
             // Nişan: kale düzleminde hedef y — Finishing kompoziti sigma'yı daraltır;
             // kafa vuruşunda Heading kompoziti geçerlidir (ME 6.4 aksiyon eşlemesi)
@@ -929,9 +949,15 @@ namespace TheBadge.Sim.Match
             double aimY = aimTarget + sigmaPlaneM * 1000.0
                           * Rng.Gauss01(seed, Domain.Physics, (uint)(200 + i), st.Tick, 41);
 
+            // ŞUT HIZI VEKTÖR BOYUNCADIR — şut modeli (c), DECISIONS 2026-10-05. ME 9.2 t_plane =
+            // "topun kale düzlemine varış süresi": top nişan noktasına sutHizi ile gider, varış
+            // süresi vektör uzunluğundan. Eski biçim süreyi yalnız |dx|'ten alıyordu; topun gerçek
+            // hızı sutHizi/cos(açı) oluyordu (dar açıda katlarca hızlı, kaleci süresi de buna göre
+            // kısa) ve şutçu düzlemin üstündeyken 0/0'dı. Koruma yukarıda: |dx| ≥ sutMinDuzlemMesafeM.
             double planeDx = (gx - a.X) / 1000.0;
-            double tPlane = Math.Abs(planeDx) / envSutHizi;
             double interY = aimY; // kale düzleminde kesişim
+            double planeDy = (interY - a.Y) / 1000.0;
+            double tPlane = Math.Sqrt(planeDx * planeDx + planeDy * planeDy) / envSutHizi;
 
             // Blok: şut koridorunda savunucu varsa top ona çarpar (ME 15.1 ShotBlocked) — serbest top.
             // Blok olasılığı koridor YOĞUNLUĞUYLA ölçeklenir (M16-F): tek gövde de altı gövde de
@@ -1001,7 +1027,7 @@ namespace TheBadge.Sim.Match
             // log'u geri almayı gerektirirdi. Direği bulan şut isabetli sayılmaz (Opta konvansiyonu).
             bool direkVurdu = Math.Abs(Math.Abs(interY) - GoalHalfWidthMm) < bal.gk.direkBandiMm;
             bool insidePosts = !direkVurdu && Math.Abs(interY) <= GoalHalfWidthMm;
-            double vy = ((interY - a.Y) / 1000.0) / tPlane;
+            double vy = planeDy / tPlane;   // |(vx, vy)| = sutHizi (şut modeli (c))
             double vx = planeDx / tPlane;
             byte flight = insidePosts ? (byte)1 : (byte)0; // karara bağlı gol yolu / dışarı serbest
             bool parried = false;
@@ -1109,6 +1135,15 @@ namespace TheBadge.Sim.Match
             st.Ball.Vx = Units.QuantizeMm(vx);
             st.Ball.Vy = Units.QuantizeMm(vy);
             st.Ball.Vz = 0; // alçak/sert şut — yüksek şut ve direk bandı M-duran-top/ince ayar
+            // Teşhis (hash dışı): top şut vektörüyle çıktıysa hızı sutHizi'dir. Tutuş, çelme ve
+            // direk hızı değiştirir, onlar hariç (kapı: SutModeliTutarliligi).
+            if (!parried && !direkVurdu && flight != 2)
+            {
+                double hizSapma = Math.Abs(Math.Sqrt((double)st.Ball.Vx * st.Ball.Vx + (double)st.Ball.Vy * st.Ball.Vy)
+                                           - envSutHizi * 1000.0);
+                if (hizSapma > SutHizSapmaMaxMmS) SutHizSapmaMaxMmS = hizSapma;
+                SutHizOlcumu++;
+            }
             st.Ball.OwnerId = -1;
             if (deflectFrom >= 0)
             {
@@ -2671,18 +2706,60 @@ namespace TheBadge.Sim.Match
 
         void EventAndStatePass(ref MatchState st)
         {
+            // Karara bağlı şut (Flight=1) kimsenin alamadığı toptur; çizgiye varmadan durursa oyun
+            // kilitlenirdi. Sabit hızlı şut modelinde (c) menzil yetiyor (kapı ölçer); yine de
+            // durursa serbest topa döner ve hayalet olarak sayılır.
+            if (st.Ball.Flight == 1 && st.Ball.OwnerId < 0 && st.Ball.Vx == 0 && st.Ball.Vy == 0 && st.Ball.Z == 0)
+            {
+                HayaletIsabetli++;
+                st.Ball.Flight = 0;
+            }
+            // KALECİ TUTUŞU (Flight=2) — ME 9.2 "kurtarış → tut": karar verildi, top kaleciye uçuyor
+            // ve yalnız o alabilir. Tutuş kontrolü tick'in başında (adım 4), çizgi kontrolü sonunda
+            // (adım 6) koşar: kaleci çizgiye yakınsa top onun yanından geçtiği tick'te çizgiyi de
+            // geçebiliyor ve eski kontrol bunu GOL sayıyordu — olay akışında "Kurtarış → Gol",
+            // maç başına 0,07-0,16, şut hızına bağlı (şut modeli (c), DECISIONS). Karar geçerli: kaleci tuttu.
+            if (st.Ball.Flight == 2 && st.Ball.OwnerId < 0 && Math.Abs(st.Ball.X) > PitchHalfXmm)
+            {
+                int gkT = st.Ball.X > 0 ? 11 : 0;   // çizgisi geçilen kalenin kalecisi
+                if (st.Agents[gkT].Active)
+                {
+                    TutusCizgide++;
+                    st.Ball.X = st.Agents[gkT].X; st.Ball.Y = st.Agents[gkT].Y;
+                    ClaimBall(ref st, gkT);
+                }
+            }
             // Çizgi geçişleri: GOL / korner / kale vuruşu / taç (ME 10.1-10.2)
             if (st.Ball.OwnerId < 0 &&
                 (Math.Abs(st.Ball.X) > PitchHalfXmm || Math.Abs(st.Ball.Y) > PitchHalfYmm))
             {
                 bool crossedGoalLine = Math.Abs(st.Ball.X) > PitchHalfXmm;
+                // KARARA BAĞLI ŞUT — ME 9.2 "kaçırdı → gol": sonuç analitik çözümde verildi
+                // (direkler arası + kurtarılamadı). 10 Hz adımda topun çizgiyi geçtiği tick'teki
+                // konumu yana taşabilir (vy × Δt); eski kontrol bu konuma bakıp şutu aut sayıyordu:
+                // maç başına ~0,45 "hayalet isabetli şut" (şut modeli (c), DECISIONS 2026-10-05).
+                bool kararliSut = st.Ball.Flight == 1;
                 bool goal = crossedGoalLine &&
-                            Math.Abs(st.Ball.Y) <= GoalHalfWidthMm && st.Ball.Z <= GoalHeightMm;
+                            (kararliSut || (Math.Abs(st.Ball.Y) <= GoalHalfWidthMm && st.Ball.Z <= GoalHeightMm));
+                if (kararliSut)
+                {
+                    if (!goal) HayaletIsabetli++;
+                    else
+                    {
+                        // Teşhis (hash dışı): top çizgiyi adım İÇİNDE nerede geçti? Karar ile fizik
+                        // tutarlıysa direklerin arasından (kapı: SutModeliTutarliligi).
+                        double px = Math.Abs(ballPrevX), nx = Math.Abs(st.Ball.X);
+                        double f = nx > px ? (PitchHalfXmm - px) / (nx - px) : 1.0;
+                        double yKesisim = Math.Abs(ballPrevY + f * (st.Ball.Y - ballPrevY));
+                        if (yKesisim > SutGolKesisimMaxYmm) SutGolKesisimMaxYmm = yKesisim;
+                    }
+                }
                 if (goal)
                 {
                     byte scorer = st.Ball.X > 0 ? (byte)0 : (byte)1; // +x çizgisi = ev hücum yönü
                     // Teşhis: gol ŞUT uçuşundan mı geldi (Flight==1: 9.2 analitik çözümü sahneleniyor)
                     // yoksa serbest yuvarlanan toptan mı? İkincisi kaleciye şans tanımaz.
+                    if (st.Ball.Flight == 2) TutulanSutGol++;   // "Kurtarış → Gol" — olmamalı (kapı)
                     if (st.Ball.Flight == 1) GoalsFromShot++;
                     else
                     {
