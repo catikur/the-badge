@@ -3959,6 +3959,70 @@ Checks 193/193 (192 + `SutModeliTutarliligi`).
 
 - ~~**🔴 P0 — platformlar arası determinizm (2026-09-06).**~~ → **KARAR VERİLDİ (2026-10-04, Atilla): (b) hemen + (a) 5G-a turundan sonra.** (b) uygulandı; tur bitti, (a) sıradaki motor dilimi. Bkz. yukarıdaki *P0 KARARI* kaydı. **(a) UYGULANDI (2026-10-05)** — kök neden NaN dönüşümüydü; bkz. *P0 (a) UYGULANDI* kaydı.
 
+- **🟠 P0 ikinci aşaması — Unity'de determinizm (Mono + IL2CPP) (2026-10-07, Atilla: "seçenekleri hazırla").**
+  P0 (a) .NET'te kapandı: Linux x64 ↔ macOS arm64, 50/50 bit-eşit. Gerçek istemci ise Unity:
+  Editor'de **Mono** (Atilla'nın Mac'i, Apple Silicon), cihazda **IL2CPP** (iOS arm64; Android
+  arm64 sonra). ME 17.1 "100 maç × (Windows editör + Linux server build)" ve gece "4 platform
+  (Win, Linux, Android arm64, iOS)" ister; bugün Unity tarafında hiçbiri ölçülmüyor. 5G-b'nin
+  cihaz/sunucu ayağından ÖNCE kapanmalı (BRIEF_5G).
+
+  **Kapanan riskler:** libm yok (P0 (a)) · NaN/aralık dışı dönüşüm doyuruyor (`ToInt32Sat`) ·
+  simde `float` aritmetiği yok — `float` yalnız sunum eğrileri ve xG kaydında, durum hash'ine
+  girmiyor (Mono'nun float'ı double hassasiyetinde işleme alışkanlığı bu yüzden risk değil) ·
+  Dictionary sırası ve sırasız LINQ yasak.
+  **Açık kalan asıl risk — IL2CPP + clang + arm64'te FMA.** IL2CPP C#'ı C++'a çevirip
+  platformun clang'ıyla derler. clang 14'ten beri varsayılan `-ffp-contract=on`: tek ifadedeki
+  `a*b+c` arm64'te tek yuvarlamalı FMA'ya dönüşebilir ve son bit .NET'ten ayrılır. IL2CPP'nin
+  hangi bayrağı geçtiği belgelenmemiş; ürettiği C++ her işlemi ayrı geçici değişkene yazıyorsa
+  birleştirme olmaz, ama bu da doğrulanmamış. Unity'nin hata izleyicisinde "Apple Silicon'da
+  Mono ile IL2CPP arasında kayan nokta tutarsızlığı" kaydı var. Kısacası risk teorik değil,
+  ama ölçülmeden bilinmez.
+  **Bugünkü altyapı:** Unity CI kapalı (lisans yok, `ci-unity.yml` elle tetikli) · cihaz
+  build'i 5G-a'da yok (balance repo kökünden okunuyor; oynatıcıya paketleme 5G-b/S6'nın işi) ·
+  EditMode testleri Atilla'nın makinesinde koşuyor · replay kurulumu `Sim.Checks/Program.cs`'te
+  (`BuildReplay`/`BuildSheetSide`/`RunReplay`/`ReplayKaydi`, ~150 satır), Unity onu göremez.
+  Tek kaynak ilkesi için ortak bir pakete taşınması gerekir; yeni paket ADR ister (ADR-002'nin
+  paket sınırı kuralları, `S1UnityPaketSiniri`).
+
+  Seçenekler:
+  - **(a) Ortak replay paketi + EditMode testi (Mono).** Yeni `shared/TheBadge.Sim.Replay`
+    (netstandard2.1, `noEngineReferences`, bağımlılıksız; ADR-004): replay kurulumu, oynatıcı,
+    kanonik kayıt ve P0 pin hesapları buraya taşınır; Checks ile Unity AYNI kodu çağırır. Golden
+    JSON'u için küçük bağımlılıksız okuyucu (System.Text.Json Unity'de yok). EditMode testi 50
+    replay'i ve P0 pinlerini koşar, golden'la karşılaştırır. Artı: ucuz, bugünkü Test Runner
+    akışına oturur, Mono arm64'ü ölçer. Eksi: cihazdaki çalışma zamanı IL2CPP'yi ÖLÇMEZ — asıl
+    risk açık kalır.
+  - **(b) (a) + macOS IL2CPP oyuncusunda ölçüm.** Aynı paket + küçük bir determinizm sondası:
+    açılışta 50 replay'i ve P0 pinlerini koşup sonucu yazan tek sahne, macOS standalone **IL2CPP
+    arm64** olarak derlenir. Golden ve balance oynatıcıya paketlenir (5G-b balance paketlemesinin
+    küçük provası). Artı: asıl riski Atilla'nın makinesinde ölçer — iOS'la aynı mimari ve
+    derleyici ailesi; P0 pinlerindeki Horner zincirleri FMA'ya karşı en hassas tanık. FMA
+    çıkarsa çaresi de ölçülebilir: `PlayerSettings.SetAdditionalIl2CppArgs` ile
+    `--compiler-flags=-ffp-contract=off` (Unity deneysel diyor; platform başına
+    `IPreprocessBuildWithReport` ile). Eksi: iOS'un Xcode derleme ayarları macOS'tan farklı
+    olabilir — kesin kanıt değil, güçlü vekil. Elle koşulur. Gerekli: Unity'de "Mac Build
+    Support (IL2CPP)" modülü + Xcode.
+  - **(c) (b) + iOS cihazında aynı sonda.** Sonda iOS'a derlenir, iPhone'da koşar, sonucu
+    ekranda gösterir ("50/50 bit-eşit"). Artı: hedef platformun kendisi — 5G-b cihaz ayağının
+    giriş kanıtı. Eksi: imzalama/provizyon kurulumu ister; balance paketlemesine (5G-b/S6) bağlı.
+  - **(d) Ölçümü ertele: sunucu otoritesi + saha telemetrisi.** Sunucu (Linux x64) otoriter,
+    istemci yalnız sunum; sapma ME 3.2'nin 600 tick checksum'ıyla yakalanıp telemetriye düşer.
+    Artı: bugün maliyetsiz. Eksi: ME 17.1'in çok platformlu determinizm kapılarıyla ÇELİŞİR
+    (spec değişikliği önerisi gerekir); "aynı maç her yerde aynı" iddiası kanıtsız kalır.
+
+  **Önerim: (b) şimdi, (c) 5G-b'nin cihaz build'iyle birlikte.** (a)'nın maliyetine küçük bir
+  ekle asıl bilinmeyeni ölçer; (c)'nin ön koşulu zaten 5G-b'de. Sıra: ADR-004 → paket ve
+  Checks'in ona geçmesi (Checks aynı kalır: 193/193, golden değişmez — taşımanın kanıtı) →
+  EditMode testi → IL2CPP sondası → Atilla'nın Mac'inde iki koşu → sonuç buraya. EditMode
+  determinizm testi CLAUDE.md gereği Checks'le aynı statüye girer; IL2CPP sondası CI olmadığı
+  için elle koşulan kanıt adımıdır. CI'a taşımak ayrı karar: GameCI ile EditMode Linux'ta koşar
+  ama arm64 FMA'yı göremez (x64 clang varsayılanda FMA komutu üretmez); IL2CPP arm64'ü CI'da
+  ölçmek macOS runner + Unity kurulumu + lisans ister.
+  *Kaynaklar (2026-10-07 araştırması):* Unity hata izleyicisi, "Apple Silicon floating point
+  inconsistencies between Mono and IL2CPP" — https://issuetracker.unity3d.com/issues/apple-silicon-floating-point-inconsistencies-between-mono-and-il2cpp ·
+  clang 14+ varsayılan `-ffp-contract=on`, arm64 etkisi — https://develop.openfoam.com/Development/openfoam/-/issues/2958 ·
+  IL2CPP ek derleyici argümanları — https://docs.unity3d.com/ScriptReference/PlayerSettings.SetAdditionalIl2CppArgs.html
+
 - ~~**🟠 Şut modeli: kale düzlemine varış süresi yalnız `|dx|`'ten (P0 (a) teşhisinden, 2026-10-05).**~~ → **KARAR VERİLDİ (2026-10-05, Atilla): (c) + (a)'nın koruması, önerildiği gibi.** UYGULANDI — bkz. *ŞUT MODELİ (c) UYGULANDI* kaydı. Aşağıdaki seçenek menüsü kararın alındığı andaki bilgi durumu olarak kalıyor:
   `ExecuteShot` topun kale düzlemine varış süresini `tPlane = |dx| / sutHizi` alıyor ve hız
   vektörünü bu süreye göre kuruyor. Yani topun gerçek hızı `sutHizi × k`, burada
