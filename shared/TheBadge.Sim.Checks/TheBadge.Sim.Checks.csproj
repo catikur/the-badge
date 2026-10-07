@@ -6,6 +6,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../TheBadge.Sim/TheBadge.Sim.csproj" />
+    <!-- ADR-004: golden replay seti, P0 pinleri ve determinizm sondası — istemciyle ORTAK kod -->
+    <ProjectReference Include="../TheBadge.Sim.Replay/TheBadge.Sim.Replay.csproj" />
     <ProjectReference Include="../TheBadge.CommandBus/TheBadge.CommandBus.csproj" />
     <ProjectReference Include="../TheBadge.World/TheBadge.World.csproj" />
     <!-- OYNANABİLİR KONSOL: kapı, oyunun GERÇEK kurulum yolunu (LigKurucu) ölçer. İnceleme

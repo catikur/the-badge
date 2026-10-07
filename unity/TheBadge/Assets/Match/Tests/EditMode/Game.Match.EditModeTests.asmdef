@@ -4,6 +4,7 @@
     "references": [
         "Game.Match",
         "TheBadge.Sim",
+        "TheBadge.Sim.Replay",
         "TheBadge.CommandBus",
         "TheBadge.World",
         "Game.Services",

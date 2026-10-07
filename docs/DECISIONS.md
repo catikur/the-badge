@@ -3955,11 +3955,82 @@ hız sapması 1,3 milyon mm/sn · T2 eski gol kontrolü → 58 hayalet · T3 top
 
 Checks 193/193 (192 + `SutModeliTutarliligi`).
 
+### P0 (b) UYGULANDI — sunucu ve istemci aynı sondayı koşuyor; Unity koşusu Atilla'da (2026-10-07)
+
+Atilla: *"44'ü merge et, önerdiğin gibi (b)'ye başla."* Dayanak: ME 3.2 (sayısal disiplin) · ME 3.3
+(config_hash) · ME 17.1 (çok platformlu determinizm) · ME 17.4 (golden set) · ADR-002 (paket sınırı)
+· **ADR-004** (bu paket). Spec ile çelişki yok.
+
+**1. Yeni paket `com.thebadge.sim.replay`** (`shared/TheBadge.Sim.Replay`; netstandard2.1, C# 9,
+`noEngineReferences`, yalnız `TheBadge.Sim`'e bağlı):
+- `TestKadrosu` + `GoldenReplay` — Checks'teki replay kurulumu, oynatıcı ve kanonik kayıt
+  (`BuildSheetSide` / `BuildReplay` / `RunReplay` / `ReplayKaydi`) buraya TAŞINDI; Checks ince
+  yönlendiricilerle paketi çağırıyor. Kayıt dizgisi kültürden bağımsız.
+- `GoldenSetOkuyucu` — golden JSON'u için bağımlılıksız, katı okuyucu (System.Text.Json Unity'de
+  yok): tamsayı olmayan sayı, tekrarlı anahtar ya da indeks, eksik alan reddedilir.
+- `P0Pinleri` — P0 (a)'nın pinleri (yedi DetMath fonksiyonu, TrigLut, 11 dönüşüm fikstürü) ve
+  ölçüm ızgarası tek yerde. **Yeni pin `IzgaraPin` = `0x2024780C6F6583E8`:** ızgaranın GİRDİLERİ
+  (`taban + ölçek·U`) de bir çarpma-toplamadır ve FMA önce onları kaydırır. Ayrı pin, sapmanın
+  girdide mi DetMath'te mi olduğunu ayırır.
+- `BalansDokumu` — okunmuş `SimBalance`'ın her alanının bit düzeyinde dökümü (362 alan; double'lar
+  ham bitleriyle). Sunucunun dökümü golden'ın yanında durur (`goldens/balance_degerleri_v1.txt`;
+  `-- gen-replays` üretir, `M17ReplaySetiGuncel` güncelliğini zorlar). **Neden:** Unity balance'ı
+  JsonUtility ile, sunucu System.Text.Json ile okur. Bir katsayıyı son bitte farklı okumak, kayan
+  nokta farkıyla AYNI belirtiyi verir (replay sapar); döküm bu iki nedeni ayırır.
+- `DeterminizmSondasi` — katman katman rapor: GoldenSet → BalansBaytlari → BalansDegerleri →
+  P0Izgara → P0DetMath → P0TrigLut → P0Donusum → GoldenReplay (50 maç). Platformun dosya ve JSON
+  araçlarına dokunmaz; girdileri çağıran yükler.
+
+**2. Sunucu aynı sondayı koşuyor — yeni kapı `P0IstemciSondasi`.** İstemcinin çağıracağı fonksiyon
+her Checks koşusunda .NET'te uçtan uca koşar; sonda burada geçmiyorsa istemcideki hükmü hiçbir şey
+söylemez. Ek ölçümler: iki golden okuyucu (Checks System.Text.Json · paket) 50/50 aynı kaydı veriyor
+· **döküm dişi:** `shotExec.sutHiziMS`'i 1 ulp kaydırmak TAM o alanı tek satırlık fark olarak
+gösteriyor · **okuyucu dişleri:** öneksiz hash, tekrarlı indeks, ondalık sayı, eksik alan, tek
+kayıtlı set — 5/5 reddedildi. `S1UnityPaketSiniri` artık dört paketi ölçüyor.
+**Taşımanın kanıtı:** `-- gen-replays` yeniden koşuldu ve `replay_set_v1.json` bir bayt bile
+değişmedi; M0-M6 durum pinleri, P0 pinleri ve golden 50/50 aynı kaldı.
+
+**3. Unity yapıştırıcısı — ince; mantığın tamamı pakette:**
+- **EditMode testi** `DeterminizmTests.EditorSunucuylaBitEsit` (`Game.Match.EditModeTests`):
+  balance'ı OYUNUN yolundan okur (`BalansKaynagi.Yukle`, yani JsonUtility), sondayı koşar, raporu
+  test çıktısına basar. CLAUDE.md gereği EditMode testleri Checks'le aynı statüdedir.
+- **`Game.Determinizm`** (oyuncu ayağı): `RuntimeInitializeOnLoadMethod`. Yalnız
+  `StreamingAssets/DeterminizmSondasi` varsa koşar; normal build'de ve Editor'de hiçbir şey
+  yapmaz. Raporu dosyaya yazar ve çıkış koduyla kapanır (0 = bit-eşit). `link.xml` iki çekirdek
+  assembly'yi ve sondayı IL2CPP budamasından korur (budanmış bir balance alanı sessizce
+  varsayılanında kalır ve sim ayrışır).
+- **`Game.Determinizm.Editor`** menüsü *The Badge → Determinizm Sondası (macOS IL2CPP)*:
+  - veriyi kopyalar, boş bir geçici sahneyle IL2CPP + Release macOS build alır;
+  - oyuncuyu `arch -arm64` ile koşar: yalnız-Intel bir build Rosetta'da x64'ü ölçerdi, o durumda
+    koşmayı reddeder;
+  - raporu Console'a basar; proje ayarlarını, sahneleri ve geçici dosyaları geri yükler;
+  - rapor oyuncunun derleme bayrağından gelen "il2cpp" etiketini taşımıyorsa sonucu geçersiz
+    sayar.
+- **Runbook:** `unity/UNITY_SETUP.md` → *Determinizm Sondası*. Her katman için "kırmızıysa ne
+  der" tablosu orada.
+
+**SINIRI — Unity tarafı burada DERLENMEDİ.** Bu ortamda Unity yok. Test, sonda ve menü yalnız
+Unity API'sinin elle yazılmış koçanlarına karşı derlendi (C# 9 sözdizimi ve paket API'sinin
+kullanımı doğrulandı; koçan imzaları benim varsayımım, yani Unity'de derlenmenin kanıtı DEĞİL).
+Paketin kendisi .NET'te derleniyor ve koşuyor (kapı + Unity'nin çağıracağı API'yi aynen çağıran
+ayrı bir koşum: 8/8 katman, sondanın tamamı ~8 sn). P0 ikinci
+aşamasının kanıtı **Atilla'nın Mac'indeki iki koşudur:** (1) EditMode testi (Mono), (2) menüden
+macOS IL2CPP sondası. İki rapor buraya işlenince bu kayıt kapanır; derleme hatası çıkarsa Console
+metni yeter.
+
+**Açık uçlar:**
+- iOS cihaz koşusu (c), 5G-b'nin cihaz build'iyle.
+- FMA çıkarsa çaresi ölçülür (`-ffp-contract=off`); ayrı karar.
+- Windows editörü geldiğinde `.gitattributes`'a balance ve golden için `eol=lf` (ADR-004).
+- Sondayı CI'a taşımak ayrı karar.
+
+Checks 194/194 (193 + `P0IstemciSondasi`).
+
 ## Bekleyen kararlar
 
 - ~~**🔴 P0 — platformlar arası determinizm (2026-09-06).**~~ → **KARAR VERİLDİ (2026-10-04, Atilla): (b) hemen + (a) 5G-a turundan sonra.** (b) uygulandı; tur bitti, (a) sıradaki motor dilimi. Bkz. yukarıdaki *P0 KARARI* kaydı. **(a) UYGULANDI (2026-10-05)** — kök neden NaN dönüşümüydü; bkz. *P0 (a) UYGULANDI* kaydı.
 
-- **🟠 P0 ikinci aşaması — Unity'de determinizm (Mono + IL2CPP) (2026-10-07, Atilla: "seçenekleri hazırla").**
+- ~~**🟠 P0 ikinci aşaması — Unity'de determinizm (Mono + IL2CPP) (2026-10-07, Atilla: "seçenekleri hazırla").**~~ → **KARAR VERİLDİ (2026-10-07, Atilla): (b), önerildiği gibi** — EditMode (Mono) + macOS IL2CPP sondası şimdi, iOS cihaz 5G-b ile. Paket: ADR-004. Uygulama kaydı yukarıda (*P0 (b)*). Aşağıdaki seçenek menüsü kararın alındığı andaki bilgi durumu olarak kalıyor:
   P0 (a) .NET'te kapandı: Linux x64 ↔ macOS arm64, 50/50 bit-eşit. Gerçek istemci ise Unity:
   Editor'de **Mono** (Atilla'nın Mac'i, Apple Silicon), cihazda **IL2CPP** (iOS arm64; Android
   arm64 sonra). ME 17.1 "100 maç × (Windows editör + Linux server build)" ve gece "4 platform

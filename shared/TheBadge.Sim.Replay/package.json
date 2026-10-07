@@ -1,0 +1,7 @@
+{
+  "name": "com.thebadge.sim.replay",
+  "version": "0.1.0",
+  "displayName": "The Badge Sim Replay",
+  "description": "Golden replay seti, P0 pinleri ve determinizm sondası — sunucu ve istemci aynı koddan ölçer (ADR-004).",
+  "unity": "6000.0"
+}

@@ -1,0 +1,9 @@
+{
+  "name": "TheBadge.Sim.Replay",
+  "rootNamespace": "TheBadge.Sim.Replay",
+  "references": [
+    "TheBadge.Sim"
+  ],
+  "noEngineReferences": true,
+  "autoReferenced": true
+}

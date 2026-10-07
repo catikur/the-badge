@@ -7,6 +7,7 @@ using TheBadge.Sim.Match;
 using System.Collections.Generic;
 using TheBadge.CommandBus;
 using TheBadge.Sim.Commands;
+using RP = TheBadge.Sim.Replay;   // ADR-004: replay seti + P0 pinleri + sonda (istemciyle ortak)
 
 // Bağımlılıksız determinizm kapısı — CI ve yerel geliştirme her commit öncesi koşar.
 // Kural (CLAUDE.md): Bu program yeşil değilse commit YOK.
@@ -169,64 +170,23 @@ if (args.Length > 0 && args[0] == "calib10k")
 
 // Replay kurulumu TEK KAYNAKTAN türetilir: üretici ve kapı AYNI fonksiyonu çağırır, böylece
 // "üretici ile kapı farklı evreni ölçer" hatası yapısal olarak imkansızdır.
+// Kurulumun kendisi pakette (ADR-004): üretici, kapı ve istemci sondası AYNI fonksiyonu çağırır.
 static (MatchConfig cfg, CommandQueue q) BuildReplay(int idx, ulong balanceHash, ulong bandsHash)
-{
-    ulong sd = 0x5EED0000UL + (ulong)idx * 7919UL;
-    // Kurulum çeşitliliği tohumdan TÜRETİLİR: 50 replay hava/zemin/rüzgar/chaos/hakem
-    // kombinasyonlarını tarar — dondurulan sözleşme yalnız "kuru + Orta" değildir.
-    var cfg = new MatchConfig
-    {
-        Seed = sd,
-        EngineVersion = "m17-golden-v1",
-        BalanceHash = balanceHash,
-        CommandBandsHash = bandsHash,
-        Home = BuildSheetSide(300, 7, home: true, offset: (idx % 5) * 6 - 12),
-        Away = BuildSheetSide(300, 7, home: false, idEntity: 8, offset: ((idx / 5) % 5) * 6 - 12),
-        Weather = (WeatherKind)(idx % 4),
-        PitchTier = (byte)(1 + idx % 5),
-        WindMS = (idx % 3) * 6.0,
-        WindDirX = (idx % 2) == 0 ? 1.0 : 0.0,
-        WindDirY = (idx % 2) == 0 ? 0.0 : 1.0,
-        Chaos = (ChaosLevel)(idx % 3),
-        Referee = new RefereeProfile
-        { Strictness = (byte)(35 + idx % 40), AdvantageTendency = 50, Consistency = 60 }
-    };
-    cfg.ConfigHash = TheBadge.Sim.Config.ConfigHash.Compute(cfg, balanceHash, bandsHash);
-
-    // KOMUT ZAMAN ÇİZELGESİ — dörtlünün dördüncü üyesi. Üç komut ailesi de temsil edilir
-    // (taktik / motivasyon / değişiklik) ki replay yalnız fizik değil MÜDAHALE yolunu da pinlesin.
-    var q = new CommandQueue();
-    q.Enqueue(new TacticChangeCmd((uint)(3000 + idx * 37), (byte)(idx % 2),
-              new TacticDelta((sbyte)((idx % 3) - 1), 0, 0, (sbyte)((idx % 3) - 1))));
-    q.Enqueue(new MotivationCmd((uint)(27000 + idx * 11), (byte)((idx + 1) % 2), (ToneType)(idx % 3)));
-    // SubstitutionCmd sözleşmesi (CanExecuteSub): OutId = SAHA SLOTU (0-10 ev / 11-21 deplasman),
-    // InId = KULÜBE İNDEKSİ (0..Bench.Length-1) — PlayerId DEĞİL. İnceleme bulgusu (Codex):
-    // ilk sürümde PlayerId geçilmişti, bu yüzden her replay'de değişiklik reddediliyor ve
-    // "üç komut ailesi de temsil edilir" iddiası GERÇEKLEŞMİYORDU. Artık SubsMade de pinlenir.
-    int subLo = (idx % 2) * 11;
-    q.Enqueue(new SubstitutionCmd((uint)(36000 + idx * 53), (byte)(idx % 2),
-              (short)(subLo + 5 + idx % 5), (short)(idx % 5)));
-    return (cfg, q);
-}
+    => RP.GoldenReplay.Kur(idx, balanceHash, bandsHash);
 
 // Bir replay'i oynatır ve KİMLİK ALANLARINI döndürür (bit-eşitlik bunlarla denetlenir).
 static (ulong cfgHash, ulong stateHash, int gh, int ga, uint ticks, ulong trace, uint applied, uint red, uint subs)
     RunReplay(int idx, ulong balanceHash, ulong bandsHash, TheBadge.Sim.Config.SimBalance bal)
 {
-    var (cfg, q) = BuildReplay(idx, balanceHash, bandsHash);
-    var e = new MatchEngine(cfg.Seed, q, cfg, bal) { AutoManage = true };
-    var st = MatchEngine.CreateInitialState(cfg);
-    var r = e.Run(ref st);
-    return (cfg.ConfigHash, MatchEngine.StateHash(in st), r.HomeGoals, r.AwayGoals,
-            r.TotalTicks, q.AppliedTraceHash, q.AppliedCount, (uint)e.RejectedCommands, (uint)e.SubsMade);
+    var o = RP.GoldenReplay.Oynat(idx, balanceHash, bandsHash, bal);
+    return (o.ConfigHash, o.StateHash, o.Ev, o.Dep, o.Tick, o.KomutIz, o.Uygulanan, o.Reddedilen, o.Degisiklik);
 }
 
 // REPLAY KAYDI — bit-eşitlikte denetlenen 8 alanın KANONİK yazımı. Golden kaydı, ölçülen çıktı ve
 // platform borcundaki pinli kayıt AYNI fonksiyondan geçer: "borç, golden'dan az alan denetliyor"
 // sürüklenmesi yapısal olarak imkânsız. Eşitlik = bu yazımın eşitliği.
 static string ReplayKaydi(ulong cfg, ulong st, string skor, uint tick, ulong iz, uint uyg, uint red, uint sub) =>
-    $"configHash 0x{cfg:X16} · stateHash 0x{st:X16} · skor {skor} · tick {tick} · komutIz 0x{iz:X16} · " +
-    $"uygulanan {uyg} · reddedilen {red} · degisiklik {sub}";
+    RP.GoldenReplay.Kayit(cfg, st, skor, tick, iz, uyg, red, sub);
 
 // Kaydın JSON yazımı: golden set satırı (gen-replays) ve borç ölçümü AYNI biçimde basılır.
 static string ReplayKaydiJson(int idx, ulong cfg, ulong st, int gh, int ga, uint tick, ulong iz, uint uyg, uint red, uint sub) =>
@@ -452,7 +412,7 @@ static string BorcTutarliligi(IReadOnlyDictionary<string, Dictionary<int, string
     return hata;
 }
 
-const int ReplaySetN = 50;   // ME 17.4: "50 arşiv golden replay"
+const int ReplaySetN = RP.GoldenReplay.Sayi;   // ME 17.4: "50 arşiv golden replay" (sayı pakette)
 
 // KALİTE KOŞUSU — `-- eval-run <cevaplar.jsonl>` (docs/evals: skor < %85 → merge yok).
 // Cevap dosyası GERÇEK model çıktılarıdır: her satır { id, cikti }. Bu ortamda model erişimi
@@ -534,7 +494,7 @@ if (args.Length > 0 && args[0] == "gen-replays")
     ulong gBandsHash = TheBadge.Sim.Core.XxHash64.Hash(System.IO.File.ReadAllBytes(gBandPath));
 
     var sb = new System.Text.StringBuilder();
-    sb.Append("{\n  \"surum\": \"m17-golden-v1\",\n  \"balanceHash\": \"0x");
+    sb.Append("{\n  \"surum\": \"" + RP.GoldenReplay.Surum + "\",\n  \"balanceHash\": \"0x");
     sb.Append(balHash.ToString("X16")).Append("\",\n  \"bandsHash\": \"0x");
     sb.Append(gBandsHash.ToString("X16")).Append("\",\n  \"replayler\": [\n");
     for (int i = 0; i < ReplaySetN; i++)
@@ -552,6 +512,11 @@ if (args.Length > 0 && args[0] == "gen-replays")
     string file = System.IO.Path.Combine(outPath, "replay_set_v1.json");
     System.IO.File.WriteAllText(file, sb.ToString());
     Console.WriteLine($"[gen] {ReplaySetN} golden replay üretildi (balanceHash 0x{balHash:X16} · bandsHash 0x{gBandsHash:X16}) → {file}");
+    // BALANCE DEĞER DÖKÜMÜ (ADR-004): sunucunun OKUDUĞU değerler, bit düzeyinde. İstemci sondası kendi
+    // okuduğu balance'ın dökümünü bununla karşılaştırır — JSON ayrıştırıcısı farkı yürütme farkından ayrılır.
+    string dokumYolu = System.IO.Path.Combine(outPath, "balance_degerleri_v1.txt");
+    System.IO.File.WriteAllText(dokumYolu, RP.BalansDokumu.Metin(gBal));
+    Console.WriteLine($"[gen] balance değer dökümü → {dokumYolu}");
     return 0;
 }
 
@@ -922,52 +887,9 @@ else Pass("AeffFullEnergy");
 // 8e) TeamSheet → kurulum determinizmi: aynı kadro = aynı durum hash'i; rol/anchor yansır
 static TeamSheet BuildSheet(ulong seed, uint entity) => BuildSheetSide(seed, entity, home: true);
 
+// Test kadrosu pakette (ADR-004): golden replay seti istemcide de AYNI kadroyu kurar.
 static TeamSheet BuildSheetSide(ulong seed, uint entity, bool home, uint idEntity = 0, int offset = 0)
-{
-    if (idEntity == 0) idEntity = entity;   // ayna kadro: nitelikler aynı, PlayerId farklı
-    // Test kadrosu: gerçekçi 4-4-2 çapaları (ev −x yarı sahada, deplasman aynalı);
-    // nitelikler deterministik türetilir (üretim kadroları FAZ 04 veri katmanından gelir)
-    var sheet = new TeamSheet { Starters = new PlayerEntry[11], Bench = new PlayerEntry[5] };
-    int sign = home ? -1 : 1;
-    for (int i = 0; i < 16; i++)
-    {
-        // offset: LOD 2 regresyonu için güç kademesi (fit-lod2). 0 = üretim kadrosu; kapılar
-        // her zaman 0 kullanır, yani kadro tanımı tek kalır.
-        byte V(uint salt)
-        {
-            int v = 35 + (int)(Rng.Rand01(seed, Domain.Decision, entity, (uint)i, salt) * 50) + offset;
-            return (byte)(v < 1 ? 1 : v > 100 ? 100 : v);
-        }
-        int ax, ay;
-        if (i == 0) { ax = 48000; ay = 0; }                                   // KL
-        else if (i < 5) { ax = 33000; ay = (i - 1) * 16000 - 24000; }         // DF hattı
-        else if (i < 9) { ax = 12000; ay = (i - 5) * 16000 - 24000; }         // OS hattı
-        else { ax = 3000; ay = i == 9 ? -8000 : 8000; }                       // FV ikilisi
-        var e = new PlayerEntry
-        {
-            PlayerId = (short)(idEntity * 100 + i),
-            Name = $"Test-{idEntity}-{i}",
-            RoleId = (byte)(i == 0 ? 1 : i < 5 ? 2 : i < 9 ? 3 : 4),
-            AnchorXmm = sign * ax,
-            AnchorYmm = ay,
-            // TÜM nitelikler doldurulur — eksik bırakılan nitelik 0 olur ve o alt sistem (kaleci
-            // 1v1'i, hava topu, faul agresifliği) sessizce ölür; M4 kalibrasyonunda yakalandı
-            Attributes = new PlayerAttributes
-            {
-                Passing = V(1), Finishing = V(2), Dribbling = V(7), Tackling = V(8),
-                Heading = V(16), FirstTouch = V(9), Crossing = V(22), SetPieces = V(18),
-                Positioning = V(10), Decisions = V(23), Composure = V(12), Aggression = V(19),
-                Workrate = V(24), Vision = V(11),
-                Pace = V(3), Acceleration = V(13), Stamina = V(4), Strength = V(14),
-                Agility = V(15), JumpReach = V(17),
-                Reflexes = V(5), Handling = V(6), OneOnOne = V(20), AerialCommand = V(21),
-                Kicking = V(25), Throwing = V(26)
-            }
-        };
-        if (i < 11) sheet.Starters[i] = e; else sheet.Bench[i - 11] = e;
-    }
-    return sheet;
-}
+    => RP.TestKadrosu.Kur(seed, entity, home, idEntity, offset);
 
 {
     var cfgA = new MatchConfig { Seed = 9, EngineVersion = "m1", Home = BuildSheet(77, 1), Away = BuildSheet(77, 2) };
@@ -2848,6 +2770,13 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         else if (setBands != bandsHashR)
             failures += Fail("M17ReplaySetiGuncel",
                 $"komut bantları değişmiş (set 0x{setBands:X16} ≠ dosya 0x{bandsHashR:X16}) — `-- gen-replays` ile YENİDEN ÜRET");
+        // Balance DEĞER dökümü de üretimin parçası (ADR-004): şema değişince (yeni alan, varsayılanıyla)
+        // bayt özeti aynı kalsa bile döküm değişir; istemci sondası bayat bir dökümle karşılaştırmasın.
+        else if (!System.IO.File.Exists(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(setPath), "balance_degerleri_v1.txt"))
+                 || System.IO.File.ReadAllText(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(setPath), "balance_degerleri_v1.txt"))
+                    != RP.BalansDokumu.Metin(simBal))
+            failures += Fail("M17ReplaySetiGuncel",
+                "balance değer dökümü (goldens/balance_degerleri_v1.txt) yok ya da bayat — `-- gen-replays` ile YENİDEN ÜRET");
         else
         {
             Pass($"M17ReplaySetiGuncel(balanceHash 0x{balHashR:X16} · bandsHash 0x{bandsHashR:X16})");
@@ -3045,30 +2974,12 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         failures += Fail("P0LibmYasagi", libmHata + "— transandantal fonksiyonlar DetMath'ten gelmeli (ME 3.2)");
     else Pass($"P0LibmYasagi({libmTaranan} Sim dosyası · libm/MathF/intrinsics çağrısı yok · yorum ve dizgiler ayıklandı)");
 
-    // --- Ölçüm ızgarası: girdiler libm'siz ve TAM üretilir (Rng: tamsayı işlem + 2^-53 ölçeği) ---
-    const ulong IzgaraTohum = 0x50A0DE7A0A7EUL;
-    const uint IzgaraN = 4096;
-    double U(uint akis, uint i) => Rng.Rand01(IzgaraTohum, Domain.Chaos, i, 0, akis);
-    static double Iki(int k) => BitConverter.Int64BitsToDouble((long)(k + 1023) << 52);   // 2^k, TAM
-
-    var expX = new List<double> { 0.0, -0.0, 1.0, -1.0, 1e-300, -1e-300, 0.34657359027997264,
-                                  -0.34657359027997264, 700.0, -700.0, -708.4, -740.0, 709.7, -745.0 };
-    for (uint i = 0; i < IzgaraN; i++) expX.Add(-50.0 + 100.0 * U(1, i));
-    var logX = new List<double> { 1.0, 2.0, 0.5, 1.4142135623730951, 1.4142135623730954, 1.4142135623730949,
-                                  1e-310, double.Epsilon, 1e300, double.MaxValue, 0.9999999999999999,
-                                  1.0000000000000002 };
-    for (uint i = 0; i < IzgaraN; i++) logX.Add((1.0 + U(2, i)) * Iki((int)(U(3, i) * 40.0) - 20));
-    var powXY = new List<(double x, double y)> { (0.0, 2.2), (1.0, 7.0), (0.5, 0.0), (0.25, 0.5),
-                                                  (1e-300, 0.1), (0.999, 3.3) };
-    for (uint i = 0; i < IzgaraN; i++) powXY.Add((U(4, i), 0.1 + 3.9 * U(5, i)));
-    var trigX = new List<double> { 0.0, -0.0, Math.PI / 4, Math.PI / 2, Math.PI, 1e5, -1e5, 1e-10 };
-    for (uint i = 0; i < IzgaraN; i++) trigX.Add(-8.0 * Math.PI + 16.0 * Math.PI * U(6, i));
-    var tanX = new List<double> { 0.0, Math.PI / 4, -Math.PI / 4, 1.5, 1e-10 };
-    for (uint i = 0; i < IzgaraN; i++) tanX.Add(-1.5 + 3.0 * U(7, i));
-    var atanYX = new List<(double y, double x)> { (0.0, 1.0), (0.0, -1.0), (-0.0, -1.0), (1.0, 0.0), (-1.0, 0.0),
-                                                   (0.0, 0.0), (0.0, -0.0), (1e-300, 1.0), (1.0, 1e-300),
-                                                   (-3.0, -4.0) };
-    for (uint i = 0; i < IzgaraN; i++) atanYX.Add((-60.0 + 120.0 * U(8, i), -60.0 + 120.0 * U(9, i)));
+    // --- Ölçüm ızgarası: girdiler libm'siz ve TAM üretilir — tanımı pakette (ADR-004), istemci sondası
+    // aynı ızgarayı kurar. Girdilerin kendisi de pinli (RP.P0Pinleri.IzgaraPin): `taban + ölçek·U` bir
+    // çarpma-toplamadır ve bir derleyici onu birleştirirse önce GİRDİLER kayar.
+    var p0g = RP.P0Pinleri.IzgarayiKur();
+    var expX = p0g.ExpX; var logX = p0g.LogX; var powXY = p0g.PowXY;
+    var trigX = p0g.TrigX; var tanX = p0g.TanX; var atanYX = p0g.AtanYX;
 
     static long UlpFarki(double a, double b)
     {
@@ -3079,14 +2990,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         if (ib < 0) ib = long.MinValue - ib;
         return Math.Abs(ia - ib);
     }
-    static ulong BitOzeti(List<double> v)
-    {
-        var b = new byte[v.Count * 8];
-        for (int i = 0; i < v.Count; i++)
-            System.Buffers.Binary.BinaryPrimitives.WriteInt64LittleEndian(b.AsSpan(i * 8),
-                BitConverter.DoubleToInt64Bits(v[i]));
-        return TheBadge.Sim.Core.XxHash64.Hash(b);
-    }
+    static ulong BitOzeti(List<double> v) => RP.P0Pinleri.BitOzeti(v);   // tanım pakette (ADR-004)
 
     // Her fonksiyon: DetMath çıktıları, System.Math referansı, girdi başına ulp sınırı, sıfır yakınında
     // mutlak tolerans. Sınırlar TASARIMDAN türetilir (ölçüme uydurulmadı): fonksiyonun kendi hatası +
@@ -3141,14 +3045,13 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     // --- P0DetMathBitPin --- Linux'ta üretildi; macOS CI aynı biti vermeli. Bir pin kırılırsa DetMath
     // platforma bağlı bir işlem içeriyor demektir (ör. JIT'in birleştirdiği çarpma-toplama) — pini
     // güncellemek DEĞİL, nedeni bulmak gerekir. Pin yalnız DetMath'in KENDİSİ bilerek değişince güncellenir.
-    var bitPin = new Dictionary<string, ulong>(StringComparer.Ordinal)
-    {
-        // linux-x64'te ölçüldü (2026-10-05); macOS arm64 CI'ı aynı biti üretmeli
-        ["Exp"] = 0x3392CD200C6E5906UL, ["Log"] = 0xA00F621B927BE80FUL, ["Pow"] = 0x1C2F53C261730C9EUL,
-        ["Sin"] = 0x910641454B06C9D2UL, ["Cos"] = 0x0F625A9C9967E60CUL, ["Tan"] = 0xFE7030AA07848E9AUL,
-        ["Atan2"] = 0xA005FC21A9BDA698UL,
-    };
+    // Pin değerleri pakette TEK yerde (ADR-004): sunucu kapısı ve istemci sondası aynı pine karşı ölçer.
+    var bitPin = new Dictionary<string, ulong>(StringComparer.Ordinal);
+    foreach (var (pAd, pPin) in RP.P0Pinleri.DetMathPinleri) bitPin[pAd] = pPin;
     string pinHata = "", pinOzet = "";
+    ulong izgaraOzeti = RP.P0Pinleri.IzgaraOzeti(p0g);
+    if (izgaraOzeti != RP.P0Pinleri.IzgaraPin)
+        pinHata += $"ızgara GİRDİLERİ 0x{izgaraOzeti:X16} ≠ pinli 0x{RP.P0Pinleri.IzgaraPin:X16}; ";
     foreach (var (ad, det, _, _, _, _) in olcum)
     {
         ulong oz = BitOzeti(det);
@@ -3158,27 +3061,14 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     if (pinHata.Length > 0)
         failures += Fail("P0DetMathBitPin", $"[{PlatformKimligi()}] " + pinHata +
                          "— DetMath bu platformda FARKLI bit üretiyor ya da pin bayat");
-    else Pass($"P0DetMathBitPin([{PlatformKimligi()}] 7 fonksiyonun çıktı özeti pinle bit-eşit: {pinOzet.Trim()})");
+    else Pass($"P0DetMathBitPin([{PlatformKimligi()}] ızgara girdileri + 7 fonksiyonun çıktı özeti pinle bit-eşit: {pinOzet.Trim()})");
 
     // --- P0DonusumDoyurma --- P0'ın KÖK NEDENİ (2026-10-05): şut hızına sızan NaN, ham (int) dönüşümünde
     // x64'te int.MinValue, arm64'te 0 oluyordu. Dönüşüm artık DetMath.ToInt32Sat'tan geçer (doyurma: arm64 ve
     // .NET 9 semantiği). Bu fikstürler LINUX'ta kırılır: QuantizeMm ham dönüşüme geri dönerse x64 NaN için
     // int.MinValue verir. (arm64 ham dönüşümde zaten 0 verdiği için orada bu fikstür tanık olamaz.)
     {
-        var donusum = new (string ad, int olculen, int beklenen)[]
-        {
-            ("ToInt32Sat(NaN)",        TheBadge.Sim.Core.DetMath.ToInt32Sat(double.NaN), 0),
-            ("ToInt32Sat(+∞)",         TheBadge.Sim.Core.DetMath.ToInt32Sat(double.PositiveInfinity), int.MaxValue),
-            ("ToInt32Sat(−∞)",         TheBadge.Sim.Core.DetMath.ToInt32Sat(double.NegativeInfinity), int.MinValue),
-            ("ToInt32Sat(3e9)",        TheBadge.Sim.Core.DetMath.ToInt32Sat(3e9), int.MaxValue),
-            ("ToInt32Sat(−3e9)",       TheBadge.Sim.Core.DetMath.ToInt32Sat(-3e9), int.MinValue),
-            ("ToInt32Sat(1.9)",        TheBadge.Sim.Core.DetMath.ToInt32Sat(1.9), 1),
-            ("ToInt32Sat(−1.9)",       TheBadge.Sim.Core.DetMath.ToInt32Sat(-1.9), -1),
-            ("ToInt32Sat(2147483647.5)", TheBadge.Sim.Core.DetMath.ToInt32Sat(2147483647.5), int.MaxValue),
-            ("QuantizeMm(NaN)",        Units.QuantizeMm(double.NaN), 0),
-            ("QuantizeMm(−∞)",         Units.QuantizeMm(double.NegativeInfinity), int.MinValue),
-            ("QuantizeMm(1.25)",       Units.QuantizeMm(1.25), 1250),
-        };
+        var donusum = RP.P0Pinleri.DonusumFiksturleri();   // tanım pakette (ADR-004)
         string donusumHata = "";
         foreach (var (ad, olc, bek) in donusum)
             if (olc != bek) donusumHata += $"{ad} = {olc} ≠ {bek}; ";
@@ -3188,7 +3078,8 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     }
 
     // --- P0TrigLutOzeti --- ME 3.2'nin tablosu (DetMath.Sin ile üretilir) + AttributeLuts'un kuvvet tabloları
-    const ulong TrigLutPin = 0x151EDD4A6B53DC23UL;   // linux-x64'te ölçüldü (2026-10-05)
+    const ulong TrigLutPin = RP.P0Pinleri.TrigLutPin;   // pin pakette (ADR-004)
+    string lutHataOn = "";
     var tb = new byte[TrigLut.Size * 4];
     int trigSadakat = 0;
     for (int i = 0; i < TrigLut.Size; i++)
@@ -3199,6 +3090,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         if (Math.Abs(v - refv) > 1) trigSadakat++;
     }
     ulong trigOzet = TheBadge.Sim.Core.XxHash64.Hash(tb);
+    if (trigOzet != RP.P0Pinleri.TrigLutOzeti()) lutHataOn = "TrigLut özeti paketin hesabıyla uyuşmuyor; ";
     var p0Luts = AttributeLuts.Build(simBal);
     var p0At = simBal.attribute;
     int lutSadakat = 0;
@@ -3210,13 +3102,81 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         int dr = p0Luts.DrenajQ16(i / 100.0);
         if (Math.Abs(dr - (int)Math.Round(Math.Pow(i / 100.0, 2.2) * 65536.0)) > 1) lutSadakat++;
     }
-    string lutHata = "";
+    string lutHata = lutHataOn;
     if (trigOzet != TrigLutPin) lutHata += $"TrigLut özeti 0x{trigOzet:X16} ≠ pinli 0x{TrigLutPin:X16}; ";
     if (trigSadakat > 0) lutHata += $"TrigLut {trigSadakat}/{TrigLut.Size} girişte Math.Sin'den ±1'den fazla uzak; ";
     if (lutSadakat > 0) lutHata += $"AttributeLuts {lutSadakat} girişte Math.Pow'dan ±1'den fazla uzak; ";
     if (lutHata.Length > 0) failures += Fail("P0TrigLutOzeti", $"[{PlatformKimligi()}] " + lutHata);
     else Pass($"P0TrigLutOzeti([{PlatformKimligi()}] 4096 girişli Q16 tablo özeti 0x{trigOzet:X16} pinle eşit · " +
               "Math.Sin'e ±1 · kondisyon/drenaj tabloları Math.Pow'a ±1)");
+}
+
+// 23c) P0 İKİNCİ AŞAMA — İSTEMCİ SONDASI .NET'TE (ADR-004; DECISIONS P0 (b), Atilla 2026-10-07).
+// Unity'nin (Editor Mono + cihaz IL2CPP) çağıracağı fonksiyon her koşuda sunucuda da uçtan uca koşar:
+// sonda burada GEÇMİYORSA istemcide verdiği hüküm hiçbir şey söylemez. Üç ek ölçüm:
+//   - İki golden okuyucu (Checks: System.Text.Json · paket: bağımlılıksız) aynı 50 kaydı veriyor mu —
+//     okuyucular sürüklenirse istemci yanlış golden'a karşı ölçerdi.
+//   - Döküm DİŞİ: balance'ta tek alanı 1 ulp kaydırınca döküm farkı tam o alanı gösteriyor mu —
+//     sondanın JSON ayrıştırıcısı farkını yakalayabildiğinin kanıtı.
+//   - Okuyucu DİŞLERİ: öneksiz hash, tekrarlı indeks, ondalık sayı, eksik alan ve tek kayıtlı set
+//     reddediliyor mu.
+{
+    string balYoluS = FindRepoFile("balance/sim.balance.json");
+    string bantYoluS = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(balYoluS), "command.bands.json");
+    string goldenKlasor = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(balYoluS), "..",
+                                                 "shared", "TheBadge.Sim.Checks", "goldens");
+    string goldenJsonS = System.IO.File.ReadAllText(System.IO.Path.Combine(goldenKlasor, "replay_set_v1.json"));
+    string dokumYoluS = System.IO.Path.Combine(goldenKlasor, "balance_degerleri_v1.txt");
+    string sunucuDokum = System.IO.File.Exists(dokumYoluS) ? System.IO.File.ReadAllText(dokumYoluS) : "";
+
+    var rapor = RP.DeterminizmSondasi.Kos(simBal, System.IO.File.ReadAllBytes(balYoluS),
+                                          System.IO.File.ReadAllBytes(bantYoluS), goldenJsonS, sunucuDokum,
+                                          PlatformKimligi());
+    string sondaHata = rapor.Gecti ? "" : "sonda .NET'te KALDI: " + rapor.Metin().Replace("\n", " ") + "; ";
+
+    // İki okuyucu aynı kayıtları veriyor mu
+    var paketSet = RP.GoldenSetOkuyucu.Oku(goldenJsonS);
+    int okuyucuEsit = 0;
+    using (var gdoc = System.Text.Json.JsonDocument.Parse(goldenJsonS))
+        foreach (var k in gdoc.RootElement.GetProperty("replayler").EnumerateArray())
+        {
+            var (idx, kayit) = ReplayKaydiOku(k);
+            if (paketSet.Kayitlar[idx] == kayit) okuyucuEsit++;
+        }
+    if (okuyucuEsit != ReplaySetN) sondaHata += $"iki golden okuyucu {okuyucuEsit}/{ReplaySetN} kayıtta aynı; ";
+
+    // Döküm dişi: 1 ulp'lik ayrıştırma farkı tam o alanda görünmeli
+    var bozukBal = System.Text.Json.JsonSerializer.Deserialize<TheBadge.Sim.Config.SimBalance>(
+        System.IO.File.ReadAllText(balYoluS), balOpts);
+    bozukBal.shotExec.sutHiziMS = BitConverter.Int64BitsToDouble(BitConverter.DoubleToInt64Bits(bozukBal.shotExec.sutHiziMS) + 1);
+    var disFark = RP.BalansDokumu.Fark(RP.BalansDokumu.Metin(simBal), RP.BalansDokumu.Metin(bozukBal), 8);
+    if (disFark.Count != 1 || !disFark[0].StartsWith("shotExec.sutHiziMS:", StringComparison.Ordinal))
+        sondaHata += $"döküm dişi: 1 ulp'lik fark {disFark.Count} satır verdi ({string.Join(" | ", disFark)}); ";
+
+    // Okuyucu dişleri
+    string ornekKayit = "{ \"idx\": 0, \"configHash\": \"0x0000000000000001\", \"stateHash\": \"0x0000000000000002\", " +
+                        "\"skor\": \"1-0\", \"tick\": 54000, \"komutIz\": \"0x0000000000000003\", \"uygulanan\": 3, " +
+                        "\"reddedilen\": 0, \"degisiklik\": 1 }";
+    var bozukGirdiler = new (string ad, string json)[]
+    {
+        ("öneksiz hash", goldenJsonS.Replace("\"balanceHash\": \"0x", "\"balanceHash\": \"")),
+        ("tekrarlı indeks", goldenJsonS.Replace("{ \"idx\": 1,", "{ \"idx\": 0,")),
+        ("ondalık sayı", goldenJsonS.Replace("\"tick\": ", "\"tick\": 1.5, \"x\": ")),
+        ("eksik alan", goldenJsonS.Replace("\"bandsHash\"", "\"bantlarHash\"")),
+        ("tek kayıtlı set", "{ \"surum\": \"m17-golden-v1\", \"balanceHash\": \"0x0000000000000001\", " +
+                             "\"bandsHash\": \"0x0000000000000002\", \"replayler\": [ " + ornekKayit + " ] }"),
+    };
+    int reddedilen = 0;
+    foreach (var (ad, json) in bozukGirdiler)
+    {
+        try { RP.GoldenSetOkuyucu.Oku(json); sondaHata += $"okuyucu dişi: '{ad}' KABUL edildi; "; }
+        catch (FormatException) { reddedilen++; }
+    }
+
+    if (sondaHata.Length > 0) failures += Fail("P0IstemciSondasi", sondaHata);
+    else Pass($"P0IstemciSondasi([{PlatformKimligi()}] istemcinin çağıracağı sonda burada GEÇTİ: balance baytları + " +
+              $"balance değerleri + P0 pinleri + {ReplaySetN}/{ReplaySetN} replay · iki golden okuyucu {okuyucuEsit}/{ReplaySetN} aynı kayıt · " +
+              $"döküm 1 ulp'lik farkı alanıyla yakalıyor · okuyucu {reddedilen}/{bozukGirdiler.Length} bozuk girdiyi reddetti)");
 }
 
 // 24) FAZ 04 K1 — COMMAND BUS ÇEKİRDEĞİ (CB Spec 3-6, 8)
@@ -9026,6 +8986,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
         ("shared/TheBadge.Sim",        "com.thebadge.sim",        "TheBadge.Sim"),
         ("shared/TheBadge.CommandBus", "com.thebadge.commandbus", "TheBadge.CommandBus"),
         ("shared/TheBadge.World",      "com.thebadge.world",      "TheBadge.World"),
+        ("shared/TheBadge.Sim.Replay", "com.thebadge.sim.replay", "TheBadge.Sim.Replay"),   // ADR-004
     };
 
     var manifestDeps = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -9121,7 +9082,7 @@ else Pass($"M4StrictnessMatters({fLoose.fouls}→{fStrict.fouls})");
     }
 
     if (s1hata.Length > 0) failures += Fail("S1UnityPaketSiniri", s1hata);
-    else Pass($"S1UnityPaketSiniri(3 paket Unity'den erisilebilir: kimlik + manifest yolu + noEngineReferences + " +
+    else Pass($"S1UnityPaketSiniri({paketler.Length} paket Unity'den erisilebilir: kimlik + manifest yolu + noEngineReferences + " +
               $"asmdef/csproj grafigi birebir + netstandard2.1/C#9 + src disi .cs yok + {s1kaynak} kaynakta UnityEngine izi yok)");
 }
 
