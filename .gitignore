@@ -17,3 +17,10 @@ unity/**/*.sln
 
 # MSBuild ciktilari (Unity paket klasorlerinden yonlendirildi — S1UnityPaketSiniri)
 artifacts/
+
+# Determinizm sondasi (ADR-004): derleyici bunlari gecici kurar ve build'den sonra siler;
+# Unity build ortasinda kapanirsa kalinti commit'lenmesin
+unity/**/Assets/StreamingAssets/DeterminizmSondasi/
+unity/**/Assets/StreamingAssets/DeterminizmSondasi.meta
+unity/**/Assets/Determinizm/DeterminizmSondasi_gecici.unity
+unity/**/Assets/Determinizm/DeterminizmSondasi_gecici.unity.meta

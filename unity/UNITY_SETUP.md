@@ -19,7 +19,8 @@
    Game penceresi üst barındaki çözünürlük menüsü → **+** → Type: *Fixed Resolution*, W:1080 H:1920, ad "Portre 1080x1920" → onu seç. (16:9 yatayda UI bilerek taşar — oyun portre kilitli.)
 5. **EditMode testleri:** Window → General → Test Runner → EditMode → Run All. Hepsi yeşil olmalı
    (`Game.Match.EditModeTests`: sunum okuma sözleşmesi, Tek Kapı zinciri, iki red yolu,
-   determinizm, duraklama ritmi). Ritim testleri ~30 sn sürer — 24 maç koşuyorlar.
+   determinizm, duraklama ritmi, sunucuyla bit-eşitlik sondası). Ritim testleri ~30 sn sürer — 24 maç
+   koşuyorlar. `DeterminizmTests` 50 maç koşar; ne ölçtüğü aşağıda (*Determinizm Sondası*).
    Greybox'ın dört EditMode dosyası artık KOŞMUYOR; kabul edilmiş bedeldir (K3), ölçtükleri
    kod emekli.
 6. **⚠️ Cihaz build'i: 5G-a'DA YOK.** Bu adım greybox'tan kalmıştı ve bugün ÇALIŞMAZ — deneme.
@@ -73,7 +74,7 @@ Sorun giderme:
 
 ## Paylaşılan paketler (5G S1 — ADR-002)
 
-Unity üç yerel paketi `manifest.json` üzerinden `shared/` altından alır; hepsi
+Unity dört yerel paketi `manifest.json` üzerinden `shared/` altından alır; hepsi
 `noEngineReferences: true` (CLAUDE.md değişmez #3) ve dış paket referansı yok:
 
 | Paket | Klasör | asmdef referansları |
@@ -81,9 +82,14 @@ Unity üç yerel paketi `manifest.json` üzerinden `shared/` altından alır; he
 | `com.thebadge.sim` | `shared/TheBadge.Sim` | — |
 | `com.thebadge.commandbus` | `shared/TheBadge.CommandBus` | `TheBadge.Sim` |
 | `com.thebadge.world` | `shared/TheBadge.World` | `TheBadge.Sim`, `TheBadge.CommandBus` |
+| `com.thebadge.sim.replay` | `shared/TheBadge.Sim.Replay` | `TheBadge.Sim` |
+
+`com.thebadge.sim.replay` oyun kodu DEĞİLDİR: sunucunun golden replay setini, P0 pinlerini ve
+determinizm sondasını tek kaynakta tutar ki sunucu kapısı (Checks) ile Unity aynı kodu koşsun
+(ADR-004). Yalnız test aynası ve sonda referanslar.
 
 > **Paket klasörüne `.cs` bırakma.** Unity paket klasöründeki TÜM `.cs`'i derler; MSBuild'in
-> ürettiği `obj/**/*.AssemblyInfo.cs` orada kalırsa Unity CS0579 ile düşer. Üç pakette
+> ürettiği `obj/**/*.AssemblyInfo.cs` orada kalırsa Unity CS0579 ile düşer. Dört pakette
 > `Directory.Build.props` çıktıyı repo kökündeki `artifacts/`e yönlendirir — o dosyaları silme.
 >
 > Bu maddelerin hepsini `S1UnityPaketSiniri` kapısı her koşuda ölçüyor
@@ -98,6 +104,8 @@ Unity üç yerel paketi `manifest.json` üzerinden `shared/` altından alır; he
 | Game.UI | UI Toolkit ekranları, Rive köprüleri | Game.Services |
 | Game.Match | Maç sunum katmanı — **5G-a'da KURULDU** | TheBadge.Sim, **TheBadge.CommandBus**, **TheBadge.World**, **Game.Services** |
 | Game.EngineDev | Motor test sahnesi (build dışı) | TheBadge.Sim |
+| Game.Determinizm | Determinizm sondasının oyuncu ayağı — yalnız sonda build'inde iş yapar (ADR-004) | TheBadge.Sim, TheBadge.Sim.Replay |
+| Game.Determinizm.Editor | Sonda menüsü: macOS IL2CPP build + koşu (yalnız Editor) | Game.Determinizm |
 | Tests.EditMode / Tests.PlayMode | Unity testleri | ilgili modüller |
 
 > Bu harita FAZ 01'de yazılmış ve FAZ 04'ten ESKİYDİ: `Game.Commands`ı `TheBadge.Sim`e bağlıyordu,
@@ -120,3 +128,42 @@ Unity üç yerel paketi `manifest.json` üzerinden `shared/` altından alır; he
 > zinciri ayrıca `S2TelemetriErisimi` kapısıyla her Checks koşusunda ölçülüyor.
 
 Kural: sunum katmanı sim durumunu OKUR, asla doğrudan yazmaz — durum değişikliği yalnız Command Bus (Tek Kapı).
+
+## Determinizm Sondası (P0 ikinci aşaması — ADR-004)
+
+Sunucu (.NET) ile istemcinin AYNI maçı bit düzeyinde aynı oynadığını Unity'nin kendi çalışma
+zamanlarında ölçer: önce Editor (Mono), sonra sevkiyat yapılandırması (IL2CPP). Sonda,
+sunucu kapısının (`P0IstemciSondasi`) koştuğu kodun AYNISIDIR (`com.thebadge.sim.replay`) ve
+balance'ı oyunun kendi yolundan okur (JsonUtility).
+
+**İlk açılışta:** Unity yeni paketi `Packages/packages-lock.json`'a ekler → **commit et.**
+Project panelinde `Packages → The Badge Sim Replay` görünmeli.
+
+1. **Editor (Mono):** Test Runner → EditMode → `DeterminizmTests` → `EditorSunucuylaBitEsit` → Run.
+   50 maç koşar (.NET'te ~8 sn; Mono'da daha uzun). Yeşil ya da kırmızı, test çıktısındaki
+   `DETERMINIZM SONDASI [editor-mono-…]` raporunu **olduğu gibi** gönder.
+2. **macOS IL2CPP (iOS'un vekili — aynı clang/arm64 ailesi):**
+   - Ön koşul: Unity Hub → Installs → 6000.3.x → Add Modules → **Mac Build Support (IL2CPP)**;
+     Xcode ya da Command Line Tools (`xcode-select --install`).
+   - File → Build Profiles → **macOS** → Switch Platform. Aynı ekranda *Architecture*
+     "Apple silicon" ya da "Intel 64-bit + Apple silicon" olmalı (yalnız-Intel build Rosetta'da
+     koşar ve arm64'ü ölçmez — sonda o durumda koşmayı reddeder); *Create Xcode Project* kapalı.
+   - Menü: **The Badge → Determinizm Sondası (macOS IL2CPP)**. Sonda boş bir geçici sahneyle
+     IL2CPP + Release build alır (ilk seferde birkaç dakika), oyuncuyu koşar ve sonucu bir
+     diyalogla söyler. Console'daki `DETERMINIZM SONDASI [il2cpp-Arm64-…]` raporunu **olduğu gibi**
+     gönder — geçse de (kayıt için).
+   - Proje ayarları (scripting backend, IL2CPP yapılandırması), açık sahneler ve geçici dosyalar
+     menü bitince geri yüklenir. Build, rapor ve oyuncu günlüğü repo kökünde
+     `artifacts/DeterminizmSondasi/` altındadır (git dışı).
+   - İş bitince önceki platformuna geri dön (Build Profiles → iOS → Switch Platform).
+
+**Kırmızı bir katman ne der** (rapor katman katman yazar; her katman bir öncekinin sapmasını ayırır):
+
+| Katman | Kırmızıysa |
+| --- | --- |
+| BalansBaytlari | Dosya baytları sunucununkinden farklı (satır sonu dönüşümü, eski kopya) — balance özeti, yani `configHash` farklı çıkar |
+| BalansDegerleri | JsonUtility bir katsayıyı System.Text.Json'dan farklı okudu — rapor alan adını ve iki değeri yazar |
+| P0Izgara | Ölçüm GİRDİLERİ bile farklı: derleyici `taban + ölçek·U` çarpma-toplamasını birleştirmiş (FMA) olabilir |
+| P0DetMath | Girdiler aynıyken DetMath farklı bit üretiyor — derleyici kayan nokta işlemlerini birleştirmiş (FMA) ya da yeniden düzenlemiş |
+| P0TrigLut / P0Donusum | ME 3.2 tablosu ya da kayan→tamsayı dönüşümü farklı |
+| GoldenReplay | Üsttekiler yeşilken maç farklı: yürütme farkı (sıralama, budanmış alan, taşma) — ilk üç fark yazılır |

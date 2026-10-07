@@ -1,0 +1,13 @@
+<Project>
+  <!-- UNITY PAKET KLASÖRÜ DİSİPLİNİ — kapı: S1UnityPaketSiniri.
+       Bu klasör bir Unity paketidir ve Unity, paket klasöründeki TÜM .cs dosyalarını
+       derlemeye alır. MSBuild'in ürettiği obj/**/*.AssemblyInfo.cs burada kalırsa Unity
+       CS0579 (yinelenen öznitelik) ile düşer — üstelik yalnız `dotnet build` koşulduktan
+       SONRA, yani tuzak sessizce bekler. Bu yüzden ara ve çıktı klasörleri paketin
+       DIŞINA (repo kökündeki artifacts/) yönlendirilir.
+       Kapı, paket klasöründe src/ dışında .cs dosyası KALMADIĞINI doğrular. -->
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)../../artifacts/obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)../../artifacts/bin/$(MSBuildProjectName)/</BaseOutputPath>
+  </PropertyGroup>
+</Project>

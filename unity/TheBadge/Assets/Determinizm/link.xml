@@ -1,0 +1,10 @@
+<linker>
+  <!-- IL2CPP KOD BUDAMASI (ADR-004): balance alanları JsonUtility ve yansımayla okunur. Budanan bir
+       alan sessizce varsayılanında kalır ve sim ayrışır; determinizm sondası da yanlış ölçer. İki
+       çekirdek assembly tümüyle korunur — oyunun kendi build'leri için de doğru olan budur.
+       Sondanın kendi assembly'si de korunur: girişi yalnız RuntimeInitializeOnLoadMethod'dur,
+       hiçbir kod onu çağırmaz. -->
+  <assembly fullname="TheBadge.Sim" preserve="all"/>
+  <assembly fullname="TheBadge.Sim.Replay" preserve="all"/>
+  <assembly fullname="Game.Determinizm" preserve="all"/>
+</linker>

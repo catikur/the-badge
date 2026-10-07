@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "com.thebadge.sim": "file:../../../shared/TheBadge.Sim",
+    "com.thebadge.sim.replay": "file:../../../shared/TheBadge.Sim.Replay",
     "com.thebadge.commandbus": "file:../../../shared/TheBadge.CommandBus",
     "com.thebadge.world": "file:../../../shared/TheBadge.World",
     "com.unity.inputsystem": "1.11.2",
