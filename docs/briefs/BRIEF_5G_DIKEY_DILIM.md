@@ -289,12 +289,13 @@ Bu brif bir plan önerisidir, kapı değil.
   IL2CPP/iOS) — ikinci aşama; yeni paylaşılan paket + ADR ister, ayrı karar. P0, 5G-b'nin
   **cihaz/sunucu ayağından ÖNCE** kapanmalı: istemci iOS arm64 (IL2CPP), sunucu Linux x64 —
   eşitlik IL2CPP'de kanıtlanmadan dikey dilimin "aynı maç her yerde aynı" iddiası kurulamaz.
-- **Yeni bekleyen karar — şut modeli** (P0 teşhisinden çıktı): kale çizgisi üstünden şut, dar
-  açıda aşırı hızlı top ve maç başına ~0,45 "hayalet isabetli şut" (isabetli, kurtarış yok, gol
-  yok, aut). Ölçüm, seçenekler ve önerim DECISIONS'ta (*Şut modeli*).
+- **Şut modeli (c) UYGULANDI** (karar 2026-10-05, Atilla; P0 teşhisinden çıktı): şut hızı vektör
+  boyunca, karara bağlı şut çizgide gol, top şutçudan çıkar, tutulan şut gole dönmez, çizgi
+  üstünden şut koruması. Hayalet isabetli şut (~0,45/maç) ve "Kurtarış → Gol" sıfırlandı; kalıcı
+  kapı `SutModeliTutarliligi`. Kalibrasyon `sutHiziMS` 24 → 28 (gol−xG −%4). Ayrıntı DECISIONS'ta.
 
 **SIRADAKİ İŞLER:** (1) tur sonuçlarını kayda geçir → 5G-a kapı kararı (veri Atilla'da) · (2) ~~P0 (a)
-.NET ayağı~~ (kapandı); P0 ikinci aşaması (Unity replay testi) ve şut modeli dilimi — ikisi de
+.NET ayağı~~ (kapandı) · ~~şut modeli (c)~~ (uygulandı) · P0 ikinci aşaması (Unity replay testi)
 karar bekliyor · ~~(3) D-D ve D-E kararları~~ (kapandı) · (4) 5G-a GO ise 5G-b açılışı: stil
 rehberi (D-D) + S3.
 Kararlar `docs/DECISIONS.md`'ye işlenir; sohbette kalan karar yok hükmündedir (Anayasa 9 +

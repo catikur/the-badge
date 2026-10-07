@@ -167,7 +167,8 @@
   "shotExec": {
     "sutMaxMesafeM": 30.0,
     "sutYariMesafeM": 12.0,
-    "sutHiziMS": 24.0,
+    "sutHiziMS": 28.0,
+    "sutMinDuzlemMesafeM": 0.25,
     "sutSigmaTabanDeg": 19.0,
     "kafaSigmaCarpani": 2.4,
     "nisanDirekOrani": 0.3,
@@ -455,21 +456,21 @@
     "_comment": "Anayasa 8.2 maliyet tavani [KALIBRE]"
   },
   "canliOlasilik": {
-    "lambdaTaban": 1.0048,
-    "gucKatsayisi": 0.04433,
+    "lambdaTaban": 1.022,
+    "gucKatsayisi": 0.04678,
     "maxEkGol": 10,
     "kritikAnEsigi": 0.04,
     "taktik": {
-      "mentaliteKendi": 0.1304,
-      "mentaliteRakip": -0.0484,
-      "tempoKendi": 0.1704,
-      "tempoRakip": 0.0722,
-      "presKendi": -0.0784,
-      "presRakip": 0.0658,
-      "hatKendi": 0.211,
-      "hatRakip": 0.038,
-      "asiriUcKendi": -0.0146,
-      "asiriUcRakip": 0.0347
+      "mentaliteKendi": 0.1748,
+      "mentaliteRakip": 0.0423,
+      "tempoKendi": 0.1168,
+      "tempoRakip": 0.0085,
+      "presKendi": -0.128,
+      "presRakip": -0.0118,
+      "hatKendi": 0.1384,
+      "hatRakip": -0.0529,
+      "asiriUcKendi": -0.0253,
+      "asiriUcRakip": 0.0277
     }
   }
 }

@@ -343,7 +343,11 @@ namespace TheBadge.Sim.Config
         {
             public double sutMaxMesafeM;       // karar: bu mesafenin dışında şut aday olmaz
             public double sutYariMesafeM;      // mesafe tehdidinin yarıya düştüğü mesafe (m, rasyonel çekirdek)
-            public double sutHiziMS;
+            public double sutHiziMS;           // topun şut VEKTÖRÜ boyunca hızı (şut modeli (c))
+            // Şut modeli (c) koruması (DECISIONS 2026-10-05): kale düzlemine bu mesafeden (m) yakın
+            // şutçu şut atmaz. Düzlemin üstünde şut yönü dejeneredir: top çizgi boyunca gider ve
+            // düzlemi hiç geçmez. Gerçekçi açı kuralı DEĞİLDİR — o ayrı karar (şut modeli (b)).
+            public double sutMinDuzlemMesafeM;
             public double sutSigmaTabanDeg;    // nişan sapması AÇISAL (derece) — mesafeyle büyür
             public double kafaSigmaCarpani;    // kafa vuruşunda nişan sapması çarpanı (ME 6.4)
             public double nisanDirekOrani;     // nişan noktası: direk yarı genişliğinin bu oranı
